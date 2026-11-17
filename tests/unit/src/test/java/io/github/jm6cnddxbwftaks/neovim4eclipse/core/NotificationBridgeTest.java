@@ -18,6 +18,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -106,6 +107,7 @@ class NotificationBridgeTest {
             @Override public void onMessageEvent(MessageEvent event) {
                 events.add("message:" + event);
             }
+            @Override public void onViewText(ViewText text) { events.add("view:" + text.title() + ":" + text.lines()); }
             @Override public void onGridEvents(List<GridEvent> grid) { events.add("grid:" + grid); }
             @Override public void onCommandWindow(int winid, String type) { events.add("cmdwin:" + winid + ":" + type); }
             @Override public void onCommandWindowClosed() { events.add("cmdwin closed"); }
@@ -508,5 +510,18 @@ class NotificationBridgeTest {
         notify("nvim_buf_lines_event", 1, 2);
         notify("nvim_buf_lines_event", 1, 2, "a", "b", List.of());
         assertTrue(events.isEmpty(), events.toString());
+    }
+
+    /**
+     * {@code eclipse_view_text}: a {@code :checkhealth} report for the Neovim view. Only that kind
+     * is known; any other, or a malformed payload, reaches nobody.
+     */
+    @Test
+    void viewTextOfTheKnownKindOnly() {
+        notify("eclipse_view_text", "checkhealth", List.of("vim.health: OK", "- OK fine"));
+        notify("eclipse_view_text", "help", List.of("a"));
+        notify("eclipse_view_text", "checkhealth", "not a list");
+        notify("eclipse_view_text");
+        assertEquals(List.of("view:checkhealth:[vim.health: OK, - OK fine]"), events);
     }
 }

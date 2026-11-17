@@ -328,6 +328,41 @@ too.
 
 **Expect:** each step's result, after its ⇒.
 
+## Neovim view
+
+### `nv-view` `:messages` and `:checkhealth` in the Neovim view, in a light and a dark theme
+
+- **On:** linux, macos, windows
+- **Launch:** checks
+- **Areas:** editor/NeovimView*.java, editor/GridMouse.java, editor/GridCanvas.java, core/ScreenSession.java, core/OutputProfile.java, core/HealthCheck.java, util/ScreenGrid.java, util/ViewText.java
+
+What reaches the view, its colors in the grid, the keys back to the editor, `q`, the yank into a
+register and the one rule (nothing written) are tested (`ScreenSessionIntegrationTest`,
+`view_scripts_spec.lua`, `NeovimViewEndToEndTest`). What only a person sees: where the view opens,
+how it looks in each theme, and that the system's keys and the mouse feel right. Look at the
+messages again after every Neovim upgrade: Neovim's `ui2`, which the view's Neovim uses, is
+experimental and changes between releases.
+
+1. Open `n4e-alpha`'s `notes.txt`, type `/nothing-like-this` and Enter, then `:messages` and Enter.
+   ⇒ A view titled *Neovim: messages* opens in the stack with Problems (the bottom of the usual
+   perspectives), with the keyboard. The `E486` line is in Neovim's error color, the cursor on the
+   last line; the text font is the editor's, and the background the editor's.
+2. In the view, type `/E486` and Enter, then `yy`; press `Ctrl-W p`, then `p`.
+   ⇒ The search finds the line; the editor has the keyboard back, and `p` pastes the `E486` line
+   into `notes.txt` (undo it with `u`).
+3. Scroll the view with the wheel, and click a line.
+   ⇒ The text scrolls; the click puts the view's cursor on that line.
+4. In `notes.txt`, type `:checkhealth neovim4eclipse` and Enter.
+   ⇒ The view's title says *Neovim: checkhealth*; the report shows `OK` lines in green and any
+   `WARNING` in Neovim's warning color, and names the plug-in's and Eclipse's versions.
+5. Switch Eclipse to the dark theme (*Preferences › General › Appearance*), restart if asked, and
+   repeat steps 1 and 4.
+   ⇒ The view's background is the dark editor's, and the colors stay readable on it.
+6. Press `q` in the view.
+   ⇒ The view closes; the next `:messages` opens it again.
+
+**Expect:** each step's result, after its ⇒.
+
 ## Input method and accent menu in the `:` box
 
 ### `ime-compose` Japanese typing in the `:` box reaches Neovim once

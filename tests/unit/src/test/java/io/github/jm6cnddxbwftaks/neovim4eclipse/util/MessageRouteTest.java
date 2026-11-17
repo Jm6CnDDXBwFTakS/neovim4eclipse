@@ -235,13 +235,6 @@ class MessageRouteTest {
         assertEquals(View.NONE, route.view());
     }
 
-    @Test
-    void theHistoryGoesToThePopup() {
-        route.commandLine(":messages");
-        route.add(new MessageEvent.History("E486: Pattern not found: x\n3 lines yanked"));
-        assertEquals(output(":messages", "E486: Pattern not found: x\n3 lines yanked"), route.view());
-    }
-
     /** A timer's message has no command line, so its output has no title. */
     @Test
     void outputNotFromATypedCommandHasNoTitle() {

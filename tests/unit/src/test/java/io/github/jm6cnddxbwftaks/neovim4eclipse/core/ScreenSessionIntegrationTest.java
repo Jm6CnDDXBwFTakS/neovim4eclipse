@@ -23,8 +23,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 
 /**
  * The second Neovim of the Neovim view against a real {@code nvim --embed}: its screen, keys,
@@ -39,6 +42,7 @@ class ScreenSessionIntegrationTest {
         final AtomicReference<GridSnapshot> screen = new AtomicReference<>();
         final List<List<Object>> yanks = new CopyOnWriteArrayList<>();
         final AtomicInteger ends = new AtomicInteger();
+        final AtomicInteger toEditor = new AtomicInteger();
 
         @Override
         public void screen(GridSnapshot snapshot) {
@@ -48,6 +52,11 @@ class ScreenSessionIntegrationTest {
         @Override
         public void yank(String register, String type, List<String> lines) {
             yanks.add(List.of(register, type, lines));
+        }
+
+        @Override
+        public void toEditor() {
+            toEditor.incrementAndGet();
         }
 
         @Override
@@ -178,5 +187,49 @@ class ScreenSessionIntegrationTest {
         waitFor(() -> recorder.ends.get() == 1, "the end");
         assertFalse(s.isAlive());
         assertThrows(Exception.class, () -> s.execLuaAsync("return 0", List.of()).get(TestWait.millis(), TimeUnit.MILLISECONDS));
+    }
+
+    /**
+     * The output profile: the text replaces what was shown, an error line takes Neovim's
+     * {@code ErrorMsg} color, {@code :messages} puts the cursor on the newest line, and {@code q}
+     * closes it all. Nothing can be typed into the text ({@code -M}).
+     */
+    @Test
+    void theOutputProfileShowsTextWithItsErrorsInColor() throws Exception {
+        try (ScreenSession s = start(OutputProfile.ARGS)) {
+            ViewText messages = ViewText.messages(new MessageEvent.History(List.of(
+                    new MessageEvent.History.Entry("", "plain line"),
+                    new MessageEvent.History.Entry("emsg", "E486: Pattern not found: x"))));
+            assertEquals(2L, ((Number) OutputProfile.show(s, messages, true)
+                    .get(TestWait.millis(), TimeUnit.MILLISECONDS)).longValue());
+            waitFor(() -> recorder.text().startsWith("plain line"), "the text: " + recorder.text());
+            GridSnapshot screen = recorder.screen.get();
+            assertEquals(1, screen.cursorRow(), "the newest message, last");
+            int plain = screen.attr(screen.hlAt(0, 0)).foreground();
+            int error = screen.attr(screen.hlAt(1, 0)).foreground();
+            assertTrue(error != GridEvent.NO_COLOR && error != plain, "ErrorMsg's color on the error line");
+
+            s.inputAsync("ggiinserted<Esc>");
+            pass(s);
+            assertTrue(recorder.text().startsWith("plain line"), "-M: nothing typed into the text: " + recorder.text());
+
+            OutputProfile.show(s, ViewText.checkhealth(List.of("vim.health: OK", "- OK fine")), true);
+            waitFor(() -> recorder.text().startsWith("vim.health"), "the report replacing the messages");
+            assertEquals(0, recorder.screen.get().cursorRow(), "a report starts at its top");
+            assertFalse(recorder.text().contains("plain line"), recorder.text());
+
+            s.inputAsync("q");
+            waitFor(() -> recorder.ends.get() == 1, "q closing it");
+        }
+    }
+
+    @Test
+    void ctrlWBackToTheEditor() throws Exception {
+        try (ScreenSession s = start(OutputProfile.ARGS)) {
+            s.inputAsync("<C-w>p");
+            s.inputAsync("<C-w><C-w>");
+            s.inputAsync("<C-w>k");
+            waitFor(() -> recorder.toEditor.get() == 3, "each key asking for the editor");
+        }
     }
 }

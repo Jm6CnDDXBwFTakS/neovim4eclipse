@@ -43,7 +43,8 @@ its messages and where the `:` box opens:
 - **Other messages** in the editor's text color: `3 lines yanked`, `3 substitutions on 3 lines`.
 
 As in Vim, the message stays until the next key; a click also hides it. A message too long for the
-line ends in `...`. Its tooltip shows all of it, and `:messages` lists the recent ones.
+line ends in `...`. Its tooltip shows all of it, and `:messages` lists the recent ones in the
+[Neovim view](#the-neovim-view-messages-checkhealth).
 
 The line shows every message of one line that Neovim gives, whatever printed it: a key, a `:` command
 (`:echo "hi"`, `:pwd`), a mapping, a timer or an autocommand; and the plug-in's own errors from the file
@@ -451,13 +452,14 @@ file info as usual, which says `[Not edited]` until the next write after such an
 
 Every other command is typed into Neovim as you wrote it, so it is in the history, `@:` repeats it and a
 macro being recorded contains it. Listings of more than one line (`:ls`, `:jumps`, `:marks`,
-`:registers` ...), shell output (`:!ls`, `:!make`), `:messages` and anything else of more than one
+`:registers` ...), shell output (`:!ls`, `:!make`) and anything else of more than one
 line show in a read-only box in the same place, with the command as its first line; output that keeps coming
 (`:!make`) is added while the box is open. `j`/`k`, Space/`b`, `g`/`G` and the arrow and page keys
 scroll it; any other key or a click closes it. Output that comes while you type elsewhere in Eclipse
 (a timer's or an autocommand's) opens the box without taking the keyboard from there. Like a message,
 it then closes with your next key or click in the editor, and the key works as usual; click into the
-box to scroll it. `:messages` keeps Neovim's message history either way. One-line output (`:echo "hi"`, `:set ts?`, a `:s` report) goes to
+box to scroll it. `:messages` and `:checkhealth` open the
+[Neovim view](#the-neovim-view-messages-checkhealth) instead, which stays open beside the code. One-line output (`:echo "hi"`, `:set ts?`, a `:s` report) goes to
 the message line instead, as on Neovim's own screen, and so do errors. Your own `:redir` collects as in Vim.
 
 ## Completion (`Ctrl-N`, `Ctrl-P`)
@@ -585,6 +587,38 @@ the cursor into it.
 `vim.g.neovim4eclipse_floating_windows = 0` in `init.lua` turns the drawing off; the windows then
 exist unseen, as before 0.2.23. Nothing is drawn either with `vim.g.neovim4eclipse_viewport = 0`:
 Neovim's screen is then not the editor's size, and a window "at the bottom" would land anywhere.
+
+## The Neovim view (`:messages`, `:checkhealth`)
+
+Two commands print more than the box over the editor is good for: `:messages`, Neovim's message
+history, and `:checkhealth`, its report on your setup. They open the **Neovim view** instead, an
+Eclipse view (first with Console and Problems; Eclipse remembers where you move it), titled with what
+it holds: *Neovim: messages*, *Neovim: checkhealth*.
+
+- **What you see:** Neovim's own screen, from a second Neovim the plug-in starts for the view. The
+  messages are in order, the newest last and the cursor on it, errors in Neovim's error color and
+  warnings in its warning color. The report is colored as Neovim colors `:checkhealth`, its
+  OK, WARNING and ERROR lines included. Running either again replaces what the view shows.
+- **It takes the keyboard**, as Vim's own `:messages` and `:checkhealth` do. Every key is Neovim's:
+  `/` searches, `n` goes on, `y` yanks into your Neovim's register of the same name (so `p` in an
+  editor pastes it; a plain `yy` fills the unnamed register, and the clipboard when your
+  `'clipboard'` says so). The left button and the wheel work as in Neovim. Eclipse's own shortcuts
+  stay Eclipse's, as in any view.
+- **Back to the editor:** `Ctrl-W p`, `Ctrl-W w` or `Ctrl-W k`, or a click in the editor.
+- **Closing it:** `q` or `:q`, or the view's close button. The next `:messages` opens it again.
+- **Only text goes over:** the second Neovim gets the lines, never a file name, and it starts
+  without your config or plug-ins (`--clean`), with writing turned off. It never writes a file, so
+  it cannot get in the way of your editors. Its look is Neovim's default colorscheme on your editor's
+  background, in Eclipse's text font; your mappings are not there.
+- **Long messages** in the view itself (a refusal after `:w`, say) do not stop at "Press ENTER":
+  they are cut to the first lines with a `[+N]` marker, and `g<` shows them all (Neovim's `ui2`).
+
+**`:checkhealth neovim4eclipse`** is the plug-in's own check: which Neovim runs and whether it is new
+enough, whether it is the dedicated Neovim (checked before it started) or a program of your own
+(`-Dneovim4eclipse.nvim`), the plug-in's and Eclipse's versions, and whether what
+[SECURITY.md](../SECURITY.md) turns off for the files you open is still off (modelines, the readers
+of URLs and archives, the `term://` reader). A plain `:checkhealth` runs it among all the others.
+Worth adding to a [problem report](../README.md#reporting-a-problem).
 
 ## Mouse
 
@@ -938,6 +972,13 @@ narrowly as it can, and it is listed here.
   file info (`"a.txt" 3 lines --33%--`) on every switch, which Eclipse does not do. Two such
   messages in a row also opened the output popup, which took the keyboard focus from the editor,
   and Eclipse's Undo then left Neovim's cursor a line off. A `:b` you type is not affected.
+
+- **`'runtimepath'`: one folder of the plug-in's appended.** `<plug-in folder>/runtime` (on Linux
+  `~/.local/share/neovim4eclipse-plugin/runtime`) holds one file, `lua/neovim4eclipse/health.lua`,
+  so that `:checkhealth` finds the plug-in's check ([The Neovim view](#the-neovim-view-messages-checkhealth));
+  `:checkhealth` looks for checks only among runtime files. The plug-in writes that file again at
+  each start and puts nothing else there, so the folder adds no plug-in, filetype script or color
+  scheme.
 
 ## When Neovim's copy and Eclipse's differ
 

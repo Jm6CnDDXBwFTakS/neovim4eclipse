@@ -12,6 +12,25 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- The **Neovim view**: `:messages` and `:checkhealth` open an Eclipse view (first with Console and
+  Problems) that shows them in a second Neovim, beside the code: search with `/`, yank with `y`
+  into your registers, `Ctrl-W p` back to the editor, `q` to close. Errors in the message history
+  show in Neovim's error color, and the report is colored as Neovim colors `:checkhealth`. The
+  second Neovim starts without your config and never writes a file
+  ([The Neovim view](docs/USER_GUIDE.md#the-neovim-view-messages-checkhealth)).
+- `:checkhealth neovim4eclipse`: which Neovim runs, whether it is the dedicated one, the plug-in's
+  and Eclipse's versions, and whether what SECURITY.md turns off for the files you open is still
+  off. For this, one folder of the plug-in's is appended to `'runtimepath'`
+  ([Neovim settings the plug-in changes](docs/USER_GUIDE.md#neovim-settings-the-plug-in-changes)).
+
+### Changed
+
+- `:messages` no longer opens the box over the editor; it opens the Neovim view. Before,
+  `:checkhealth` opened a window Eclipse could not show, which was closed at once with the message
+  "Window closed", and its `health://` buffer stayed behind for `:bnext` to find.
+
 ## [0.2.26] - 2026-11-17
 
 ### Changed

@@ -86,6 +86,12 @@ public final class ScreenSession implements AutoCloseable {
          */
         void yank(String register, String type, List<String> lines);
 
+        /**
+         * {@code Ctrl-W w}, {@code p} or {@code k} in the view ({@link LuaScripts#SCREEN_SETUP}):
+         * the keyboard goes back to the editor the user came from.
+         */
+        void toEditor();
+
         /** The Neovim process ended: {@link #close}, {@code :q} in the view, or a crash. Called once. */
         void ended();
     }
@@ -249,6 +255,7 @@ public final class ScreenSession implements AutoCloseable {
             switch (method) {
                 case "redraw" -> redraw(params);
                 case "eclipse_screen_yank" -> yank(params);
+                case "eclipse_screen_to_editor" -> listener.toEditor();
                 default -> {
                     // nothing else is expected from a Neovim that runs no plug-ins
                 }

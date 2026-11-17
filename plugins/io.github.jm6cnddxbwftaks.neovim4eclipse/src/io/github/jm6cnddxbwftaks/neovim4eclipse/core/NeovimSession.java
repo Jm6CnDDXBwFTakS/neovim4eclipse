@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +44,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
@@ -512,6 +514,16 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return answer;
     }
 
+    /**
+     * Registers {@code :checkhealth neovim4eclipse} ({@link HealthCheck}): writes the stub into
+     * {@code runtimeFolder} and sends the check. Blocks for one request; called once after
+     * {@link #start}, off the UI thread, as the start itself is.
+     */
+    public void installHealthCheck(Path runtimeFolder, HealthCheck.Info info) throws Exception {
+        HealthCheck.writeStub(runtimeFolder);
+        await(api.execLua(LuaScripts.HEALTH_CHECK, List.of(runtimeFolder.toString(), info.toLua())));
+    }
+
     /** The running Neovim's version ({@code 0.12.6}), or {@code ""} if unknown. */
     public String neovimVersion() {
         return connection.version();
@@ -647,6 +659,19 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     public void removeOutputListener(Consumer<CommandOutput> listener) {
         status.removeOutputListener(listener);
+    }
+
+    /**
+     * Notified (on the RPC reader thread) of text for the Neovim view: {@code :messages} with its
+     * errors marked, and a {@code :checkhealth} report ({@code util/ViewText}). Neither goes to the
+     * output popup.
+     */
+    public void addViewTextListener(Consumer<ViewText> listener) {
+        status.addViewTextListener(listener);
+    }
+
+    public void removeViewTextListener(Consumer<ViewText> listener) {
+        status.removeViewTextListener(listener);
     }
 
     /**
@@ -858,6 +883,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         String background = dark ? "dark" : "light";
         submit("'background' " + background, Level.FINE,
                 () -> await(api.execLua(LuaScripts.SET_BACKGROUND, List.of(background))));
+    }
+
+    /**
+     * Puts text yanked in the Neovim view into this Neovim's register of the same name
+     * ({@link LuaScripts#SET_REGISTER_FROM_VIEW}), so that {@code p} in an editor pastes it. A
+     * plain {@code yy} in the view (register {@code ""}) fills the unnamed register, and the
+     * clipboard as well when this Neovim's {@code 'clipboard'} says so. Example:
+     * {@code ("a", "V", ["OK"])} after {@code "ayy} on a line {@code OK}.
+     */
+    public void setRegisterFromViewAsync(String register, String type, List<String> lines) {
+        submit("register from the Neovim view", Level.FINE,
+                () -> await(api.execLua(LuaScripts.SET_REGISTER_FROM_VIEW, List.of(register, type, lines))));
     }
 
     /**
@@ -2244,6 +2281,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public void onMessageEvent(MessageEvent event) {
             status.onMessageEvent(event);
+        }
+
+        @Override
+        public void onViewText(ViewText text) {
+            status.onViewText(text);
         }
 
         /**

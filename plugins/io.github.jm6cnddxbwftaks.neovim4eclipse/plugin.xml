@@ -1232,6 +1232,37 @@
       <startup class="io.github.jm6cnddxbwftaks.neovim4eclipse.EarlyStartup"/>
    </extension>
 
+   <!-- The Neovim view (editor/NeovimView): a second Neovim's screen, for :messages and
+        :checkhealth; editor/NeovimViewOpener opens it when one of them runs. Listed under Window >
+        Show View > Other... > Neovim for Eclipse. Not allowed twice: one second Neovim per window. -->
+   <extension point="org.eclipse.ui.views">
+      <category
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.views"
+            name="Neovim for Eclipse">
+      </category>
+      <view
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.views.neovim"
+            name="Neovim"
+            category="io.github.jm6cnddxbwftaks.neovim4eclipse.views"
+            class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimView"
+            allowMultiple="false">
+      </view>
+   </extension>
+
+   <!-- Its first place, in every perspective: in the stack of the Problems view (with Console, at
+        the bottom in the usual perspectives), not shown until :messages or :checkhealth opens it.
+        Eclipse remembers where the user moves it. -->
+   <extension point="org.eclipse.ui.perspectiveExtensions">
+      <perspectiveExtension targetID="*">
+         <view
+               id="io.github.jm6cnddxbwftaks.neovim4eclipse.views.neovim"
+               relative="org.eclipse.ui.views.ProblemView"
+               relationship="stack"
+               visible="false">
+         </view>
+      </perspectiveExtension>
+   </extension>
+
    <extension point="org.eclipse.ui.preferencePages">
       <page
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.page"

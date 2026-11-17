@@ -14,6 +14,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
@@ -200,6 +201,15 @@ final class NotificationBridge implements Incoming {
         void onMessageEvent(MessageEvent event);
 
         /**
+         * Text for the Neovim view that is no message: a {@code :checkhealth} report, which the
+         * {@code WinNew} net of {@link LuaScripts#WINDOWS} took from its window
+         * ({@code eclipse_view_text}). A default that does nothing, for the fakes of tests that do
+         * not use it.
+         */
+        default void onViewText(ViewText text) {
+        }
+
+        /**
          * The grid events of one {@code redraw} notification, in order (the UI is attached with
          * {@code ext_multigrid}; see {@link GridEvent}): what Neovim's windows show.
          */
@@ -260,6 +270,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_search" -> onSearch(args);
             case "eclipse_highlights" -> onHighlights(args);
             case "eclipse_window_closed" -> onWindowClosed(args);
+            case "eclipse_view_text" -> onViewText(args);
             case "eclipse_echo" -> onEcho(args);
             case "eclipse_cmdwin" -> onCommandWindow(args);
             case "eclipse_cmdwin_closed" -> sink.onCommandWindowClosed();
@@ -364,6 +375,22 @@ final class NotificationBridge implements Incoming {
         }
         Integer id = toInt(raw);
         return id == null ? -1 : id;
+    }
+
+    /**
+     * Payload: {@code [kind, lines]}, from the {@code WinNew} net of {@link LuaScripts#WINDOWS}.
+     * Only the kind {@code "checkhealth"} is known; any other is ignored, so that no text reaches
+     * the view under a name the plug-in did not choose.
+     */
+    private void onViewText(List<?> args) {
+        if (args.size() < 2 || !ViewText.CHECKHEALTH.equals(args.get(0)) || !(args.get(1) instanceof List<?> raw)) {
+            return;
+        }
+        List<String> lines = new ArrayList<>();
+        for (Object line : raw) {
+            lines.add(String.valueOf(line));
+        }
+        sink.onViewText(ViewText.checkhealth(lines));
     }
 
     private void onWindowClosed(List<?> args) {

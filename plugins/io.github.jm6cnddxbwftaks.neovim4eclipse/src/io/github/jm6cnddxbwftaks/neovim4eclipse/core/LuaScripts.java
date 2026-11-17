@@ -1137,6 +1137,13 @@ final class LuaScripts {
      * the user closed in Neovim ({@code :tabclose}, a plug-in's {@code nvim_win_close}) is forgotten,
      * and its editor gets a new one at its next attach. The plug-in's own closes are quiet and do not
      * send it. A home window closed that way is opened again by the next {@code show} of it.
+     *
+     * <p>The second net, {@code WinNew}, closes a window Eclipse cannot show (a stray split, the
+     * quickfix window, a focused float) once the command that opened it is over. One window it
+     * reads first: a {@code :checkhealth} report's (its buffer's filetype is {@code checkhealth}),
+     * whose lines it sends as {@code eclipse_view_text("checkhealth", lines)} for the Neovim view,
+     * then wipes the {@code health://} buffer, with no message ({@code docs/ARCHITECTURE.md},
+     * decision 10).
      */
     static final String WINDOWS = """
             local home_buf = tonumber((select(1, ...)))
@@ -1400,6 +1407,25 @@ final class LuaScripts {
             -- A floating window is closed too when it opened with the focus (a picker's prompt,
             -- :Lazy, a dashboard): Eclipse does not draw it, and it would take the keys typed in the
             -- editor. Floating windows without the focus stay, unseen and harmless.
+            -- A :checkhealth report opens in a window of its own however it is asked for (a new
+            -- tab, a split with :vert, a float with vim.g.health's style 'float'), and Neovim has
+            -- filled it and set its filetype by the time this net runs (after the command). Its
+            -- text goes to the Neovim view instead (eclipse_view_text): read before the window
+            -- closes, since closing the float wipes its buffer; then the buffer is wiped, so that
+            -- :ls and :bnext never meet health://. Only text leaves, never a file name.
+            local function take_health_report(win)
+              local buf = vim.api.nvim_win_get_buf(win)
+              if vim.bo[buf].filetype ~= 'checkhealth' then
+                return false
+              end
+              local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+              pcall(vim.api.nvim_win_close, win, true)
+              if vim.api.nvim_buf_is_valid(buf) then
+                pcall(vim.api.nvim_buf_delete, buf, { force = true })
+              end
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_text', 'checkhealth', lines)
+              return true
+            end
             vim.api.nvim_create_autocmd('WinNew', {
               group = group,
               callback = function()
@@ -1411,7 +1437,9 @@ final class LuaScripts {
                     local new = not seen[win]
                     seen[win] = true
                     local wintype = vim.fn.win_gettype(win)
-                    if new and win == current and wintype == 'popup' and not own[win] then
+                    -- A report taken leaves its window closed: the checks below then pass it by.
+                    local taken = new and not own[win] and take_health_report(win)
+                    if not taken and new and win == current and wintype == 'popup' and not own[win] then
                       local name = float_name(win)
                       local prompt = vim.bo[vim.api.nvim_win_get_buf(win)].buftype == 'prompt'
                       if pcall(vim.api.nvim_win_close, win, true) then
@@ -1423,7 +1451,7 @@ final class LuaScripts {
                         end
                       end
                     end
-                    local reason = not own[win] and why_closed[wintype]
+                    local reason = not taken and not own[win] and why_closed[wintype]
                     if reason and vim.api.nvim_win_is_valid(win) and pcall(vim.api.nvim_win_close, win, true) then
                       if quickfix and (wintype == 'quickfix' or wintype == 'loclist') then
                         list = list or wintype
@@ -5638,6 +5666,10 @@ final class LuaScripts {
      *       yank in the view reaches the editing Neovim's register of the same name. Example:
      *       {@code "ayy} on a line {@code OK} sends {@code ("a", "V", {"OK"})}; a plain {@code yy}
      *       sends {@code regname ""}.</li>
+     *   <li>{@code Ctrl-W w}, {@code Ctrl-W p} and {@code Ctrl-W k} (with or without Ctrl on the
+     *       second key), in normal mode: {@code eclipse_screen_to_editor}, and Eclipse gives the
+     *       keyboard back to the editor the user came from. In Vim these keys go to the next,
+     *       previous or upper window; the view lies below the editor, so they lead back to it.</li>
      *   <li>Neovim's own message and command-line UI, {@code ui2} (new in Neovim 0.12, experimental:
      *       {@code :help ui2}), loaded with {@code pcall}. Why: the second Neovim draws its messages
      *       into its screen, and without {@code ui2} messages longer than the message area stop at
@@ -5673,6 +5705,11 @@ final class LuaScripts {
                 vim.rpcnotify(channel, 'eclipse_screen_yank', e.regname, e.regtype, e.regcontents)
               end,
             })
+            for _, key in ipairs({ '<C-w>w', '<C-w><C-w>', '<C-w>p', '<C-w><C-p>', '<C-w>k', '<C-w><C-k>' }) do
+              vim.keymap.set('n', key, function()
+                vim.rpcnotify(channel, 'eclipse_screen_to_editor')
+              end, { desc = 'Back to the Eclipse editor' })
+            end
             return {
               write = vim.o.write,
               modeline = vim.o.modeline,
@@ -5681,5 +5718,135 @@ final class LuaScripts {
               shadafile = vim.o.shadafile,
               ui2 = ui2,
             }
+            """;
+
+    /**
+     * The output profile of the Neovim view ({@code :messages}, {@code :checkhealth}): puts text
+     * into the second Neovim's one buffer, replacing what it showed, and returns its line count.
+     * Arguments: the lines; the filetype ({@code "checkhealth"}, or {@code ""} for none); the lines
+     * to color, as {@code {line, group}} pairs (0-based lines, Neovim's highlight groups:
+     * {@code {0, "ErrorMsg"}}); {@code 'background'} ({@code "light"} or {@code "dark"}, the
+     * editor's, so Neovim's default colors suit it); and where the cursor goes ({@code "end"} for
+     * {@code :messages}, whose newest message is last; {@code "top"} otherwise).
+     *
+     * <p>The buffer is a scratch one ({@code buftype=nofile}), changeable only while its text is
+     * set: the profile starts Neovim with {@code -M}, and the buffer is {@code nomodifiable} again
+     * at the end. {@code q} quits, which ends the second Neovim and closes the view, as {@code q}
+     * closes Neovim's own {@code :checkhealth}. Example: {@code ({"E486: x", "3 lines yanked"}, "",
+     * {{0, "ErrorMsg"}}, "dark", "end")} shows two lines, the first in red, the cursor on the second.
+     */
+    static final String SCREEN_SHOW_TEXT = """
+            local lines, filetype, highlights, background, cursor = ...
+            if background == 'light' or background == 'dark' then
+              vim.o.background = background
+            end
+            local buf = vim.api.nvim_get_current_buf()
+            vim.bo[buf].buftype = 'nofile'
+            vim.bo[buf].modifiable = true
+            vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+            vim.bo[buf].modifiable = false
+            local ns = vim.api.nvim_create_namespace('neovim4eclipse.view')
+            vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+            for _, h in ipairs(highlights) do
+              pcall(vim.api.nvim_buf_set_extmark, buf, ns, h[1], 0, { line_hl_group = h[2] })
+            end
+            vim.bo[buf].filetype = filetype
+            local count = vim.api.nvim_buf_line_count(buf)
+            vim.api.nvim_win_set_cursor(0, { cursor == 'end' and count or 1, 0 })
+            vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the Neovim view' })
+            return count
+            """;
+
+    /**
+     * Registers {@code :checkhealth neovim4eclipse} in the editing Neovim ({@link HealthCheck}): run
+     * once at start, after the user's config. Arguments: the folder holding the stub
+     * {@code lua/neovim4eclipse/health.lua}, appended to {@code 'runtimepath'} unless it is there
+     * already (so that {@code :checkhealth} finds the check), and what only Eclipse knows
+     * ({@code HealthCheck.Info.toLua}: {@code minimum}, {@code program}, {@code plugin},
+     * {@code eclipse}, {@code readers}).
+     *
+     * <p>The report, in three sections: <b>Neovim</b>, its version against the minimum (an error
+     * below it) and whether it is the dedicated Neovim (a warning for a program of the user's:
+     * unchecked and unsupported); <b>Eclipse</b>, the plug-in's and Eclipse's versions; <b>Off for
+     * the files you open</b>, read live, since {@code init.lua} or a later {@code :set} may have
+     * turned one back on (a warning then): modelines, each reader of {@code NvimExecutable.READERS_OFF}
+     * (its "already loaded" variable still set), and the {@code term://} reader (no
+     * {@code BufReadCmd} left in the group {@code nvim.terminal}). Example line: {@code - OK
+     * Neovim 0.12.6 (Neovim for Eclipse needs 0.12.6 or newer)}.
+     */
+    static final String HEALTH_CHECK = """
+            local folder, info = ...
+            if not vim.tbl_contains(vim.opt.runtimepath:get(), folder) then
+              vim.opt.runtimepath:append(folder)
+            end
+            local M = {}
+            function M.check()
+              local h = vim.health
+              h.start('Neovim')
+              local v = vim.version()
+              local version = string.format('%d.%d.%d', v.major, v.minor, v.patch)
+              if vim.version.lt(v, info.minimum) then
+                h.error('Neovim ' .. version .. ' is older than ' .. info.minimum .. ', which Neovim for Eclipse needs')
+              else
+                h.ok('Neovim ' .. version .. ' (Neovim for Eclipse needs ' .. info.minimum .. ' or newer)')
+              end
+              if info.program == 'dedicated' then
+                h.ok('The dedicated Neovim: its files were checked against the release before it started')
+              else
+                h.warn('A Neovim program of your own (-Dneovim4eclipse.nvim): run unchecked, and not supported',
+                  { 'Leave out -Dneovim4eclipse.nvim to use the dedicated Neovim; Get Neovim installs it' })
+              end
+              h.start('Eclipse')
+              h.info('Neovim for Eclipse ' .. info.plugin)
+              h.info('Eclipse ' .. (info.eclipse ~= '' and info.eclipse or 'version unknown'))
+              h.start('Off for the files you open (SECURITY.md)')
+              if vim.go.modeline then
+                h.warn("Modelines are on again: a file's text can set options", { 'Your init.lua or a :set modeline turned them on' })
+              else
+                h.ok('Modelines are off')
+              end
+              for _, name in ipairs(info.readers) do
+                if vim.g[name] ~= nil then
+                  h.ok('g:' .. name .. ' is set: that reader stays off')
+                else
+                  h.warn('g:' .. name .. ' is unset: that reader is on again', { 'Your init.lua unset it' })
+                end
+              end
+              local ok, reads = pcall(vim.api.nvim_get_autocmds, { group = 'nvim.terminal', event = 'BufReadCmd' })
+              if ok and #reads > 0 then
+                h.warn('The term:// reader is on again: a buffer named term://... runs its command')
+              else
+                h.ok('The term:// reader is off')
+              end
+            end
+            package.loaded['neovim4eclipse.health'] = M
+            return true
+            """;
+
+    /**
+     * Puts a yank from the Neovim view into the editing Neovim's register of the same name
+     * ({@code NeovimSession.setRegisterFromViewAsync}). Arguments: the register's name ({@code ""}
+     * for the unnamed one), Neovim's register type and the lines. The unnamed register fills
+     * {@code "}, and {@code +} or {@code *} too when {@code 'clipboard'} holds {@code unnamedplus}
+     * or {@code unnamed}, as a yank in an editor would. A name a yank cannot have (one of the
+     * read-only registers, {@code =}) is ignored. Answers whether a register was set.
+     */
+    static final String SET_REGISTER_FROM_VIEW = """
+            local name, regtype, lines = ...
+            if name == '' then
+              vim.fn.setreg('"', lines, regtype)
+              local clipboard = vim.o.clipboard
+              if clipboard:find('unnamedplus', 1, true) then
+                vim.fn.setreg('+', lines, regtype)
+              elseif clipboard:find('unnamed', 1, true) then
+                vim.fn.setreg('*', lines, regtype)
+              end
+              return true
+            end
+            if not name:match('^[%w"+*_-]$') then
+              return false
+            end
+            vim.fn.setreg(name, lines, regtype)
+            return true
             """;
 }

@@ -11,16 +11,21 @@ import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
+import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
+import org.osgi.framework.Version;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.HealthCheck;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ClipboardBridge;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.EditorAttachManager;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimViewOpener;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolderExit;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.QuickfixLists;
@@ -30,6 +35,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LogLevelSwitch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimInstaller;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimOption;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.RecentWarnings;
@@ -224,8 +230,29 @@ public class Activator extends AbstractUIPlugin {
             session = NeovimSession.start(getNvimExecutable(), List.of(), ClipboardBridge.INSTANCE,
                     getBundle().getVersion().toString());
             session.setStatusItems(getStatusItems());
+            // :messages and :checkhealth open the Neovim view (docs/ARCHITECTURE.md, decision 10).
+            session.addViewTextListener(NeovimViewOpener::show);
+            installHealthCheck(session);
         }
         return session;
+    }
+
+    /**
+     * Registers {@code :checkhealth neovim4eclipse} ({@code core/HealthCheck}). A failure is logged
+     * and costs only the check: the session works without it.
+     */
+    private void installHealthCheck(NeovimSession started) {
+        try {
+            boolean dedicated = NvimExecutable.find(getNvimExecutable()).kind() == NvimExecutable.Kind.DEDICATED;
+            Bundle platform = Platform.getBundle("org.eclipse.platform");
+            String eclipse = platform == null ? "" : platform.getVersion().getMajor() + "."
+                    + platform.getVersion().getMinor() + "." + platform.getVersion().getMicro();
+            Version own = getBundle().getVersion();
+            started.installHealthCheck(HealthCheck.runtimeFolder(PluginFolders.pluginFolder()),
+                    new HealthCheck.Info(dedicated, own.getMajor() + "." + own.getMinor() + "." + own.getMicro(), eclipse));
+        } catch (Exception e) {
+            Logger.getLogger(Activator.class.getName()).log(Level.WARNING, "Could not register :checkhealth neovim4eclipse", e);
+        }
     }
 
     /**

@@ -65,17 +65,23 @@ class MessageEventTest {
                 MessageEvent.fromRedraw(redraw));
     }
 
-    /** {@code :messages}: one line per entry; an entry that appends continues the line before. */
+    /**
+     * {@code :messages}: one entry per message, with its kind; an entry that appends continues the
+     * one before, whose kind it keeps.
+     */
     @Test
-    void theHistoryIsOneLinePerEntry() {
+    void theHistoryIsOneEntryPerMessageWithItsKind() {
         List<?> entries = List.of(
                 List.of("emsg", chunks("E486: Pattern not found: nope"), false),
                 List.of("", chunks("3 substitutions"), false),
                 List.of("", chunks(" on 3 lines"), true));
         List<?> redraw = List.of(List.of("msg_history_show", List.of(entries, false)));
 
-        assertEquals(List.of(new MessageEvent.History("E486: Pattern not found: nope\n3 substitutions on 3 lines")),
-                MessageEvent.fromRedraw(redraw));
+        MessageEvent.History history = new MessageEvent.History(List.of(
+                new MessageEvent.History.Entry("emsg", "E486: Pattern not found: nope"),
+                new MessageEvent.History.Entry("", "3 substitutions on 3 lines")));
+        assertEquals(List.of(history), MessageEvent.fromRedraw(redraw));
+        assertEquals("E486: Pattern not found: nope\n3 substitutions on 3 lines", history.text());
     }
 
     /** The protocol is Neovim's: a surprise is skipped, never thrown. */

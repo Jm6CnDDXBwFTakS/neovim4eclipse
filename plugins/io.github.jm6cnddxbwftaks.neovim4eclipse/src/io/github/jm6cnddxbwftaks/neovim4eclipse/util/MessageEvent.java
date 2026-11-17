@@ -55,8 +55,35 @@ public sealed interface MessageEvent {
     record Showcmd(String text) implements MessageEvent {
     }
 
-    /** {@code msg_history_show}: what {@code :messages} lists, one entry per line. */
-    record History(String text) implements MessageEvent {
+    /**
+     * {@code msg_history_show}: what {@code :messages} lists, one entry per message, each with its
+     * kind, so that the Neovim view can color the errors. Example: {@code [("emsg", "E486: Pattern
+     * not found: nope"), ("", "3 substitutions on 3 lines")]}.
+     */
+    record History(List<Entry> entries) implements MessageEvent {
+
+        public History {
+            entries = List.copyOf(entries);
+        }
+
+        /**
+         * One message of the history: its kind as {@link Show#kind} has it ({@code "emsg"},
+         * {@code "wmsg"}, {@code ""} ...) and its text, which may hold line breaks.
+         */
+        public record Entry(String kind, String text) {
+        }
+
+        /** The entries' texts, one entry per line, as {@code :messages} prints them. */
+        public String text() {
+            StringBuilder out = new StringBuilder();
+            for (Entry e : entries) {
+                if (!out.isEmpty()) {
+                    out.append('\n');
+                }
+                out.append(e.text());
+            }
+            return out.toString();
+        }
     }
 
     /** {@code flush}: Neovim finished one redraw; a good moment to show what arrived. */
@@ -107,22 +134,28 @@ public sealed interface MessageEvent {
                 args.size() <= 3 || flag(args, 3)); // history; an older Neovim without it: kept
     }
 
-    /** The entries' texts, one per line; an entry with {@code append} continues the line before. */
+    /**
+     * The entries, each {@code [kind, content, append]}; an entry with {@code append} continues the
+     * one before (its text joins that entry's, whose kind it keeps).
+     */
     private static History history(List<?> args) {
         if (args.isEmpty() || !(args.get(0) instanceof List<?> entries)) {
             return null;
         }
-        StringBuilder out = new StringBuilder();
+        List<History.Entry> out = new ArrayList<>();
         for (Object e : entries) {
             if (e instanceof List<?> entry && entry.size() >= 2) {
                 boolean append = entry.size() > 2 && Boolean.TRUE.equals(entry.get(2));
-                if (!out.isEmpty() && !append) {
-                    out.append('\n');
+                String text = text(entry.get(1));
+                if (append && !out.isEmpty()) {
+                    History.Entry last = out.remove(out.size() - 1);
+                    out.add(new History.Entry(last.kind(), last.text() + text));
+                } else {
+                    out.add(new History.Entry(string(entry.get(0)), text));
                 }
-                out.append(text(entry.get(1)));
             }
         }
-        return new History(out.toString());
+        return new History(out);
     }
 
     /** The texts of a {@code content} list of {@code [attr_id, text, hl_id]} chunks, joined. */

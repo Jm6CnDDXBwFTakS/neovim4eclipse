@@ -10,6 +10,7 @@ import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageRoute;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
 /**
@@ -70,6 +71,7 @@ final class StatusTracker {
 
     private final ListenerList<StatusInfo> statusListeners = new ListenerList<>("status", Level.FINE);
     private final ListenerList<CommandOutput> outputListeners = new ListenerList<>("output", Level.FINE);
+    private final ListenerList<ViewText> viewTextListeners = new ListenerList<>("view text", Level.FINE);
     private final ListenerList<String> recordingListeners = new ListenerList<>("recording", Level.FINE);
 
     /**
@@ -117,12 +119,18 @@ final class StatusTracker {
 
     /** One message event from Neovim; see the class comment. */
     void onMessageEvent(MessageEvent event) {
+        if (event instanceof MessageEvent.History history) {
+            // :messages goes to the Neovim view, not the output popup (docs/ARCHITECTURE.md,
+            // decision 10); the message line keeps what it showed.
+            viewTextListeners.fire(ViewText.messages(history));
+            return;
+        }
         Delivery delivery = null;
         CommandOutput output = null;
         synchronized (this) {
             switch (event) {
                 case MessageEvent.Show show -> route.add(show);
-                case MessageEvent.History history -> route.add(history);
+                case MessageEvent.History history -> throw new AssertionError("handled above");
                 case MessageEvent.Showcmd cmd -> showcmd = cmd.text();
                 case MessageEvent.Flush flush -> {
                     MessageRoute.View view = route.view();
@@ -236,6 +244,23 @@ final class StatusTracker {
 
     void removeOutputListener(Consumer<CommandOutput> listener) {
         outputListeners.remove(listener);
+    }
+
+    /**
+     * Listens for text for the Neovim view ({@code :messages}, {@code :checkhealth}); called on the
+     * RPC reader thread.
+     */
+    void addViewTextListener(Consumer<ViewText> listener) {
+        viewTextListeners.add(listener);
+    }
+
+    void removeViewTextListener(Consumer<ViewText> listener) {
+        viewTextListeners.remove(listener);
+    }
+
+    /** Text for the Neovim view that is no message ({@code :checkhealth}): to the same listeners. */
+    void onViewText(ViewText text) {
+        viewTextListeners.fire(text);
     }
 
     void addRecordingListener(Consumer<String> listener) {

@@ -711,6 +711,30 @@ t.test('a split a plug-in opens in an editor\'s tab is closed again: the safety 
   t.ok(vim.v.errmsg:find('Window closed', 1, true), vim.v.errmsg)
 end)
 
+t.test(':checkhealth hands its report to the Neovim view and leaves no window, buffer or message', function()
+  local win = commands()
+  vim.v.errmsg = ''
+  t.forget()
+  vim.cmd('checkhealth vim.health') -- opens in a new tab: the editor's buffer is not empty
+  t.wait_for('the report', function() return #t.sent('eclipse_view_text') == 1 end)
+  local sent = t.sent('eclipse_view_text')[1]
+  t.eq('checkhealth', sent[1])
+  t.ok(table.concat(sent[2], '\n'):find('vim.health', 1, true), vim.inspect(sent[2]))
+  t.eq(-1, vim.fn.bufnr('health://'), 'wiped, so :ls and :bnext never meet it')
+  t.eq(win, vim.api.nvim_get_current_win(), "back in the editor's window")
+  t.eq('', vim.v.errmsg, 'no "Window closed" message: the report went somewhere')
+end)
+
+t.test(':checkhealth as a float (vim.g.health style) is read before closing wipes it', function()
+  commands()
+  vim.g.health = { style = 'float' }
+  t.forget()
+  vim.cmd('checkhealth vim.health')
+  t.wait_for('the report', function() return #t.sent('eclipse_view_text') == 1 end)
+  t.ok(#t.sent('eclipse_view_text')[1][2] > 1, 'the lines, read while the float was open')
+  vim.g.health = nil
+end)
+
 t.test('floating windows are left alone', function()
   commands()
   local float = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })

@@ -34,6 +34,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
@@ -434,16 +435,81 @@ class NeovimSessionIntegrationTest {
         }
     }
 
-    /** {@code :messages} arrives as its own event (msg_history_show) and opens the popup. */
+    /**
+     * {@code :messages} arrives as its own event (msg_history_show) and goes to the Neovim view,
+     * its errors marked; the output popup gets nothing.
+     */
     @Test
-    void theMessageHistoryOpensThePopup() throws Exception {
+    void theMessageHistoryGoesToTheViewWithItsErrorsMarked() throws Exception {
         try (NeovimSession s = start()) {
             Shown shown = new Shown(s);
+            List<ViewText> texts = new CopyOnWriteArrayList<>();
+            s.addViewTextListener(texts::add);
             s.commandAsync("echomsg 'remember me'");
+            s.commandAsync("lua vim.api.nvim_echo({ { 'E999: made up' } }, true, { err = true })");
             s.commandAsync("messages");
-            waitFor(() -> !shown.outputs.isEmpty(), "the history");
-            assertEquals(":messages", shown.outputs.get(0).title());
-            assertTrue(shown.outputs.get(0).text().contains("remember me"), "the history: " + shown.outputs);
+            waitFor(() -> !texts.isEmpty(), "the history");
+            ViewText text = texts.get(0);
+            assertEquals(ViewText.MESSAGES, text.title());
+            int remembered = text.lines().indexOf("remember me");
+            int error = text.lines().indexOf("E999: made up");
+            assertTrue(remembered >= 0 && error > remembered, "the history: " + text.lines());
+            assertTrue(text.highlights().contains(new ViewText.LineHighlight(error, "ErrorMsg")), text.highlights().toString());
+            assertTrue(text.highlights().stream().noneMatch(h -> h.line() == remembered), "a plain message stays plain");
+            NeovimBarrier.pass(s);
+            assertTrue(shown.outputs.isEmpty(), "nothing for the popup: " + shown.outputs);
+        }
+    }
+
+    /**
+     * {@code :checkhealth}'s report goes to the Neovim view too, taken from its window by the
+     * {@code WinNew} net; its buffer is wiped, so {@code :ls} never lists {@code health://}.
+     */
+    @Test
+    void aCheckhealthReportGoesToTheView() throws Exception {
+        try (NeovimSession s = start()) {
+            List<ViewText> texts = new CopyOnWriteArrayList<>();
+            s.addViewTextListener(texts::add);
+            s.commandAsync("checkhealth vim.health");
+            waitFor(() -> !texts.isEmpty(), "the report");
+            ViewText text = texts.get(0);
+            assertEquals(ViewText.CHECKHEALTH, text.title());
+            assertEquals(ViewText.CHECKHEALTH, text.filetype());
+            assertTrue(String.join("\n", text.lines()).contains("vim.health"), text.lines().toString());
+            assertEquals(-1L, ((Number) s.lua("return vim.fn.bufnr('health://')")).longValue(), "the buffer is wiped");
+        }
+    }
+
+    /** {@code :checkhealth neovim4eclipse}: the plug-in's own check, registered after the start. */
+    @Test
+    void thePluginsOwnHealthCheckReports(@TempDir Path runtime) throws Exception {
+        try (NeovimSession s = start()) {
+            s.installHealthCheck(runtime, new HealthCheck.Info(false, "0.2.27", "4.38.0"));
+            List<ViewText> texts = new CopyOnWriteArrayList<>();
+            s.addViewTextListener(texts::add);
+            s.commandAsync("checkhealth neovim4eclipse");
+            waitFor(() -> !texts.isEmpty(), "the report");
+            String report = String.join("\n", texts.get(0).lines());
+            assertTrue(report.contains("OK Neovim " + s.neovimVersion()), report);
+            assertTrue(report.contains("WARNING A Neovim program of your own"), report);
+            assertTrue(report.contains("Neovim for Eclipse 0.2.27"), report);
+            assertTrue(report.contains("Eclipse 4.38.0"), report);
+            assertTrue(report.contains("OK Modelines are off"), report);
+            assertTrue(report.contains("OK The term:// reader is off"), report);
+        }
+    }
+
+    /** A yank in the Neovim view lands in the editing Neovim's register of the same name. */
+    @Test
+    void aYankFromTheViewFillsTheRegister() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setRegisterFromViewAsync("a", "V", List.of("from the view"));
+            s.setRegisterFromViewAsync("", "v", List.of("plain"));
+            s.setRegisterFromViewAsync("=", "v", List.of("1+1")); // no yank fills the expression register
+            NeovimBarrier.pass(s);
+            assertEquals("from the view\n", s.lua("return vim.fn.getreg('a')"));
+            assertEquals("V", s.lua("return vim.fn.getregtype('a')"));
+            assertEquals("plain", s.lua("return vim.fn.getreg('\"')"));
         }
     }
 

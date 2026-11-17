@@ -23,9 +23,11 @@ import java.util.Set;
  *   <li>A listing ({@code list_cmd}) follows the same two rules, as on Neovim's own screen: one
  *       line goes to the message line ({@code :set ts?}, {@code :ls} with one buffer, the file info
  *       of a typed {@code :b}), more to the popup ({@code :ls}, {@code :marks}).</li>
- *   <li>Shell output always goes to the popup, even when one line long: the {@code shell_*} kinds,
- *       and {@code :messages}. (Shell output arrives appended to the {@code shell_cmd} message, so
- *       that one counts as output too.)</li>
+ *   <li>Shell output always goes to the popup, even when one line long: the {@code shell_*} kinds.
+ *       (Shell output arrives appended to the {@code shell_cmd} message, so that one counts as
+ *       output too.) {@code :messages} is not routed here at all: it is its own event
+ *       ({@link MessageEvent.History}), which goes to the Neovim view ({@code core/StatusTracker},
+ *       {@link ViewText#messages}).</li>
  *   <li>Not shown: the echo of a search ({@code search_cmd}: Eclipse's box showed it) and of a
  *       shell command (the first line of {@code shell_cmd}: the popup's title is the command), and
  *       empty messages.</li>
@@ -61,13 +63,11 @@ import java.util.Set;
  */
 public final class MessageRoute {
 
-    /** The kind given to {@code :messages}' list, which is its own event ({@link MessageEvent.History}). */
-    private static final String HISTORY_KIND = "history";
     /** Kinds that are errors: drawn in the error color on the message line. */
-    private static final Set<String> ERROR_KINDS = Set.of("emsg", "echoerr", "lua_error", "rpc_error");
+    static final Set<String> ERROR_KINDS = Set.of("emsg", "echoerr", "lua_error", "rpc_error");
     /** Kinds that are output to read: always the popup. (A listing, {@code list_cmd}, is not: see the class comment.) */
     private static final Set<String> OUTPUT_KINDS = Set.of("shell_cmd", "shell_out", "shell_err",
-            "shell_ret", HISTORY_KIND);
+            "shell_ret");
     /** The kind of a quickfix command's {@code (1 of 2): ...}, which overwrites the passing notes before it, as an error does. */
     private static final String QUICKFIX_KIND = "quickfix";
     /** Kinds that only echo what was typed. */
@@ -167,11 +167,6 @@ public final class MessageRoute {
     /** Not shown: the echo of what was typed, or an empty message. */
     private static boolean isHidden(Message m) {
         return ECHO_KINDS.contains(m.kind) || m.text.isBlank();
-    }
-
-    /** Adds {@code :messages}' list (typed, so the popup is titled with the command line). */
-    public void add(MessageEvent.History history) {
-        messages.add(new Message(HISTORY_KIND, history.text(), "", "typed_cmd", true));
     }
 
     /** What to show for the messages collected since {@link #clear}. */

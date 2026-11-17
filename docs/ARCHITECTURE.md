@@ -407,6 +407,31 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   `ui2` (new in Neovim 0.12, experimental, `:help ui2`), which has no such prompt: long messages
   are cut with a `[+N]` marker and `g<` shows them all. Loaded with `pcall`; a Neovim without it
   keeps the prompt, logged once at start.
+- **What reaches it**, in the editing session's view-text listeners (`NeovimSession.addViewTextListener`,
+  which `Activator` points at `editor/NeovimViewOpener`): `:messages`, from its own UI event
+  (`msg_history_show`, see "Messages and output"), and a `:checkhealth` report, which the
+  `WinNew` net of `LuaScripts.WINDOWS` takes from its window. Every way the report opens (a new tab,
+  a split with `:vert`, a focused float with `vim.g.health`'s style `'float'`) passes that one net,
+  with the report already in the buffer: the net reads its lines first (closing the float wipes its
+  buffer), closes the window, wipes `health://` and sends `eclipse_view_text("checkhealth", lines)`.
+  `NotificationBridge` passes on that kind only.
+- **The view** (`editor/NeovimView`, `plugin.xml`: `org.eclipse.ui.views`, placed with Problems
+  through `perspectiveExtensions`) holds one second Neovim, started in a job at its first text with
+  the output profile (`core/OutputProfile`: `-M`; `LuaScripts.SCREEN_SHOW_TEXT` puts the text in a
+  scratch buffer, the highlights as extmarks, the filetype, `'background'` from the editor's, and
+  maps `q` to `:quit`). Keys go through `util/KeyMapping` as in the `q:` panel, the mouse through
+  `editor/GridMouse` (shared with that panel), the size through `util/ScreenInput.cells`.
+  `GridCanvas.Look` gives it the text font and the colors of the editor the text came from.
+- **Back to the editor**: `SCREEN_SETUP` maps `Ctrl-W w`, `p` and `k` to `eclipse_screen_to_editor`;
+  the view activates the editor it last got text from.
+- **Yanks**: `eclipse_screen_yank` goes to `NeovimSession.setRegisterFromViewAsync`
+  (`LuaScripts.SET_REGISTER_FROM_VIEW`): the register of the same name, the unnamed one also to
+  `+` or `*` as `'clipboard'` says; a name a yank cannot have is ignored.
+- **`:checkhealth neovim4eclipse`** (`core/HealthCheck`, `LuaScripts.HEALTH_CHECK`): `:checkhealth`
+  finds checks only among runtime files, so a stub `lua/neovim4eclipse/health.lua` is written at
+  every start into `<plug-in folder>/runtime`, which is appended to the editing Neovim's
+  `'runtimepath'`; the check itself is sent from Java and put in `package.loaded`, where `require`
+  finds it first. The folder holds nothing else, so it adds no script that runs by itself.
 - **The end**: `:q` in the view ends the process (its last window). `SCREEN_SETUP`'s
   `VimLeavePre` asks Eclipse first (`eclipse_screen_leaving`, a request, so it arrives before the
   process ends), and the end of Neovim's output is then expected (`NeovimConnection.expectEnd`),
@@ -512,7 +537,8 @@ key or a submitted line until the next) in a `util/MessageRoute` and passes on t
 | What arrived | Where it goes | Example |
 | --- | --- | --- |
 | one message of one line, a listing (`list_cmd`) too | the message line; errors (`emsg`, `echoerr`, `lua_error`, `rpc_error`) in the error color | `3 lines yanked`, `E486: Pattern not found: x`, `:echo "hi"`, `:set ts?`, a typed `:b`'s file info |
-| shell output (`shell_*`, `:messages`), even one line | the output popup, titled with the command line | `:!make`, `:messages` |
+| shell output (`shell_*`), even one line | the output popup, titled with the command line | `:!make` |
+| `:messages` (`msg_history_show`, its own event) | the Neovim view, not through `MessageRoute`: `StatusTracker` makes it a `util/ViewText` (each entry's lines, errors marked `ErrorMsg`, warnings `WarningMsg`) for the view-text listeners (decision 10) | `:messages` |
 | more than one line, in one message or several | the output popup, as Vim shows it above "Press ENTER" | `:ls`, a failed save with its `Error in BufWriteCmd Autocommands` header, a Lua traceback |
 | the echo of a search (`search_cmd`) or of a shell command (first line of `shell_cmd`), empty messages | nowhere | |
 
