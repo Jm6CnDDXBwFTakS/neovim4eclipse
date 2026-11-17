@@ -97,13 +97,34 @@ final class NeovimConnection implements AutoCloseable {
     static final Map<String, Object> TERMINAL_UI = terminalUi();
 
     private static Map<String, Object> terminalUi() {
-        List<String> on = List.of("rgb", "ext_cmdline", "ext_messages", "ext_linegrid", "ext_multigrid", "ext_popupmenu");
+        return uiOptions(List.of("rgb", "ext_cmdline", "ext_messages", "ext_linegrid", "ext_multigrid", "ext_popupmenu"));
+    }
+
+    /**
+     * The UI a second Neovim attaches as, the one whose whole screen the Neovim view draws
+     * ({@link ScreenSession}): 24-bit color and {@code ext_linegrid} only. Everything else, the
+     * command line and the messages included, Neovim draws into its one grid, as on a terminal, so
+     * the view shows the screen as it is and needs no command box of its own
+     * ({@code util/ScreenGrid}). The "Press ENTER" prompt that long messages would bring is
+     * avoided inside that Neovim, by its own {@code ui2} ({@link LuaScripts#SCREEN_SETUP}).
+     */
+    static final Map<String, Object> SCREEN_UI = uiOptions(List.of("rgb", "ext_linegrid"));
+
+    /** Every {@code nvim_ui_attach} option the plug-in names, those in {@code on} true, in a fixed order. */
+    private static Map<String, Object> uiOptions(List<String> on) {
         Map<String, Object> options = new LinkedHashMap<>();
         for (String name : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                 "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
             options.put(name, on.contains(name));
         }
         return Collections.unmodifiableMap(options); // keeps the order: the same bytes every time
+    }
+
+    /**
+     * What {@code nvim_ui_attach} is called with: the screen's size in cells and the UI options.
+     * Example: the editing Neovim's {@code new Ui(120, 40, TERMINAL_UI)}.
+     */
+    record Ui(int width, int height, Map<String, Object> options) {
     }
 
     /** Upper bound for the requests made while opening. */
@@ -156,6 +177,14 @@ final class NeovimConnection implements AutoCloseable {
      * @throws Exception if the process cannot start or does not answer in time
      */
     static NeovimConnection open(String nvimPath, List<String> extraArgs, String clientVersion) throws Exception {
+        return open(nvimPath, extraArgs, clientVersion, new Ui(UI_WIDTH, UI_HEIGHT, TERMINAL_UI));
+    }
+
+    /**
+     * {@link #open(String, List, String)} with a UI of the caller's: a second Neovim attaches with
+     * {@link #SCREEN_UI} at the size of the view that shows it ({@link ScreenSession}).
+     */
+    static NeovimConnection open(String nvimPath, List<String> extraArgs, String clientVersion, Ui ui) throws Exception {
         List<String> cmd = NvimExecutable.embedCommand(nvimPath, extraArgs);
         // Inherit the environment: Neovim and the programs it runs (:!, :terminal) need PATH and the rest.
         ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -171,7 +200,7 @@ final class NeovimConnection implements AutoCloseable {
             // Before attaching: a too old Neovim then never runs the user's init.lua for nothing.
             connection.checkVersion();
             // Without a UI attached, nvim_input is not processed reliably under --embed.
-            await(connection.api.uiAttach(UI_WIDTH, UI_HEIGHT, TERMINAL_UI));
+            await(connection.api.uiAttach(ui.width(), ui.height(), ui.options()));
             connection.startupErrors = connection.waitForStartup();
         } catch (Exception e) {
             connection.close();
@@ -411,6 +440,25 @@ final class NeovimConnection implements AutoCloseable {
 
     boolean isAlive() {
         return process != null && process.isAlive();
+    }
+
+    /**
+     * Completes when the Neovim process has ended, for whatever reason: {@link #close}, a
+     * {@code :qa!}, or the user's {@code :q} in a Neovim whose last window that was
+     * ({@link ScreenSession}). Completed on a thread of the JDK's, so what is chained to it must
+     * not touch SWT.
+     */
+    CompletableFuture<Void> ended() {
+        return process.onExit().thenApply(p -> null);
+    }
+
+    /**
+     * Says that Neovim is about to end on its own, so that the end of its output is logged as
+     * expected, not as "Neovim exited unexpectedly" ({@link RpcChannel#closing()}). Example: a
+     * second Neovim reports {@code VimLeavePre} when the user types {@code :q}.
+     */
+    void expectEnd() {
+        channel.closing();
     }
 
     /**

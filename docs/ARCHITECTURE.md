@@ -373,6 +373,45 @@ those modes: `editor/NeovimWheel`, a display filter, swallows it and sends its l
 which steps the top line as `Ctrl-E` does; the editor then follows Neovim's top line. A top line from Neovim becomes the agreed one once
 applied, so it is not sent back. Design and decisions: [design/VIEWPORT.md](design/VIEWPORT.md).
 
+### 10. A second Neovim, which never writes a file
+
+Some of what Neovim shows has no Eclipse editor behind it: a `:checkhealth` report, the
+`:messages` history, later the help pages. The Neovim view shows these in a second Neovim, beside
+the editing one, whose whole screen Eclipse draws (`core/ScreenSession`). The second Neovim knows
+nothing of the editing one's buffers: it is handed text, never a file name.
+
+```text
+editing Neovim ── text (lines, a filetype) ──▶ ScreenSession ──▶ second Neovim (nvim --embed)
+second Neovim ── redraw: one grid, the whole screen ──▶ util/ScreenGrid ──▶ GridSnapshot ──▶ the view
+the view ── keys, mouse, size ──▶ ScreenSession (its own input thread) ──▶ second Neovim
+second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the editing Neovim's register
+```
+
+- **The one rule: it never writes a file.** Two Neovims and Eclipse's documents changing the same
+  file would drift apart (lost edits, swap prompts, reloads). So every second Neovim starts with
+  `ScreenSession.FIXED_ARGS`: `--clean` (no user config, no plug-ins, no shada file), `-n` (no swap
+  file), `--cmd "set nowrite nomodeline"`. And the rule is checked where it ends, not trusted on
+  the way: once started, `LuaScripts.SCREEN_SETUP` answers the options as Neovim has them, and
+  `ScreenSession.unsafeOptions` refuses the start unless `write`, `modeline` and `undofile` are
+  off, `updatecount` is 0 and `shadafile` is `NONE`. One check covers every way of writing a
+  buffer (`:w`, `:saveas`, `:update`, `ZZ`, an autocmd's write). What the user types in the view
+  (`:set write`, `:!`) stays their own, as in the editing Neovim.
+- **The screen, as on a terminal**: attached with `NeovimConnection.SCREEN_UI` (24-bit color and
+  `ext_linegrid`, nothing else), Neovim draws its windows, status line, `:` line and messages
+  into grid 1, which `util/ScreenGrid` keeps; both it and `util/Grids` (the editing Neovim's grid
+  per window) keep cells in `util/GridCells`. The first screen comes before the session listens,
+  so the session sets the size it attached with and asks for `:redraw!`.
+- **No "Press ENTER"**: without `ext_messages`, Neovim would stop at that prompt when messages
+  overflow, and hold back every call that is not "fast" (`nvim_exec_lua`, the `:qa!` that ends
+  it) until a key is pressed in the view. `SCREEN_SETUP` turns on Neovim's own message UI,
+  `ui2` (new in Neovim 0.12, experimental, `:help ui2`), which has no such prompt: long messages
+  are cut with a `[+N]` marker and `g<` shows them all. Loaded with `pcall`; a Neovim without it
+  keeps the prompt, logged once at start.
+- **The end**: `:q` in the view ends the process (its last window). `SCREEN_SETUP`'s
+  `VimLeavePre` asks Eclipse first (`eclipse_screen_leaving`, a request, so it arrives before the
+  process ends), and the end of Neovim's output is then expected (`NeovimConnection.expectEnd`),
+  not logged as a crash. `ScreenSession.Listener.ended` follows once, whatever ended it.
+
 ## Not done
 
 - **New-file buffer, shared editors.** A new file's editor is opened by location and switched to the
@@ -392,6 +431,7 @@ applied, so it is not sent back. Design and decisions: [design/VIEWPORT.md](desi
 | SWT UI | Widget updates, `VerifyKeyListener`, the command-line box, all `IDocument` edits and reads (a push from the input thread takes its snapshot of the text with `syncExec`) |
 | input executor | All blocking `await(...)` RPC |
 | RPC reader (`RpcChannel`, one per session) | Completing the futures; dispatch to listeners; schedule UI work with `Display.asyncExec`; answer Neovim's requests (a clipboard paste waits for the UI thread at most 2 s, a save at most 30 s) |
+| second Neovim's input executor (`ScreenSession`, `neovim4eclipse-screen-input`) | Every write to the second Neovim (keys, mouse, size, a profile's Lua), in order; it waits for no answer |
 
 Never call `await` on the UI thread for key handling.
 

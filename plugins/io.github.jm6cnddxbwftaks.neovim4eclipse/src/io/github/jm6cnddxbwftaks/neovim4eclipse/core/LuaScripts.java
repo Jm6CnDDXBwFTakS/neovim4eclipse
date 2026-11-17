@@ -5623,4 +5623,63 @@ final class LuaScripts {
             end
             return set
             """;
+
+    /**
+     * Run once in the <em>second</em> Neovim, the one whose whole screen the Neovim view draws
+     * ({@link ScreenSession}), right after it started. Argument: Eclipse's channel number. Not run
+     * in the editing Neovim.
+     *
+     * <ul>
+     *   <li>{@code VimLeavePre}: {@code eclipse_screen_leaving}, a request (not a notification),
+     *       so that it has reached Eclipse before the process ends, whatever ended it ({@code :q},
+     *       {@code :qa}, {@code ZZ}). Eclipse then takes the end of Neovim's output as expected,
+     *       and closes the view.</li>
+     *   <li>{@code TextYankPost}: {@code eclipse_screen_yank(regname, regtype, lines)}, so that a
+     *       yank in the view reaches the editing Neovim's register of the same name. Example:
+     *       {@code "ayy} on a line {@code OK} sends {@code ("a", "V", {"OK"})}; a plain {@code yy}
+     *       sends {@code regname ""}.</li>
+     *   <li>Neovim's own message and command-line UI, {@code ui2} (new in Neovim 0.12, experimental:
+     *       {@code :help ui2}), loaded with {@code pcall}. Why: the second Neovim draws its messages
+     *       into its screen, and without {@code ui2} messages longer than the message area stop at
+     *       a "Press ENTER" prompt, while which Neovim holds back every call that is not "fast"
+     *       ({@code nvim_exec_lua}, {@code nvim_command}): new content for the view, and the
+     *       {@code :qa!} that ends it, would wait for a key in the view. With {@code ui2} there is
+     *       no such prompt: long messages are cut with a {@code [+N]} marker, and {@code g<}
+     *       shows them all in a pager window. A Neovim without it (its module moved, say) keeps
+     *       the classic prompt; the view still works, and the answer's {@code ui2} says so.</li>
+     * </ul>
+     *
+     * <p>Answers what the one rule of the second Neovim rests on, the options that keep it from
+     * writing files, as Neovim has them once started: {@code write}, {@code modeline},
+     * {@code updatecount} (0: no swap file, {@code -n}), {@code undofile} and {@code shadafile}.
+     * {@link ScreenSession} refuses to go on unless each is off ({@code shadafile} is
+     * {@code "NONE"}). And {@code ui2}: whether that UI is on. Example answer: {@code {write = false,
+     * modeline = false, updatecount = 0, undofile = false, shadafile = "NONE", ui2 = true}}.
+     */
+    static final String SCREEN_SETUP = """
+            local channel = tonumber((select(1, ...)))
+            local ui2 = pcall(function() require('vim._core.ui2').enable({}) end)
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_screen', { clear = true })
+            vim.api.nvim_create_autocmd('VimLeavePre', {
+              group = group,
+              callback = function()
+                pcall(vim.rpcrequest, channel, 'eclipse_screen_leaving')
+              end,
+            })
+            vim.api.nvim_create_autocmd('TextYankPost', {
+              group = group,
+              callback = function()
+                local e = vim.v.event
+                vim.rpcnotify(channel, 'eclipse_screen_yank', e.regname, e.regtype, e.regcontents)
+              end,
+            })
+            return {
+              write = vim.o.write,
+              modeline = vim.o.modeline,
+              updatecount = vim.o.updatecount,
+              undofile = vim.o.undofile,
+              shadafile = vim.o.shadafile,
+              ui2 = ui2,
+            }
+            """;
 }

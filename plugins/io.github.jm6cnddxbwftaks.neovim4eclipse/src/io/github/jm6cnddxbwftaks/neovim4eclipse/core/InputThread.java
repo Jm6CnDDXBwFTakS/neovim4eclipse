@@ -33,11 +33,24 @@ final class InputThread {
         void run() throws Exception;
     }
 
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "neovim4eclipse-input");
-        t.setDaemon(true); // never keeps the JVM (Eclipse) from exiting
-        return t;
-    });
+    private final ExecutorService executor;
+
+    /** The editing Neovim's thread, named {@code neovim4eclipse-input}. */
+    InputThread() {
+        this("neovim4eclipse-input");
+    }
+
+    /**
+     * A thread of the given name, so that a thread dump tells which Neovim it serves. Example:
+     * {@code neovim4eclipse-screen-input} for the second Neovim of the Neovim view ({@link ScreenSession}).
+     */
+    InputThread(String threadName) {
+        executor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, threadName);
+            t.setDaemon(true); // never keeps the JVM (Eclipse) from exiting
+            return t;
+        });
+    }
 
     /**
      * Queues {@code work} behind everything submitted before.
