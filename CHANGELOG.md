@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.25] - 2026-11-17
+
 ### Added
 
 - The labels of a jump plug-in show in the editor: flash, leap, hop and mini.jump2d draw a letter
