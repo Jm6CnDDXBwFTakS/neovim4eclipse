@@ -65,75 +65,7 @@ public final class Grids {
      */
     public static final int MAX_FLOAT_CELLS = 250_000;
 
-    /** One grid: its size and cells. */
-    private static final class Grid {
-        int width;
-        int height;
-        String[] text;
-        int[] hl;
-
-        Grid(int width, int height) {
-            resize(width, height);
-        }
-
-        void resize(int newWidth, int newHeight) {
-            String[] newText = new String[Math.max(0, newWidth) * Math.max(0, newHeight)];
-            int[] newHl = new int[newText.length];
-            Arrays.fill(newText, " ");
-            for (int r = 0; r < Math.min(height, newHeight); r++) { // what fits stays, as Neovim expects
-                for (int c = 0; c < Math.min(width, newWidth); c++) {
-                    newText[r * newWidth + c] = text[r * width + c];
-                    newHl[r * newWidth + c] = hl[r * width + c];
-                }
-            }
-            width = Math.max(0, newWidth);
-            height = Math.max(0, newHeight);
-            text = newText;
-            hl = newHl;
-        }
-
-        void clear() {
-            Arrays.fill(text, " ");
-            Arrays.fill(hl, 0);
-        }
-
-        void line(int row, int colStart, List<GridEvent.Cell> cells) {
-            if (row < 0 || row >= height) {
-                return;
-            }
-            for (int i = 0; i < cells.size(); i++) {
-                int col = colStart + i;
-                if (col >= 0 && col < width) {
-                    text[row * width + col] = cells.get(i).text();
-                    hl[row * width + col] = cells.get(i).hl();
-                }
-            }
-        }
-
-        /** {@link GridEvent.Scroll}: rows move up by {@code rows} inside the region. */
-        void scroll(int top, int bot, int left, int right, int rows) {
-            top = Math.max(0, top);
-            bot = Math.min(height, bot);
-            left = Math.max(0, left);
-            right = Math.min(width, right);
-            if (rows > 0) {
-                for (int r = top; r < bot - rows; r++) {
-                    copyRow(r + rows, r, left, right);
-                }
-            } else if (rows < 0) {
-                for (int r = bot - 1; r >= top - rows; r--) {
-                    copyRow(r + rows, r, left, right);
-                }
-            }
-        }
-
-        private void copyRow(int from, int to, int left, int right) {
-            System.arraycopy(text, from * width + left, text, to * width + left, right - left);
-            System.arraycopy(hl, from * width + left, hl, to * width + left, right - left);
-        }
-    }
-
-    private final Map<Integer, Grid> grids = new HashMap<>();
+    private final Map<Integer, GridCells> grids = new HashMap<>();
     private final Map<Integer, Integer> windowOfGrid = new HashMap<>();
     /** Where each grid's window is on Neovim's screen, as last said; a float's and a layout window's alike. */
     private final Map<Integer, GridEvent.WinPos> placeOfGrid = new HashMap<>();
@@ -202,16 +134,16 @@ public final class Grids {
     public void apply(GridEvent event) {
         switch (event) {
             case GridEvent.Resize e -> {
-                Grid grid = grids.get(e.grid());
+                GridCells grid = grids.get(e.grid());
                 if (grid == null) {
-                    grids.put(e.grid(), new Grid(e.width(), e.height()));
+                    grids.put(e.grid(), new GridCells(e.width(), e.height()));
                 } else {
                     grid.resize(e.width(), e.height());
                 }
                 touched(e.grid());
             }
             case GridEvent.Clear e -> {
-                withGrid(e.grid(), Grid::clear);
+                withGrid(e.grid(), GridCells::clear);
                 touched(e.grid());
             }
             case GridEvent.Line e -> {
@@ -273,7 +205,7 @@ public final class Grids {
             return Optional.empty();
         }
         Integer gridId = gridOf(drawnWindow);
-        Grid grid = gridId == null ? null : grids.get(gridId);
+        GridCells grid = gridId == null ? null : grids.get(gridId);
         if (grid == null) {
             return Optional.empty(); // its win_pos has not come yet: stays changed until it does
         }
@@ -322,7 +254,7 @@ public final class Grids {
             long cells = 0;
             for (Map.Entry<Integer, GridEvent.WinPos> e : candidates) {
                 GridEvent.WinPos place = e.getValue();
-                Grid grid = grids.get(e.getKey());
+                GridCells grid = grids.get(e.getKey());
                 long size = (long) grid.width * grid.height; // as long: two large ints would wrap
                 if (floats.size() >= MAX_FLOATS || cells + size > MAX_FLOAT_CELLS) {
                     if (!limitLogged) {
@@ -348,7 +280,7 @@ public final class Grids {
     }
 
     /** {@code grid} as it stands, with the highlights it uses; the cursor only when asked for and on it. */
-    private GridSnapshot snapshot(int win, int gridId, Grid grid, boolean withCursor) {
+    private GridSnapshot snapshot(int win, int gridId, GridCells grid, boolean withCursor) {
         Set<Integer> used = new HashSet<>();
         for (int id : grid.hl) {
             used.add(id);
@@ -431,8 +363,8 @@ public final class Grids {
         }
     }
 
-    private void withGrid(int id, java.util.function.Consumer<Grid> action) {
-        Grid grid = grids.get(id);
+    private void withGrid(int id, java.util.function.Consumer<GridCells> action) {
+        GridCells grid = grids.get(id);
         if (grid != null) {
             action.accept(grid);
         }
