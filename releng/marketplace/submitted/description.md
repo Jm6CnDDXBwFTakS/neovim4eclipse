@@ -17,12 +17,14 @@ buffer you see; Eclipse keeps owning files, rendering, content assist and its ow
 - Neovim's keys run Eclipse's commands: `gd` Open Declaration, `K` hover, `grn` Rename,
   `gra` Quick Fix, `grr` References.
 - Folding with `zo`, `zc` and `zM` on Eclipse's own folds (methods, imports, comments).
+- `:terminal` opens Eclipse's Terminal view, with a shell in the file's folder.
 
 **Requires:**
 
-- Neovim 0.12.6. After installing, a *Get Neovim* dialog opens when Eclipse starts: it can
-  download the official release into the plug-in's own folder and check it. A Neovim of your own,
-  0.12.6 or newer, can be named instead with `-Dneovim4eclipse.nvim`.
+- Neovim 0.12.6. After installing, a *Get Neovim* dialog opens when Eclipse starts. It
+  downloads the official release into the plug-in's own folder, or installs an archive you
+  downloaded yourself (for a machine that is offline or behind a proxy), and checks it either way.
+  A Neovim of your own, 0.12.6 or newer, can be named instead with `-Dneovim4eclipse.nvim`.
 - Eclipse 2024-12 (4.34) or newer, on Java 21 or newer.
 
 **Signed releases:** Eclipse asks whether to trust the key that signed the plug-in, *Neovim for
