@@ -380,20 +380,23 @@ gets in your way:
    `nnoremap` to `zE` still reach Neovim's own `zE`, and so does a key that `'langmap'` turns into
    one of the five when it is typed slowly after `z`. Other buffers are not affected, and
    `vim.g.neovim4eclipse_folds = 0` leaves these keys alone everywhere.
-7. **Neovim plug-ins that draw are shown only in part.** Eclipse draws the editor. Of Neovim's
-   floating windows it draws those that do not take the keyboard (a panel of key hints such as
-   which-key's, a note or progress window opened in the background; see
-   [Floating windows](docs/USER_GUIDE.md#floating-windows)). Not drawn: windows that take the
-   keyboard (pickers such as Telescope and fzf-lua, file trees, dashboards, `:Lazy`), the menus
-   of completion plug-ins (nvim-cmp, blink.cmp; Neovim's built-in list for `Ctrl-N` is drawn, see
-   [Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and windows that follow typing in
-   insert mode. Plug-ins that work on
-   text (surround, commentary, text objects, mappings of your own) work as in a terminal. A floating
-   window that opens with the focus (a picker's prompt, `:Lazy`) is closed again at once, with a
-   message, since it would take the keys typed in the editor. A plug-in
-   can still slip one past (a window opened without autocommands, or focused a moment later); if
-   keys seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave such plug-ins
-   out in Eclipse (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in
+7. **Neovim plug-ins that draw are shown only in part.** Eclipse draws the editor, not Neovim, so
+   only some of what plug-ins draw appears:
+   - **Shown:** floating windows that do not take the keyboard (a panel of key hints such as
+     which-key's, a note or progress window opened in the background; see
+     [Floating windows](docs/USER_GUIDE.md#floating-windows)), Neovim's built-in completion list
+     for `Ctrl-N` ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and the labels of
+     jump plug-ins (flash, leap, hop, mini.jump2d; see [Jump labels](docs/USER_GUIDE.md#jump-labels)).
+   - **Not shown:** windows that take the keyboard (pickers such as Telescope and fzf-lua, file
+     trees, dashboards, `:Lazy`), the menus of completion plug-ins (nvim-cmp, blink.cmp), and
+     windows that follow typing in insert mode.
+
+   Plug-ins that work on text (surround, commentary, text objects, mappings of your own) work as in
+   a terminal. A floating window that opens with the focus (a picker's prompt, `:Lazy`) is closed
+   again at once, with a message, since it would take the keys typed in the editor. A plug-in can
+   still slip one past (a window opened without autocommands, or focused a moment later); if keys
+   seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave such plug-ins out
+   in Eclipse (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in
    [Your `init.lua` in Eclipse](#your-initlua-in-eclipse)).
 
 ## Reporting a problem
