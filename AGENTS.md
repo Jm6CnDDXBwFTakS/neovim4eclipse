@@ -64,7 +64,7 @@ java releng/tools/checks/Proxy.java               # an HTTP proxy on 127.0.0.1:3
 java releng/tools/neovim/NeovimUpgrade.java 0.13.0  # move to a new Neovim release (data file, copies, checks, tests; docs/UPGRADING.md)
 java releng/tools/eclipse/EclipseUpgrade.java newest  # test with the newest Eclipse release; oldest <release> raises the floor; smoke installs into both (docs/UPGRADING.md)
 java releng/tools/maven/MavenUpgrade.java        # move to the newest Maven 3.9.x and Maven wrapper (checked downloads, tests, one commit each; docs/UPGRADING.md)
-java releng/tools/plugins/TestPlugins.java fetch  # the pinned Neovim plug-ins the jump-label tests run, into target/test-plugins (update <name>, then accept <name> <commit>, moves a pin; docs/UPGRADING.md)
+java releng/tools/plugins/TestPlugins.java fetch  # the pinned Neovim plug-ins the jump-label tests and the gallery run, into target/test-plugins (update <name> <commit>, then accept <name> <commit> <sha256>, moves a pin to a commit you chose; docs/UPGRADING.md)
 java releng/tools/dependencies/Dependencies.java  # move libraries, Maven plug-ins and GitHub Actions to their newest releases, by dependabot.yml's rules (docs/UPGRADING.md)
 java releng/tools/marketplace/Marketplace.java    # the Marketplace listing page; pictures takes the screenshots and records demo.gif, logo renders the PNGs (docs/design/MARKETPLACE.md)
 java releng/tools/release/Release.java            # a release, step by step: status and next step (a JDK of release 22 or newer; CONTRIBUTING.md, "Releasing")

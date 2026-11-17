@@ -6,6 +6,7 @@ package plugins;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -29,8 +30,10 @@ public final class Pins {
     private static final Pattern NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]*");
     private static final Pattern COMMIT = Pattern.compile("[0-9a-f]{40}");
     private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
-    /** Only https, and no characters that would need escaping in a URL or mean something to a shell. */
+    /** Only https, and no characters that would need escaping in a URL. */
     private static final Pattern REPOSITORY = Pattern.compile("https://[A-Za-z0-9.-]+(/[A-Za-z0-9._-]+)+");
+    /** The tool's own folders beside the plug-ins' ({@code TestPluginsTool}: downloads, and archives kept for vetting). */
+    private static final List<String> RESERVED = List.of("archives", "vetting");
     private static final List<String> FIELDS = List.of("repository", "commit", "sha256", "license");
 
     private Pins() {
@@ -63,15 +66,29 @@ public final class Pins {
         }
     }
 
+    /** Stops the tool unless {@code sha256} has the form of one: 64 hex digits, lowercase. */
+    public static void checkSha256(String sha256) {
+        check(SHA256, sha256, "the SHA-256", "64 hex digits, lowercase");
+    }
+
     /** Stops the tool unless {@code commit} is a full commit id: it goes into a URL and a file name. */
     public static void checkCommit(String commit) {
-        check(COMMIT, commit, "the commit", "a full commit id, 40 hex digits");
+        check(COMMIT, commit, "the commit", "a full commit id, 40 hex digits in lowercase (no short id, no tag)");
     }
 
     /**
      * The pins in the file's text, in the file's order. Lines are {@code name.field=value};
      * {@code #} starts a comment. A plug-in with a field missing, a value of the wrong form or an
      * unknown field stops the tool: half a pin must not be mistaken for a whole one.
+     *
+     * <p>A line has exactly that form, with no space before the name or around the {@code =}: the
+     * tests read the pinned commit from this file with a plain search for {@code name.commit=}
+     * ({@code PinnedPlugins}, {@code jump_plugins_spec.lua}), and a line this method took but
+     * they did not find would skip or fail them with a wrong reason. One form, checked here.
+     *
+     * <p>A name the tool uses itself under {@code target/test-plugins} is refused
+     * ({@link #RESERVED}, and one ending in {@code .pin} or {@code .unpacking}): unpacking such a
+     * plug-in would replace the tool's own folder.
      */
     public static List<Pin> parse(String text) {
         Map<String, Map<String, String>> byName = new LinkedHashMap<>();
@@ -82,17 +99,28 @@ public final class Pins {
             if (line.isEmpty() || line.startsWith("#")) {
                 continue;
             }
+            if (!raw.stripTrailing().equals(line) || line.contains(" =") || line.contains("= ") || line.contains("\t")) {
+                throw new ToolFailure("line " + number + " has a space or tab before the name or around the =; write name.field=value: " + line);
+            }
             int eq = line.indexOf('=');
             int dot = eq < 0 ? -1 : line.lastIndexOf('.', eq);
             if (eq < 0 || dot <= 0) {
                 throw new ToolFailure("line " + number + " is not name.field=value: " + line);
             }
             String name = line.substring(0, dot);
-            String field = line.substring(dot + 1, eq).strip();
+            String field = line.substring(dot + 1, eq); // as written: "flash. commit" is no field
+            String lower = name.toLowerCase(Locale.ROOT); // Windows and macOS take Vetting and vetting for one folder
+            if (RESERVED.contains(lower) || lower.endsWith(".pin") || lower.endsWith(".unpacking")) {
+                throw new ToolFailure("line " + number + ": " + name + " is a name the tool uses itself under target/test-plugins");
+            }
             if (!NAME.matcher(name).matches() || !FIELDS.contains(field)) {
                 throw new ToolFailure("line " + number + ": a key is <name>.<field>, the field one of " + FIELDS + ": " + line);
             }
-            if (byName.computeIfAbsent(name, n -> new LinkedHashMap<>()).put(field, line.substring(eq + 1).strip()) != null) {
+            if (!byName.containsKey(name) && byName.keySet().stream().anyMatch(name::equalsIgnoreCase)) {
+                // Flash and flash would share one folder under target/test-plugins on Windows and macOS.
+                throw new ToolFailure("line " + number + ": " + name + " differs from another pin's name only in case");
+            }
+            if (byName.computeIfAbsent(name, n -> new LinkedHashMap<>()).put(field, line.substring(eq + 1)) != null) {
                 throw new ToolFailure("line " + number + ": " + name + "." + field + " is given twice");
             }
         }

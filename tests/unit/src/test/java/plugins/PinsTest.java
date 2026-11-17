@@ -30,7 +30,7 @@ class PinsTest {
             flash.sha256=%s
             flash.license=Apache-2.0
 
-            mini.jump2d.repository = https://github.com/echasnovski/mini.jump2d
+            mini.jump2d.repository=https://github.com/echasnovski/mini.jump2d
             mini.jump2d.commit=%s
             mini.jump2d.sha256=%s
             mini.jump2d.license=MIT
@@ -44,7 +44,7 @@ class PinsTest {
         assertEquals(new Pin("flash", "https://github.com/folke/flash.nvim", COMMIT, SHA, "Apache-2.0"), flash);
         assertEquals("https://github.com/folke/flash.nvim/archive/" + COMMIT + ".zip", flash.archiveUrl());
         assertEquals(COMMIT + " " + SHA, flash.marker());
-        assertEquals("https://github.com/echasnovski/mini.jump2d", pins.get(1).repository(), "spaces around = do not count");
+        assertEquals("https://github.com/echasnovski/mini.jump2d", pins.get(1).repository());
     }
 
     /** Half a pin, or a value of the wrong form, stops the tool: it must not be taken for a whole one. */
@@ -58,6 +58,16 @@ class PinsTest {
         refused(TEXT + "flash.commit=" + COMMIT + "\n", "given twice");
         refused(TEXT + "flash.branch=main\n", "the field one of");
         refused(TEXT + "no equals sign\n", "not name.field=value");
+        // One form only: the tests find a pin's commit by searching the file for "name.commit=".
+        refused(TEXT.replace("flash.commit=", "flash.commit = "), "around the =");
+        refused(TEXT.replace("flash.commit=", "  flash.commit="), "before the name");
+        refused(TEXT.replace("flash.commit=", "flash. commit="), "the field one of");
+        refused(TEXT.replace("flash.commit=", "flash.commit=\u2003"), "flash.commit");
+        // A plug-in named as one of the tool's own folders would be unpacked over it.
+        refused(TEXT.replace("flash.", "vetting."), "the tool uses itself");
+        refused(TEXT.replace("flash.", "x.pin."), "the tool uses itself");
+        refused(TEXT.replace("flash.", "Vetting."), "the tool uses itself");
+        refused(TEXT + TEXT.substring(0, TEXT.indexOf("mini.")).replace("flash.", "Flash."), "only in case");
     }
 
     @Test

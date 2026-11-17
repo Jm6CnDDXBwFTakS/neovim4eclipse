@@ -36,7 +36,7 @@ import java.util.stream.Stream;
  *       Kept between runs while its files have the pinned tree hash, so only the first run (and the
  *       first after a Neovim upgrade) downloads it.</li>
  *   <li><b>Fetches the pinned plug-ins the tests run</b> ({@link #PLUGINS}) into
- *       {@code target/test-plugins/}: flash, leap, hop and mini.jump2d, each at the commit and
+ *       {@code target/test-plugins/}: flash, leap, hop, mini.jump2d and which-key, each at the commit and
  *       archive hash {@code releng/test-plugins.properties} pins. A wrong hash fails the run.
  *       Without a network, or with a Java older than that tool needs, they are left out with a
  *       note and the tests that need them are skipped; the list of skips below names them. CI

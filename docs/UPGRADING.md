@@ -308,16 +308,27 @@ code that runs in the test Neovim, on your machine and wherever `LikeCi`
 or the gallery runs, so each is pinned: `releng/test-plugins.properties` holds, per plug-in, its repository, one commit,
 the SHA-256 of that commit's archive and its license. That file is the only place a commit or a
 hash is written. Nothing of a plug-in is in the repository; `TestPlugins.java fetch` unpacks them
-into `target/test-plugins/`, and stops if an archive's hash is not the pinned one.
+into `target/test-plugins/`, and stops if an archive's hash is not the pinned one. Without a
+network it leaves the plug-ins out and their tests are skipped; a connection that is not secure
+(a certificate that does not fit, a proxy that opens TLS) stops it instead.
 
 Move a pin when a plug-in changed something the tests should see (new highlight groups, a new way
-of drawing labels), not routinely.
+of drawing labels), not routinely. The tool never looks for a newer commit and never moves a pin
+by itself: you choose the commit on the plug-in's own page (its full id, 40 hex digits), and the
+tool does the bookkeeping the tests depend on, the archive's hash and the entry's two lines.
+
+Where to find the commit: each pin's `repository` line in `releng/test-plugins.properties` is the
+plug-in's page (the tool's status, `java releng/tools/plugins/TestPlugins.java`, prints it beside
+the pin). Open its list of commits (on GitHub `<repository>/commits`; on Codeberg the *Commits*
+link of the repository's page), pick the commit, and copy its full id: the list shows the first
+seven digits or so, the copy button beside it or the commit's own page gives all 40. The tool
+takes nothing shorter, and no tag or branch name: a tag can be moved to other code later, a full
+id cannot.
 
 ```bash
-java releng/tools/plugins/TestPlugins.java                         # each pin, the repository's newest commit, what is fetched
-java releng/tools/plugins/TestPlugins.java update flash            # step 1: download the newest commit for vetting
-java releng/tools/plugins/TestPlugins.java update flash <commit>   # ... or a commit you name
-java releng/tools/plugins/TestPlugins.java accept flash <commit>   # step 2, after vetting: look inside, then write the pin
+java releng/tools/plugins/TestPlugins.java                         # each pin, and whether it is fetched
+java releng/tools/plugins/TestPlugins.java update flash <commit>   # step 1: download that commit for vetting
+java releng/tools/plugins/TestPlugins.java accept flash <commit> <sha256>   # step 2, after vetting: the hash you vetted; look inside, then write the pin
 ```
 
 A pin moves in two steps, with your own check between them, so that nothing opens the archive
@@ -327,16 +338,30 @@ before it has been scanned:
    path, its SHA-256 and the VirusTotal address of that hash (a report if the file is known
    there; otherwise upload the archive). It only hashes the bytes: the ZIP is not opened.
 2. Vet the archive.
-3. `accept` unpacks that archive, prints its hash again (compare it with the one you vetted), the
-   first lines of the license file and the files that differ from the pinned commit, and after
-   your yes writes the entry's two lines. If the license changed, correct `<name>.license` by
-   hand.
+3. `accept` takes the SHA-256 you vetted (`update` prints the whole command) and compares the
+   file's with it before opening the ZIP; a hash that differs stops it with nothing unpacked.
+   Why an argument: a second `update` can bring other bytes for the same commit, and a file can
+   be replaced, so the tool checks what a person would otherwise compare by eye. It then unpacks
+   the archive and prints the first lines of the license file and the files that differ from the
+   pinned commit (if that one is fetched: run `fetch` before, to have the comparison), and after your yes writes the entry's two lines. If the license changed,
+   correct `<name>.license` by hand.
 4. `java releng/tools/plugins/TestPlugins.java fetch`, then `java releng/tools/ci/LikeCi.java`
    (the specs in `jump_plugins_spec.lua` and `JumpLabelsEndToEndTest` run the plug-in), then
    commit the file.
 
+`--dry-run` on any step leaves the pins file alone, and only that: `update` and `fetch` still
+download, and `accept` still unpacks and shows the license and the differences. Unlike the other
+tools, `accept` takes no `--yes` and does nothing without a terminal: a pin moves only on a yes
+you type, so a script (or an AI running the tool) cannot move one for you.
+
 By hand it is the same change of two lines: `update` gives the path and the hash; set
-`<name>.commit` and `<name>.sha256` yourself once you have vetted the archive.
+`<name>.commit` and `<name>.sha256` yourself once you have vetted the archive. Write each line as
+`name.field=value`, with no space around the `=`: the tool refuses another form, since the tests
+read the commit from the file with a plain search.
+
+A forge makes `archive/<commit>.zip` on request and does not promise the same bytes forever. If
+`fetch` one day reports a wrong hash for a commit that did not change, the archive may only have
+been packed anew: `update <name> <commit>`, vet that file, and `accept` it with its new hash.
 
 To pin another plug-in, add its four lines to the file and a test to `jump_plugins_spec.lua`; if
 the editor should know it without a setting, add its prefix to `util/JumpLabels.BUILT_IN_PREFIXES`

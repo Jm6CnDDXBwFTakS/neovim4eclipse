@@ -8,7 +8,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -17,21 +20,19 @@ import java.util.stream.Stream;
 import common.Ask;
 import common.Folders;
 import common.Http;
-import common.Shell;
 import common.ToolFailure;
 import plugins.Pins.Pin;
 
 /**
- * The Neovim plug-ins the tests run (flash, leap, hop, mini.jump2d): fetches them as pinned, and
- * moves a pin.
+ * The Neovim plug-ins the tests and the gallery run (flash, leap, hop, mini.jump2d, which-key):
+ * fetches them as pinned, and moves a pin.
  *
  * <h2>Usage</h2>
  * <pre>
  *   java releng/tools/plugins/TestPlugins.java                    status: each pin, and whether it is fetched
  *   java releng/tools/plugins/TestPlugins.java fetch              download and unpack what is not there yet
- *   java releng/tools/plugins/TestPlugins.java update flash       download flash's newest commit for vetting
- *   java releng/tools/plugins/TestPlugins.java update flash 5f0f… ... or a commit you name
- *   java releng/tools/plugins/TestPlugins.java accept flash 5f0f… after vetting: look inside, then write the pin
+ *   java releng/tools/plugins/TestPlugins.java update flash 5f0f… download that commit of flash for vetting
+ *   java releng/tools/plugins/TestPlugins.java accept flash 5f0f… 56ec…   after vetting: the commit and the SHA-256 you vetted
  * </pre>
  *
  * <h2>Why</h2>
@@ -44,8 +45,8 @@ import plugins.Pins.Pin;
  * <h2>fetch</h2>
  * For each pin: the archive into {@code target/test-plugins/archives/}, its hash compared with
  * the pin's, then unpacked into {@code target/test-plugins/<name>/} with a marker file
- * {@code <name>.pin} beside it that says which commit is there. The tests look for that folder and
- * marker and skip, with the reason, when they are missing or of another commit.
+ * {@code <name>.pin} beside it that says which commit and archive hash is there. The tests look
+ * for that folder and marker and skip, with the reason, when they are missing or of another pin.
  * <ul>
  *   <li><b>A wrong hash stops the tool</b> and the archive is deleted: the bytes are not what was
  *       looked at. The message names the hash found, which is the value to put into the file if
@@ -53,20 +54,31 @@ import plugins.Pins.Pin;
  *   <li><b>No network is no failure:</b> the plug-in is left out with a note, and the tests that
  *       need it are skipped. The build still passes offline. An answer that is not the archive
  *       (a 404: the repository or the commit is gone) does stop the tool: that is a fact about
- *       the pin, not about this machine's network.</li>
+ *       the pin, not about this machine's network. So does a connection that is not secure (a
+ *       certificate that does not fit, a proxy that opens TLS): something answered, and it was
+ *       not the forge.</li>
  * </ul>
  *
  * <h2>update, then accept</h2>
- * Moving a pin takes two steps, with the maintainer's own check of the archive between them, so
+ * When to move a pin, and to which commit, is decided by hand: the tool never asks a repository
+ * what is new and never moves a pin by itself. What it takes over is the bookkeeping the tests
+ * depend on: the archive's hash, the unpacked copy, the two lines of the entry.
+ *
+ * <p>Moving a pin takes two steps, with the maintainer's own check of the archive between them, so
  * that nothing opens the archive before it has been scanned:
  * <ol>
  *   <li>{@code update} downloads the commit's archive into {@code target/test-plugins/vetting/}
  *       and prints its path, its SHA-256 and the VirusTotal address of that hash. It only hashes
  *       the bytes: the ZIP is not opened, nothing is unpacked, and it stops there.</li>
  *   <li>The maintainer scans the file (or looks the hash up).</li>
- *   <li>{@code accept} checks that the file is still the one {@code update} left, unpacks it,
- *       shows the license file's first lines and the files that differ from the commit pinned
- *       now, and after a yes writes the two lines of the entry, with the hash of that file.</li>
+ *   <li>{@code accept} takes the SHA-256 that was vetted and compares the file's with it before
+ *       opening the ZIP: {@code update} run again can bring other bytes for the same commit (a
+ *       forge makes the archive on request), and a file can be replaced. A hash that differs
+ *       stops the tool with nothing unpacked. The file is read once, and the bytes that were
+ *       hashed are the bytes unpacked. Then it unpacks, shows the license file's first
+ *       lines and the files that differ from the commit pinned now, and after a yes writes the
+ *       two lines of the entry, with that hash. The yes is typed at a terminal: {@code accept}
+ *       takes no {@code --yes} and does nothing without a terminal ({@link #modeFor}).</li>
  * </ol>
  * Neither step commits anything: the change of the pin is yours to review and commit.
  */
@@ -78,15 +90,21 @@ public final class TestPluginsTool {
     /** Where the plug-ins are unpacked, relative to the repository's root; the tests look here. */
     public static final String FOLDER = "target/test-plugins";
     private static final String USAGE = "Usage: java " + TOOL
-            + " [status | fetch | update <name> [<commit>] | accept <name> <commit>] [--yes] [--dry-run]";
+            + " [status | fetch | update <name> <commit> | accept <name> <commit> <sha256>] [--dry-run]";
+
+    /**
+     * The largest archive that is read, and the most its files may add up to. The pinned plug-ins
+     * are well under a megabyte each; an archive far beyond that is not one of theirs, and it is
+     * read into memory whole (so that the bytes whose hash was checked are the bytes unpacked).
+     */
+    static final long MAX_ARCHIVE_BYTES = 50L << 20;
+    static final long MAX_UNPACKED_BYTES = 500L << 20;
 
     private final Path root;
-    private final Shell shell;
     private final Ask ask;
 
     TestPluginsTool(Path root, Ask ask) {
         this.root = root;
-        this.shell = new Shell(root);
         this.ask = ask;
     }
 
@@ -105,25 +123,26 @@ public final class TestPluginsTool {
                     default -> words.add(a);
                 }
             }
-            List<String> rerun = new ArrayList<>(List.of("java", TOOL));
-            rerun.addAll(words);
-            rerun.add("--yes");
-            TestPluginsTool tool = new TestPluginsTool(root, new Ask(mode, String.join(" ", rerun)));
             String step = words.isEmpty() ? "status" : words.get(0);
+            mode = modeFor(step, mode);
+            // accept is the only step that asks. What Ask prints when there is no terminal to
+            // ask on is this, not a command with --yes: accept takes none.
+            String rerun = "the same command at a terminal (accept asks a person, and takes no --yes)";
+            TestPluginsTool tool = new TestPluginsTool(root, new Ask(mode, rerun));
             switch (step) {
                 case "status" -> tool.status();
                 case "fetch" -> tool.fetch();
                 case "update" -> {
-                    if (words.size() < 2 || words.size() > 3) {
-                        throw new ToolFailure("update needs a plug-in's name, and may take a commit\n" + USAGE);
+                    if (words.size() != 3) {
+                        throw new ToolFailure("update needs the plug-in's name and the commit to move to\n" + USAGE);
                     }
-                    tool.update(words.get(1), words.size() == 3 ? words.get(2) : null);
+                    tool.update(words.get(1), words.get(2));
                 }
                 case "accept" -> {
-                    if (words.size() != 3) {
-                        throw new ToolFailure("accept needs the plug-in's name and the commit that update downloaded\n" + USAGE);
+                    if (words.size() != 4) {
+                        throw new ToolFailure("accept needs the plug-in's name, the commit that update downloaded and the SHA-256 you vetted\n" + USAGE);
                     }
-                    tool.accept(words.get(1), words.get(2));
+                    tool.accept(words.get(1), words.get(2), words.get(3));
                 }
                 default -> throw new ToolFailure("unknown step " + step + "\n" + USAGE);
             }
@@ -134,18 +153,33 @@ public final class TestPluginsTool {
         }
     }
 
+    /**
+     * The mode {@code step} runs in. {@code accept} refuses {@code --yes}: a pin moves only on a
+     * yes typed at a terminal, after the maintainer's own scan of the archive, so a script (or an
+     * AI running the tool) cannot go from {@code update}'s output to a moved pin by itself. The
+     * other tools take {@code --yes} for a step approved beforehand; here the approval is the
+     * point of the step. {@code --dry-run} stays: it writes nothing.
+     */
+    static Ask.Mode modeFor(String step, Ask.Mode asked) {
+        if (step.equals("accept") && asked == Ask.Mode.YES) {
+            throw new ToolFailure("accept takes no --yes: it moves a pin, and asks the person who vetted the archive. Run it at a terminal.");
+        }
+        return asked;
+    }
+
     private List<Pin> pins() {
         return Pins.parse(read(root.resolve(PINS_FILE)));
     }
 
-    /** Each pin, whether it is fetched, and the repository's newest commit where it can be asked. */
+    /**
+     * Each pin and whether it is fetched. Nothing is asked of a repository here: which commit to
+     * move to is the maintainer's choice, made on the plug-in's own page; the tool's part starts
+     * once a commit is named.
+     */
     void status() {
         for (Pin pin : pins()) {
-            String newest = newestCommit(pin.repository());
             System.out.println(pin.name() + "  " + pin.license() + "  " + pin.repository());
             System.out.println("  pinned   " + pin.commit() + (isFetched(pin) ? "  (fetched)" : "  (not fetched: java " + TOOL + " fetch)"));
-            System.out.println("  newest   " + (newest == null ? "unknown (the repository did not answer)"
-                    : newest + (newest.equals(pin.commit()) ? "  (the pin)" : "  (java " + TOOL + " update " + pin.name() + ")")));
         }
     }
 
@@ -171,7 +205,8 @@ public final class TestPluginsTool {
                 System.out.println("note: " + pin.name() + " not fetched (no network?); the tests that need it will be skipped");
                 continue;
             }
-            String got = Http.hash(archive, "SHA-256");
+            byte[] bytes = bytesOf(archive);
+            String got = sha256(bytes);
             if (!got.equals(pin.sha256())) {
                 delete(archive);
                 throw new ToolFailure(pin.archiveUrl() + " has SHA-256 " + got + ", but " + PINS_FILE + " pins " + pin.sha256()
@@ -180,7 +215,7 @@ public final class TestPluginsTool {
             }
             // The marker goes first: should the unpacking stop halfway, no marker claims the folder.
             delete(root.resolve(FOLDER).resolve(pin.name() + ".pin"));
-            unpack(archive, root.resolve(FOLDER).resolve(pin.name()));
+            unpack(archive.getFileName().toString(), bytes, root.resolve(FOLDER).resolve(pin.name()));
             write(root.resolve(FOLDER).resolve(pin.name() + ".pin"), pin.marker() + "\n");
             System.out.println("ok: " + pin.name() + " at " + shortRevision(pin) + ", SHA-256 as pinned");
         }
@@ -190,50 +225,52 @@ public final class TestPluginsTool {
     }
 
     /**
-     * The first step of moving {@code name}'s pin: downloads {@code commit} (the repository's
-     * newest when {@code null}) for vetting and says where it is. The archive is hashed, never
-     * opened.
+     * The first step of moving {@code name}'s pin: downloads {@code commit} for vetting and says
+     * where it is. The archive is hashed, never opened. The commit is always named: the tool does
+     * not look for a newer one, it records the one the maintainer chose.
      */
     void update(String name, String commit) {
         Pin old = Pins.find(pins(), name);
-        String to = commit != null ? commit : newestCommit(old.repository());
-        if (to == null) {
-            throw new ToolFailure(old.repository() + " did not say what its newest commit is; name the commit: java " + TOOL
-                    + " update " + name + " <commit>");
-        }
-        Pins.checkCommit(to); // before anything is downloaded: it becomes part of a URL and of a file name
-        Pin next = new Pin(name, old.repository(), to, old.sha256(), old.license());
-        Path archive = Http.fetch(next.archiveUrl(), vettingArchive(name, to));
+        Pins.checkCommit(commit); // before anything is downloaded: it becomes part of a URL and of a file name
+        Pin next = new Pin(name, old.repository(), commit, old.sha256(), old.license());
+        Path archive = Http.fetch(next.archiveUrl(), vettingArchive(name, commit));
         String sha = Http.hash(archive, "SHA-256");
         System.out.println();
-        System.out.println(name + ": " + old.commit() + " -> " + to + (to.equals(old.commit()) ? "  (the pinned commit)" : ""));
+        System.out.println(name + ": " + old.commit() + " -> " + commit + (commit.equals(old.commit()) ? "  (the pinned commit)" : ""));
         System.out.println("  archive     " + archive);
         System.out.println("  SHA-256     " + sha + (sha.equals(old.sha256()) ? "  (the pinned hash)" : ""));
         System.out.println("  VirusTotal  https://www.virustotal.com/gui/file/" + sha + "  (a report, if the file is known there; else upload the archive)");
-        System.out.println("The archive was not opened. Vet it, then: java " + TOOL + " accept " + name + " " + to);
+        System.out.println("The archive was not opened. Vet it, then: java " + TOOL + " accept " + name + " " + commit + " " + sha);
     }
 
     /**
      * The second step, after the maintainer has vetted the archive {@link #update} left: unpacks
-     * it, shows its license and what changed, and writes the pin after a yes. The hash written is
-     * that of the file as it is now, printed again, so that it can be compared with the one vetted.
+     * it, shows its license and what changed, and writes the pin after a yes. {@code vetted} is
+     * the SHA-256 the maintainer vetted. The file is read once: those bytes must have that hash,
+     * and those bytes are what is unpacked, so a file replaced meanwhile changes nothing.
      */
-    void accept(String name, String commit) {
+    void accept(String name, String commit, String vetted) {
         String text = read(root.resolve(PINS_FILE));
         Pin old = Pins.find(Pins.parse(text), name);
         Pins.checkCommit(commit); // before anything is opened: it is part of the archive's file name
+        Pins.checkSha256(vetted);
         Path archive = vettingArchive(name, commit);
         if (!Files.isRegularFile(archive)) {
             throw new ToolFailure("no archive to accept at " + archive + "; first: java " + TOOL + " update " + name + " " + commit);
         }
-        String sha = Http.hash(archive, "SHA-256");
+        byte[] bytes = bytesOf(archive);
+        String sha = sha256(bytes);
+        if (!sha.equals(vetted)) {
+            throw new ToolFailure(archive + " has SHA-256 " + sha + ", not the " + vetted
+                    + " you name; it was not opened. Vet this file, or download it again: java " + TOOL + " update " + name + " " + commit);
+        }
         Path unpacked = archive.resolveSibling(name + "-" + commit);
-        unpack(archive, unpacked);
+        unpack(archive.getFileName().toString(), bytes, unpacked);
 
         System.out.println();
         System.out.println(name + ": " + old.commit() + " -> " + commit);
         System.out.println("  archive     " + archive);
-        System.out.println("  SHA-256     " + sha + "  (compare with the one you vetted)");
+        System.out.println("  SHA-256     " + sha + "  (the one you vetted)");
         System.out.println("  unpacked    " + unpacked);
         System.out.println("  license     recorded as " + old.license() + "; the repository's file begins:");
         for (String line : licenseStart(unpacked)) {
@@ -268,26 +305,23 @@ public final class TestPluginsTool {
         return root.resolve(FOLDER).resolve("vetting").resolve(name + "-" + commit + ".zip");
     }
 
-    /** The commit the repository's default branch is at, by {@code git ls-remote}; {@code null} if it cannot be asked. */
-    private String newestCommit(String repository) {
-        Shell.Result r = shell.capture(List.of("git", "ls-remote", repository, "HEAD"));
-        String first = r.ok() ? r.out().strip().split("\\s+", 2)[0] : "";
-        return first.matches("[0-9a-f]{40}") ? first : null;
-    }
-
     /**
-     * Unpacks {@code archive} as {@code folder}. An archive of a repository holds one top folder
+     * Unpacks the archive's {@code bytes} as {@code folder}. An archive of a repository holds one top folder
      * (GitHub: {@code flash.nvim-<commit>/}); that folder becomes {@code folder}, so the plug-in's
      * {@code lua/} is right under it, where Neovim's {@code 'runtimepath'} wants it. An archive
      * of any other shape is not a repository's, and stops the tool.
      */
-    private static void unpack(Path archive, Path folder) {
+    static void unpack(String archive, byte[] bytes, Path folder) {
         Path scratch = folder.resolveSibling(folder.getFileName() + ".unpacking");
         Folders.deleteTree(scratch);
         Folders.deleteTree(folder);
-        Folders.unzip(archive, scratch);
-        try (Stream<Path> top = Files.list(scratch)) {
-            List<Path> entries = top.toList();
+        try {
+            Files.createDirectories(scratch); // bytes that are no ZIP unpack to nothing: an empty folder, refused below
+            Folders.unzip(archive, bytes, scratch, MAX_UNPACKED_BYTES);
+            List<Path> entries;
+            try (Stream<Path> top = Files.list(scratch)) {
+                entries = top.toList();
+            }
             if (entries.size() != 1 || !Files.isDirectory(entries.get(0))) {
                 throw new ToolFailure(archive + " does not hold one top folder, as a repository's archive does");
             }
@@ -295,7 +329,28 @@ public final class TestPluginsTool {
         } catch (IOException e) {
             throw new ToolFailure("cannot unpack " + archive + ": " + e.getMessage());
         } finally {
-            Folders.deleteTree(scratch);
+            Folders.deleteTree(scratch); // also after a ZIP that could not be read: no half-unpacked folder stays
+        }
+    }
+
+    /** The archive's bytes, read once; an archive larger than {@link #MAX_ARCHIVE_BYTES} stops the tool unread. */
+    private static byte[] bytesOf(Path archive) {
+        try {
+            long size = Files.size(archive);
+            if (size > MAX_ARCHIVE_BYTES) {
+                throw new ToolFailure(archive + " has " + size + " bytes, more than any plug-in's archive (" + MAX_ARCHIVE_BYTES + "); it was not read");
+            }
+            return Files.readAllBytes(archive);
+        } catch (IOException e) {
+            throw new ToolFailure("cannot read " + archive + ": " + e.getMessage());
+        }
+    }
+
+    private static String sha256(byte[] bytes) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e); // every Java has SHA-256
         }
     }
 

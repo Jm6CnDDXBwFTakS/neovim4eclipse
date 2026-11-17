@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -30,7 +31,8 @@ final class PinnedPlugins {
 
     /**
      * The folder of the plug-in pinned as {@code name} (to put on Neovim's {@code 'runtimepath'}),
-     * if it is fetched at the pinned commit. The repository's root is the first folder above the
+     * if it is fetched at the pinned commit and archive hash (the marker's whole line, as the
+     * tool's own check). The repository's root is the first folder above the
      * working directory that holds the pins.
      */
     static Optional<Path> find(String name) {
@@ -42,18 +44,22 @@ final class PinnedPlugins {
             return Optional.empty();
         }
         try {
-            Optional<String> commit = Files.readAllLines(root.resolve(PINS)).stream()
-                    .filter(line -> line.startsWith(name + ".commit="))
-                    .map(line -> line.substring(line.indexOf('=') + 1).strip())
-                    .findFirst();
+            List<String> lines = Files.readAllLines(root.resolve(PINS));
+            Optional<String> commit = value(lines, name + ".commit=");
+            Optional<String> sha = value(lines, name + ".sha256=");
             Path folder = root.resolve("target/test-plugins").resolve(name);
             Path marker = root.resolve("target/test-plugins").resolve(name + ".pin");
-            boolean there = commit.isPresent() && Files.isDirectory(folder) && Files.isRegularFile(marker)
-                    && Files.readString(marker).startsWith(commit.get() + " ");
+            boolean there = commit.isPresent() && sha.isPresent() && Files.isDirectory(folder) && Files.isRegularFile(marker)
+                    && Files.readString(marker).strip().equals(commit.get() + " " + sha.get());
             return there ? Optional.of(folder) : Optional.empty();
         } catch (IOException e) {
             return Optional.empty();
         }
+    }
+
+    /** The value of the line that starts with {@code key} (the pins file allows no space around the =). */
+    private static Optional<String> value(List<String> lines, String key) {
+        return lines.stream().filter(line -> line.startsWith(key)).map(line -> line.substring(key.length()).strip()).findFirst();
     }
 
     /**

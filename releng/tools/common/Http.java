@@ -24,6 +24,8 @@ import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Optional;
 
+import javax.net.ssl.SSLException;
+
 /**
  * The upgrade tools' downloads: HTTPS only, and every file checked against the hash its publisher
  * gives before anything uses it. Shared by the Eclipse tool (Platform downloads and their SHA-512
@@ -135,7 +137,8 @@ public final class Http {
      * {@code url} saved as {@code file}, unchecked: for a caller that checks the file itself, or
      * that is about to learn its hash (a pin being moved). As {@link #download}, the bytes go to
      * a {@code .part} file first. A {@link ToolFailure} means the file could not be had (no
-     * network, an error answer); nothing is left under {@code file}'s name then.
+     * network, an error answer); nothing new is written under {@code file}'s name then (a file an
+     * earlier call left there stays).
      */
     public static Path fetch(String url, Path file) {
         if (!fetchIfReachable(url, file)) {
@@ -147,8 +150,9 @@ public final class Http {
     /**
      * {@link #fetch} for a caller that goes on without the file when there is no network:
      * {@code false} when the server could not be reached at all (offline, no such host, a
-     * timeout). An answer other than the file (a 404: the repository or commit is gone) is still a
-     * {@link ToolFailure}, since that is a fact about the URL, not about this machine's network.
+     * timeout). A TLS failure is a {@link ToolFailure}: something answered. An answer other than
+     * the file (a 404: the repository or commit is gone) is a {@link ToolFailure} too, since
+     * that is a fact about the URL, not about this machine's network.
      */
     public static boolean fetchIfReachable(String url, Path file) {
         Path part = file.resolveSibling(file.getFileName() + ".part");
@@ -158,6 +162,10 @@ public final class Http {
             HttpResponse<Path> r;
             try {
                 r = CLIENT.send(request(url), HttpResponse.BodyHandlers.ofFile(part));
+            } catch (SSLException e) {
+                // The server answered, but not as itself (a certificate that does not fit, an
+                // intercepting proxy): no "no network", and nothing to go on without.
+                throw new ToolFailure("no secure connection to " + url + ": " + e.getMessage());
             } catch (IOException e) {
                 System.out.println("  (" + url + " could not be reached: " + e + ")");
                 return false; // no connection, no such host, a timeout
