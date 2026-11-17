@@ -5711,18 +5711,22 @@ final class LuaScripts {
      *   <li>The {@code term://} reader off, as {@link #NO_TERMINAL_URLS} turns it off in the
      *       editing Neovim: {@code --clean} keeps Neovim's own {@code nvim.terminal} autocmd, so
      *       {@code gf} on a shown {@code term:///path/build.sh} (in a message a linter printed,
-     *       say) would run the script. The netrw, zip and tar readers are off already, through the
-     *       start command ({@code NvimExecutable.embedCommand}).</li>
+     *       say) would run the script. The netrw, zip, tar and http readers are off already,
+     *       through the start command ({@code NvimExecutable.embedCommand}).</li>
      * </ul>
      *
      * <p>Answers what the one rule of the second Neovim rests on, the options that keep it from
      * writing files, as Neovim has them once started: {@code write}, {@code modeline},
      * {@code updatecount} (0: no swap file, {@code -n}), {@code undofile} and {@code shadafile}.
      * {@link ScreenSession} refuses to go on unless each is off ({@code shadafile} is
-     * {@code "NONE"}). Also {@code term_reader}, the number of {@code term://} readers left (it must
-     * be 0), and {@code ui2}: whether that UI is on. Example answer: {@code {write = false,
-     * modeline = false, updatecount = 0, undofile = false, shadafile = "NONE", term_reader = 0,
-     * ui2 = true}}.
+     * {@code "NONE"}). Also {@code readers}: how many readers of a name are left
+     * ({@code BufReadCmd}, {@code FileReadCmd} and {@code SourceCmd} autocmds), whatever their
+     * group or pattern, but for the two kept on purpose: {@code nvim.man} (as in the editing
+     * Neovim, SECURITY.md) and {@code nvim.shada}. It must be 0; it is absent if Neovim could not
+     * list them. A known set allowed, not one reader looked for: a reader a later Neovim adds or
+     * renames shows here, and the view refuses to start until it is turned off or allowed. And
+     * {@code ui2}: whether that UI is on. Example answer: {@code {write = false, modeline = false,
+     * updatecount = 0, undofile = false, shadafile = "NONE", readers = 0, ui2 = true}}.
      */
     static final String SCREEN_SETUP = """
             local channel = tonumber((select(1, ...)))
@@ -5747,13 +5751,21 @@ final class LuaScripts {
               end, { desc = 'Back to the Eclipse editor' })
             end
             pcall(vim.api.nvim_clear_autocmds, { group = 'nvim.terminal', event = 'BufReadCmd' })
-            local readers = 0
-            local ok, found = pcall(vim.api.nvim_get_autocmds, { event = 'BufReadCmd', pattern = 'term://*' })
+            -- Every reader of a name left, whatever its group or pattern, except the two kept on
+            -- purpose. nil (no answer) if the list cannot be read: ScreenSession refuses that too.
+            local kept = { ['nvim.man'] = true, ['nvim.shada'] = true }
+            local readers = nil
+            local ok, found = pcall(vim.api.nvim_get_autocmds, { event = { 'BufReadCmd', 'FileReadCmd', 'SourceCmd' } })
             if ok then
-              readers = #found
+              readers = 0
+              for _, autocmd in ipairs(found) do
+                if not kept[autocmd.group_name] then
+                  readers = readers + 1
+                end
+              end
             end
             return {
-              term_reader = readers,
+              readers = readers,
               write = vim.o.write,
               modeline = vim.o.modeline,
               updatecount = vim.o.updatecount,

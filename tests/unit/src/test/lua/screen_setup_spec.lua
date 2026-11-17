@@ -14,6 +14,10 @@ local function as_started()
   vim.o.write = false
   vim.o.modeline = false
   vim.o.updatecount = 0
+  -- The readers NvimExecutable.READERS_OFF keeps from loading; loaded here, so cleared.
+  for _, group in ipairs({ 'Network', 'tar', 'zip', 'nvim.net.remotefile' }) do
+    pcall(vim.api.nvim_del_augroup_by_name, group)
+  end
 end
 
 t.test('the answer is the options the one rule rests on, as Neovim has them', function()
@@ -21,7 +25,7 @@ t.test('the answer is the options the one rule rests on, as Neovim has them', fu
   local answer = t.run('SCREEN_SETUP', tostring(t.channel))
   t.eq('boolean', type(answer.ui2), 'whether ui2 could be turned on; this headless harness has no UI to show it')
   answer.ui2 = nil
-  t.eq({ write = false, modeline = false, updatecount = 0, undofile = false, shadafile = 'NONE', term_reader = 0 },
+  t.eq({ write = false, modeline = false, updatecount = 0, undofile = false, shadafile = 'NONE', readers = 0 },
     answer)
 end)
 
@@ -29,8 +33,22 @@ t.test("the term:// reader --clean keeps is off, so gf on shown text runs nothin
   as_started()
   t.ok(#vim.api.nvim_get_autocmds({ event = 'BufReadCmd', pattern = 'term://*' }) > 0,
     'Neovim sets the reader up even with --clean; without it this test proves nothing')
-  t.eq(0, t.run('SCREEN_SETUP', tostring(t.channel)).term_reader)
+  t.eq(0, t.run('SCREEN_SETUP', tostring(t.channel)).readers)
   t.eq(0, #vim.api.nvim_get_autocmds({ event = 'BufReadCmd', pattern = 'term://*' }))
+end)
+
+t.test('a reader left, whatever its pattern, is counted, so ScreenSession refuses the start', function()
+  as_started()
+  vim.api.nvim_create_autocmd('BufReadCmd', { pattern = 'term:*', command = 'echo' })
+  vim.api.nvim_create_autocmd('SourceCmd', { pattern = '*', command = 'echo' })
+  t.eq(2, t.run('SCREEN_SETUP', tostring(t.channel)).readers)
+  vim.api.nvim_clear_autocmds({ event = { 'BufReadCmd', 'SourceCmd' }, pattern = { 'term:*', '*' } })
+end)
+
+t.test('man:// and ShaDa readers are kept, as in the editing Neovim', function()
+  as_started()
+  t.ok(#vim.api.nvim_get_autocmds({ group = 'nvim.man' }) > 0, 'this Neovim has the man:// reader')
+  t.eq(0, t.run('SCREEN_SETUP', tostring(t.channel)).readers)
 end)
 
 t.test('an option left on shows in the answer, so ScreenSession refuses the start', function()
