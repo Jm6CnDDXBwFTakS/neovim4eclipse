@@ -5708,14 +5708,21 @@ final class LuaScripts {
      *       no such prompt: long messages are cut with a {@code [+N]} marker, and {@code g<}
      *       shows them all in a pager window. A Neovim without it (its module moved, say) keeps
      *       the classic prompt; the view still works, and the answer's {@code ui2} says so.</li>
+     *   <li>The {@code term://} reader off, as {@link #NO_TERMINAL_URLS} turns it off in the
+     *       editing Neovim: {@code --clean} keeps Neovim's own {@code nvim.terminal} autocmd, so
+     *       {@code gf} on a shown {@code term:///path/build.sh} (in a message a linter printed,
+     *       say) would run the script. The netrw, zip and tar readers are off already, through the
+     *       start command ({@code NvimExecutable.embedCommand}).</li>
      * </ul>
      *
      * <p>Answers what the one rule of the second Neovim rests on, the options that keep it from
      * writing files, as Neovim has them once started: {@code write}, {@code modeline},
      * {@code updatecount} (0: no swap file, {@code -n}), {@code undofile} and {@code shadafile}.
      * {@link ScreenSession} refuses to go on unless each is off ({@code shadafile} is
-     * {@code "NONE"}). And {@code ui2}: whether that UI is on. Example answer: {@code {write = false,
-     * modeline = false, updatecount = 0, undofile = false, shadafile = "NONE", ui2 = true}}.
+     * {@code "NONE"}). Also {@code term_reader}, the number of {@code term://} readers left (it must
+     * be 0), and {@code ui2}: whether that UI is on. Example answer: {@code {write = false,
+     * modeline = false, updatecount = 0, undofile = false, shadafile = "NONE", term_reader = 0,
+     * ui2 = true}}.
      */
     static final String SCREEN_SETUP = """
             local channel = tonumber((select(1, ...)))
@@ -5739,7 +5746,14 @@ final class LuaScripts {
                 vim.rpcnotify(channel, 'eclipse_screen_to_editor')
               end, { desc = 'Back to the Eclipse editor' })
             end
+            pcall(vim.api.nvim_clear_autocmds, { group = 'nvim.terminal', event = 'BufReadCmd' })
+            local readers = 0
+            local ok, found = pcall(vim.api.nvim_get_autocmds, { event = 'BufReadCmd', pattern = 'term://*' })
+            if ok then
+              readers = #found
+            end
             return {
+              term_reader = readers,
               write = vim.o.write,
               modeline = vim.o.modeline,
               updatecount = vim.o.updatecount,

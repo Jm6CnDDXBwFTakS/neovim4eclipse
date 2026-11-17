@@ -27,6 +27,7 @@ class ScreenSessionTest {
         options.put("updatecount", 0L);
         options.put("undofile", false);
         options.put("shadafile", "NONE");
+        options.put("term_reader", 0L);
         return options;
     }
 
@@ -41,12 +42,13 @@ class ScreenSessionTest {
         options.put("write", true);
         options.put("updatecount", 200L);
         options.put("shadafile", "");
-        assertEquals(List.of("write", "updatecount", "shadafile"), ScreenSession.unsafeOptions(options));
+        options.put("term_reader", 1L); // gf on a shown term://… would run it
+        assertEquals(List.of("write", "updatecount", "shadafile", "term_reader"), ScreenSession.unsafeOptions(options));
     }
 
     @Test
     void aMissingOrStrangeAnswerCountsAsEveryWayOpen() {
-        List<String> all = List.of("write", "modeline", "undofile", "updatecount", "shadafile");
+        List<String> all = List.of("write", "modeline", "undofile", "updatecount", "shadafile", "term_reader");
         assertEquals(all, ScreenSession.unsafeOptions(null));
         assertEquals(all, ScreenSession.unsafeOptions("not a table"));
         assertEquals(all, ScreenSession.unsafeOptions(Map.of()));

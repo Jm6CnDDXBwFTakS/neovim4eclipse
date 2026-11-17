@@ -35,7 +35,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenGrid;
  * not trusted on the way: once started, Neovim is asked for those options as it has them
  * ({@link LuaScripts#SCREEN_SETUP}), and the start is refused unless every one is off
  * ({@link #unsafeOptions}). One check covers every way of writing a buffer ({@code :w},
- * {@code :saveas}, {@code :update}, {@code ZZ}, an autocmd's write). A profile may also forbid
+ * {@code :saveas}, {@code :update}, {@code ZZ}, an autocmd's write). The same check covers the
+ * readers SECURITY.md turns off: the start is refused while a {@code term://} reader is left,
+ * which would let {@code gf} on shown text run a program. A profile may also forbid
  * changes to the text ({@code -M}: {@code nomodifiable}). What the user types in the view
  * ({@code :set write}, {@code :!}) stays their own, as in the editing Neovim.
  *
@@ -146,8 +148,8 @@ public final class ScreenSession implements AutoCloseable {
             Object options = Rpc.await(session.api.execLua(LuaScripts.SCREEN_SETUP, List.of(String.valueOf(channel))));
             List<String> unsafe = unsafeOptions(options);
             if (!unsafe.isEmpty()) {
-                throw new IllegalStateException("The second Neovim could write files (" + String.join(", ", unsafe)
-                        + "); it was not started");
+                throw new IllegalStateException("The second Neovim could write files or run programs ("
+                        + String.join(", ", unsafe) + "); it was not started");
             }
             if (!(options instanceof Map<?, ?> m && Boolean.TRUE.equals(m.get("ui2")))) {
                 LOG.info("The second Neovim has no ui2 (vim._core.ui2): long messages stop at a Press ENTER prompt"
@@ -164,9 +166,10 @@ public final class ScreenSession implements AutoCloseable {
 
     /**
      * The options of {@link LuaScripts#SCREEN_SETUP}'s answer that leave a way to write a file
-     * open, by name; empty when the one rule holds. An answer that is not a table of those
-     * options counts as all of them open. Example: {@code {write = true, modeline = false,
-     * updatecount = 0, undofile = false, shadafile = "NONE"}} gives {@code ["write"]}.
+     * (or, {@code term_reader}, to run a program from shown text) open, by name; empty when the
+     * one rule holds. An answer that is not a table of those options counts as all of them open.
+     * Example: {@code {write = true, modeline = false, updatecount = 0, undofile = false,
+     * shadafile = "NONE", term_reader = 0}} gives {@code ["write"]}.
      */
     static List<String> unsafeOptions(Object answer) {
         Map<?, ?> options = answer instanceof Map<?, ?> m ? m : Map.of();
@@ -181,6 +184,9 @@ public final class ScreenSession implements AutoCloseable {
         }
         if (!"NONE".equals(options.get("shadafile"))) {
             unsafe.add("shadafile");
+        }
+        if (!(options.get("term_reader") instanceof Number n && n.longValue() == 0)) {
+            unsafe.add("term_reader");
         }
         return unsafe;
     }

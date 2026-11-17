@@ -611,7 +611,9 @@ it holds: *Neovim: messages*, *Neovim: checkhealth*.
   without your config or plug-ins (`--clean`), in a folder of the plug-in's own, with writing turned
   off. Nothing it shows and nothing it does by itself writes a file, so it cannot get in the way of
   your editors; a command you type there that writes on purpose (`:call writefile(...)`,
-  `:mksession`) is yours, as in any Neovim. Its look is Neovim's default colorscheme on your editor's
+  `:mksession`) is yours, as in any Neovim. The readers that could run a program from a name in
+  the text (netrw, zip, tar, `term://`) are off there too, as in the editing Neovim, so `gf` on a
+  shown `term://…` runs nothing. Its look is Neovim's default colorscheme on your editor's
   background, in Eclipse's text font; your mappings are not there.
 - **Long messages** in the view itself (a refusal after `:w`, say) do not stop at "Press ENTER":
   they are cut to the first lines with a `[+N]` marker, and `g<` shows them all (Neovim's `ui2`).
