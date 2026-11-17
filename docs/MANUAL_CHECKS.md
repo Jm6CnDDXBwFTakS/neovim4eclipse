@@ -351,6 +351,26 @@ Accessibility permission, so the real key is checked by hand.
 
 **Expect:** each step's result, after its ⇒.
 
+## Starting Neovim
+
+### `st-notice` The status bar's message while Neovim starts
+
+- **On:** any
+- **Launch:** checks
+- **Areas:** util/StartingNotice.java, editor/EditorAttachManager.java
+
+The order around the start is tested (`StartingNoticeTest`: message, repaint, start under the busy
+cursor, message cleared, also after a failure), and every UI test's attach goes through it. Whether
+each system paints the message before the UI thread waits is only seen on screen. The start is
+short (0.2 to 0.6 s), so watch the status bar.
+
+1. In `n4e-alpha`'s `notes.txt`, choose *Neovim → Restart Neovim...*, answer *Restart*, and type
+   `dd` at once.
+   ⇒ While Neovim starts, the status bar shows *Neovim is starting, please wait…* and the cursor
+   is busy; then the message is gone, and the line under the cursor is deleted.
+
+**Expect:** each step's result, after its ⇒.
+
 ## Input method and accent menu in the `:` box
 
 ### `ime-compose` Japanese typing in the `:` box reaches Neovim once

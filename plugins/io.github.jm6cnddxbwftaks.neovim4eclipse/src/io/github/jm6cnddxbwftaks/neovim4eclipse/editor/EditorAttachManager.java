@@ -22,8 +22,10 @@ import java.util.logging.Logger;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.jobs.Job;
+import org.eclipse.jface.action.IStatusLineManager;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.source.IAnnotationModel;
+import org.eclipse.swt.custom.BusyIndicator;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
@@ -58,6 +60,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InputRebind;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LocalFiles;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimNotFoundException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartingNotice;
 
 /**
  * Manages attach/detach of Neovim to text editors, including automatic attach
@@ -454,6 +457,31 @@ public final class EditorAttachManager {
     }
 
     /**
+     * The running session, or Neovim started for it: on the UI thread, synchronously, with
+     * "Neovim is starting, please wait…" in the editor's status bar and the busy cursor while it
+     * starts (see {@link StartingNotice} for why it blocks). Off the UI thread, or with Neovim
+     * already running, just the session.
+     */
+    private static NeovimSession startWithNotice(ITextEditor editor) throws Exception {
+        Activator activator = Activator.getDefault();
+        Display display = Display.getCurrent();
+        IStatusLineManager statusLine = null;
+        try {
+            statusLine = editor.getEditorSite().getActionBars().getStatusLineManager();
+        } catch (RuntimeException e) {
+            LOG.log(Level.FINE, "No status bar for the start's message", e);
+        }
+        IStatusLineManager shown = statusLine;
+        boolean starting = display != null && activator.currentSession() == null;
+        return StartingNotice.around(starting, message -> {
+            if (shown != null) {
+                shown.setMessage(message);
+            }
+        }, display == null ? () -> { } : display::update,
+                work -> BusyIndicator.showWhile(display, work), activator::getOrCreateSession);
+    }
+
+    /**
      * Attaches Neovim to the given editor (detaching any other one first). Preserves the Eclipse
      * caret as the Neovim cursor. Attaching the already-attached editor is a no-op.
      *
@@ -483,7 +511,7 @@ public final class EditorAttachManager {
 
         NeovimSession session;
         try {
-            session = Activator.getDefault().getOrCreateSession();
+            session = startWithNotice(textEditor);
             StartFailureNotice.clear();
             WelcomeNotice.afterStart(); // the welcome, once per installation (and per minor version)
             StartupErrorNotice.afterStart(session); // errors in init.lua, once per Neovim

@@ -481,6 +481,22 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
 
 Never call `await` on the UI thread for key handling.
 
+Two bounded exceptions, each waiting on purpose:
+
+- **Starting the editing Neovim.** The first editor's attach, and the next one after Neovim quit
+  or was restarted, starts Neovim on the UI thread (`Activator.getOrCreateSession`, from
+  `EditorAttachManager.attach`): the hash of the dedicated Neovim's files, the process, the
+  handshake, the user's `init.lua` and the plug-in's setup scripts. Measured without an
+  `init.lua`: about 0.2 s on Linux, 0.5 s on macOS, 0.5 to 0.6 s on Windows for the first start;
+  0.05 to 0.3 s for a restart. Bounded by the connection's timeouts. It blocks on purpose: while
+  the UI thread waits, the keys typed meanwhile wait in the system's queue and reach Neovim in
+  order once the editor is attached (`dd` right after opening a file deletes a line). A start in
+  the background would leave the editor to Eclipse's own editing meanwhile, and a progress dialog
+  would take the keys itself. Meanwhile the status bar says "Neovim is starting, please wait…"
+  and the cursor is busy (`util/StartingNotice`).
+- **Before a project delete or close**, `editor/ProjectFolderExit` waits at most 1 s for Neovim
+  to leave the project's folder (see "Working folder" above).
+
 `BufferSynchronizer`, `UnattachedDocumentSync` and `CaretSync` hand work to the UI thread through `core/UiExecutor`, not
 `Display` directly: the editor passes `editor/SwtUiExecutor`, tests pass `UiExecutor.IMMEDIATE`
 or a fake that holds the work back (for example, to close the editor while a Neovim change waits).

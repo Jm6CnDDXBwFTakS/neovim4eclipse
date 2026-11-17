@@ -33,6 +33,11 @@ own messages: in a narrow window the statusline gets narrower first.
 
 Messages and errors are not in the status bar: they appear in the editor (next section).
 
+While Neovim starts (the first text editor you open, or the next one after *Restart Neovim...*),
+the status bar says *Neovim is starting, please wait…* and the cursor is busy. Eclipse waits for
+it, usually well under a second plus your `init.lua`; what you type meanwhile is kept, and reaches
+Neovim in order once it is ready, so `dd` typed right away deletes a line.
+
 ## Messages and errors
 
 Neovim's latest message or error appears in a line along the bottom of the editor, where Vim shows
