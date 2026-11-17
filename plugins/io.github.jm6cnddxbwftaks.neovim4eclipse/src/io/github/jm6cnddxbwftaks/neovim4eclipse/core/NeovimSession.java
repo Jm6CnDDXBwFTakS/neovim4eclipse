@@ -516,15 +516,22 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Registers {@code :checkhealth neovim4eclipse} ({@link HealthCheck}): writes the stub into
-     * {@code runtimeFolder} and sends the check. Blocks for one request; called once after
-     * {@link #start}, off the UI thread, as the start itself is.
+     * {@code runtimeFolder} and sends the check, both on the input thread, so the UI thread (where
+     * the first editor's attach starts the session) waits for neither. Queued like any
+     * {@code *Async} call: a {@code :checkhealth} queued after it finds the check. A failure is
+     * logged at WARNING and costs only the check. Called once after {@link #start}. Any thread.
+     *
+     * @throws IllegalArgumentException at once, if a comma in the folder's name would split it on
+     *                                  {@code 'runtimepath'} ({@link HealthCheck#fitsRuntimepath})
      */
-    public void installHealthCheck(Path runtimeFolder, HealthCheck.Info info) throws Exception {
+    public void installHealthCheckAsync(Path runtimeFolder, HealthCheck.Info info) {
         if (!HealthCheck.fitsRuntimepath(runtimeFolder)) {
             throw new IllegalArgumentException("A comma in the folder's name would split it on 'runtimepath': " + runtimeFolder);
         }
-        HealthCheck.writeStub(runtimeFolder);
-        await(api.execLua(LuaScripts.HEALTH_CHECK, List.of(runtimeFolder.toString(), info.toLua())));
+        submit("register :checkhealth neovim4eclipse", Level.WARNING, () -> {
+            HealthCheck.writeStub(runtimeFolder);
+            await(api.execLua(LuaScripts.HEALTH_CHECK, List.of(runtimeFolder.toString(), info.toLua())));
+        });
     }
 
     /** The running Neovim's version ({@code 0.12.6}), or {@code ""} if unknown. */

@@ -497,7 +497,7 @@ class NeovimSessionIntegrationTest {
     @Test
     void thePluginsOwnHealthCheckReports(@TempDir Path runtime) throws Exception {
         try (NeovimSession s = start()) {
-            s.installHealthCheck(runtime, new HealthCheck.Info(false, "0.2.27", "4.38.0"));
+            s.installHealthCheckAsync(runtime, new HealthCheck.Info(false, "0.2.27", "4.38.0"));
             List<ViewText> texts = new CopyOnWriteArrayList<>();
             s.addViewTextListener(texts::add);
             s.commandAsync("checkhealth neovim4eclipse");

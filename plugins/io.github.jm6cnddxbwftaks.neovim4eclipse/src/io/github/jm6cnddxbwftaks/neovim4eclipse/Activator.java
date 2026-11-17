@@ -238,8 +238,9 @@ public class Activator extends AbstractUIPlugin {
     }
 
     /**
-     * Registers {@code :checkhealth neovim4eclipse} ({@code core/HealthCheck}). A failure is logged
-     * and costs only the check: the session works without it.
+     * Registers {@code :checkhealth neovim4eclipse} ({@code core/HealthCheck}), queued on the
+     * session's input thread (this runs on the UI thread when an editor's attach starts Neovim). A
+     * failure is logged and costs only the check: the session works without it.
      */
     private void installHealthCheck(NeovimSession started) {
         try {
@@ -248,7 +249,7 @@ public class Activator extends AbstractUIPlugin {
             String eclipse = platform == null ? "" : platform.getVersion().getMajor() + "."
                     + platform.getVersion().getMinor() + "." + platform.getVersion().getMicro();
             Version own = getBundle().getVersion();
-            started.installHealthCheck(HealthCheck.runtimeFolder(PluginFolders.pluginFolder()),
+            started.installHealthCheckAsync(HealthCheck.runtimeFolder(PluginFolders.pluginFolder()),
                     new HealthCheck.Info(dedicated, own.getMajor() + "." + own.getMinor() + "." + own.getMicro(), eclipse));
         } catch (Exception e) {
             Logger.getLogger(Activator.class.getName()).log(Level.WARNING, "Could not register :checkhealth neovim4eclipse", e);
