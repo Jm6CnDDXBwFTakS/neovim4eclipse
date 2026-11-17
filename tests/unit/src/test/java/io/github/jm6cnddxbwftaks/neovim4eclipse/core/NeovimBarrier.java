@@ -3,6 +3,10 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
+import java.util.concurrent.TimeUnit;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+
 /**
  * Lets an integration test check that something did <em>not</em> happen, without sleeping.
  *
@@ -13,6 +17,12 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
  *
  * <p>The barrier: one request that Neovim answers only after everything before it.
  * <ul>
+ *   <li>First it waits for the session's input thread to run what is queued there
+ *       ({@code NeovimSession.queuedWorkDone}): an {@code *Async} call only queues its work, and the
+ *       request below, sent from the test thread, would otherwise overtake it. Example:
+ *       {@code setRegisterFromViewAsync("a", ...)}, then {@code pass}, then reading register
+ *       {@code a}: without this step the read can come before the {@code setreg} (it did on a
+ *       Windows machine, where the input thread was not yet started).</li>
  *   <li>Neovim runs a non-fast API call such as {@code nvim_exec_lua} from its main loop, only once
  *       the keys queued before it have been handled (unlike {@code nvim_get_mode}, which is "fast"
  *       and answered at once). So by then every autocmd those keys fired has run, and every
@@ -23,8 +33,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
  *       listeners itself (see {@code RpcChannel}, "Threads"). So when the answer completes the
  *       request, every listener for those notifications has already returned.</li>
  * </ul>
- * After {@link #pass}, whatever the keys before it caused has reached the test's listeners: what has
- * not arrived will not.
+ * After {@link #pass}, whatever the keys and {@code *Async} calls before it caused has reached the
+ * test's listeners: what has not arrived will not.
  *
  * <pre>
  * keys(s, "\"", "+", "y", "y");
@@ -33,7 +43,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
  * assertEquals(List.of("CLIPBOARD:one" + NL), system.copies); // exactly one
  * </pre>
  *
- * <p>Limits: it covers what Neovim does in response to the keys, not work Neovim deferred on
+ * <p>Limits: it covers what Neovim does in response to the keys and calls, not work Neovim deferred on
  * purpose ({@code vim.schedule}, {@code vim.defer_fn}, a timer). And it fails after the session's
  * RPC limit ({@code Rpc.TIMEOUT_SEC}) if Neovim is in the middle of a command (after {@code f},
  * waiting for the character), because Neovim holds non-fast requests back then. Same idea as
@@ -44,8 +54,12 @@ final class NeovimBarrier {
     private NeovimBarrier() {
     }
 
-    /** Returns once Neovim has sent, and the session has handled, everything the keys before caused. */
+    /**
+     * Returns once Neovim has sent, and the session has handled, everything the keys and queued
+     * calls before caused. Waits at most {@link TestWait#millis} for the queue.
+     */
     static void pass(NeovimSession session) throws Exception {
+        session.queuedWorkDone().get(TestWait.millis(), TimeUnit.MILLISECONDS);
         session.lua("return 0");
     }
 }

@@ -331,9 +331,12 @@ waiting longer:
 
 **Checking that something did not happen** needs care too: "sleep 200 ms, then check nothing
 arrived" passes on a loaded machine even when the bug is there, because the stray event comes later.
-The integration tests use `NeovimBarrier.pass(session)` instead: one request that Neovim answers
-only after the keys before it, with every notification they caused sent and handled before the
-answer (see that class for why the order holds). After it, what has not arrived will not.
+The integration tests use `NeovimBarrier.pass(session)` instead: it first waits for the session's
+input thread to send what the `*Async` calls before it queued, then makes one request that Neovim
+answers only after the keys and calls before it, with every notification they caused sent and
+handled before the answer (see that class for why the order holds). After it, what has not arrived
+will not. The first step matters: an `*Async` call only queues its work, and a request the test
+sends itself would otherwise overtake it.
 
 **Tests that cannot help depending on the machine** are tagged `timeoutReliant`: a test that measures
 time (`pendingCommandsDoNotStallTheInputThread` compares how long keys take) fails on a busy machine

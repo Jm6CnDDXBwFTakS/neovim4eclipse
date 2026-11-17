@@ -2020,6 +2020,26 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * Completes once the input thread has run everything queued before this call: every
+     * {@code *Async} call so far has been sent to Neovim (and answered, for the ones that wait for an
+     * answer). For tests: {@code NeovimBarrier.pass} waits for it before its own round trip, since
+     * a call the test thread sends itself overtakes work still in the queue. Example:
+     * {@code setRegisterFromViewAsync("a", ...)} only queues the {@code setreg}; without this wait a
+     * test could read register {@code a} before it is set. Work held by {@link #whenAnswering}
+     * while Neovim waits for the rest of a command is not covered: it runs when the wait ends.
+     * Completes at once if the session is closed (the queue is dropped). Any thread.
+     */
+    CompletableFuture<Void> queuedWorkDone() {
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        // inputThread.submit, not submit(): this marker is not input, so the input-handled
+        // listeners must not hear of it (some tests count those events).
+        if (!inputThread.submit("queue barrier", Level.FINE, () -> done.complete(null))) {
+            done.complete(null);
+        }
+        return done;
+    }
+
+    /**
      * Runs {@code work} now, or, while Neovim waits for the rest of a command (and would not answer),
      * after the input-thread work that ends the wait. Input thread. Like {@link #resizeGrid}'s skip,
      * for work that must not be lost.
