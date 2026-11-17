@@ -151,11 +151,6 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Where it opens and how it looks: in the stack of the Problems view (plugin.xml's
-     * perspectiveExtensions), with the keyboard, an error in Neovim's error color, the cursor on the
-     * newest message, and the editor's background under the text.
-     */
-    /**
      * Where it opens and how it looks: outside the editor area (with Problems where the perspective
      * has it, plugin.xml's perspectiveExtensions, which PluginXmlConsistencyTest reads; the test
      * Eclipse's Resource perspective has none, and Eclipse puts the view at the bottom), with the

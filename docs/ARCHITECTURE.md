@@ -389,7 +389,7 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
 
 - **The one rule: it never writes a file.** Two Neovims and Eclipse's documents changing the same
   file would drift apart (lost edits, swap prompts, reloads). So every second Neovim starts with
-  `ScreenSession.FIXED_ARGS`: `--clean` (no user config, no plug-ins, no shada file), `-n` (no swap
+  `ScreenSession.FIXED_ARGS`: `--clean` (no user config, none of the user's plug-ins, only Neovim's own; no shada file), `-n` (no swap
   file), `--cmd "set nowrite nomodeline"`. And the rule is checked where it ends, not trusted on
   the way: once started, `LuaScripts.SCREEN_SETUP` answers the options as Neovim has them, and
   `ScreenSession.unsafeOptions` refuses the start unless `write`, `modeline` and `undofile` are

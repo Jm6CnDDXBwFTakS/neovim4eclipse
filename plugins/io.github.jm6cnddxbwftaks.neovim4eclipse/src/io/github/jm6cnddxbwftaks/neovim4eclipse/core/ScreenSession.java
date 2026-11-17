@@ -30,7 +30,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenGrid;
  * <h2>The one rule: the second Neovim never writes a file</h2>
  * Two Neovims and Eclipse's documents editing the same file would drift apart (lost edits, swap
  * prompts, reloads), so the second Neovim writes nothing at all. Every profile starts with
- * {@link #FIXED_ARGS}: {@code --clean} (no user config, no plug-ins, no shada file), {@code -n}
+ * {@link #FIXED_ARGS}: {@code --clean} (no user config, none of the user's plug-ins, only Neovim's
+ * own; no shada file), {@code -n}
  * (no swap file) and {@code 'write'} and {@code 'modeline'} off. And it is checked where it ends,
  * not trusted on the way: once started, Neovim is asked for those options as it has them
  * ({@link LuaScripts#SCREEN_SETUP}), and the start is refused unless every one is off
@@ -270,7 +271,7 @@ public final class ScreenSession implements AutoCloseable {
                 case "eclipse_screen_yank" -> yank(params);
                 case "eclipse_screen_to_editor" -> listener.toEditor();
                 default -> {
-                    // nothing else is expected from a Neovim that runs no plug-ins
+                    // nothing else is expected from a Neovim that runs none of the user's plug-ins
                 }
             }
         }
