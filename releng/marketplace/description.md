@@ -17,6 +17,7 @@ buffer you see; Eclipse keeps owning files, rendering, content assist and its ow
 - Neovim's keys run Eclipse's commands: `gd` Open Declaration, `K` hover, `grn` Rename,
   `gra` Quick Fix, `grr` References.
 - Folding with `zo`, `zc` and `zM` on Eclipse's own folds (methods, imports, comments).
+- `:terminal` opens Eclipse's Terminal view, with a shell in the file's folder.
 
 **Requires:**
 
