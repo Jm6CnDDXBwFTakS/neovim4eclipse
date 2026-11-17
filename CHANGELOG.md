@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.26] - 2026-11-17
+
 ### Changed
 
 - `:terminal` opens Eclipse's *Terminal* view with a shell in the file's folder. Before, it started
