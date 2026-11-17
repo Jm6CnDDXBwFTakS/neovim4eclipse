@@ -45,6 +45,13 @@ public final class JumpLabels {
      */
     public static final int MAX_LABELS = 2000;
 
+    /**
+     * The most screen cells a label may start after its character. A label sits on or right
+     * beside its target; a number far larger is no jump label's, and multiplied by a cell's width
+     * in pixels it would overflow an {@code int} and put the label somewhere else.
+     */
+    public static final int MAX_CELLS = 1000;
+
     /** The most characters of one label's text that are kept; jump labels have one or two. */
     public static final int MAX_TEXT_LENGTH = 8;
 
@@ -108,7 +115,7 @@ public final class JumpLabels {
         Integer fg = number(f.get(5));
         String text = clean(raw);
         if (line == null || col == null || cells == null || bg == null || fg == null || text.isEmpty()
-                || line < 1 || col < 0 || cells < 0 || !isColor(bg) || !isColor(fg)) {
+                || line < 1 || col < 0 || cells < 0 || cells > MAX_CELLS || !isColor(bg) || !isColor(fg)) {
             return null;
         }
         return new Label(line, col, cells, text, bg, fg, Boolean.TRUE.equals(f.get(6)));

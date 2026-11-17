@@ -146,6 +146,25 @@ class NeovimHighlighterTest {
         assertEquals(List.of(), highlighter.paintedLabels());
     }
 
+    /**
+     * A paint computes only the labels on lines in view (and one line beyond each end): a paint
+     * runs at every caret blink. A label scrolled out of view is back once its line shows again.
+     */
+    @Test
+    void aPaintLeavesOutLabelsOnLinesOutOfView() {
+        viewer.getDocument().set("line\n".repeat(400));
+        JumpLabels.Label top = new JumpLabels.Label(1, 0, 0, "t", YELLOW, DARK, false);
+        JumpLabels.Label far = new JumpLabels.Label(300, 0, 0, "f", YELLOW, DARK, false);
+        highlighter.show(List.of(), List.of(top, far));
+        widget.setTopIndex(0);
+        assertEquals(List.of(top, far), highlighter.paintedLabels().stream().map(JumpLabelPainter.Painted::label).toList());
+        assertEquals(List.of(top), highlighter.paintedLabelsInView().stream().map(JumpLabelPainter.Painted::label).toList());
+        widget.setTopIndex(295);
+        assertEquals(List.of(far), highlighter.paintedLabelsInView().stream().map(JumpLabelPainter.Painted::label).toList());
+        widget.redraw();
+        widget.update(); // a real paint, scrolled: the listener must not fail
+    }
+
     /** Lowest priority first: the last lies on top, and both lie over a search match. */
     @Test
     void theLastHighlightLiesOnTopOfTheOthersAndOfASearchMatch() {

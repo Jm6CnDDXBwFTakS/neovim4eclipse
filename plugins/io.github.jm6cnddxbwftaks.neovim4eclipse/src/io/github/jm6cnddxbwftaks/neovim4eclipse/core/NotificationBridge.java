@@ -403,6 +403,14 @@ final class NotificationBridge implements Incoming {
     }
 
     /**
+     * The most highlight ranges taken from one {@code eclipse_highlights}. The script sends those
+     * of the window's visible lines only, a few hundred on a full screen of matches; each becomes
+     * a style range the editor paints, so a list far longer (a plug-in marking every character
+     * with its own group) is cut here instead of slowing the UI thread.
+     */
+    static final int MAX_HIGHLIGHTS = 20_000;
+
+    /**
      * Payload: {@code [bufnr, ranges, winid, labels]}, from {@link LuaScripts#HIGHLIGHTS}:
      * {@code ranges} holds six numbers per highlight (start line, start byte, end line, end byte,
      * background, text color; -1 for a color the group does not set). An incomplete last group is
@@ -414,8 +422,8 @@ final class NotificationBridge implements Incoming {
         if (buf == null || args.size() < 2 || !(args.get(1) instanceof List<?> flat)) {
             return;
         }
-        List<NeovimHighlight> highlights = new ArrayList<>(flat.size() / 6);
-        for (int i = 0; i + 5 < flat.size(); i += 6) {
+        List<NeovimHighlight> highlights = new ArrayList<>(Math.min(flat.size() / 6, MAX_HIGHLIGHTS));
+        for (int i = 0; i + 5 < flat.size() && highlights.size() < MAX_HIGHLIGHTS; i += 6) {
             Integer l1 = toInt(flat.get(i));
             Integer c1 = toInt(flat.get(i + 1));
             Integer l2 = toInt(flat.get(i + 2));

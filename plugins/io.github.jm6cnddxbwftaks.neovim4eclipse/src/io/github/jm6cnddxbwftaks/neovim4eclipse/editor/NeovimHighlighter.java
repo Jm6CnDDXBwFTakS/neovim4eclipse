@@ -101,6 +101,11 @@ final class NeovimHighlighter implements ITextPresentationListener {
         labelPainter.show(labels);
     }
 
+    /** The labels a paint would draw now, those on lines scrolled out of view left out; for tests. */
+    List<JumpLabelPainter.Painted> paintedLabelsInView() {
+        return labelPainter.paintedInView();
+    }
+
     /** The labels as they would be painted now; for tests. */
     List<JumpLabelPainter.Painted> paintedLabels() {
         return labelPainter.painted();

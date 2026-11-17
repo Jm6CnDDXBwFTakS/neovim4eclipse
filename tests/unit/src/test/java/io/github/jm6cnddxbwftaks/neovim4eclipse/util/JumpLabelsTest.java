@@ -39,6 +39,8 @@ class JumpLabelsTest {
         assertEquals(List.of(), JumpLabels.parse(null));
         assertEquals(List.of(), JumpLabels.parse("labels"));
         Label good = new Label(1, 0, 0, "a", 1, 2, false);
+        assertEquals(List.of(new Label(1, 0, JumpLabels.MAX_CELLS, "a", 1, 2, false)),
+                JumpLabels.parse(List.of(List.of(1, 0, JumpLabels.MAX_CELLS, "a", 1, 2, false))), "the limit itself is a label");
         List<Object> entries = new ArrayList<>();
         entries.add(List.of(1, 0, 0, "a", 1, 2, false));
         entries.add("text");                                         // no list
@@ -46,6 +48,7 @@ class JumpLabelsTest {
         entries.add(List.of(0, 0, 0, "a", 1, 2, false));             // line 0
         entries.add(List.of(1, -1, 0, "a", 1, 2, false));            // a negative column
         entries.add(List.of(1, 0, -1, "a", 1, 2, false));            // a negative cell
+        entries.add(List.of(1, 0, JumpLabels.MAX_CELLS + 1, "a", 1, 2, false)); // further off than any label sits
         entries.add(List.of(1, 0, 0, "", 1, 2, false));              // nothing to draw
         entries.add(List.of(1, 0, 0, 7, 1, 2, false));               // the text is no string
         entries.add(List.of(1, 0, 0, "a", 0x1000000, 2, false));     // no color

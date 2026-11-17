@@ -245,6 +245,18 @@ class NotificationBridgeTest {
                 + "+" + List.of(new JumpLabels.Label(1, 7, 0, "a", 0x101010, 0xF0F0F0, true)) + "#1001"), events);
     }
 
+    /** A list of ranges far longer than a screen of text can hold is cut, not passed on whole. */
+    @Test
+    void noMoreHighlightsThanTheLimitAreTaken() {
+        List<Object> flat = new ArrayList<>();
+        for (int i = 0; i < NotificationBridge.MAX_HIGHLIGHTS + 10; i++) {
+            flat.addAll(List.of(1, i, 1, i + 1, 0x112233, -1));
+        }
+        notify("eclipse_highlights", 3, flat, 1001);
+        assertEquals(1, events.size());
+        assertEquals(NotificationBridge.MAX_HIGHLIGHTS, events.get(0).split("NeovimHighlight\\[", -1).length - 1);
+    }
+
     @Test
     void aScrollCarriesTheBufferAndTheTopLine() {
         notify("eclipse_topline", 3, 40);

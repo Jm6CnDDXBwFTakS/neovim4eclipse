@@ -20,6 +20,7 @@ import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.graphics.Region;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 
@@ -98,7 +99,20 @@ final class JumpLabelPainter {
         }
         GC gc = new GC(widget);
         try {
-            return cells(gc);
+            return cells(gc, false);
+        } finally {
+            gc.dispose();
+        }
+    }
+
+    /** The labels a paint would draw now: those of {@link #painted()} on lines in view; for tests. */
+    List<Painted> paintedInView() {
+        if (widget == null || widget.isDisposed() || labels.isEmpty()) {
+            return List.of();
+        }
+        GC gc = new GC(widget);
+        try {
+            return cells(gc, true);
         } finally {
             gc.dispose();
         }
@@ -123,19 +137,30 @@ final class JumpLabelPainter {
     }
 
     private void paint(GC gc) {
+        Font oldFont = gc.getFont(); // before cells(), which measures with the widget's font
         List<Painted> cells;
         try {
-            cells = cells(gc);
+            cells = cells(gc, true);
         } catch (RuntimeException e) {
             LOG.log(Level.FINE, "jump label paint failed", e); // e.g. the document changed under us
             return;
         }
         Color oldBackground = gc.getBackground();
         Color oldForeground = gc.getForeground();
-        Font oldFont = gc.getFont();
+        // The clip as a region, to put back exactly: its bounding box alone would let a later
+        // painter of the same event draw where this paint event does not reach.
+        Region oldRegion = new Region(gc.getDevice());
+        gc.getClipping(oldRegion);
+        Rectangle oldClip = gc.getClipping();
         try {
             for (Painted p : cells) {
+                if (!p.cell().intersects(oldClip)) {
+                    continue; // not in the part being repainted (a caret blink repaints one small rectangle)
+                }
                 JumpLabels.Label label = p.label();
+                // Nothing of a label leaves its cell: a combining mark stacked on a letter, or a
+                // glyph wider than a cell, would otherwise draw over the neighboring text.
+                gc.setClipping(p.cell().intersection(oldClip));
                 gc.setBackground(label.background() == JumpLabels.NO_COLOR ? widget.getBackground() : color(label.background()));
                 gc.setForeground(label.foreground() == JumpLabels.NO_COLOR ? widget.getForeground() : color(label.foreground()));
                 gc.setFont(label.bold() ? boldFont() : widget.getFont());
@@ -143,14 +168,23 @@ final class JumpLabelPainter {
                 gc.drawText(label.text(), p.cell().x, p.cell().y, true);
             }
         } finally {
+            gc.setClipping(oldRegion);
+            oldRegion.dispose();
             gc.setBackground(oldBackground);
             gc.setForeground(oldForeground);
             gc.setFont(oldFont);
         }
     }
 
-    /** Each label that has a place in the widget now, with the cell it covers. */
-    private List<Painted> cells(GC gc) {
+    /**
+     * Each label that has a place in the widget now, with the cell it covers.
+     *
+     * @param onlyVisible leave out the labels on lines scrolled out of view, before their place
+     *                    is asked for: a paint runs often (each caret blink), and asking the
+     *                    widget where an offset lies is the costly part. One line more at each
+     *                    end is kept, for a line that shows in part.
+     */
+    private List<Painted> cells(GC gc, boolean onlyVisible) {
         IDocument document = viewer.getDocument();
         if (document == null) {
             return List.of();
@@ -158,6 +192,8 @@ final class JumpLabelPainter {
         gc.setFont(widget.getFont());
         int cellWidth = Math.max(1, (int) Math.round(gc.getFontMetrics().getAverageCharacterWidth()));
         int chars = widget.getCharCount();
+        int firstLine = widget.getTopIndex() - 1;
+        int lastLine = widget.getLineIndex(widget.getClientArea().height) + 1;
         List<Painted> cells = new ArrayList<>(labels.size());
         for (JumpLabels.Label label : labels) {
             if (label.line1() > document.getNumberOfLines()) {
@@ -172,6 +208,12 @@ final class JumpLabelPainter {
             int widgetOffset = offsets.toWidget(offset);
             if (widgetOffset < 0 || widgetOffset > chars) {
                 continue; // inside a closed fold
+            }
+            if (onlyVisible) {
+                int widgetLine = widget.getLineAtOffset(widgetOffset);
+                if (widgetLine < firstLine || widgetLine > lastLine) {
+                    continue;
+                }
             }
             Point at = widget.getLocationAtOffset(widgetOffset);
             int height = widget.getLineHeight(Math.min(widgetOffset, chars));
