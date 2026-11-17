@@ -4,6 +4,13 @@ How each part of Neovim for Eclipse behaves, section by section. The [README](..
 overview: how to install, the first five minutes, the [Settings](../README.md#settings) and the
 [Known limitations](../README.md#known-limitations).
 
+## Starting Neovim
+
+Neovim starts with the first text editor you open, and again with the next one after *Neovim →
+Restart Neovim...*. Eclipse waits for it, with the busy cursor: usually well under a second, plus
+your `init.lua`. What you type meanwhile is kept, and reaches Neovim in order once it is ready, so
+`dd` typed while it starts deletes a line.
+
 ## Status bar
 
 *Window → Preferences → Neovim → Status Bar* chooses which parts of Vim's status information appear in the
@@ -32,11 +39,6 @@ position to the right. *At most this share of the status bar* (default 40%) keep
 own messages: in a narrow window the statusline gets narrower first.
 
 Messages and errors are not in the status bar: they appear in the editor (next section).
-
-While Neovim starts (the first text editor you open, or the next one after *Restart Neovim...*),
-the status bar says *Neovim is starting, please wait…* and the cursor is busy. Eclipse waits for
-it, usually well under a second plus your `init.lua`; what you type meanwhile is kept, and reaches
-Neovim in order once it is ready, so `dd` typed right away deletes a line.
 
 ## Messages and errors
 

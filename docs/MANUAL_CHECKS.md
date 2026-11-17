@@ -353,21 +353,21 @@ Accessibility permission, so the real key is checked by hand.
 
 ## Starting Neovim
 
-### `st-notice` The status bar's message while Neovim starts
+### `st-busy` The busy cursor while Neovim starts
 
 - **On:** any
 - **Launch:** checks
-- **Areas:** util/StartingNotice.java, editor/EditorAttachManager.java
+- **Areas:** util/BusyStart.java, editor/EditorAttachManager.java
 
-The order around the start is tested (`StartingNoticeTest`: message, repaint, start under the busy
-cursor, message cleared, also after a failure), and every UI test's attach goes through it. Whether
-each system paints the message before the UI thread waits is only seen on screen. The start is
-short (0.2 to 0.6 s), so watch the status bar.
+That the start runs inside the busy cursor, on the same thread, is tested (`BusyStartTest`), and
+every UI test's attach goes through it. Whether each system shows the cursor while the UI thread
+waits is only seen on screen. The start is short (0.2 to 0.6 s), so keep the pointer over the
+editor and watch it.
 
 1. In `n4e-alpha`'s `notes.txt`, choose *Neovim → Restart Neovim...*, answer *Restart*, and type
    `dd` at once.
-   ⇒ While Neovim starts, the status bar shows *Neovim is starting, please wait…* and the cursor
-   is busy; then the message is gone, and the line under the cursor is deleted.
+   ⇒ While Neovim starts, the pointer over Eclipse is the busy cursor; then it is the usual one
+   again, and the line under the cursor is deleted.
 
 **Expect:** each step's result, after its ⇒.
 

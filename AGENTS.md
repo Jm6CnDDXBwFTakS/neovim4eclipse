@@ -100,8 +100,9 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 
 - No blocking Neovim RPC on the SWT UI thread; queue work through the session's `*Async` methods.
   Two bounded exceptions (docs/ARCHITECTURE.md, "Threading rules"): `editor/ProjectFolderExit`
-  waits at most 1 s before a project delete, and the first editor's attach starts the editing
-  Neovim synchronously (`util/StartingNotice`), so that keys typed meanwhile reach it in order.
+  waits at most 1 s before a project delete, and the first editor's attach (and the next one
+  after a restart) starts the editing Neovim synchronously (`util/BusyStart`), so that keys
+  typed meanwhile reach it in order.
 - Compare file paths only through the one rule: `util/FilePaths` in Java, `neovim4eclipse.paths`
   (`LuaScripts.PATHS`) in Lua, `t.same_file` in Lua specs; find a path's workspace file only with
   `NewFiles.workspaceFileAt`. A new case goes into `tests/unit/src/test/resources/path-cases.tsv`,

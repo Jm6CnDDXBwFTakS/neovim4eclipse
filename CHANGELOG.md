@@ -27,9 +27,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
-- While Neovim starts, the status bar says "Neovim is starting, please wait…" and the cursor is
-  busy. Eclipse still waits for the start, so keys typed meanwhile reach Neovim in order
-  ([Status bar](docs/USER_GUIDE.md#status-bar)).
+- While Neovim starts, the cursor is busy. Eclipse still waits for the start, so keys typed
+  meanwhile reach Neovim in order ([Starting Neovim](docs/USER_GUIDE.md#starting-neovim)).
 - `:messages` no longer opens the box over the editor; it opens the Neovim view. Before,
   `:checkhealth` opened a window Eclipse could not show, which was closed at once with the message
   "Window closed", and its `health://` buffer stayed behind for `:bnext` to find.
