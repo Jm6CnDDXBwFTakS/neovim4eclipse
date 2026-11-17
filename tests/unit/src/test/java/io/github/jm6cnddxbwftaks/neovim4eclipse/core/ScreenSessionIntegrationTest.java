@@ -207,6 +207,8 @@ class ScreenSessionIntegrationTest {
             assertEquals(2L, ((Number) OutputProfile.show(s, messages, true)
                     .get(TestWait.millis(), TimeUnit.MILLISECONDS)).longValue());
             waitFor(() -> recorder.text().startsWith("plain line"), "the text: " + recorder.text());
+            waitFor(() -> recorder.text().contains(" messages "), "the status line naming the view's text: " + recorder.text());
+            assertFalse(recorder.text().contains("[Scratch]"), recorder.text());
             GridSnapshot screen = recorder.screen.get();
             assertEquals(1, screen.cursorRow(), "the newest message, last");
             int plain = screen.attr(screen.hlAt(0, 0)).foreground();

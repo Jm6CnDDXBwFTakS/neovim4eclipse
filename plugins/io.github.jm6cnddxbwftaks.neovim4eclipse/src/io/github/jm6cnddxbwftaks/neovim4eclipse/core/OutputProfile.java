@@ -43,6 +43,6 @@ public final class OutputProfile {
         }
         String cursor = ViewText.MESSAGES.equals(text.title()) ? "end" : "top";
         return session.execLuaAsync(LuaScripts.SCREEN_SHOW_TEXT,
-                List.of(text.lines(), text.filetype(), highlights, dark ? "dark" : "light", cursor));
+                List.of(text.lines(), text.filetype(), highlights, dark ? "dark" : "light", cursor, text.title()));
     }
 }

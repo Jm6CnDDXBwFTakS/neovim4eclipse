@@ -5755,8 +5755,12 @@ final class LuaScripts {
      * Arguments: the lines; the filetype ({@code "checkhealth"}, or {@code ""} for none); the lines
      * to color, as {@code {line, group}} pairs (0-based lines, Neovim's highlight groups:
      * {@code {0, "ErrorMsg"}}); {@code 'background'} ({@code "light"} or {@code "dark"}, the
-     * editor's, so Neovim's default colors suit it); and where the cursor goes ({@code "end"} for
-     * {@code :messages}, whose newest message is last; {@code "top"} otherwise).
+     * editor's, so Neovim's default colors suit it); where the cursor goes ({@code "end"} for
+     * {@code :messages}, whose newest message is last; {@code "top"} otherwise); and the title,
+     * which the window's status line shows instead of the scratch buffer's {@code [Scratch] [-]}
+     * (example: {@code " messages"} on the left, line, column and position on the right). The title
+     * is one of the plug-in's own ({@code ViewText}); a {@code %} in it is doubled anyway, so the
+     * status line shows it as it is.
      *
      * <p>The buffer is a scratch one ({@code buftype=nofile}), changeable only while its text is
      * set: the profile starts Neovim with {@code -M}, and the buffer is {@code nomodifiable} again
@@ -5765,7 +5769,7 @@ final class LuaScripts {
      * {{0, "ErrorMsg"}}, "dark", "end")} shows two lines, the first in red, the cursor on the second.
      */
     static final String SCREEN_SHOW_TEXT = """
-            local lines, filetype, highlights, background, cursor = ...
+            local lines, filetype, highlights, background, cursor, title = ...
             if background == 'light' or background == 'dark' then
               vim.o.background = background
             end
@@ -5783,6 +5787,7 @@ final class LuaScripts {
             local count = vim.api.nvim_buf_line_count(buf)
             vim.api.nvim_win_set_cursor(0, { cursor == 'end' and count or 1, 0 })
             vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the Neovim view' })
+            vim.wo.statusline = ' ' .. (title or ''):gsub('%%', '%%%%') .. '%=%l,%c%V  %P '
             return count
             """;
 

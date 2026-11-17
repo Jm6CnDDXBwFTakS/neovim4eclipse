@@ -8,8 +8,8 @@
 local t = ...
 
 --- SCREEN_SHOW_TEXT as core/OutputProfile calls it.
-local function show(lines, filetype, highlights, background, cursor)
-  return t.run('SCREEN_SHOW_TEXT', lines, filetype, highlights, background, cursor)
+local function show(lines, filetype, highlights, background, cursor, title)
+  return t.run('SCREEN_SHOW_TEXT', lines, filetype, highlights, background, cursor, title or 'messages')
 end
 
 t.test('the text replaces what was shown, unchangeable, its error lines colored', function()
@@ -35,6 +35,13 @@ t.test('new text clears the old highlights, sets its filetype and starts at the 
   t.eq('checkhealth', vim.bo.filetype)
   t.eq({ 1, 0 }, vim.api.nvim_win_get_cursor(0))
   t.eq('light', vim.o.background)
+end)
+
+t.test('the status line names what the view shows, not the scratch buffer', function()
+  show({ 'x' }, '', {}, 'dark', 'top', 'checkhealth')
+  t.eq(' checkhealth%=%l,%c%V  %P ', vim.wo.statusline)
+  show({ 'x' }, '', {}, 'dark', 'top', '100% sure')
+  t.eq(' 100%% sure%=%l,%c%V  %P ', vim.wo.statusline, 'a % shows as it is')
 end)
 
 t.test('q quits, as in Neovim\'s own :checkhealth', function()
