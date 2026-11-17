@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The plug-in's own Neovim: where it lives and what counts as one.
@@ -126,8 +127,27 @@ public final class PluginNeovim {
      * called: the Activator forgets before every Neovim start, the first included, so each start is
      * checked in full (EarlyStartup's check, made in the background at Eclipse's start, only decides
      * whether Get Neovim opens at once). Call this off the UI thread where possible.
+     *
+     * <p>Two starts at once (an editor's and the Neovim view's): an answer is kept with the
+     * {@link #forget} count from when its hash began, and reused only while that count is current.
+     * So a hash that was running when another start forgot is not reused by that start, which
+     * hashes again; nothing waits for anything. Example: start A begins hashing; start B forgets
+     * (count 1 to 2) and asks; A's answer, kept with 1, is not B's, and B hashes.
      */
     public static boolean verified(Path home, boolean windows, NeovimRelease release) {
+        return verified(home, windows, release, (install, tree) ->
+                // A Finder or Explorer file is deleted, not skipped (InstallTree, point 1).
+                InstallTree.removeSystemFiles(install) && InstallTree.of(install).map(tree::equals).orElse(false));
+    }
+
+    /** Whether an install's files hash to the tree hash given; {@link InstallTree} in the plug-in. */
+    @FunctionalInterface
+    interface TreeCheck {
+        boolean matches(Path home, String tree);
+    }
+
+    /** {@link #verified(Path, boolean, NeovimRelease)} with the hashing given, for tests. */
+    static boolean verified(Path home, boolean windows, NeovimRelease release, TreeCheck check) {
         Optional<NeovimPlatform> platform = NeovimPlatform.byCode(String.valueOf(home.getFileName()));
         Optional<String> expected = platform.flatMap(release::forPlatform).map(NeovimRelease.Archive::tree);
         if (expected.isEmpty() || !isInstall(home, windows)) {
@@ -135,26 +155,32 @@ public final class PluginNeovim {
         }
         Path key = home.toAbsolutePath().normalize();
         String stamp = expected.get() + " " + stamp(home, windows);
+        long generation = GENERATION.get(); // read before the hash: a forget during it makes it stale
         Verdict known = VERDICTS.get(key);
-        if (known != null && known.stamp().equals(stamp)) {
+        if (known != null && known.stamp().equals(stamp) && known.generation() == generation) {
             return known.matches();
         }
-        // A Finder or Explorer file is deleted, not skipped (InstallTree, point 1).
-        boolean matches = InstallTree.removeSystemFiles(home)
-                && InstallTree.of(home).map(expected.get()::equals).orElse(false);
-        VERDICTS.put(key, new Verdict(stamp, matches));
+        boolean matches = check.matches(home, expected.get());
+        VERDICTS.put(key, new Verdict(stamp, generation, matches));
         return matches;
     }
 
-    /** Forgets every kept answer of {@link #verified}: after an install, so the next start checks again. */
+    /**
+     * Forgets every kept answer of {@link #verified}, and any hash still running, so the next
+     * {@link #verified} hashes again: after an install, and before every start of Neovim.
+     */
     public static void forget() {
+        GENERATION.incrementAndGet();
         VERDICTS.clear();
     }
 
-    private record Verdict(String stamp, boolean matches) {
+    /** An answer, with the {@link #forget} count from when its hash began. */
+    private record Verdict(String stamp, long generation, boolean matches) {
     }
 
     private static final Map<Path, Verdict> VERDICTS = new ConcurrentHashMap<>();
+    /** How many times {@link #forget} was called; see {@link #verified(Path, boolean, NeovimRelease)}. */
+    private static final AtomicLong GENERATION = new AtomicLong();
 
     /** What changes when the install is replaced or touched: modification times of its main parts. */
     private static String stamp(Path home, boolean windows) {

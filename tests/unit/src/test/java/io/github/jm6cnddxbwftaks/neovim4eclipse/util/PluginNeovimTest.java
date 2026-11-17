@@ -84,6 +84,33 @@ class PluginNeovimTest {
         assertTrue(PluginNeovim.verified(home, false, release));
     }
 
+    /**
+     * Two starts at once: start B forgets while start A is still hashing. A's answer, begun before
+     * the forget, is not reused: B's check hashes again.
+     */
+    @Test
+    void aHashRunningWhenAnotherStartForgetsIsNotReused() throws IOException {
+        Path home = testInstall();
+        NeovimRelease release = release(TestArchives.neovimTree());
+        PluginNeovim.forget();
+        List<String> hashes = new ArrayList<>();
+        assertTrue(PluginNeovim.verified(home, false, release, (install, tree) -> {
+            hashes.add("A");
+            PluginNeovim.forget(); // start B, while A hashes
+            return true;
+        }));
+        assertTrue(PluginNeovim.verified(home, false, release, (install, tree) -> {
+            hashes.add("B");
+            return true;
+        }));
+        assertEquals(List.of("A", "B"), hashes, "B hashed again");
+        assertTrue(PluginNeovim.verified(home, false, release, (install, tree) -> {
+            hashes.add("C");
+            return true;
+        }));
+        assertEquals(List.of("A", "B"), hashes, "B's answer, with no forget since, is kept");
+    }
+
     @Test
     void searchHomesPutTheRealProcessorFirst() {
         Path f = tmp;
