@@ -38,6 +38,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 
@@ -224,6 +225,10 @@ public final class NeovimView extends ViewPart {
             ScreenSession started = null;
             Exception failure = null;
             try {
+                // Every start of the dedicated Neovim checks its files in full, this one too: the
+                // kept answer notices a reinstall, not a runtime file edited in place
+                // (PluginNeovim.verified). About 0.1 s, here in the job.
+                PluginNeovim.forget();
                 started = ScreenSession.start(program, OutputProfile.ARGS, version, SCREEN_FOLDER.get(), startColumns,
                         startRows, new Events());
             } catch (Exception e) {
@@ -339,11 +344,15 @@ public final class NeovimView extends ViewPart {
         }
     }
 
-    /** {@code Ctrl-W w}, {@code p} or {@code k}: the editor the text came from, or the page's active one. */
+    /**
+     * {@code Ctrl-W w}, {@code p} or {@code k}: the editor of the file the text came from, or the
+     * page's active one. The editor found by its file, not {@link #cameFrom} itself: if that editor
+     * was closed and its file opened again, the open one is a new part.
+     */
     private void toEditor() {
         IWorkbenchPage page = getSite().getPage();
-        IEditorPart editor = cameFrom != null && page.findEditor(cameFrom.getEditorInput()) != null ? cameFrom
-                : page.getActiveEditor();
+        IEditorPart found = cameFrom == null ? null : page.findEditor(cameFrom.getEditorInput());
+        IEditorPart editor = found != null ? found : page.getActiveEditor();
         if (editor != null) {
             page.activate(editor);
         }
