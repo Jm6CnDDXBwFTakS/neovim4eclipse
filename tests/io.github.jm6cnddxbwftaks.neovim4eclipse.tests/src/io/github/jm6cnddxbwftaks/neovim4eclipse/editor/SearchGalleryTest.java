@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.GalleryCamera;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 
 /**
  * The search highlighting pictures of the manual checks' gallery (card {@code sh-colors},
@@ -100,6 +101,14 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "completed, its entries lined up with it, in Neovim's colors for the list (Pmenu), "
                             + "which follow the theme. The second entry is selected (PmenuSel) and stands out from "
                             + "the others in both themes; all entries read. The caret is after the completed word."),
+            new Picture("view-messages", "The Neovim view after :messages",
+                    "The view's second Neovim, in the editor's text font on the editor's background: three "
+                            + "messages, the newest last with the cursor on it. The E486 error is in Neovim's error "
+                            + "color (ErrorMsg), the other two in the default text color; all read in both themes."),
+            new Picture("view-checkhealth", "The Neovim view after :checkhealth neovim4eclipse",
+                    "The plug-in's own report as Neovim colors :checkhealth: the section headings stand out, OK "
+                            + "in green, the WARNING (the gallery runs a Neovim program of its own, not the dedicated "
+                            + "one) in Neovim's warning color; the lines read in both themes."),
             new Picture(LABELS, "A jump plug-in's labels (flash)",
                     "The real flash plug-in in the Java editor, after its jump key and f: each f that can be "
                             + "jumped to has its match highlighted and a label, one letter in its own cell right "
@@ -323,6 +332,8 @@ class SearchGalleryTest extends EndToEndTestBase {
                 });
             }
 
+            takeTheView(java);
+
             takeLabels(java, javaWidget);
 
             // As a user sets it in Colors and Fonts: the theme's color registry takes the new value.
@@ -450,6 +461,57 @@ class SearchGalleryTest extends EndToEndTestBase {
         GalleryCamera.drain(target.getDisplay());
         Rectangle area = target.getClientArea();
         GalleryCamera.save(target, new Rectangle(0, 0, Math.min(area.width, 720), area.height), out.resolve(file(theme, name)),
+                name + " (" + theme + ")");
+    }
+
+    /**
+     * The Neovim view after {@code :messages} (three messages, an error among them) and after
+     * {@code :checkhealth neovim4eclipse}, as the view's canvas draws them; then the view is closed
+     * and the Java editor is active again, for the pictures after these.
+     */
+    private void takeTheView(ITextEditor java) {
+        SessionProbe.lua(session, "vim.cmd.messages('clear') vim.cmd.echomsg(\"'3 lines yanked'\")"
+                + " vim.api.nvim_echo({ { 'E486: Pattern not found: wolf' } }, true, { err = true })"
+                + " vim.cmd.echomsg(\"'\\\"Foxes.java\\\" 16L, 371B written'\") return 0");
+        session.inputAsync(":messages<CR>");
+        NeovimView view = viewShowing("E486: Pattern not found: wolf");
+        try {
+            takeView(view, "view-messages");
+            session.inputAsync(":checkhealth neovim4eclipse<CR>");
+            viewShowing("Neovim for Eclipse ");
+            takeView(view, "view-checkhealth");
+        } finally {
+            page().hideView(view);
+            page().activate(java);
+            settle();
+        }
+    }
+
+    /** Waits for the Neovim view to show a row holding {@code text}, and returns it. */
+    private NeovimView viewShowing(String text) {
+        waitUntil("the Neovim view showing " + text, TIMEOUT_MS, () -> {
+            settle();
+            if (!(page().findView(NeovimView.ID) instanceof NeovimView view) || view.canvasForTests().grid() == null) {
+                return false;
+            }
+            GridSnapshot grid = view.canvasForTests().grid();
+            for (int r = 0; r < grid.height(); r++) {
+                if (grid.row(r).contains(text)) {
+                    return true;
+                }
+            }
+            return false;
+        });
+        return (NeovimView) page().findView(NeovimView.ID);
+    }
+
+    /** Pictures the view's canvas: at most a page column wide, its first 14 rows. */
+    private void takeView(NeovimView view, String name) {
+        GridCanvas canvas = view.canvasForTests();
+        GalleryCamera.drain(canvas.getDisplay());
+        Rectangle area = canvas.getClientArea();
+        int height = Math.min(area.height, 14 * canvas.cellHeight());
+        GalleryCamera.save(canvas, new Rectangle(0, 0, Math.min(area.width, 720), height), out.resolve(file(theme, name)),
                 name + " (" + theme + ")");
     }
 

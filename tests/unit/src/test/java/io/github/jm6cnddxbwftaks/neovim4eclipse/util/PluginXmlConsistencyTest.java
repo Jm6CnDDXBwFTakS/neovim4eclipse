@@ -320,4 +320,21 @@ class PluginXmlConsistencyTest {
             assertEquals(VimCtrlKeys.NORMAL_CONTEXT_ID, parents.get(VimCtrlKeys.contextId(letter)), "context of Ctrl-" + letter);
         }
     }
+
+    /**
+     * The Neovim view's first place, in every perspective: stacked with the Problems view, hidden
+     * until :messages or :checkhealth opens it (docs/USER_GUIDE.md, "The Neovim view"). Where
+     * Eclipse then puts it is Eclipse's; this checks that plugin.xml asks for it.
+     */
+    @Test
+    void theNeovimViewIsStackedWithProblemsInEveryPerspective() throws Exception {
+        Element extension = extension(load(), "org.eclipse.ui.perspectiveExtensions");
+        Element perspective = (Element) extension.getElementsByTagName("perspectiveExtension").item(0);
+        assertEquals("*", perspective.getAttribute("targetID"));
+        Element view = (Element) perspective.getElementsByTagName("view").item(0);
+        assertEquals("io.github.jm6cnddxbwftaks.neovim4eclipse.views.neovim", view.getAttribute("id"));
+        assertEquals("org.eclipse.ui.views.ProblemView", view.getAttribute("relative"));
+        assertEquals("stack", view.getAttribute("relationship"));
+        assertEquals("false", view.getAttribute("visible"));
+    }
 }
