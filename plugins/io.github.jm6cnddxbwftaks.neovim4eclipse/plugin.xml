@@ -1275,7 +1275,11 @@
             name="Neovim"
             category="io.github.jm6cnddxbwftaks.neovim4eclipse.views"
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimView"
-            allowMultiple="false">
+            allowMultiple="false"
+            restorable="false">
+         <!-- restorable="false": open at Eclipse's exit, it is not brought back at the next start,
+              where it would be empty (its second Neovim is not); :messages or :checkhealth opens
+              it again. -->
       </view>
    </extension>
 

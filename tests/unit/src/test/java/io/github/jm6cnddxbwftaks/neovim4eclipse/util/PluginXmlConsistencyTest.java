@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.image.BufferedImage;
@@ -336,5 +337,25 @@ class PluginXmlConsistencyTest {
         assertEquals("org.eclipse.ui.views.ProblemView", view.getAttribute("relative"));
         assertEquals("stack", view.getAttribute("relationship"));
         assertEquals("false", view.getAttribute("visible"));
+    }
+
+    /**
+     * The Neovim view is not brought back at Eclipse's next start: its second Neovim is not, so it
+     * would come back empty, with keys that do nothing. {@code :messages} or {@code :checkhealth}
+     * opens it again (docs/USER_GUIDE.md, "The Neovim view").
+     */
+    @Test
+    void theNeovimViewIsNotRestoredAtTheNextStart() throws Exception {
+        Element extension = extension(load(), "org.eclipse.ui.views");
+        NodeList views = extension.getElementsByTagName("view");
+        Element view = null;
+        for (int i = 0; i < views.getLength(); i++) {
+            Element e = (Element) views.item(i);
+            if ("io.github.jm6cnddxbwftaks.neovim4eclipse.views.neovim".equals(e.getAttribute("id"))) {
+                view = e;
+            }
+        }
+        assertNotNull(view, "the Neovim view in plugin.xml");
+        assertEquals("false", view.getAttribute("restorable"));
     }
 }

@@ -593,7 +593,8 @@ Neovim's screen is then not the editor's size, and a window "at the bottom" woul
 Two commands print more than the box over the editor is good for: `:messages`, Neovim's message
 history, and `:checkhealth`, its report on your setup. They open the **Neovim view** instead, an
 Eclipse view (first with Console and Problems; Eclipse remembers where you move it), titled with what
-it holds: *Neovim: messages*, *Neovim: checkhealth*.
+it holds: *Neovim: messages*, *Neovim: checkhealth*. It is not brought back when Eclipse starts
+again, since it would be empty; the next `:messages` or `:checkhealth` opens it.
 
 - **What you see:** Neovim's own screen, from a second Neovim the plug-in starts for the view. The
   messages are in order, the newest last and the cursor on it, errors in Neovim's error color and
