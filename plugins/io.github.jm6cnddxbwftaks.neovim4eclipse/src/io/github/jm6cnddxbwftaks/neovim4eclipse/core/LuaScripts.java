@@ -1423,6 +1423,11 @@ final class LuaScripts {
             -- closes. Closed while current, its tab would hand Neovim to the next tab, another
             -- editor's.
             local function take_health_report(win)
+              -- An earlier close in this pass (or an autocmd it fired) may have closed this window
+              -- too; reading it would throw and end the whole net, leaving later windows open.
+              if not vim.api.nvim_win_is_valid(win) then
+                return false
+              end
               local before = opened_from[win]
               local buf = vim.api.nvim_win_get_buf(win)
               if vim.bo[buf].filetype ~= 'checkhealth' or vim.bo[buf].buftype ~= 'nofile'
