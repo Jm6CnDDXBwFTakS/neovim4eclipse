@@ -957,7 +957,20 @@ filetype plug-ins; their buffers are no files, so no Eclipse editor could show t
 **A buffer named `term://...` starts no program** (`LuaScripts.NO_TERMINAL_URLS`): Neovim's
 defaults read such a name by running it in a terminal, so `gf` on `term://./build.sh` in a file's
 text would run the repository's script. It is no plug-in with an "already loaded" variable; the
-autocommand itself is removed at start. `:terminal` does not use it.
+autocommand itself is removed at start. `:terminal` does not use it (and a typed one never reaches
+Neovim: see the next paragraph).
+
+**`:terminal` opens Eclipse's Terminal** (`util/EclipseTerminal`, `editor/EclipseTerminals`). A
+terminal buffer has no Eclipse editor, so its program ran out of sight. A typed `:terminal` is a
+host command (`HostCommand.Kind.TERMINAL`): Neovim's command line hands it to Eclipse before it
+runs, so nothing starts in Neovim. Eclipse runs the Terminal's *Open local terminal* command by its
+id, which opens a shell in the active editor's file's folder; no bundle of the Terminal is needed,
+which matters because it was renamed in 2025-09 (`org.eclipse.tm.terminal.*` before,
+`org.eclipse.terminal.*` after; 2025-09 has both, and the new id is tried first). A command after
+`:terminal` is not run (the command opens a shell only), and a message says so. A terminal started
+where the `:` line is not read (`<Cmd>`, `:execute`, Lua, a plug-in) has already started when
+Neovim's `TermOpen` fires: `LuaScripts.TERMINALS` names it in a message and leaves it running, so
+no program is stopped part way.
 
 **`Ctrl-X Ctrl-O` is Eclipse's content assist wherever Eclipse gets the insert back.** In an
 insert Eclipse types, `KeyRouter` keeps the `Ctrl-X` until the next key and runs content assist for
@@ -1151,6 +1164,7 @@ reason is gone.
 | Mode strings | `util/VimModes` | `VimModesTest` |
 | Folding: which regions, the state diff | `util/FoldRegions`, `LuaScripts.FOLDS` / `SET_FOLDS`, the snapshot's fold element (`StateSnapshot.closedFolds`), `core/FoldsPort` | `FoldRegionsTest`, `folds_spec.lua`, `StateSnapshotTest`, `StateSyncTest`, `NeovimFoldsIntegrationTest` |
 | Folding: Eclipse's annotations, the caption line | `editor/FoldMirror`, `StyledTextCaret.setFoldCaption`, `NeovimEditorController.sendFolds` | `tests/swt` `FoldMirrorTest`, UI `FoldingEndToEndTest` (test editor `TestFoldingEditor`), `JavaEditorEndToEndTest` (`-PuiHeavyJava`) |
+| `:terminal` | `util/HostCommand` (`TERMINAL`), `util/EclipseTerminal` (which command id, the messages), `editor/EclipseTerminals` (runs it), `LuaScripts.TERMINALS` (a terminal started another way) | `EclipseTerminalTest`, `HostCommandRunnerTest`, `terminal_spec.lua`, UI `TerminalEndToEndTest` (no Terminal), manual card `tm-open` |
 | Host `:` commands (`:w`, `:qa`, `:e`, `:tabn`, ...) | `LuaScripts.HOST_COMMANDS` (Neovim parses and hands over), `util/HostCommand` (which commands, by full name), `util/HostCommandRunner` (which IDE calls, through its `Ide` interface), `editor/HostCommands` (Eclipse's save, close, open, tabs), `editor/NewFiles` (`:e` of a new file, and the write that creates it) | `HostCommandTest`, `HostCommandRunnerTest` (fake `Ide`), `NeovimSessionIntegrationTest` (typed, mapping, macro, `@:`, arguments), `WrittenMessageTest`, UI `HostCommandsTest` (one real path per operation), `NewFileEndToEndTest` |
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` / `:wq` file names | `util/TabNavigation`, `LuaScripts.HOST_COMMANDS` (Neovim expands the name), `util/EditPath` (fallback) | `TabNavigationTest`, `host_commands_spec.lua`, `EditPathTest` |

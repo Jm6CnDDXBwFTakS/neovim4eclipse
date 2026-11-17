@@ -78,6 +78,11 @@ class HostCommandRunnerTest {
         public void window(WindowCommand command) {
             calls.add("window " + command.action() + " " + command.key() + " " + command.count());
         }
+
+        @Override
+        public void openTerminal(String command) {
+            calls.add("terminal [" + command + "]");
+        }
     }
 
     private final FakeIde ide = new FakeIde();
@@ -97,6 +102,19 @@ class HostCommandRunnerTest {
     private List<String> run(String nameAndArgs) {
         runner.run(command(nameAndArgs));
         return ide.calls;
+    }
+
+    // ---- :terminal ----
+
+    /**
+     * {@code :terminal} opens Eclipse's Terminal; a command after it is passed on only to be named in
+     * the message (it is not run), word for word.
+     */
+    @Test
+    void terminalOpensEclipsesTerminalAndNamesTheCommandNotRun() {
+        run("terminal");
+        run("terminal make -j4");
+        assertEquals(List.of("terminal []", "terminal [make -j4]", "terminal [++close ls]"), run("terminal ++close ls"));
     }
 
     // ---- writing and quitting ----

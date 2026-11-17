@@ -50,6 +50,8 @@ class HostCommandTest {
         assertEquals(Kind.TAB_FIRST, kind("tabfirst"));
         assertEquals(Kind.TAB_FIRST, kind("tabrewind"));
         assertEquals(Kind.TAB_LAST, kind("tablast"));
+        assertEquals(Kind.TERMINAL, kind("terminal"));
+        assertEquals(Kind.TERMINAL, kind("terminal", "make", "|", "tee", "log"), "a | is part of :terminal's command");
     }
 
     /** {@code :bd} and its relatives close the editor, like {@code :q}; with buffers, those editors. */

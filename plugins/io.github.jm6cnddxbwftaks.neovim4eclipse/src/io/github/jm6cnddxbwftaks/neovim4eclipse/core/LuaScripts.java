@@ -4734,11 +4734,54 @@ final class LuaScripts {
      * "already loaded" variable ({@code NvimExecutable.READERS_OFF}), so the autocommand itself
      * is removed.
      *
-     * <p>What it costs: {@code :edit term://cmd} opens an empty buffer. {@code :terminal cmd},
-     * which the user types, does not use this autocommand.
+     * <p>What it costs: {@code :edit term://cmd} opens an empty buffer. {@code :terminal cmd}
+     * does not use this autocommand; a typed one does not reach Neovim at all ({@link #TERMINALS}).
      */
     static final String NO_TERMINAL_URLS = """
             pcall(vim.api.nvim_clear_autocmds, { group = 'nvim.terminal', event = 'BufReadCmd' })
+            return true
+            """;
+
+    /**
+     * Says so when a Neovim terminal starts that Eclipse cannot show: run once at start, always.
+     *
+     * <p><b>Why.</b> Eclipse has no view for a terminal buffer: the editor goes back to its file, as
+     * after any buffer it cannot show, and the terminal's program runs on out of sight until it exits
+     * or Neovim stops. A typed {@code :terminal} never gets here: {@link #HOST_COMMANDS} hands it to
+     * Eclipse before Neovim runs it ({@code HostCommand.Kind.TERMINAL}), which opens its own
+     * Terminal view. What does get here is a terminal started where the {@code :} line is not
+     * looked at: a {@code <Cmd>terminal<CR>} mapping, {@code :execute}, Lua
+     * ({@code vim.cmd.terminal()}), a plug-in's {@code jobstart({term = true})} (toggleterm,
+     * lazygit.nvim). By {@code TermOpen} its program has already started, so it is not stopped: a
+     * stop could leave its work half done ({@code make} part way). It runs on, and the message names
+     * it, so nothing runs unseen without a word.
+     *
+     * <p>Example: a mapping {@code <Cmd>terminal lazygit<CR>} shows
+     * {@code terminal: "lazygit" is running hidden: Eclipse cannot show a Neovim terminal. It stops
+     * when it exits or Neovim does.} The program is read from the buffer's name, which Neovim gives
+     * every terminal as {@code term://<folder>//<pid>:<command>}: the command line for a string
+     * ({@code :terminal lazygit}, {@code jobstart('make', {term = true})}), only the program (its
+     * full path) for a list ({@code jobstart({'sh', '-c', 'make'}, {term = true})} names
+     * {@code /usr/bin/sh}). A terminal that runs no program ({@code nvim_open_term}, which some
+     * plug-ins use to show coloured text) gets no message: its channel is no job.
+     *
+     * <p>Shown with {@code nvim_echo}, which changes no mode (this may run in insert mode; a plain
+     * {@code :normal} would fire {@code ModeChanged}).
+     */
+    static final String TERMINALS = """
+            vim.api.nvim_create_autocmd('TermOpen', {
+              group = vim.api.nvim_create_augroup('neovim4eclipse_terminals', { clear = true }),
+              desc = 'Say that Eclipse cannot show this terminal',
+              callback = function(a)
+                if not pcall(vim.fn.jobpid, vim.bo[a.buf].channel) then
+                  return -- nvim_open_term: no program runs
+                end
+                local command = vim.api.nvim_buf_get_name(a.buf):match('^term://.-//%d+:(.*)$')
+                local what = command and ('"' .. command .. '"') or 'a terminal'
+                vim.api.nvim_echo({ { 'terminal: ' .. what .. ' is running hidden: Eclipse cannot show a Neovim terminal.'
+                  .. ' It stops when it exits or Neovim does.' } }, true, {})
+              end,
+            })
             return true
             """;
 

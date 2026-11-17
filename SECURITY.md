@@ -60,8 +60,10 @@ What stays as in Vim, because it takes a key you press on purpose or your own se
 - `Ctrl-R` with a register (`%`, `#`, `"`, `/`, `:`, `-`, `=`) inserts its text as if typed, so
   a control character in it acts as a key. A file whose name holds a real Esc can run a command
   that way when you press `Ctrl-R %` in it. `Ctrl-R Ctrl-R` inserts the same text as text.
-- Commands that run a program by design: `:!`, `:terminal`, `K` (the manual page of the word
-  under the cursor), `gx` (the system's handler for the link under the cursor), `:make`.
+- Commands that run a program by design: `:!`, `K` (the manual page of the word under the
+  cursor), `gx` (the system's handler for the link under the cursor), `:make`. `:terminal` opens
+  Eclipse's Terminal with a shell instead, and runs no command typed after it; a terminal a
+  plug-in or a mapping starts runs its program in Neovim, with a message naming it.
 - `:vimgrep` reads the files it searches itself, with filetype detection.
 - Three bundled Neovim plug-ins are still loaded: `gzip` (a compressed file Neovim reads itself is
   unpacked with the system's `gzip`), `editorconfig` (a repository's `.editorconfig` may set

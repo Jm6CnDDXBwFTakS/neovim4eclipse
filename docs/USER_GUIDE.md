@@ -391,6 +391,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:w ++p` | as `:w`, and for a new file also create its missing folders (`:wq ++p`, `:x ++p` too) |
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
 | `:ene[w]` | open a new untitled editor (*File → New → Untitled Text File*), working in this editor's folder (its `:lcd` too), so `:w notes.txt` saves it there. Unlike Vim's `:enew`, which empties the window, this editor stays open (so `:enew!` is the same). `Ctrl-^` goes back |
+| `:te[rminal] [cmd]` | open Eclipse's *Terminal* view with a shell in the file's folder, instead of a Neovim terminal (which Eclipse cannot show). A command after it (`:terminal make`) is not run, and a message says so: type it in the shell. In an Eclipse without the Terminal nothing opens, and a message says how to get it. A terminal started another way (a `<Cmd>` mapping, a plug-in) still starts in Neovim, out of sight, with a message naming it |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
 | `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:on[ly]`, `:res[ize]`, `:winc[md]` | Vim's windows as editors: see [Splits](#splits-split-vsplit-ctrl-w) |
@@ -624,10 +625,14 @@ To have one back, unset its variable in `init.lua`
 `vim.g.loaded_zipPlugin`, `vim.g.loaded_tarPlugin`).
 
 A buffer named `term://...` starts no program either (`gf` on such a name in a file would
-otherwise run it). `:terminal` still starts its program, but Eclipse has no view for a terminal:
-the editor goes back to its file, as after any other buffer it cannot show, and the program keeps
-running out of sight until it ends or Neovim stops. For a shell, use Eclipse's *Terminal* view,
-where your Eclipse has one.
+otherwise run it). `:terminal` opens Eclipse's *Terminal* view instead, and Neovim starts nothing
+for it (see the `:` commands table). A terminal started where the `:` line is not read (a `<Cmd>`
+mapping, `:execute`, Lua, a plug-in's `jobstart({term = true})` such as toggleterm) still starts
+in Neovim. Eclipse has no view for it: the editor goes back to its file, and the program runs out
+of sight until it exits or Neovim stops. A message names it
+(`terminal: "lazygit" is running hidden: Eclipse cannot show a Neovim terminal. It stops when it
+exits or Neovim does.`). It is not stopped, since by then it has started, and a stop could leave
+its work half done.
 
 `Ctrl-R` is Neovim's own, in insert mode and on the `:` line. As in Vim, some registers are
 inserted as if typed (the file's name `%`, the last search `/`, the unnamed register `"`), so a

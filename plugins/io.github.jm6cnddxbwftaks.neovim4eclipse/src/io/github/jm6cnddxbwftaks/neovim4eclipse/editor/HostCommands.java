@@ -19,7 +19,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowCommand;
 /**
  * Carries out the {@code :} commands that belong to the IDE (see {@link HostCommand} for the
  * list): files through {@link EclipseFileCommands}, tabs through {@link EditorTabs}, Vim's windows
- * (splits) through {@link EditorSplits}.
+ * (splits) through {@link EditorSplits}, {@code :terminal} through {@link EclipseTerminals}.
  *
  * <p>What each command does (save before close, a failed save keeps the file open, ...) is decided
  * by {@link HostCommandRunner}, which has no Eclipse code and is unit-tested; this class only
@@ -101,6 +101,11 @@ public final class HostCommands {
         @Override
         public void window(WindowCommand command) {
             EditorSplits.run(editor, command);
+        }
+
+        @Override
+        public void openTerminal(String command) {
+            EclipseTerminals.open(editor, command);
         }
     }
 

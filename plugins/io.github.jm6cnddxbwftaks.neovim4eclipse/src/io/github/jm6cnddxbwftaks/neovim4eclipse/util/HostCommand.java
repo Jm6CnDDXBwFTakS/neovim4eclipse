@@ -37,6 +37,7 @@ import java.util.TreeMap;
  *   <tr><td>{@code edit file}, {@code edit!}</td><td>{@link Kind#EDIT}</td><td>open a file; revert</td></tr>
  *   <tr><td>{@code enew}, {@code enew!}</td><td>{@link Kind#NEW_UNTITLED}</td><td>File &gt; New &gt; Untitled Text File</td></tr>
  *   <tr><td>{@code tabnext}, {@code tabprevious}, ...</td><td>{@code TAB_*}</td><td>switch editor tabs</td></tr>
+ *   <tr><td>{@code terminal [cmd]}</td><td>{@link Kind#TERMINAL}</td><td>open Eclipse's Terminal view with a shell ({@link EclipseTerminal})</td></tr>
  *   <tr><td>{@code window ...} (from {@code :split}, {@code :only}, {@code Ctrl-W l}, ...)</td><td>{@link Kind#WINDOW}</td><td>split, move between and size the editors ({@link WindowCommand})</td></tr>
  * </table>
  *
@@ -116,7 +117,17 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
          * {@code :Eclipse window} with words it has worked out ({@link WindowCommand}): no Vim
          * command has that name, so a typed line never arrives as one by mistake.
          */
-        WINDOW
+        WINDOW,
+        /**
+         * {@code :terminal [cmd]}: opens Eclipse's Terminal view with a shell in the file's folder
+         * ({@link EclipseTerminal}). Left to Neovim, the terminal would start its program in a
+         * buffer Eclipse has no view for, so the program ran out of sight. The command after it
+         * ({@code :terminal make}) is not run anywhere, and a message says so; it is kept in
+         * {@link #args()} for that message. Caught here, on the {@code :} line, it never starts in
+         * Neovim; a terminal started another way ({@code <Cmd>}, Lua, a plug-in's
+         * {@code jobstart({term = true})}) does, and {@code LuaScripts.TERMINALS} tells about it.
+         */
+        TERMINAL
     }
 
     /**
@@ -264,6 +275,8 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         table.put("tabrewind", new Entry(Kind.TAB_FIRST, Arguments.NONE, false));
         table.put("tablast", new Entry(Kind.TAB_LAST, Arguments.NONE, false));
         table.put("window", new Entry(Kind.WINDOW, Arguments.ANY, false));
+        // Its arguments are a command line (:terminal make -j4), kept only for the message.
+        table.put("terminal", new Entry(Kind.TERMINAL, Arguments.ANY, false));
         return Map.copyOf(table);
     }
 }

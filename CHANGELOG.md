@@ -14,6 +14,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- `:terminal` opens Eclipse's *Terminal* view with a shell in the file's folder. Before, it started
+  a Neovim terminal that Eclipse cannot show, so its program ran out of sight. A command typed after
+  it (`:terminal make`) is not run, and a message says so; in an Eclipse without the Terminal
+  nothing opens, and a message says how to get it. A terminal a plug-in or a `<Cmd>` mapping starts
+  still runs in Neovim, out of sight, now with a message naming it
+  ([`:` commands](docs/USER_GUIDE.md)).
+
 - For contributors: the developer tools keep their downloads and records in `.tool-cache/` at the
   repository's root, not under `target/`, so `./mvnw clean` no longer deletes LikeCi's pinned
   Neovim, the fetched test plug-ins or the Release tool's record of passed tests

@@ -299,6 +299,35 @@ mouse, and Eclipse's restore of the stacks at the next start, need a person and 
 
 **Expect:** each step's result, after its ⇒.
 
+## Terminal
+
+### `tm-open` `:terminal` opens Eclipse's Terminal
+
+- **On:** any
+- **Launch:** checks
+- **Areas:** util/EclipseTerminal.java, editor/EclipseTerminals.java, util/HostCommand.java
+
+Which of the Terminal's two command ids is run, the messages, and that a typed `:terminal` starts
+nothing in Neovim are tested (`EclipseTerminalTest`, `terminal_spec.lua`), and so is the message of
+an Eclipse without the Terminal (`TerminalEndToEndTest`). The test Eclipse has no Terminal, so
+that the command opens one needs an Eclipse that has it, such as the *Eclipse IDE for Eclipse
+Committers* package (2025-09 and later: the new command id).
+
+1. Open `n4e-alpha`'s `notes.txt`, type `:terminal` and Enter.
+   ⇒ Eclipse's *Terminal* view opens with a shell whose folder is the one `notes.txt` is in
+   (`pwd` there shows it); the editor shows no message.
+2. Click back into `notes.txt`, type `:terminal make` and Enter.
+   ⇒ A second shell opens in the same folder. The editor's message line says
+   `terminal: opened Eclipse's Terminal in …; "make" was not run, type it there`, and `make` did not
+   run in either shell.
+3. Close the Terminal view, then type `:ls!` and Enter in `notes.txt`.
+   ⇒ No `term://` buffer is listed: nothing was started in Neovim.
+
+If you have an Eclipse of 2025-06 or older with the TM Terminal (the old command id), step 1 there
+too.
+
+**Expect:** each step's result, after its ⇒.
+
 ## Input method and accent menu in the `:` box
 
 ### `ime-compose` Japanese typing in the `:` box reaches Neovim once

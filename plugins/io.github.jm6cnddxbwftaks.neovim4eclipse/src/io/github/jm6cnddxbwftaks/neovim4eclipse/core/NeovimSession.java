@@ -393,6 +393,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             await(api.execLua(LuaScripts.NO_MODELINES, List.of()));
             // And a buffer named term://... starts no program (LuaScripts.NO_TERMINAL_URLS).
             await(api.execLua(LuaScripts.NO_TERMINAL_URLS, List.of()));
+            // And a terminal Eclipse cannot show is named, not left unseen (LuaScripts.TERMINALS).
+            await(api.execLua(LuaScripts.TERMINALS, List.of()));
             Object clipboardOption = await(api.execLua(LuaScripts.GET_CLIPBOARD_OPTION, List.of()));
             session.nvimManagesClipboard = managesSystemClipboard(
                     clipboardOption == null ? "" : String.valueOf(clipboardOption));

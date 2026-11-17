@@ -93,6 +93,15 @@ public final class HostCommandRunner {
 
         /** Carries out a Vim window command on the editors ({@code :split}, {@code Ctrl-W l}). */
         void window(WindowCommand command);
+
+        /**
+         * {@code :terminal}: opens Eclipse's Terminal view with a shell in the current file's folder,
+         * or says that this Eclipse has none ({@link EclipseTerminal}).
+         *
+         * @param command what was typed after {@code :terminal} ({@code make}), not run: the message
+         *                names it; "" when only a shell was asked for
+         */
+        void openTerminal(String command);
     }
 
     private final Ide ide;
@@ -149,6 +158,7 @@ public final class HostCommandRunner {
             case TAB_FIRST -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.FIRST, 0));
             case TAB_LAST -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.LAST, 0));
             case WINDOW -> onUi.accept(() -> ide.window(cmd.window()));
+            case TERMINAL -> onUi.accept(() -> ide.openTerminal(EclipseTerminal.command(cmd.args())));
         }
     }
 }
