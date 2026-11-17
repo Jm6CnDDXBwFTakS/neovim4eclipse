@@ -638,6 +638,14 @@ text that tests do not always catch.
   // SPDX-License-Identifier: EPL-2.0
   ```
 
+  in the comment syntax of its language (`#` in a shell script or `.properties`, `<!-- -->` in XML),
+  at most one opening line before it (a shebang, the XML declaration, `<!DOCTYPE html>`, an SVG's
+  opening tag, a CSS comment's `/*`). `SpdxHeaderTest` checks every file git lists: each must be of
+  a kind that needs the header, or of a kind or a path it exempts, with the reason (Markdown,
+  pictures, `MANIFEST.MF`, the Maven wrapper's files, `LICENSE` and third-party license texts, ...).
+  A file of a kind it does not know fails it, so the first file of a new kind gets a decision: add
+  its extension to one of its lists, or the file's path to the exempt ones.
+
 ## Branches
 
 Work flows up through three kinds of branches, and a branch is deleted once it has been merged

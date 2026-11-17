@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+# SPDX-License-Identifier: EPL-2.0
 # EditorConfig (https://editorconfig.org): basic whitespace rules that most editors and IDEs apply
 # automatically, Eclipse with the "EditorConfig" plug-in from the Marketplace. Line endings are also
 # enforced by .gitattributes; Java formatting details are in releng/eclipse-formatter.xml.

@@ -56,6 +56,16 @@ public final class RepositoryFiles {
         return fromGit.isPresent() ? fromGit.get() : walk(root);
     }
 
+    /**
+     * Git's list alone, without the walk {@link #list} falls back to: for a test whose rule only
+     * git can answer, such as "every file of the repository has a header". A walk also finds the files
+     * git ignores (the copied {@code lib/*.jar}, Eclipse's {@code .project}, a {@code local.properties}),
+     * so such a test skips without git ({@code assumeTrue(listedByGit(root).isPresent())}).
+     */
+    public static Optional<List<String>> listedByGit(Path root) {
+        return fromGit(root);
+    }
+
     /** {@link #list} as paths under {@code root}, for a test that reads the files. */
     public static List<Path> paths(Path root) throws IOException {
         return list(root).stream().map(root::resolve).toList();
