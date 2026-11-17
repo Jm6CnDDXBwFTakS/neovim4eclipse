@@ -203,11 +203,18 @@ class PluginXmlConsistencyTest {
     void everyCtrlKeyIsBoundOnWindowsLinuxAndMacInItsOwnContext() throws Exception {
         NodeList list = extension(load(), "org.eclipse.ui.bindings").getElementsByTagName("key");
         Map<String, String> sequences = new HashMap<>(); // "commandId|platform" -> sequence
+        Map<String, String> inTheView = new HashMap<>(); // platform -> sequence, in the Neovim view's context
         for (int i = 0; i < list.getLength(); i++) {
             Element e = (Element) list.item(i);
             String commandId = e.getAttribute("commandId");
             if (VimCtrlKeys.isCtrlKeyCommand(commandId)) {
                 char letter = commandId.charAt(commandId.length() - 1);
+                if (NEOVIM_VIEW_CONTEXT.equals(e.getAttribute("contextId"))) {
+                    // The one other context: Ctrl-W in the Neovim view, over Eclipse's Close.
+                    assertEquals('w', letter, "only Ctrl-W is bound in the Neovim view: " + commandId);
+                    inTheView.put(e.getAttribute("platform"), e.getAttribute("sequence"));
+                    continue;
+                }
                 assertEquals(VimCtrlKeys.contextId(letter), e.getAttribute("contextId"), "context of " + commandId);
                 sequences.put(e.getAttribute("commandId") + "|" + e.getAttribute("platform"), e.getAttribute("sequence"));
             }
@@ -220,7 +227,11 @@ class PluginXmlConsistencyTest {
             // On macOS M1 is Command (Paste etc. must keep working); the Control key is M4.
             assertEquals("M4+" + upper, sequences.get(id + "|cocoa"), "cocoa Ctrl-" + letter);
         }
+        assertEquals(Map.of("win32", "M1+W", "gtk", "M1+W", "cocoa", "M4+W"), inTheView, "Ctrl-W in the Neovim view");
     }
+
+    /** {@code editor/NeovimView.KEY_CONTEXT_ID}: the Neovim view's key context. */
+    private static final String NEOVIM_VIEW_CONTEXT = "io.github.jm6cnddxbwftaks.neovim4eclipse.context.view";
 
     /**
      * Parameterized key bindings did not deliver their parameter on Linux (see VimCtrlKeys), so no

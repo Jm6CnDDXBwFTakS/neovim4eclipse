@@ -461,6 +461,19 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /** An empty history shows nothing, as in Vim: no empty view that takes the keyboard. */
+    @Test
+    void anEmptyHistoryOpensNothing() throws Exception {
+        try (NeovimSession s = start()) {
+            List<ViewText> texts = new CopyOnWriteArrayList<>();
+            s.addViewTextListener(texts::add);
+            s.commandAsync("messages clear");
+            s.commandAsync("messages");
+            NeovimBarrier.pass(s);
+            assertEquals(List.of(), texts);
+        }
+    }
+
     /**
      * {@code :checkhealth}'s report goes to the Neovim view too, taken from its window by the
      * {@code WinNew} net; its buffer is wiped, so {@code :ls} never lists {@code health://}.

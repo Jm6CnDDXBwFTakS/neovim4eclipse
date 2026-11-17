@@ -17,7 +17,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
  *
  * <p>Example:
  * <pre>{@code
- * ScreenSession s = ScreenSession.start(nvim, OutputProfile.ARGS, version, 80, 24, listener);
+ * ScreenSession s = ScreenSession.start(nvim, OutputProfile.ARGS, version, folder, 80, 24, listener);
  * OutputProfile.show(s, ViewText.checkhealth(lines), true);   // the report, on a dark editor
  * }</pre>
  */

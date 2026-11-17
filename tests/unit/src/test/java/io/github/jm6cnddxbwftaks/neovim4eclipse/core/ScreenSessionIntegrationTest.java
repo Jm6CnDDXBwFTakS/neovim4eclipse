@@ -85,8 +85,12 @@ class ScreenSessionIntegrationTest {
         TestNeovim.require();
     }
 
+    /** The folder the second Neovim starts in, as the view's own would be. */
+    @TempDir
+    Path folder;
+
     private ScreenSession start(List<String> profileArgs) throws Exception {
-        return ScreenSession.start(TestNeovim.PATH, profileArgs, "0.0.0", 40, 10, recorder);
+        return ScreenSession.start(TestNeovim.PATH, profileArgs, "0.0.0", folder, 40, 10, recorder);
     }
 
     private static void waitFor(BooleanSupplier condition, String what) throws Exception {
@@ -230,6 +234,15 @@ class ScreenSessionIntegrationTest {
             s.inputAsync("<C-w><C-w>");
             s.inputAsync("<C-w>k");
             waitFor(() -> recorder.toEditor.get() == 3, "each key asking for the editor");
+        }
+    }
+
+    /** The second Neovim starts in the folder it is given, never in Eclipse's. */
+    @Test
+    void theSecondNeovimStartsInItsOwnFolder() throws Exception {
+        try (ScreenSession s = start(OutputProfile.ARGS)) {
+            Object cwd = s.execLuaAsync("return vim.fn.getcwd()", List.of()).get(TestWait.millis(), TimeUnit.MILLISECONDS);
+            assertEquals(folder.toRealPath(), Path.of(String.valueOf(cwd)).toRealPath());
         }
     }
 }

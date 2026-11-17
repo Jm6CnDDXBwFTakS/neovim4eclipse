@@ -1413,12 +1413,21 @@ final class LuaScripts {
             -- text goes to the Neovim view instead (eclipse_view_text): read before the window
             -- closes, since closing the float wipes its buffer; then the buffer is wiped, so that
             -- :ls and :bnext never meet health://. Only text leaves, never a file name.
-            local function take_health_report(win)
+            -- Matched by all three marks Neovim's report has (filetype, scratch buffer, its name), so a
+            -- file the user gave the filetype by hand is never taken and wiped.
+            -- `before` is the window that was current when the report's window opened (read in WinNew
+            -- itself, before the schedule): Neovim goes back there first, then the report closes. Closed
+            -- while current, its tab would hand Neovim to the next tab, another editor's.
+            local function take_health_report(win, before)
               local buf = vim.api.nvim_win_get_buf(win)
-              if vim.bo[buf].filetype ~= 'checkhealth' then
+              if vim.bo[buf].filetype ~= 'checkhealth' or vim.bo[buf].buftype ~= 'nofile'
+                  or vim.api.nvim_buf_get_name(buf) ~= 'health://' then
                 return false
               end
               local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+              if before ~= win and own[before] and vim.api.nvim_win_is_valid(before) then
+                pcall(vim.api.nvim_set_current_win, before)
+              end
               pcall(vim.api.nvim_win_close, win, true)
               if vim.api.nvim_buf_is_valid(buf) then
                 pcall(vim.api.nvim_buf_delete, buf, { force = true })
@@ -1429,6 +1438,7 @@ final class LuaScripts {
             vim.api.nvim_create_autocmd('WinNew', {
               group = group,
               callback = function()
+                local before = vim.api.nvim_get_current_win() -- still the window the command ran in
                 vim.schedule(function()
                   local why, list, float
                   local quickfix = package.loaded['neovim4eclipse.quickfix']
@@ -1438,7 +1448,7 @@ final class LuaScripts {
                     seen[win] = true
                     local wintype = vim.fn.win_gettype(win)
                     -- A report taken leaves its window closed: the checks below then pass it by.
-                    local taken = new and not own[win] and take_health_report(win)
+                    local taken = new and not own[win] and take_health_report(win, before)
                     if not taken and new and win == current and wintype == 'popup' and not own[win] then
                       local name = float_name(win)
                       local prompt = vim.bo[vim.api.nvim_win_get_buf(win)].buftype == 'prompt'
@@ -5759,9 +5769,10 @@ final class LuaScripts {
 
     /**
      * Registers {@code :checkhealth neovim4eclipse} in the editing Neovim ({@link HealthCheck}): run
-     * once at start, after the user's config. Arguments: the folder holding the stub
-     * {@code lua/neovim4eclipse/health.lua}, appended to {@code 'runtimepath'} unless it is there
-     * already (so that {@code :checkhealth} finds the check), and what only Eclipse knows
+     * once at start of each Neovim, after the user's config, so the folder is appended once.
+     * Arguments: the folder holding the stub {@code lua/neovim4eclipse/health.lua}, appended to
+     * {@code 'runtimepath'} so that {@code :checkhealth} finds the check (a folder whose name holds a
+     * comma never gets here: {@code HealthCheck.fitsRuntimepath}), and what only Eclipse knows
      * ({@code HealthCheck.Info.toLua}: {@code minimum}, {@code program}, {@code plugin},
      * {@code eclipse}, {@code readers}).
      *
@@ -5776,9 +5787,7 @@ final class LuaScripts {
      */
     static final String HEALTH_CHECK = """
             local folder, info = ...
-            if not vim.tbl_contains(vim.opt.runtimepath:get(), folder) then
-              vim.opt.runtimepath:append(folder)
-            end
+            vim.opt.runtimepath:append(folder)
             local M = {}
             function M.check()
               local h = vim.health

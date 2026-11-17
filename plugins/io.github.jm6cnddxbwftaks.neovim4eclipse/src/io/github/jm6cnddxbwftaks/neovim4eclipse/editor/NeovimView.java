@@ -3,7 +3,9 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -24,6 +26,8 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.contexts.IContextActivation;
+import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.part.ViewPart;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
@@ -33,6 +37,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ScreenSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 
@@ -70,7 +75,17 @@ public final class NeovimView extends ViewPart {
     /** The view's id in {@code plugin.xml}. */
     public static final String ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.views.neovim";
 
+    /**
+     * The key context active while the view's canvas has the keyboard ({@code plugin.xml}): there
+     * Ctrl+W runs the plug-in's Ctrl-W command, which {@link SendKeyHandler} sends to this view,
+     * instead of Eclipse's Close, which would close the editor behind the view.
+     */
+    static final String KEY_CONTEXT_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.context.view";
+
     private static final Logger LOG = Logger.getLogger(NeovimView.class.getName());
+
+    /** Where the second Neovim starts: a folder of the plug-in's own ({@code ScreenSession.start}). */
+    private static final Supplier<Path> SCREEN_FOLDER = () -> PluginFolders.pluginFolder().resolve("screen");
 
     /** Before any editor's colors arrive: black on white, Neovim's light look. */
     private int foreground = 0x000000;
@@ -92,6 +107,8 @@ public final class NeovimView extends ViewPart {
     private int columns;
     private int rows;
     private boolean disposed;
+    /** The view's key context while the canvas has the keyboard ({@link #KEY_CONTEXT_ID}); {@code null} otherwise. */
+    private IContextActivation keyContext;
 
     @Override
     public void createPartControl(Composite parent) {
@@ -129,6 +146,22 @@ public final class NeovimView extends ViewPart {
             }
         });
         canvas.addTraverseListener(this::onTraverse);
+        // Bound to the view's site: Eclipse also ends the activation when the view stops being the
+        // active part, so the context never outlives the focus.
+        IContextService contexts = getSite().getService(IContextService.class);
+        if (contexts != null) {
+            canvas.addListener(SWT.FocusIn, e -> {
+                if (keyContext == null) {
+                    keyContext = contexts.activateContext(KEY_CONTEXT_ID);
+                }
+            });
+            canvas.addListener(SWT.FocusOut, e -> {
+                if (keyContext != null) {
+                    contexts.deactivateContext(keyContext);
+                    keyContext = null;
+                }
+            });
+        }
         new GridMouse(canvas, (button, action, modifier, row, col) -> {
             if (screen != null) {
                 screen.mouseAsync(button, action, modifier, row, col);
@@ -168,7 +201,7 @@ public final class NeovimView extends ViewPart {
         background = bg;
         setPartName(ScreenInput.title(text.title()));
         if (screen != null) {
-            OutputProfile.show(screen, text, OverlayColors.isDark(background));
+            showOnScreen(text);
             canvas.redraw();
             return;
         }
@@ -191,7 +224,8 @@ public final class NeovimView extends ViewPart {
             ScreenSession started = null;
             Exception failure = null;
             try {
-                started = ScreenSession.start(program, OutputProfile.ARGS, version, startColumns, startRows, new Events());
+                started = ScreenSession.start(program, OutputProfile.ARGS, version, SCREEN_FOLDER.get(), startColumns,
+                        startRows, new Events());
             } catch (Exception e) {
                 failure = e;
             }
@@ -222,8 +256,20 @@ public final class NeovimView extends ViewPart {
         ViewText text = pending;
         pending = null;
         if (text != null) {
-            OutputProfile.show(screen, text, OverlayColors.isDark(background));
+            showOnScreen(text);
         }
+    }
+
+    /**
+     * Puts {@code text} into the second Neovim. A failure (it ended a moment ago, after a
+     * {@code :q} whose end is still on its way) is logged; the next text starts a new one.
+     */
+    private void showOnScreen(ViewText text) {
+        OutputProfile.show(screen, text, OverlayColors.isDark(background)).whenComplete((count, failure) -> {
+            if (failure != null) {
+                LOG.log(Level.FINE, "The Neovim view could not show " + text.title(), failure);
+            }
+        });
     }
 
     /** One cell's height: the text font's line height, measured once per font. */
@@ -267,6 +313,16 @@ public final class NeovimView extends ViewPart {
         }
         String key = KeyMapping.toNeovimKey(e.keyCode, e.stateMask, e.character);
         if (key != null) {
+            screen.inputAsync(key);
+        }
+    }
+
+    /**
+     * A Vim key Eclipse would have taken for a shortcut, from the plug-in's key binding
+     * ({@link SendKeyHandler}): {@code <C-w>}, typed in the view. UI thread.
+     */
+    void sendKey(String key) {
+        if (screen != null) {
             screen.inputAsync(key);
         }
     }

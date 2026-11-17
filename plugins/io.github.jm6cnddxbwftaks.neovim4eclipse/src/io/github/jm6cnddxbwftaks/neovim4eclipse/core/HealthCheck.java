@@ -77,6 +77,16 @@ public final class HealthCheck {
         return pluginFolder.resolve("runtime");
     }
 
+    /**
+     * Whether {@code folder} can go on {@code 'runtimepath'} as one entry: a name with a comma in it
+     * would be split there into two, the second a relative folder, read from wherever Neovim's
+     * current folder is (a project). Refused rather than escaped: one check, nothing to get right.
+     * Example: {@code /data,home/neovim4eclipse-plugin/runtime} is refused.
+     */
+    static boolean fitsRuntimepath(Path folder) {
+        return !folder.toString().contains(",");
+    }
+
     /** Writes {@link #STUB} to {@code <folder>/}{@value #STUB_PATH}, replacing what was there. */
     static void writeStub(Path folder) throws IOException {
         Path stub = folder.resolve(STUB_PATH);

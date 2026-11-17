@@ -121,8 +121,11 @@ final class StatusTracker {
     void onMessageEvent(MessageEvent event) {
         if (event instanceof MessageEvent.History history) {
             // :messages goes to the Neovim view, not the output popup (docs/ARCHITECTURE.md,
-            // decision 10); the message line keeps what it showed.
-            viewTextListeners.fire(ViewText.messages(history));
+            // decision 10); the message line keeps what it showed. An empty history shows nothing,
+            // as in Vim, rather than an empty view that takes the keyboard.
+            if (!history.entries().isEmpty()) {
+                viewTextListeners.fire(ViewText.messages(history));
+            }
             return;
         }
         Delivery delivery = null;

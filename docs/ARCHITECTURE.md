@@ -423,7 +423,16 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   `editor/GridMouse` (shared with that panel), the size through `util/ScreenInput.cells`.
   `GridCanvas.Look` gives it the text font and the colors of the editor the text came from.
 - **Back to the editor**: `SCREEN_SETUP` maps `Ctrl-W w`, `p` and `k` to `eclipse_screen_to_editor`;
-  the view activates the editor it last got text from.
+  the view activates the editor it last got text from. Ctrl+W itself would be Eclipse's Close on
+  Linux and Windows (M1+W in the window's context, dispatched before the canvas sees the key), so
+  while the canvas has the keyboard the view activates a key context of its own
+  (`NeovimView.KEY_CONTEXT_ID`, a child of the window's context, so its binding wins), where Ctrl+W
+  runs the plug-in's Ctrl-W command; `SendKeyHandler` sends it to the view when the view is the
+  active part.
+- **Its own folder**: the second Neovim starts in `<plug-in folder>/screen`
+  (`NeovimConnection.Ui.directory`), never Eclipse's working folder: Lua's `require` also looks in
+  `./`, so a module Neovim lacks (`vim._core.ui2` moved, in a Neovim of the user's) could otherwise
+  be read from a cloned repository Eclipse was started in.
 - **Yanks**: `eclipse_screen_yank` goes to `NeovimSession.setRegisterFromViewAsync`
   (`LuaScripts.SET_REGISTER_FROM_VIEW`): the register of the same name, the unnamed one also to
   `+` or `*` as `'clipboard'` says; a name a yank cannot have is ignored.
@@ -431,7 +440,14 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   finds checks only among runtime files, so a stub `lua/neovim4eclipse/health.lua` is written at
   every start into `<plug-in folder>/runtime`, which is appended to the editing Neovim's
   `'runtimepath'`; the check itself is sent from Java and put in `package.loaded`, where `require`
-  finds it first. The folder holds nothing else, so it adds no script that runs by itself.
+  finds it first. The folder holds nothing else, so it adds no script that runs by itself. A folder
+  whose name holds a comma is refused (`HealthCheck.fitsRuntimepath`): `'runtimepath'` would split
+  it into two entries, the second relative.
+- **The report is matched** by all three marks Neovim gives it: filetype `checkhealth`, a `nofile`
+  buffer, the name `health://`; so a file the user set to that filetype is never taken. The net
+  goes back to the window that was current when the report opened (read in `WinNew`, before the
+  schedule) before it closes the report's window: closed while current, its tab would hand Neovim
+  to the next tab, another editor's.
 - **The end**: `:q` in the view ends the process (its last window). `SCREEN_SETUP`'s
   `VimLeavePre` asks Eclipse first (`eclipse_screen_leaving`, a request, so it arrives before the
   process ends), and the end of Neovim's output is then expected (`NeovimConnection.expectEnd`),

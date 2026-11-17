@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -121,10 +122,17 @@ final class NeovimConnection implements AutoCloseable {
     }
 
     /**
-     * What {@code nvim_ui_attach} is called with: the screen's size in cells and the UI options.
-     * Example: the editing Neovim's {@code new Ui(120, 40, TERMINAL_UI)}.
+     * What {@code nvim_ui_attach} is called with, the screen's size in cells and the UI options, and
+     * the folder the process starts in. Example: the editing Neovim's {@code new Ui(120, 40,
+     * TERMINAL_UI, null)}.
+     *
+     * @param directory the process's working folder, or {@code null} for Eclipse's own. A second
+     *                  Neovim gets one of the plug-in's ({@link ScreenSession}): Lua's
+     *                  {@code require} also looks in {@code ./}, so started in a cloned repository's
+     *                  folder (Eclipse launched from there), a module Neovim lacks could be read
+     *                  from that repository.
      */
-    record Ui(int width, int height, Map<String, Object> options) {
+    record Ui(int width, int height, Map<String, Object> options, Path directory) {
     }
 
     /** Upper bound for the requests made while opening. */
@@ -177,7 +185,7 @@ final class NeovimConnection implements AutoCloseable {
      * @throws Exception if the process cannot start or does not answer in time
      */
     static NeovimConnection open(String nvimPath, List<String> extraArgs, String clientVersion) throws Exception {
-        return open(nvimPath, extraArgs, clientVersion, new Ui(UI_WIDTH, UI_HEIGHT, TERMINAL_UI));
+        return open(nvimPath, extraArgs, clientVersion, new Ui(UI_WIDTH, UI_HEIGHT, TERMINAL_UI, null));
     }
 
     /**
@@ -188,6 +196,9 @@ final class NeovimConnection implements AutoCloseable {
         List<String> cmd = NvimExecutable.embedCommand(nvimPath, extraArgs);
         // Inherit the environment: Neovim and the programs it runs (:!, :terminal) need PATH and the rest.
         ProcessBuilder pb = new ProcessBuilder(cmd);
+        if (ui.directory() != null) {
+            pb.directory(ui.directory().toFile());
+        }
         NvimExecutable.prepareEnvironment(pb.environment(), PlatformUtil.isWindows());
         Process process = pb.start();
         LOG.info(() -> "Started Neovim pid=" + process.pid() + " cmd=" + cmd);

@@ -520,6 +520,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * {@link #start}, off the UI thread, as the start itself is.
      */
     public void installHealthCheck(Path runtimeFolder, HealthCheck.Info info) throws Exception {
+        if (!HealthCheck.fitsRuntimepath(runtimeFolder)) {
+            throw new IllegalArgumentException("A comma in the folder's name would split it on 'runtimepath': " + runtimeFolder);
+        }
         HealthCheck.writeStub(runtimeFolder);
         await(api.execLua(LuaScripts.HEALTH_CHECK, List.of(runtimeFolder.toString(), info.toLua())));
     }

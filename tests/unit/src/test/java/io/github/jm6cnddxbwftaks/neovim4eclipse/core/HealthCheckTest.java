@@ -45,4 +45,10 @@ class HealthCheckTest {
                     "nothing else on the runtimepath: no plugin/ or ftplugin/ that would run");
         }
     }
+
+    @Test
+    void aFolderWithACommaWouldSplitOnTheRuntimepath() {
+        assertEquals(true, HealthCheck.fitsRuntimepath(Path.of("/home/you/.local/share/neovim4eclipse-plugin/runtime")));
+        assertEquals(false, HealthCheck.fitsRuntimepath(Path.of("/data,home/neovim4eclipse-plugin/runtime")));
+    }
 }

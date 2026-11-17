@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +55,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenGrid;
  *
  * <h2>Example</h2>
  * <pre>{@code
- * ScreenSession screen = ScreenSession.start(nvimPath, List.of("-M"), version, 80, 24, listener);
+ * ScreenSession screen = ScreenSession.start(nvimPath, List.of("-M"), version, folder, 80, 24, listener);
  * screen.execLuaAsync(profileScript, List.of(lines));   // the profile fills the screen
  * screen.inputAsync("/OK<CR>");                          // a search, typed in the view
  * screen.resizeAsync(100, 30);                           // the view grew
@@ -118,17 +120,21 @@ public final class ScreenSession implements AutoCloseable {
      *                      same program, found and checked the same way ({@code util/NvimExecutable})
      * @param profileArgs   the profile's own arguments, after {@link #FIXED_ARGS}; example {@code -M}
      * @param clientVersion this plug-in's version, reported to Neovim
+     * @param folder        the folder the process starts in, one of the plug-in's own, made if
+     *                      missing: never Eclipse's, which may be a cloned repository
+     *                      ({@link NeovimConnection.Ui#directory})
      * @throws IllegalStateException if Neovim started with a way to write files still open
      *                               ({@link #unsafeOptions}); the process is ended then
      * @throws Exception             if Neovim cannot start or does not answer in time
      */
-    public static ScreenSession start(String nvimPath, List<String> profileArgs, String clientVersion, int width,
-            int height, Listener listener) throws Exception {
+    public static ScreenSession start(String nvimPath, List<String> profileArgs, String clientVersion, Path folder,
+            int width, int height, Listener listener) throws Exception {
         Objects.requireNonNull(listener, "listener");
+        Files.createDirectories(folder);
         List<String> args = new ArrayList<>(FIXED_ARGS);
         args.addAll(profileArgs);
         NeovimConnection connection = NeovimConnection.open(nvimPath, args, clientVersion,
-                new NeovimConnection.Ui(Math.max(1, width), Math.max(1, height), NeovimConnection.SCREEN_UI));
+                new NeovimConnection.Ui(Math.max(1, width), Math.max(1, height), NeovimConnection.SCREEN_UI, folder));
         ScreenSession session = new ScreenSession(connection, listener);
         try {
             // The first screen came before anyone listened (only highlight definitions are kept for

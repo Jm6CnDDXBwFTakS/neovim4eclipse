@@ -7,16 +7,23 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import org.eclipse.jface.bindings.Binding;
+import org.eclipse.jface.bindings.keys.KeySequence;
+import org.eclipse.jface.bindings.keys.ParseException;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IViewPart;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.handlers.IHandlerService;
+import org.eclipse.ui.keys.IBindingService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 
 /**
  * The Neovim view in a real workbench: {@code :messages} typed in an editor opens it, titled with
@@ -24,6 +31,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
  * back to the editor; {@code q} in the view closes it.
  */
 class NeovimViewEndToEndTest extends EndToEndTestBase {
+
+    private static final String CTRL_W = "io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.w";
 
     @AfterEach
     void closeTheView() {
@@ -86,9 +95,28 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
         assertEquals("Neovim: messages", view.getPartName());
         UiTestSupport.requireKeyboardFocus(view.canvasForTests(), TIMEOUT_MS);
 
-        key(view.canvasForTests(), 'w', (char) 0x17, SWT.CTRL); // Ctrl-W
+        // Ctrl+W as Eclipse's key dispatcher sees it: in the view's key context it is the plug-in's
+        // Ctrl-W command, not Close (which would close the editor behind the view), and that
+        // command sends <C-w> to the view's Neovim. (macOS: Close is Cmd+W, Ctrl+W free anyway.)
+        if (!PlatformUtil.isMac()) {
+            IBindingService bindings = PlatformUI.getWorkbench().getService(IBindingService.class);
+            Binding binding;
+            try {
+                binding = bindings.getPerfectMatch(KeySequence.getInstance("M1+W"));
+            } catch (ParseException e) {
+                throw new AssertionError(e);
+            }
+            assertEquals(CTRL_W, binding == null ? null : binding.getParameterizedCommand().getId());
+        }
+        IHandlerService handlers = view.getSite().getService(IHandlerService.class);
+        try {
+            handlers.executeCommand(CTRL_W, null);
+        } catch (Exception e) {
+            throw new AssertionError("the Ctrl-W command did not run", e);
+        }
         key(view.canvasForTests(), 'p', 'p', 0);
         waitUntil("the editor has the keyboard back", TIMEOUT_MS, widget::isFocusControl);
+        assertEquals(true, editor.getSite().getPage().isPartVisible(editor), "the editor is still open");
     }
 
     @Test

@@ -53,13 +53,8 @@ local function report(info)
   vim.fn.writefile({ "return { check = function() vim.health.error('stub') end }" },
     folder .. '/lua/neovim4eclipse/health.lua')
   t.eq(true, t.run('HEALTH_CHECK', folder, info))
-  t.ok(vim.tbl_contains(vim.opt.runtimepath:get(), folder), 'the folder is on the runtimepath')
-  t.run('HEALTH_CHECK', folder, info) -- a second start: not appended twice
-  local count = 0
-  for _, dir in ipairs(vim.opt.runtimepath:get()) do
-    count = count + (dir == folder and 1 or 0)
-  end
-  t.eq(1, count)
+  local rtp = vim.opt.runtimepath:get()
+  t.same_file(folder, rtp[#rtp], 'appended, last')
   vim.cmd('checkhealth neovim4eclipse')
   return table.concat(vim.api.nvim_buf_get_lines(vim.fn.bufnr('health://'), 0, -1, false), '\n')
 end

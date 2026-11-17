@@ -604,11 +604,14 @@ it holds: *Neovim: messages*, *Neovim: checkhealth*.
   editor pastes it; a plain `yy` fills the unnamed register, and the clipboard when your
   `'clipboard'` says so). The left button and the wheel work as in Neovim. Eclipse's own shortcuts
   stay Eclipse's, as in any view.
-- **Back to the editor:** `Ctrl-W p`, `Ctrl-W w` or `Ctrl-W k`, or a click in the editor.
+- **Back to the editor:** `Ctrl-W p`, `Ctrl-W w` or `Ctrl-W k`, or a click in the editor. While
+  the view has the keyboard, Ctrl+W is Neovim's, not Eclipse's Close (on Linux and Windows).
 - **Closing it:** `q` or `:q`, or the view's close button. The next `:messages` opens it again.
 - **Only text goes over:** the second Neovim gets the lines, never a file name, and it starts
-  without your config or plug-ins (`--clean`), with writing turned off. It never writes a file, so
-  it cannot get in the way of your editors. Its look is Neovim's default colorscheme on your editor's
+  without your config or plug-ins (`--clean`), in a folder of the plug-in's own, with writing turned
+  off. Nothing it shows and nothing it does by itself writes a file, so it cannot get in the way of
+  your editors; a command you type there that writes on purpose (`:call writefile(...)`,
+  `:mksession`) is yours, as in any Neovim. Its look is Neovim's default colorscheme on your editor's
   background, in Eclipse's text font; your mappings are not there.
 - **Long messages** in the view itself (a refusal after `:w`, say) do not stop at "Press ENTER":
   they are cut to the first lines with a `[+N]` marker, and `g<` shows them all (Neovim's `ui2`).

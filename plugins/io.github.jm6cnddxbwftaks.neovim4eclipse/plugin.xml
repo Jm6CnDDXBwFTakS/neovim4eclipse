@@ -310,6 +310,15 @@
             name="Neovim Ctrl-W"
             parentId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal">
       </context>
+      <!-- While the Neovim view (editor/NeovimView) has the keyboard: a child of the window's
+           context, so its Ctrl+W below wins over Eclipse's Close (M1+W in the window's context),
+           and Ctrl-W w, p and k reach the view's Neovim. Only Ctrl+W: every other shortcut stays
+           Eclipse's in the view, as in any view. -->
+      <context
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.context.view"
+            name="In the Neovim View"
+            parentId="org.eclipse.ui.contexts.window">
+      </context>
       <context
             id="io.github.jm6cnddxbwftaks.neovim4eclipse.context.ctrl.x"
             name="Neovim Ctrl-X"
@@ -1117,6 +1126,27 @@
       <key
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.w"
             contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.ctrl.w"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            platform="cocoa"
+            sequence="M4+W">
+      </key>
+      <key
+            commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.w"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.view"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            platform="win32"
+            sequence="M1+W">
+      </key>
+      <key
+            commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.w"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.view"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            platform="gtk"
+            sequence="M1+W">
+      </key>
+      <key
+            commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.w"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.view"
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
             platform="cocoa"
             sequence="M4+W">

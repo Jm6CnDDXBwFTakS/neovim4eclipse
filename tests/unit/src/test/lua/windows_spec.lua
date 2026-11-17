@@ -725,6 +725,35 @@ t.test(':checkhealth hands its report to the Neovim view and leaves no window, b
   t.eq('', vim.v.errmsg, 'no "Window closed" message: the report went somewhere')
 end)
 
+t.test(':checkhealth from an editor whose tab is not the last comes back to it, not the next tab', function()
+  start()
+  t.run('HOST_COMMANDS', t.host_rules)
+  t.run('WINDOW_COMMANDS')
+  local a, b = buffer(3), buffer(3)
+  local wa = open(a)
+  local wb = open(b) -- its tab comes after a's
+  show(wa, a)
+  t.eq(wa, vim.api.nvim_get_current_win())
+  t.forget()
+  vim.cmd('checkhealth vim.health')
+  t.wait_for('the report', function() return #t.sent('eclipse_view_text') == 1 end)
+  t.eq(wa, vim.api.nvim_get_current_win(), "back in the editor the command ran in")
+  for _, enter in ipairs(t.sent('eclipse_buf_enter')) do
+    t.ok(enter[2] ~= wb, 'never in the other editor: ' .. vim.inspect(t.sent('eclipse_buf_enter')))
+  end
+end)
+
+t.test('a buffer the user set to the checkhealth filetype is no report: not taken, not wiped', function()
+  commands()
+  local mine = buffer(2)
+  vim.bo[mine].filetype = 'checkhealth'
+  vim.cmd('split')
+  vim.api.nvim_win_set_buf(0, mine)
+  t.wait_for('the stray split to close', function() return windows_in_tab() == 1 end)
+  t.eq({}, t.sent('eclipse_view_text'))
+  t.ok(vim.api.nvim_buf_is_valid(mine), 'the buffer stays')
+end)
+
 t.test(':checkhealth as a float (vim.g.health style) is read before closing wipes it', function()
   commands()
   vim.g.health = { style = 'float' }
