@@ -121,7 +121,9 @@ it, see [CONTRIBUTING.md, "Run it from Eclipse"](CONTRIBUTING.md#run-it-from-ecl
 
 1. **Get Neovim.** The first time, the *Get Neovim 0.12.6…* dialog opens: choose *Download*. It
    fetches the Neovim release from GitHub and checks it before anything runs; until then, editors
-   keep Eclipse's keys.
+   keep Eclipse's keys. If Eclipse cannot reach GitHub (offline, a blocked host, or a proxy that
+   asks for a password), download the archive the dialog names and choose *Install from File…*
+   instead; it is checked the same way.
 2. **Open a file.** Any text editor attaches: Java, XML, plain text, and the others built on
    Eclipse's text editor. The status bar shows the mode, `NORMAL`, and Neovim's keys apply:
    `hjkl`, `w`, `ciw`, `dd`, `u`, `.`, counts, registers, macros.
