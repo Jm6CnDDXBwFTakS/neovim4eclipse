@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS -->
+<!-- SPDX-License-Identifier: EPL-2.0 -->
 <?eclipse version="3.4"?>
 <!-- Contributions used only by the UI tests. They are inert until a test activates the context below. -->
 <fragment>
