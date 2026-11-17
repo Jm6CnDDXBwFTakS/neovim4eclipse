@@ -624,7 +624,10 @@ To have one back, unset its variable in `init.lua`
 `vim.g.loaded_zipPlugin`, `vim.g.loaded_tarPlugin`).
 
 A buffer named `term://...` starts no program either (`gf` on such a name in a file would
-otherwise run it); `:terminal` works as usual.
+otherwise run it). `:terminal` still starts its program, but Eclipse has no view for a terminal:
+the editor goes back to its file, as after any other buffer it cannot show, and the program keeps
+running out of sight until it ends or Neovim stops. For a shell, use Eclipse's *Terminal* view,
+where your Eclipse has one.
 
 `Ctrl-R` is Neovim's own, in insert mode and on the `:` line. As in Vim, some registers are
 inserted as if typed (the file's name `%`, the last search `/`, the unnamed register `"`), so a
