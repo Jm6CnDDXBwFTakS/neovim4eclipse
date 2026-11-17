@@ -389,12 +389,16 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
 
 - **The one rule: it never writes a file.** Two Neovims and Eclipse's documents changing the same
   file would drift apart (lost edits, swap prompts, reloads). So every second Neovim starts with
-  `ScreenSession.FIXED_ARGS`: `--clean` (no user config, none of the user's plug-ins, only Neovim's own; no shada file), `-n` (no swap
-  file), `--cmd "set nowrite nomodeline"`. And the rule is checked where it ends, not trusted on
-  the way: once started, `LuaScripts.SCREEN_SETUP` answers the options as Neovim has them, and
-  `ScreenSession.unsafeOptions` refuses the start unless `write`, `modeline` and `undofile` are
-  off, `updatecount` is 0 and `shadafile` is `NONE`. One check covers every way of writing a
-  buffer (`:w`, `:saveas`, `:update`, `ZZ`, an autocmd's write). What the user types in the view
+  `ScreenSession.FIXED_ARGS`: `--clean` (no user config, none of the user's plug-ins, only
+  Neovim's own; no shada file), `-n` (no swap file), `--cmd "set nowrite nomodeline"`. And the
+  rule is checked where it ends, not trusted on the way: once started, `LuaScripts.SCREEN_SETUP`
+  answers the options as Neovim has them, and `ScreenSession.unsafeOptions` refuses the start
+  unless `write`, `modeline` and `undofile` are off, `updatecount` is 0 and `shadafile` is `NONE`.
+  One check covers every way of writing a buffer (`:w`, `:saveas`, `:update`, `ZZ`, an autocmd's
+  write). The same answer counts the readers of a name left (`BufReadCmd`, `FileReadCmd`,
+  `SourceCmd`, any group or pattern) outside a known set, `nvim.man` and `nvim.shada`, and the
+  start is refused unless there are none: netrw, zip, tar, http and `term://` are checked off
+  where they end, so `gf` on shown text reaches none of them. What the user types in the view
   (`:set write`, `:!`) stays their own, as in the editing Neovim.
 - **The screen, as on a terminal**: attached with `NeovimConnection.SCREEN_UI` (24-bit color and
   `ext_linegrid`, nothing else), Neovim draws its windows, status line, `:` line and messages
