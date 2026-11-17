@@ -39,7 +39,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenGrid;
  * {@code :saveas}, {@code :update}, {@code ZZ}, an autocmd's write). The same check covers the
  * readers SECURITY.md turns off (netrw, zip, tar, http, {@code term://}): the start is refused
  * while any reader of a name is left but the two kept on purpose ({@code man://}, ShaDa), since
- * {@code gf} on shown text would reach it. A profile may also forbid
+ * {@code gf} on shown text would reach it. Checked once, at the start: a reader added later can
+ * only come from a command the user types ({@code :packadd}, {@code :runtime}), which stays
+ * theirs. A profile may also forbid
  * changes to the text ({@code -M}: {@code nomodifiable}). What the user types in the view
  * ({@code :set write}, {@code :!}) stays their own, as in the editing Neovim.
  *
@@ -150,8 +152,7 @@ public final class ScreenSession implements AutoCloseable {
             Object options = Rpc.await(session.api.execLua(LuaScripts.SCREEN_SETUP, List.of(String.valueOf(channel))));
             List<String> unsafe = unsafeOptions(options);
             if (!unsafe.isEmpty()) {
-                throw new IllegalStateException("The second Neovim could write files or run programs ("
-                        + String.join(", ", unsafe) + "); it was not started");
+                throw new IllegalStateException(refusal(options, unsafe));
             }
             if (!(options instanceof Map<?, ?> m && Boolean.TRUE.equals(m.get("ui2")))) {
                 LOG.info("The second Neovim has no ui2 (vim._core.ui2): long messages stop at a Press ENTER prompt"
@@ -191,6 +192,24 @@ public final class ScreenSession implements AutoCloseable {
             unsafe.add("readers");
         }
         return unsafe;
+    }
+
+    /**
+     * The message of a refused start: the options left open, and for {@code readers} the first
+     * reader left, so that the log says what to turn off or allow (after a Neovim upgrade, most
+     * likely). Example: {@code The second Neovim could write files or run programs (readers:
+     * nvim.net.remotefile:BufReadCmd:http://*); it was not started}.
+     */
+    static String refusal(Object answer, List<String> unsafe) {
+        List<String> named = new ArrayList<>();
+        for (String option : unsafe) {
+            if (option.equals("readers") && answer instanceof Map<?, ?> m && m.get("first_reader") instanceof String first) {
+                named.add("readers: " + first);
+            } else {
+                named.add(option);
+            }
+        }
+        return "The second Neovim could write files or run programs (" + String.join(", ", named) + "); it was not started";
     }
 
     /** Types {@code keys}, in Neovim's key notation ({@code "/OK<CR>"}), as {@code nvim_input} does. */

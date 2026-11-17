@@ -57,6 +57,20 @@ class ScreenSessionTest {
         assertEquals(List.of("write"), ScreenSession.unsafeOptions(options));
     }
 
+    /** A refused start names the reader left, so the log says what to turn off or allow. */
+    @Test
+    void aRefusalNamesTheFirstReaderLeft() {
+        Map<String, Object> options = safe();
+        options.put("readers", 2L);
+        options.put("first_reader", "nvim.net.remotefile:BufReadCmd:http://*");
+        options.put("write", true);
+        assertEquals("The second Neovim could write files or run programs (write, readers:"
+                + " nvim.net.remotefile:BufReadCmd:http://*); it was not started",
+                ScreenSession.refusal(options, ScreenSession.unsafeOptions(options)));
+        assertEquals("The second Neovim could write files or run programs (readers); it was not started",
+                ScreenSession.refusal(Map.of("readers", 1L), List.of("readers")), "no name in the answer");
+    }
+
     @Test
     void theFixedArgumentsComeFirstAndCloseEveryWay() {
         assertTrue(ScreenSession.FIXED_ARGS.contains("--clean"), "no user config, no plug-ins, no shada");

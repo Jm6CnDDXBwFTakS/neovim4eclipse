@@ -5729,9 +5729,14 @@ final class LuaScripts {
      * group or pattern, but for the two kept on purpose: {@code nvim.man} (as in the editing
      * Neovim, SECURITY.md) and {@code nvim.shada}. It must be 0; it is absent if Neovim could not
      * list them. A known set allowed, not one reader looked for: a reader a later Neovim adds or
-     * renames shows here, and the view refuses to start until it is turned off or allowed. And
-     * {@code ui2}: whether that UI is on. Example answer: {@code {write = false, modeline = false,
-     * updatecount = 0, undofile = false, shadafile = "NONE", readers = 0, ui2 = true}}.
+     * renames shows here, and the view refuses to start until it is turned off or allowed; then
+     * {@code first_reader} names the first one left, as {@code group:event:pattern} (example:
+     * {@code nvim.net.remotefile:BufReadCmd:http://*}), for the log. Counted once, here at the
+     * start: a reader added later can only come from a command the user types ({@code :packadd},
+     * {@code :runtime}, {@code :luafile}), which stays theirs; Neovim adds none later, and
+     * {@code --clean} loads none of the user's plug-ins. And {@code ui2}: whether that UI is on.
+     * Example answer: {@code {write = false, modeline = false, updatecount = 0, undofile = false,
+     * shadafile = "NONE", readers = 0, ui2 = true}}.
      */
     static final String SCREEN_SETUP = """
             local channel = tonumber((select(1, ...)))
@@ -5760,17 +5765,21 @@ final class LuaScripts {
             -- purpose. nil (no answer) if the list cannot be read: ScreenSession refuses that too.
             local kept = { ['nvim.man'] = true, ['nvim.shada'] = true }
             local readers = nil
+            local first_reader = nil
             local ok, found = pcall(vim.api.nvim_get_autocmds, { event = { 'BufReadCmd', 'FileReadCmd', 'SourceCmd' } })
             if ok then
               readers = 0
               for _, autocmd in ipairs(found) do
                 if not kept[autocmd.group_name] then
                   readers = readers + 1
+                  first_reader = first_reader
+                    or ((autocmd.group_name or '(no group)') .. ':' .. autocmd.event .. ':' .. autocmd.pattern)
                 end
               end
             end
             return {
               readers = readers,
+              first_reader = first_reader,
               write = vim.o.write,
               modeline = vim.o.modeline,
               updatecount = vim.o.updatecount,

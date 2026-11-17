@@ -41,7 +41,10 @@ t.test('a reader left, whatever its pattern, is counted, so ScreenSession refuse
   as_started()
   vim.api.nvim_create_autocmd('BufReadCmd', { pattern = 'term:*', command = 'echo' })
   vim.api.nvim_create_autocmd('SourceCmd', { pattern = '*', command = 'echo' })
-  t.eq(2, t.run('SCREEN_SETUP', tostring(t.channel)).readers)
+  local answer = t.run('SCREEN_SETUP', tostring(t.channel))
+  t.eq(2, answer.readers)
+  t.ok(answer.first_reader == '(no group):BufReadCmd:term:*' or answer.first_reader == '(no group):SourceCmd:*',
+    'the first reader left is named: ' .. tostring(answer.first_reader))
   vim.api.nvim_clear_autocmds({ event = { 'BufReadCmd', 'SourceCmd' }, pattern = { 'term:*', '*' } })
 end)
 
