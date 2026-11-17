@@ -1,9 +1,10 @@
 Vim mode for Eclipse, powered by a real Neovim. **Not an emulation:** Neovim itself does the
 editing, so your `init.lua`, mappings and the Neovim plug-ins that work on text (surround,
-commentary) apply; plug-ins that draw (completion menus, pickers, file trees, dashboards) do not
-show. Motions, operators, text objects,
-visual mode, registers, macros and `:` commands work on the buffer you see; Eclipse keeps owning
-files, rendering, content assist and its own commands.
+commentary) apply. Of plug-ins that draw, the editor shows Neovim's completion list, jump labels
+(flash, leap, hop) and floating windows that do not take the keyboard (which-key's key hints);
+pickers, file trees, dashboards and completion plug-ins' menus (nvim-cmp, blink.cmp) do not show.
+Motions, operators, text objects, visual mode, registers, macros and `:` commands work on the
+buffer you see; Eclipse keeps owning files, rendering, content assist and its own commands.
 
 **See it work:** a demo is available at the top of the [README](https://github.com/Jm6CnDDXBwFTakS/neovim4eclipse#readme).
 
