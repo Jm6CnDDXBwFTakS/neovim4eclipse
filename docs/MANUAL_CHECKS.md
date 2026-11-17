@@ -344,8 +344,8 @@ color, the cursor, the background, search, yank and paste, the wheel and a click
 and its look in both themes is in the gallery (card `sh-colors`). On macOS posting keys needs the
 Accessibility permission, so the real key is checked by hand.
 
-1. Open `n4e-alpha`'s `notes.txt`, type `:messages` and Enter.
-   ⇒ The view *Neovim: messages* opens with the keyboard.
+1. Open `n4e-alpha`'s `notes.txt`, type `:checkhealth neovim4eclipse` and Enter.
+   ⇒ The view *Neovim: checkhealth* opens with the keyboard.
 2. Press Control and W together (not Command), then `p`.
    ⇒ `notes.txt` has the keyboard back and is still open.
 
