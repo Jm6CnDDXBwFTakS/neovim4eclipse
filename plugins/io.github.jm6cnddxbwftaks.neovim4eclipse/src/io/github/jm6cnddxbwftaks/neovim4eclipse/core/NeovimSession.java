@@ -908,6 +908,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * {@code :help topic} in this Neovim, as if typed in the attached editor: the help window it
+     * opens goes to the help editor ({@link LuaScripts#WINDOWS}). For {@code :help} typed in the
+     * messages or checkhealth editor, whose Neovim has neither the user's help pages nor the help
+     * editor's rules ({@link LuaScripts#HELP_HERE}). Example: {@code helpAsync("telescope")}.
+     *
+     * @param topic the help topic, as typed; {@code ""} for {@code :help} alone
+     */
+    public void helpAsync(String topic) {
+        submit("help from a page editor", Level.FINE, () -> await(api.execLua(LuaScripts.HELP_HERE, List.of(topic))));
+    }
+
+    /**
      * The keys that close the command-line window without running its line, whatever mode it is
      * in. {@code <C-\><C-N>} ends a command half typed ({@code r}, {@code "}, {@code d}) and Insert
      * or Visual mode; in the window's Normal mode it closes the window, its line dropped, as

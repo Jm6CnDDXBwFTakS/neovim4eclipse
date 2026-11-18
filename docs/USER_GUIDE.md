@@ -647,7 +647,8 @@ window is an Eclipse editor.
 
 `:help` opens the page in the help editor: Neovim's own help, with the pages of your plug-ins, as
 in a terminal Neovim. So do `:helpgrep`, `:vert help`, `:tab help` and a plug-in's
-`vim.cmd.help()`. The editor you typed in keeps no help window.
+`vim.cmd.help()`. The editor you typed in keeps no help window. `:help` typed in the messages or
+checkhealth editor opens the help editor too, as if typed in your code.
 
 - **It is Neovim's help:** `Ctrl-]` (or a double click) follows a link, `Ctrl-T` and `Ctrl-O` go
   back, `:help` again opens another page there, `K` looks up the word under the cursor, `/`

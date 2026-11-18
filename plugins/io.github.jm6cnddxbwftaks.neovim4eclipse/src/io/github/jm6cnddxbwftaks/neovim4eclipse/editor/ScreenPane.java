@@ -84,6 +84,9 @@ final class ScreenPane {
          */
         void window(char key, int count, Point cursor);
 
+        /** {@code :help topic} typed in a text page ({@link ScreenSession.Listener#help}). */
+        void help(String topic);
+
         /** The second Neovim ended ({@code :q}, {@code q}, a crash); the next content starts a new one. */
         void ended();
     }
@@ -447,6 +450,15 @@ final class ScreenPane {
             onUi(() -> {
                 if (current()) {
                     host.window(key, count, cursorOnScreen());
+                }
+            });
+        }
+
+        @Override
+        public void help(String topic) {
+            onUi(() -> {
+                if (current()) {
+                    host.help(topic);
                 }
             });
         }

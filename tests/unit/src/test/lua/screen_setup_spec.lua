@@ -117,3 +117,31 @@ t.test('Ctrl-W moves among its own windows first, and goes on to Eclipse at the 
   t.eq(3, #t.sent('eclipse_screen_window'), 'nothing more to Eclipse')
   vim.cmd('only')
 end)
+
+t.test(':help typed in a text page is not run there but handed to Eclipse, with its topic', function()
+  as_started()
+  t.run('SCREEN_SETUP', tostring(t.channel))
+  vim.g.neovim4eclipse_help_page = nil
+  t.forget()
+  t.type(':help telescope<CR>')
+  t.eq({ { 'telescope' } }, t.sent('eclipse_screen_help'))
+  t.type(':vert h<CR>')
+  t.eq({ { 'telescope' }, { '' } }, t.sent('eclipse_screen_help'), ':help alone: no topic')
+  t.type(':echo 1<CR>')
+  t.eq(2, #t.sent('eclipse_screen_help'), 'other commands run as typed')
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    t.ok(vim.bo[vim.api.nvim_win_get_buf(win)].buftype ~= 'help', 'no help window here')
+  end
+end)
+
+t.test("in the help editor's own Neovim, :help is its own", function()
+  as_started()
+  t.run('SCREEN_SETUP', tostring(t.channel))
+  vim.g.neovim4eclipse_help_page = true
+  t.forget()
+  t.type(':help help-context<CR>')
+  t.eq({}, t.sent('eclipse_screen_help'))
+  t.eq('help', vim.bo.buftype)
+  vim.cmd('helpclose')
+  vim.g.neovim4eclipse_help_page = nil
+end)

@@ -1462,6 +1462,17 @@ final class LuaScripts {
             -- on the line under "*help-context*", that tag; on line 1 of helphelp.txt, "helphelp.txt".
             -- At most 200 candidates are looked up (each about 0.1 ms): a page whose folder has no
             -- tags file, reached by :helpgrep, would otherwise pause Neovim on every star above.
+            --- The pattern of a :helpgrep list's title, as typed; "" if the title is no :helpgrep.
+            --- Example: ":silent helpgrep tab  page" gives "tab  page". SCREEN_SHOW_HELP has a copy.
+            function M.helpgrep_pattern(title)
+              title = title or ''
+              local ok, parsed = pcall(vim.api.nvim_parse_cmd, title:sub(2), {})
+              if not ok or parsed.cmd ~= 'helpgrep' then
+                return ''
+              end
+              local after = vim.fn.matchend(title, [[\\C\\<helpg\\%[rep]\\>!\\=\\s*]])
+              return after < 0 and '' or title:sub(after + 1)
+            end
             local function nearest_tag(buf, line, file)
               local lines = vim.api.nvim_buf_get_lines(buf, 0, line, false)
               local found
@@ -1490,23 +1501,23 @@ final class LuaScripts {
               return found or file
             end
             -- Whether this help window is the current entry of a :helpgrep list (:helpgrep itself, or
-            -- :cnext through it): its pattern and the entry's number, so that the page editor runs the same
-            -- :helpgrep and goes on through it there (]q, :cnext typed in the page editor). The pattern is
-            -- read from the list's title, the command line Neovim keeps there (":silent helpgrep
-            -- runtimepath"), parsed by Neovim itself (nvim_parse_cmd), not by matching its text. Else
-            -- ("", 0): the page goes over by its tag.
+            -- :cnext through it): its pattern and the entry's number, so that the help editor runs the
+            -- same :helpgrep and goes on through it there (]q, :cnext typed in it). The pattern is the
+            -- list's title, the command line Neovim keeps there (":silent helpgrep tab  page"): Neovim
+            -- itself says it is a :helpgrep (nvim_parse_cmd), and the pattern is the title's text after
+            -- the command's name, as typed (nvim_parse_cmd's own arguments merge runs of spaces and drop
+            -- a backslash from \\\\). Else ("", 0): the page goes over by its tag.
             local function helpgrep_at(buf, line)
               local list = vim.fn.getqflist({ title = 0, idx = 0 })
-              local ok, parsed = pcall(vim.api.nvim_parse_cmd, (list.title or ''):sub(2), {})
-              if not ok or parsed.cmd ~= 'helpgrep' or #parsed.args < 1 or (list.idx or 0) < 1 then
+              local pattern = M.helpgrep_pattern(list.title)
+              if pattern == '' or (list.idx or 0) < 1 then
                 return '', 0
               end
               local entry = vim.fn.getqflist({ idx = list.idx, items = 0 }).items[1]
               if not entry or entry.bufnr ~= buf or entry.lnum ~= line then
                 return '', 0
               end
-              -- nvim_parse_cmd splits the pattern at spaces (:helpgrep foo bar): joined again.
-              return table.concat(parsed.args, ' '), list.idx
+              return pattern, list.idx
             end
             -- A help window (:help, :helpgrep, a plug-in's vim.cmd.help, in a split, a tab or with
             -- :vert): Eclipse shows help in a page editor instead, with the user's own help pages
@@ -5890,6 +5901,29 @@ final class LuaScripts {
                 vim.keymap.set('n', '<C-w><C-' .. key .. '>', go, { desc = 'Ctrl-W ' .. key .. ', on to Eclipse at the edge' })
               end
             end
+            -- :help typed in the messages or checkhealth editor: Neovim parses the line, and a :help
+            -- is not run here (this Neovim has neither the user's help pages nor the help editor's
+            -- rules) but handed to Eclipse, which runs it in the editing Neovim, so the help editor
+            -- opens (eclipse_screen_help, with the topic as typed). The help editor's own Neovim
+            -- (SCREEN_SHOW_HELP sets neovim4eclipse_help_page) runs :help itself.
+            vim.api.nvim_create_autocmd('CmdlineLeave', {
+              group = group,
+              pattern = ':',
+              callback = function()
+                if vim.g.neovim4eclipse_help_page or vim.v.event.abort then
+                  return
+                end
+                local line = vim.fn.getcmdline()
+                local ok, parsed = pcall(vim.api.nvim_parse_cmd, line, {})
+                if not ok or parsed.cmd ~= 'help' then
+                  return
+                end
+                local after = vim.fn.matchend(line, [[\\C\\<h\\%[elp]\\>!\\=\\s*]])
+                -- v:event seen from Lua is a copy: the abort is set on the real one.
+                vim.cmd('let v:event.abort = v:true')
+                vim.rpcnotify(channel, 'eclipse_screen_help', after < 0 and '' or line:sub(after + 1))
+              end,
+            })
             pcall(vim.api.nvim_clear_autocmds, { group = 'nvim.terminal', event = 'BufReadCmd' })
             -- Every reader of a name left, whatever its group or pattern, except the two kept on
             -- purpose. nil (no answer) if the list cannot be read: ScreenSession refuses that too.
@@ -6002,6 +6036,7 @@ final class LuaScripts {
      */
     static final String SCREEN_SHOW_HELP = """
             local tag, file, line, runtimepath, background, grep, index = ...
+            vim.g.neovim4eclipse_help_page = true -- :help here is this Neovim's own (SCREEN_SETUP)
             if background == 'light' or background == 'dark' then
               vim.o.background = background
             end
@@ -6048,9 +6083,11 @@ final class LuaScripts {
             local ok, err = false, nil
             if grep and grep ~= '' then
               -- The same :helpgrep, run here unless this list is it already, then its entry.
+              -- The title's pattern as typed, by the rule of WINDOWS' helpgrep_pattern.
               local title = vim.fn.getqflist({ title = 0 }).title or ''
               local same, parsed = pcall(vim.api.nvim_parse_cmd, title:sub(2), {})
-              ok = same and parsed.cmd == 'helpgrep' and table.concat(parsed.args, ' ') == grep
+              local after = vim.fn.matchend(title, [[\\C\\<helpg\\%[rep]\\>!\\=\\s*]])
+              ok = same and parsed.cmd == 'helpgrep' and after >= 0 and title:sub(after + 1) == grep
               if not ok then
                 ok = pcall(vim.cmd.helpgrep, { args = { grep }, mods = { silent = true } })
               end
@@ -6152,6 +6189,21 @@ final class LuaScripts {
             end
             package.loaded['neovim4eclipse.health'] = M
             return true
+            """;
+
+    /**
+     * Runs {@code :help topic} in the editing Neovim ({@link NeovimSession#helpAsync}), for a
+     * {@code :help} typed in the messages or checkhealth editor. Argument: the topic as typed,
+     * {@code ""} for none. A structured call ({@code vim.cmd.help}), so the topic is never read as
+     * a command line. A topic Neovim does not know shows its own error (E149) on the message line.
+     */
+    static final String HELP_HERE = """
+            local topic = ...
+            local ok, err = pcall(vim.cmd.help, topic ~= '' and { args = { topic } } or {})
+            if not ok then
+              vim.api.nvim_echo({ { tostring(err):gsub('^.-(E%d+:)', '%1') } }, true, { err = true })
+            end
+            return ok
             """;
 
     /**

@@ -477,6 +477,12 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   location of its own an editor's entry is `null`, which says nothing. So the page editor gives one
   (`NeovimPageEditor.PageLocation`, one entry per editor), and `util/HistorySteps` passes over the
   entries whose input is a `NeovimPageInput`, as over the plug-in's own (`NavigationHistorySteps`).
+- **`:help` in a text page**: the messages and checkhealth editors' Neovim has neither the user's
+  help pages nor the help editor's rules, so `SCREEN_SETUP`'s `CmdlineLeave` hook has Neovim
+  parse the line (`nvim_parse_cmd`) and, for a `:help`, aborts it there and sends
+  `eclipse_screen_help(topic)`; the page editor runs it in the editing Neovim
+  (`NeovimSession.helpAsync`, `LuaScripts.HELP_HERE`, a structured `vim.cmd.help`), whose help
+  window the net hands to the help editor. The help editor's own Neovim runs `:help` itself.
 - **`Ctrl-W`**: `SCREEN_SETUP` maps `Ctrl-W h j k l w W t b p` (and the Ctrl- forms, with a
   count). Neovim moves among its own windows when it has one in that direction (`winnr('k')` and
   its like; `w` but from the last window, and always with a count, as Vim's `N Ctrl-W w`; `W`

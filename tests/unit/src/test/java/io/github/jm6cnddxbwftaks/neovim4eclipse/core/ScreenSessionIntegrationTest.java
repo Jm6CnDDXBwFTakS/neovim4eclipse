@@ -44,6 +44,7 @@ class ScreenSessionIntegrationTest {
         final List<List<Object>> yanks = new CopyOnWriteArrayList<>();
         final AtomicInteger ends = new AtomicInteger();
         final List<String> windows = new CopyOnWriteArrayList<>();
+        final List<String> helps = new CopyOnWriteArrayList<>();
 
         @Override
         public void screen(GridSnapshot snapshot) {
@@ -58,6 +59,11 @@ class ScreenSessionIntegrationTest {
         @Override
         public void window(char key, int count) {
             windows.add(key + ":" + count);
+        }
+
+        @Override
+        public void help(String topic) {
+            helps.add(topic);
         }
 
         @Override
@@ -369,6 +375,17 @@ class ScreenSessionIntegrationTest {
             pass(s);
             assertEquals(true, lua(s, "for _, w in ipairs(vim.api.nvim_list_wins()) do "
                     + "if vim.fn.win_gettype(w) == 'quickfix' then return true end end return false"), "the list stays open");
+        }
+    }
+
+    /** {@code :help} typed in a text page reaches Eclipse with its topic, and opens no help there. */
+    @Test
+    void helpTypedInATextPageGoesToEclipse() throws Exception {
+        try (ScreenSession s = start(OutputProfile.ARGS)) {
+            s.inputAsync(":help help-context<CR>");
+            waitFor(() -> recorder.helps.size() == 1, "the topic: " + recorder.helps);
+            assertEquals(List.of("help-context"), recorder.helps);
+            assertEquals("", lua(s, "return vim.bo.buftype"), "no help window in the text page");
         }
     }
 }

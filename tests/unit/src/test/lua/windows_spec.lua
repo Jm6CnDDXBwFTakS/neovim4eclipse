@@ -1013,3 +1013,13 @@ t.test("the plug-in's own closes forget the window, though they fire no WinClose
   t.eq(home, vim.api.nvim_get_current_win())
   t.eq({}, t.sent('eclipse_window_closed'))
 end)
+
+t.test("a :helpgrep title's pattern is taken as typed, after the command's name", function()
+  commands()
+  local m = package.loaded['neovim4eclipse.windows']
+  t.eq('tab  page', m.helpgrep_pattern(':silent helpgrep tab  page'), 'runs of spaces kept')
+  t.eq([[a\\b]], m.helpgrep_pattern([[:helpg a\\b]]), 'an abbreviation, and a doubled backslash kept')
+  t.eq('x', m.helpgrep_pattern(':vert helpgrep x'))
+  t.eq('', m.helpgrep_pattern(':vimgrep /helpgrep/ %'), 'another command: none')
+  t.eq('', m.helpgrep_pattern(nil))
+end)

@@ -29,6 +29,8 @@ import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.part.EditorPart;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 
@@ -99,6 +101,16 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
             @Override
             public void window(char key, int count, Point cursor) {
                 EditorSplits.focusFrom(NeovimPageEditor.this, key, count, cursor);
+            }
+
+            @Override
+            public void help(String topic) {
+                // :help in the messages or checkhealth editor: run where the user's help pages are,
+                // in the editing Neovim, whose help window then goes to the help editor.
+                NeovimSession editing = Activator.getDefault().currentSession();
+                if (editing != null) {
+                    editing.helpAsync(topic);
+                }
             }
 
             @Override

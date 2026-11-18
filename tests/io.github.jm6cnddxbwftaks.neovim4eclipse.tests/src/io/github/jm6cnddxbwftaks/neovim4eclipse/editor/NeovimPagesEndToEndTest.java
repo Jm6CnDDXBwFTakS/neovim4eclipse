@@ -370,6 +370,24 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * {@code :help} typed in the messages editor opens the help editor, as if typed in the code:
+     * the messages editor's Neovim has neither the user's help pages nor the help editor's rules.
+     */
+    @Test
+    void helpTypedInTheMessagesEditorOpensTheHelpEditor() {
+        SessionProbe.lua(session, "vim.cmd.echomsg(\"'before help'\") return 0");
+        colon("messages");
+        NeovimPageEditor messages = pageShowing("before help");
+        UiTestSupport.requireKeyboardFocus(messages.canvasForTests(), TIMEOUT_MS);
+        for (char c : ":help help-context".toCharArray()) {
+            key(messages.canvasForTests(), c, c, 0);
+        }
+        key(messages.canvasForTests(), SWT.CR, SWT.CR, 0);
+        NeovimPageEditor help = pageShowing("*help-context*".substring(1, 13));
+        assertEquals("Neovim: help", help.getPartName());
+    }
+
+    /**
      * {@code Ctrl-W} goes both ways by where the editors are: {@code Ctrl-W k} from the help editor
      * below the code reaches the code's editor (the help Neovim has no window above its own), and
      * {@code Ctrl-W j} from the code reaches the help editor again.

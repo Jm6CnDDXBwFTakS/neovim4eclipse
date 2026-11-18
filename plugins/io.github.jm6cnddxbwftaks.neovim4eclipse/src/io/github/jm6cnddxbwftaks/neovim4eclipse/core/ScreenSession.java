@@ -103,6 +103,14 @@ public final class ScreenSession implements AutoCloseable {
          */
         void window(char key, int count);
 
+        /**
+         * {@code :help topic} was typed in a second Neovim that shows text, not help
+         * ({@link LuaScripts#SCREEN_SETUP}): it is not run there, and Eclipse runs it in the editing
+         * Neovim, so the help editor opens. Example: {@code "telescope"}; {@code ""} for
+         * {@code :help} alone.
+         */
+        void help(String topic);
+
         /** The Neovim process ended: {@link #close}, {@code :q} in the page editor, or a crash. Called once. */
         void ended();
     }
@@ -292,6 +300,11 @@ public final class ScreenSession implements AutoCloseable {
                 case "redraw" -> redraw(params);
                 case "eclipse_screen_yank" -> yank(params);
                 case "eclipse_screen_window" -> window(params);
+                case "eclipse_screen_help" -> {
+                    if (!params.isEmpty() && params.get(0) instanceof String topic) {
+                        listener.help(topic);
+                    }
+                }
                 default -> {
                     // nothing else is asked for (a help plug-in's own notifications go nowhere)
                 }

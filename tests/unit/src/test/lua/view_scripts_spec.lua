@@ -147,3 +147,12 @@ t.test("a real plug-in's help page opens as Neovim's help, and its links lead on
   vim.o.runtimepath = before
   vim.fn.delete(copy, 'rf')
 end)
+
+t.test('HELP_HERE runs :help with the topic as given, and shows the error of an unknown one', function()
+  t.eq(true, t.run('HELP_HERE', 'help-context'))
+  t.eq('help', vim.bo.buftype)
+  vim.cmd('helpclose')
+  vim.v.errmsg = ''
+  t.eq(false, t.run('HELP_HERE', 'no-such-topic-anywhere'))
+  t.ok(vim.fn.execute('messages'):find('E149', 1, true) ~= nil, vim.fn.execute('messages'))
+end)
