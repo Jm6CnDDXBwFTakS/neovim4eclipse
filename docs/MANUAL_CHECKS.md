@@ -209,7 +209,7 @@ xattr -l ~/var/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 
 - **On:** any
 - **Launch:** none
-- **Areas:** editor/SearchHighlighter.java, editor/NeovimHighlighter.java, editor/JumpLabelPainter.java, editor/SearchColors.java, editor/ThemeColorSource.java, util/OverlayColors.java, editor/GridCanvas.java, editor/NeovimPage*.java, editor/ScreenPane.java, core/OutputProfile.java, util/ViewText.java, core/HealthCheck.java, editor/NeovimWindowPanel.java, editor/FloatingWindows.java, util/FloatPlacement.java, util/GridSnapshot.java, editor/CompletionMenuPopup.java, util/CompletionMenu.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
+- **Areas:** editor/SearchHighlighter.java, editor/NeovimHighlighter.java, editor/JumpLabelPainter.java, editor/SearchColors.java, editor/ThemeColorSource.java, util/OverlayColors.java, editor/GridCanvas.java, editor/NeovimPage*.java, editor/ScreenPane.java, editor/WindowPane.java, core/OutputProfile.java, util/ViewText.java, core/HealthCheck.java, editor/NeovimWindowPanel.java, editor/FloatingWindows.java, util/FloatPlacement.java, util/GridSnapshot.java, editor/CompletionMenuPopup.java, util/CompletionMenu.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
 
 Whether a color reads well is for a person to judge; the painting itself is tested
 (`SearchHighlighterTest`, `SearchHighlightingEndToEndTest`). The gallery takes the pictures in two
@@ -336,13 +336,14 @@ too.
 
 - **On:** macos
 - **Launch:** checks
-- **Areas:** editor/NeovimPage*.java, editor/ScreenPane.java, editor/SendKeyHandler.java, editor/GridMouse.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/plugin.xml
+- **Areas:** editor/NeovimPage*.java, editor/ScreenPane.java, editor/WindowPane.java, editor/PageCommandsRun.java, editor/SendKeyHandler.java, editor/GridMouse.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/plugin.xml
 
 Everything else about the page editors is tested (`NeovimPagesEndToEndTest`: where they open, the
 error color, the cursor, the background, search, yank and paste, the wheel and a click,
 `:checkhealth neovim4eclipse`, `:help` and `:messages` side by side, `Ctrl-W` both ways,
 `Ctrl-O` passing over them, `q`; on Linux and Windows a real Ctrl+W posted through the system;
-`NeovimPageEditorEndToEndTest`), and their look in both themes is in the gallery (card
+`NeovimPageEditorEndToEndTest`; the messages page as a window of the editing Neovim, with `/`
+over it, `:split`, `:q`, `:e` and typing in the code after it: `MessagesPageEndToEndTest`), and their look in both themes is in the gallery (card
 `sh-colors`). On macOS posting keys needs the Accessibility permission, so the real key is checked
 by hand.
 

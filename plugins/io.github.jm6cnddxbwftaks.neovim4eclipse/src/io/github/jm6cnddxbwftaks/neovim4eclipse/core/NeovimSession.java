@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -46,6 +47,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
@@ -353,6 +355,54 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public int openPageWindow(int bufnr) throws Exception {
         return buffers.openPage(bufnr);
+    }
+
+    /**
+     * Shows {@code text} as a page of the editing Neovim ({@link LuaScripts#PAGE_TEXT}): fills the
+     * page's buffer ({@code neovim4eclipse://messages}), and when {@code win} is no open page window
+     * opens one on it ({@link #openPageWindow}) and draws it ({@link #drawPageWindow}). Then calls
+     * {@code shown} with the window, on the input thread; not at all when Neovim refused. Queued.
+     * Example: {@code :messages} again: the same buffer refilled, the page's window kept.
+     */
+    public void showPageTextAsync(ViewText text, int win, IntConsumer shown) {
+        submit("page " + text.title(), Level.WARNING, () -> {
+            List<List<Object>> highlights = new ArrayList<>();
+            for (ViewText.LineHighlight h : text.highlights()) {
+                highlights.add(List.of(h.line(), h.group()));
+            }
+            String cursor = ViewText.MESSAGES.equals(text.title()) ? "end" : "top";
+            Object answer = await(api.execLua(LuaScripts.PAGE_TEXT, List.of(text.title(), text.lines(), highlights, cursor)));
+            if (!(answer instanceof Number buf)) {
+                return;
+            }
+            int window = buffers.isPageWindow(win) ? win : buffers.openPage(buf.intValue());
+            if (window != EditorWindow.UNKNOWN) {
+                grids.drawPage(window);
+                shown.accept(window);
+            }
+        });
+    }
+
+    /**
+     * Opens another window on page window {@code win}'s buffer (a split of the page: a second
+     * view, each with its own cursor, as {@code :split} gives in Neovim), draws it, and calls
+     * {@code shown} with it on the input thread. Nothing when {@code win} is no page window. Queued.
+     */
+    public void openSecondPageAsync(int win, IntConsumer shown) {
+        submit("second page window", Level.WARNING, () -> {
+            int buf = buffers.pageBuffer(win);
+            int window = buf == EditorWindow.UNKNOWN ? EditorWindow.UNKNOWN : buffers.openPage(buf);
+            if (window != EditorWindow.UNKNOWN) {
+                grids.drawPage(window);
+                shown.accept(window);
+            }
+        });
+    }
+
+    /** Closes page window {@code win} and draws it no more (its editor closed; {@link DocumentBuffers#closePage}). Queued. */
+    public void closePageWindowAsync(int win) {
+        stopDrawingPageWindow(win);
+        submit("close page window " + win, Level.FINE, () -> buffers.closePage(win));
     }
 
     /** Puts a page window's own buffer back into it ({@link DocumentBuffers#restorePage}). Queued. */

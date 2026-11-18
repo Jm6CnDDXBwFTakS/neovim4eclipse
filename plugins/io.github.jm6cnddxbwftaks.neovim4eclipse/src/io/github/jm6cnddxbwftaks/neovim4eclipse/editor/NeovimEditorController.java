@@ -617,7 +617,12 @@ public final class NeovimEditorController implements AutoCloseable {
 
         @Override
         public void sendSize(int columns, int rows) {
-            session.setEditorSizeAsync(columns, rows);
+            // Not while a page shown from the editing Neovim has the focus: Neovim's screen is the
+            // page's then, and this editor sends its size again when it takes the focus back
+            // (takeFocusBack). Example: a text font change resizes both; the page keeps the screen.
+            if (session.focusedPage() == EditorWindow.UNKNOWN) {
+                session.setEditorSizeAsync(columns, rows);
+            }
         }
 
         @Override
@@ -1086,6 +1091,24 @@ public final class NeovimEditorController implements AutoCloseable {
             shownMessage = info.message();
             messageLine.show(info.message(), info.error());
         });
+    }
+
+    /**
+     * This editor, still attached, takes the focus back from a page shown from a window of the
+     * editing Neovim ({@code WindowPane}): the focus events come here again, Neovim enters this
+     * editor's window, Neovim's screen takes this editor's size again, and the mode and status
+     * bar are read anew. Example: a click from the messages page back into the code. UI thread.
+     */
+    void takeFocusBack() {
+        if (closed) {
+            return;
+        }
+        session.focus(focusTarget);
+        session.focusAttachedAsync();
+        if (viewport != null) {
+            viewport.resendSize();
+        }
+        session.refreshStatusAsync();
     }
 
     /**

@@ -935,7 +935,7 @@ group's (`IncSearch`) background and text color, read with `nvim_get_hl`, sent a
 Design: [SPLITS.md](design/SPLITS.md). Tests: `windows_spec.lua`, `WindowLayoutTest`,
 `SplitsEndToEndTest`.
 
-### 3.2g `:messages`: a second Neovim in an editor of its own
+### 3.2g `:messages`: a window of the editing Neovim in an editor of its own
 
 The user has had a few errors and types `:messages` and Enter in an attached editor.
 
@@ -947,26 +947,28 @@ The user has had a few errors and types `:messages` and Enter in an attached edi
    editor Neovim is attached to and its colors, and opens the messages editor,
    `page.openEditor(new NeovimPageInput(MESSAGES), NeovimPageEditor.ID, false)`. An editor need not
    be a text editor (section 1.3): `plugin.xml` declares this one under `org.eclipse.ui.editors`
-   with no file extension, so Eclipse offers it for no file. Its input is equal by kind, so the
-   next `:messages` finds the same editor. The first page editor moves into a new stack below the
-   code (`util/PagePlacement`, `EditorSplits.intoNewStack`, the same model steps as `:split`).
-3. The editor's pane (`editor/ScreenPane`, inside `editor/NeovimPageEditor`) has no Neovim yet, so
-   a background job starts one: `core/ScreenSession.start` runs the same program with
-   `--clean -n --cmd "set nowrite nomodeline"` and the output profile's `-M`, attaches as a UI
-   without `ext_multigrid` (section 2.4: the whole screen is one grid), and checks, by asking
-   Neovim, that every way to write a file is off. It also turns on Neovim's own message UI, `ui2`,
-   so that nothing in that Neovim can stop at "Press ENTER" and hold back the calls that follow
-   (section 2.6).
-4. `core/OutputProfile.show` sends the text with `LuaScripts.SCREEN_SHOW_TEXT`: a scratch buffer, the
-   highlights as extmarks, the cursor on the last line. Neovim redraws; `util/ScreenGrid` keeps
-   the cells, and at each `flush` a `GridSnapshot` reaches the pane's `GridCanvas`, which paints it
-   in the text font and the editor's colors.
-5. The messages editor has the keyboard. `/E486` searches in the second Neovim; `yy` there sends
-   `eclipse_screen_yank`, and the editing Neovim gets the line in its unnamed register. `Ctrl-W k`
-   finds no window of that Neovim's own above (`winnr('k')` is the current one), so it sends
-   `eclipse_screen_window("k", 0)`, and `EditorSplits.focusFrom` takes Eclipse to the code above,
-   by the same rule as a code editor's `Ctrl-W`. `q` quits the second Neovim; its `VimLeavePre`
-   tells Eclipse first, so the end is expected, and the editor closes.
+   with no file extension, so Eclipse offers it for no file. The next `:messages` finds the
+   messages editor used last (`NeovimPageEditor.lastUsed`). The first page editor moves into a new
+   stack below the code (`util/PagePlacement`, `EditorSplits.intoNewStack`, the same model steps
+   as `:split`).
+3. The editor's pane is an `editor/WindowPane`: the page is a window of the editing Neovim, the
+   one behind the code. `NeovimSession.showPageTextAsync` fills the page's buffer
+   (`LuaScripts.PAGE_TEXT`: `neovim4eclipse://messages`, a scratch buffer no file has, read-only
+   between fills, the highlights as extmarks) and opens a window on it
+   (`WINDOWS.open_page`: alone in a hidden tabpage, as a text editor's window is, opened with
+   autocommands off and given a page's options), then draws it: at each `flush` `util/Grids`
+   gives the window's `GridSnapshot` to the pane's `GridCanvas`.
+4. The messages editor has the keyboard, so the page takes the focus (section 3.2a's attach in
+   reverse: `NeovimSession.focusPageAsync`). Neovim enters the page's window, and its `BufEnter`
+   is known as the focus moving (`util/EnterDecision`); the session's focus events
+   (`core/FocusRouter`) go to the pane: `/` opens the `:` box over the page, not over the code.
+   The code's editor stays attached: its document and caret do not move.
+5. `/E486` searches in the editing Neovim; `yy` fills its unnamed register, so `p` in the code
+   pastes it, with no forwarding: it is one Neovim. `Ctrl-W k` sends a window command whose origin
+   is the page's window (`HostCommand.origin`), so it is the page's (`util/CommandOrigin`), and
+   `editor/PageCommandsRun` runs it with the page as the current editor: Eclipse goes to the code
+   above. The code, activated, takes the focus back (`NeovimEditorController.takeFocusBack`). `q`
+   runs `:Eclipse quit` from the page's window, which closes the page editor and its window.
 
 `:checkhealth` takes another road to its editor: its report opens in a Neovim window Eclipse
 cannot show, and the `WinNew` net (`LuaScripts.WINDOWS`) reads the lines, closes the window, wipes

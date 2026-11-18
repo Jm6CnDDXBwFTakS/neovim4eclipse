@@ -29,6 +29,7 @@ import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
@@ -145,30 +146,81 @@ final class EditorSplits {
      * says why in the editor's message line, as Vim shows an error.
      */
     static void run(ITextEditor editor, WindowCommand command) {
+        run(Origin.of(editor), command);
+    }
+
+    /**
+     * The editor a window command was typed in, as the commands need it: a text editor
+     * ({@link #of}), or a page editor shown from a window of the editing Neovim, which has no
+     * text but is an editor of the layout all the same ({@code :new} beside it, {@code Ctrl-W l}
+     * from it, its stack sized). Every call is on the UI thread.
+     */
+    interface Origin {
+        /** The editor's part in the layout (a multi-page editor's, for its text page). */
+        IEditorPart part();
+
+        /** Shows Vim's error for a command that could not be carried out, where the user typed it. */
+        void error(String message);
+
+        /** The cursor in display pixels, whose row or column {@code Ctrl-W h j k l} keep. */
+        Point cursor();
+
+        /** The widget the editor shows its text or grid in, whose line and character sizes {@code Ctrl-W +} counts in. */
+        Canvas canvas();
+
+        /** {@code :new}: a new untitled editor, in this editor's project. */
+        void newUntitled();
+
+        /** The folder a relative file name is taken from ({@code :vsplit b.txt}). */
+        Path folder();
+
+        /** {@code :tabclose} of this editor's own tab. */
+        void closeSelf(boolean force);
+
+        /** A text editor as the origin: its part, its message line, its caret, its project. */
+        static Origin of(ITextEditor editor) {
+            return new Origin() {
+                @Override public IEditorPart part() { return EditorAttachManager.getInstance().workbenchPartOf(editor); }
+                @Override public void error(String message) { HostCommands.showError(editor, message); }
+                @Override public Point cursor() { return caretOnScreen(editor); }
+                @Override public Canvas canvas() { return (StyledText) editor.getAdapter(Control.class); }
+                @Override public void newUntitled() { EclipseFileCommands.newUntitled(editor); }
+                @Override public Path folder() { return EclipseFileCommands.windowFolder(editor); }
+                @Override public void closeSelf(boolean force) { EclipseFileCommands.close(editor, force); }
+                @Override public String toString() { return String.valueOf(editor); }
+            };
+        }
+    }
+
+    /**
+     * Carries out {@code command}, typed in {@code origin}. A command that cannot be carried out
+     * says why where it was typed, as Vim shows an error.
+     */
+    static void run(Origin origin, WindowCommand command) {
         if (command == null) {
-            HostCommands.showError(editor, "window: not a window command");
+            origin.error("window: not a window command");
             return;
         }
-        IEditorPart part = EditorAttachManager.getInstance().workbenchPartOf(editor);
-        LOG.fine(() -> "Window command " + command + " typed in " + editor + " (part " + part + ")");
+        IEditorPart part = origin.part();
+        LOG.fine(() -> "Window command " + command + " typed in " + origin + " (part " + part + ")");
         try {
             switch (command.action()) {
-                case SPLIT -> split(editor, part, command);
+                case SPLIT -> split(origin, part, command);
                 case ONLY -> only(part);
-                case FOCUS -> focus(editor, part, command);
-                case SIZE -> size(editor, part, command);
-                case EXCHANGE -> exchange(editor, part, command.count());
-                case ROTATE -> rotate(editor, part, command.key() == 'r', command.count());
-                case TAB -> tab(editor, part, command);
-                case TO_TAB -> toTab(editor, part);
-                case TAB_CLOSE -> tabClose(editor, part, command);
-                case TAB_ONLY -> tabOnly(editor, part, command);
+                case FOCUS -> focus(origin, part, command);
+                case SIZE -> size(origin, part, command);
+                case EXCHANGE -> exchange(origin, part, command.count());
+                case ROTATE -> rotate(origin, part, command.key() == 'r', command.count());
+                case TAB -> tab(origin, part, command);
+                case TO_TAB -> toTab(origin, part);
+                case TAB_CLOSE -> tabClose(origin, part, command);
+                case TAB_ONLY -> tabOnly(origin, part, command);
             }
         } catch (IllegalStateException e) {
-            HostCommands.showError(editor, e.getMessage()); // Vim's own error (E443)
+            origin.error(e.getMessage()); // Vim's own error (E443)
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Window command " + command + " failed", e);
-            HostCommands.showError(editor, "Window command failed: "
+            origin.error("Window command failed: "
                     + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
         }
     }
@@ -187,17 +239,17 @@ final class EditorSplits {
      * Vim's new window takes half of the current one: so does the new stack. The new editor is the
      * active one, and Neovim attaches to it, with a window of its own.
      */
-    private static void split(ITextEditor editor, IEditorPart from, WindowCommand command) {
+    private static void split(Origin origin, IEditorPart from, WindowCommand command) {
         IWorkbenchPage page = from.getSite().getPage();
         MPart fromPart = from.getSite().getService(MPart.class);
         MPartStack fromStack = stackOf(fromPart);
         EModelService models = from.getSite().getService(EModelService.class);
         if (fromStack == null || models == null) {
-            HostCommands.showError(editor, "Cannot split: this editor is not in an editor stack");
+            origin.error("Cannot split: this editor is not in an editor stack");
             return;
         }
         MStackElement fromTab = fromStack.getSelectedElement(); // the editor, or Eclipse's halves around it
-        IEditorPart opened = openFor(editor, from, command);
+        IEditorPart opened = openFor(origin, from, command);
         if (opened == null || opened == from) {
             return; // not opened: the reason is shown already
         }
@@ -274,7 +326,7 @@ final class EditorSplits {
     }
 
     /** {@link EModelService}'s side for a split's {@link WindowCommand.Where}. */
-    private static int side(WindowCommand.Where where) {
+    static int side(WindowCommand.Where where) {
         return switch (where) {
             case ABOVE -> EModelService.ABOVE;
             case BELOW -> EModelService.BELOW;
@@ -297,7 +349,7 @@ final class EditorSplits {
      *   <li>{@code :new}: a new untitled editor, as {@code :enew} opens.</li>
      * </ul>
      */
-    private static IEditorPart openFor(ITextEditor editor, IEditorPart from, WindowCommand command) {
+    private static IEditorPart openFor(Origin origin, IEditorPart from, WindowCommand command) {
         IWorkbenchPage page = from.getSite().getPage();
         switch (command.target()) {
             case SAME -> {
@@ -305,23 +357,23 @@ final class EditorSplits {
                     from.getSite().getService(IHandlerService.class).executeCommand(CLONE_COMMAND, null);
                 } catch (Exception e) {
                     LOG.log(Level.WARNING, "Clone failed", e);
-                    HostCommands.showError(editor, "Cannot split: Window > Editor > Clone failed");
+                    origin.error("Cannot split: Window > Editor > Clone failed");
                     return null;
                 }
             }
-            case NEW -> EclipseFileCommands.newUntitled(editor);
+            case NEW -> origin.newUntitled();
             case FILE -> {
                 // Usually a full path already: Neovim expanded the name as its own :split would.
                 Path home = Path.of(System.getProperty("user.home"));
-                Path folder = EclipseFileCommands.windowFolder(editor);
+                Path folder = origin.folder();
                 Path file = EditPath.resolve(command.file(), home, folder);
                 if (file == null) {
-                    HostCommands.showError(editor, "Can't find file \"" + command.file() + "\"");
+                    origin.error("Can't find file \"" + command.file() + "\"");
                     return null;
                 }
                 String shown = EditPath.shown(file, home, folder);
                 if (Files.isDirectory(file)) {
-                    HostCommands.showError(editor, "\"" + shown + "\" is a directory");
+                    origin.error("\"" + shown + "\" is a directory");
                     return null;
                 }
                 // A dangling link is missing too, as for :e (Files.exists follows links).
@@ -339,8 +391,8 @@ final class EditorSplits {
      * editor tab of this stack, as {@link #openFor} opens a split's editor (a new one even when an
      * editor has the file open, as a tab page of its own would show it), and leaves it there.
      */
-    private static void tab(ITextEditor editor, IEditorPart from, WindowCommand command) {
-        IEditorPart opened = openFor(editor, from, command);
+    private static void tab(Origin origin, IEditorPart from, WindowCommand command) {
+        IEditorPart opened = openFor(origin, from, command);
         if (opened != null && opened != from) {
             activate(from.getSite().getPage(), opened);
         }
@@ -351,14 +403,14 @@ final class EditorSplits {
      * its split, as a tab of the first other stack on screen (top left), and stays the active one.
      * Alone on screen it is a tab already, and nothing changes.
      */
-    private static void toTab(ITextEditor editor, IEditorPart part) {
+    private static void toTab(Origin origin, IEditorPart part) {
         Picture picture = Picture.of(part);
         if (picture == null || picture.current < 0) {
             return;
         }
         MPartStack own = picture.stackOf(picture.current);
         if (own == null) {
-            HostCommands.showError(editor, "Eclipse's split halves cannot move to another stack");
+            origin.error("Eclipse's split halves cannot move to another stack");
             return;
         }
         MPartStack target = null;
@@ -384,7 +436,7 @@ final class EditorSplits {
      * document ({@link EclipseFileCommands#isKeptByAnotherEditor}; this editor's own tab goes
      * through {@link EclipseFileCommands#close}).
      */
-    private static void tabClose(ITextEditor editor, IEditorPart part, WindowCommand command) {
+    private static void tabClose(Origin origin, IEditorPart part, WindowCommand command) {
         MPartStack stack = stackOf(part.getSite().getService(MPart.class));
         if (stack == null) {
             return;
@@ -393,18 +445,18 @@ final class EditorSplits {
         int index = tabs.indexOf(stack.getSelectedElement());
         int target = TabNavigation.closeTarget(command.key(), command.count(), index, tabs.size());
         if (target < 0) {
-            HostCommands.showError(editor, "E16: Invalid range");
+            origin.error("E16: Invalid range");
             return;
         }
         if (target == index) {
-            EclipseFileCommands.close(editor, command.force());
+            origin.closeSelf(command.force());
             return;
         }
         IWorkbenchPage page = part.getSite().getPage();
         List<IEditorPart> closing = madeEditorsOf(page, partsOf(part, tabs.get(target)));
         if (closing.isEmpty()) {
             if (!isUnmade(tabs.get(target))) {
-                HostCommands.showError(editor, "Cannot close that tab: it is not an editor");
+                origin.error("Cannot close that tab: it is not an editor");
                 return;
             }
             closeUnmade(part, List.of(tabs.get(target)));
@@ -447,7 +499,7 @@ final class EditorSplits {
      * ({@link EclipseFileCommands#isKeptByAnotherEditor}). {@code :tabonly!}, which would discard
      * them all at once, is refused in Neovim.
      */
-    private static void tabOnly(ITextEditor editor, IEditorPart part, WindowCommand command) {
+    private static void tabOnly(Origin origin, IEditorPart part, WindowCommand command) {
         MPartStack stack = stackOf(part.getSite().getService(MPart.class));
         if (stack == null) {
             return;
@@ -457,7 +509,7 @@ final class EditorSplits {
         int keep = command.key() == '.' ? index
                 : TabNavigation.closeTarget(command.key(), command.count(), index, tabs.size());
         if (keep < 0) {
-            HostCommands.showError(editor, "E16: Invalid range");
+            origin.error("E16: Invalid range");
             return;
         }
         IWorkbenchPage page = part.getSite().getPage();
@@ -576,8 +628,8 @@ final class EditorSplits {
 
     // ---- Ctrl-W h j k l w W t b p ----
 
-    private static void focus(ITextEditor editor, IEditorPart part, WindowCommand command) {
-        focusFrom(part, command.key(), command.count(), caretOnScreen(editor));
+    private static void focus(Origin origin, IEditorPart part, WindowCommand command) {
+        focusFrom(part, command.key(), command.count(), origin.cursor());
     }
 
     /**
@@ -617,9 +669,9 @@ final class EditorSplits {
 
     // ---- Ctrl-W = + - < > _ |, :resize ----
 
-    private static void size(ITextEditor editor, IEditorPart part, WindowCommand command) {
+    private static void size(Origin origin, IEditorPart part, WindowCommand command) {
         Picture picture = Picture.of(part);
-        StyledText text = (StyledText) editor.getAdapter(Control.class);
+        Canvas text = origin.canvas();
         if (picture == null || picture.current < 0 || text == null || text.isDisposed()) {
             return;
         }
@@ -631,7 +683,7 @@ final class EditorSplits {
         } finally {
             gc.dispose();
         }
-        WindowLayout.Metrics metrics = new WindowLayout.Metrics(text.getLineHeight(), charWidth, area.height, area.width);
+        WindowLayout.Metrics metrics = new WindowLayout.Metrics(OverlayFrame.lineHeight(text), charWidth, area.height, area.width);
         boolean heights = "+-_".indexOf(command.key()) >= 0;
         // A window keeps one line (or character) of text, with its tab row and rulers around it.
         WindowLayout.Rect window = picture.boundsOf(picture.current);
@@ -666,7 +718,7 @@ final class EditorSplits {
      * Vim's {@code Ctrl-W x}: this editor and the next one in its row or column change places; the
      * cursor stays where it was on screen, so the other editor is then the active one, as in Vim.
      */
-    private static void exchange(ITextEditor editor, IEditorPart part, int count) {
+    private static void exchange(Origin origin, IEditorPart part, int count) {
         Picture picture = Picture.of(part);
         if (picture == null || picture.current < 0) {
             return;
@@ -678,7 +730,7 @@ final class EditorSplits {
         MPartStack here = picture.stackOf(picture.current);
         MPartStack there = picture.stackOf(other);
         if (here == null || there == null) {
-            HostCommands.showError(editor, "Eclipse's split halves cannot change places");
+            origin.error("Eclipse's split halves cannot change places");
             return;
         }
         EModelService models = part.getSite().getService(EModelService.class);
@@ -687,7 +739,7 @@ final class EditorSplits {
     }
 
     /** Vim's {@code Ctrl-W r} and {@code R}: the editors of this row or column move one place on. */
-    private static void rotate(ITextEditor editor, IEditorPart part, boolean down, int count) {
+    private static void rotate(Origin origin, IEditorPart part, boolean down, int count) {
         Picture picture = Picture.of(part);
         if (picture == null || picture.current < 0) {
             return;
@@ -704,7 +756,7 @@ final class EditorSplits {
             MPartStack place = picture.stackOf(((WindowLayout.Window) parent.children().get(i)).id());
             MPartStack source = picture.stackOf(order.get(i));
             if (place == null || source == null) {
-                HostCommands.showError(editor, "Eclipse's split halves cannot change places");
+                origin.error("Eclipse's split halves cannot change places");
                 return;
             }
             places.add(place);

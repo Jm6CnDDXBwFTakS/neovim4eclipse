@@ -234,6 +234,7 @@ public final class EditorAttachManager {
             }
             if (partRef instanceof IEditorReference eref) {
                 EditorSplits.activated(eref.getEditor(false)); // the editor before is Ctrl-W p's
+                takeFocusFromPage(session, eref.getEditor(false));
             }
             maybeAutoAttach(partRef);
             ToggleButtonRefresh.request(); // the button is about the editor in front, Neovim or not
@@ -380,6 +381,22 @@ public final class EditorAttachManager {
      * Attached to the new half, Neovim would work there while Eclipse takes the first as current,
      * and {@code Ctrl-W j} would start from the wrong half.
      */
+    /**
+     * The attached text editor activated again while a page shown from the editing Neovim had the
+     * focus (a click back from the messages page): it takes the focus back, still attached, with no
+     * new attach ({@link NeovimEditorController#takeFocusBack}). Another editor activated attaches as
+     * always, and its attach takes the focus from any page ({@code DocumentBuffers.show}).
+     */
+    private void takeFocusFromPage(NeovimSession session, IEditorPart activated) {
+        NeovimEditorController controller;
+        synchronized (this) {
+            controller = activated != null && activated == attachedPart ? activeController : null;
+        }
+        if (session != null && controller != null && session.focusedPage() != EditorWindow.UNKNOWN) {
+            controller.takeFocusBack();
+        }
+    }
+
     private void maybeAutoAttach(IWorkbenchPartReference partRef) {
         if (!autoAttach) {
             return;

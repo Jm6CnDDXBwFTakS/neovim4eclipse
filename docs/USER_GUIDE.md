@@ -611,11 +611,11 @@ window is an Eclipse editor.
   window; the others as tabs beside it, so the code is split only once. Running a command again
   brings its editor to the front and shows the new content there, wherever you moved it. Drag it
   anywhere in the editor area, as any editor.
-- **What you see:** Neovim's own screen, from a second Neovim the plug-in starts for each page
-  editor. The messages are in order, the newest last and the cursor on it, errors in Neovim's error
-  color and warnings in its warning color. The report is colored as Neovim colors `:checkhealth`,
-  its OK, WARNING and ERROR lines included. Its look is Neovim's default colorscheme on your
-  editor's background, in Eclipse's text font; your mappings are not there.
+- **What you see:** for `:help` and `:checkhealth`, Neovim's own screen, from a second Neovim the
+  plug-in starts for each page editor; its look is Neovim's default colorscheme on your editor's
+  background, in Eclipse's text font, and your mappings are not there. The report is colored as
+  Neovim colors `:checkhealth`, its OK, WARNING and ERROR lines included. `:messages` is a window
+  of your own Neovim, the one behind your code (next section).
 - **It takes the keyboard**, as Vim's own `:help`, `:messages` and `:checkhealth` do. Every key is
   Neovim's: `/` searches, `n` goes on, `y` yanks into your Neovim's register of the same name (so
   `p` in an editor pastes it; a plain `yy` fills the unnamed register, and the clipboard when your
@@ -630,7 +630,7 @@ window is an Eclipse editor.
   Vim's jumps never go into a help window. Inside a page editor they are its Neovim's own.
 - **Closing it:** `q` or `:q`, or its tab's close button. The next command opens it again. Page
   editors are not brought back when Eclipse starts again: their Neovim ended with Eclipse.
-- **`:messages` and `:checkhealth` get text only:** their second Neovim gets the lines, never a
+- **`:checkhealth` gets text only:** its second Neovim gets the lines, never a
   file name, and it starts without your config or plug-ins (`--clean`), in a folder of the
   plug-in's own, with writing turned off. Nothing it shows and nothing it does by itself writes a
   file, so it cannot get in the way of your editors; a command you type there that writes on purpose
@@ -640,6 +640,34 @@ window is an Eclipse editor.
 - **Long messages** in a page editor itself (a refusal after `:w`, say) do not stop at "Press
   ENTER": they are cut to the first lines with a `[+N]` marker, and `g<` shows them all (Neovim's
   `ui2`).
+
+### The messages editor (`:messages`)
+
+`:messages` opens a window of your own Neovim, the one behind your code, in an editor of its own:
+the message history, in order, the newest last and the cursor on it, errors in your colorscheme's
+error color and warnings in its warning color. Being the same Neovim as your code's:
+
+- **Your colors and mappings are there**, and so are your registers and your search history: `y`
+  in the messages and `p` in the code, `/` in the messages and `n` in the code.
+- **The `:` box, messages and floating windows** (which-key's panel, say) show over the messages
+  editor while it has the keyboard, as over your code. The status bar shows Neovim's mode and status
+  line for it.
+- **`:split`, `:vsplit`, `Ctrl-W s`, `Ctrl-W v`** in it give a second messages editor in a tab group
+  of its own: two views of the one history, each with its own cursor and scroll position, as two
+  Neovim windows on one buffer. `:messages` again shows the new history in both, and brings the one
+  you used last to the front.
+- **`:new`, `:vnew`, `Ctrl-W n`** open a new untitled text editor beside it; **`:e file`** opens the
+  file in an editor, in the tab group of the code you came from: the messages editor keeps its text.
+  `gf` on a path in the messages does the same.
+- **It cannot be changed or written:** it is a scratch buffer of your Neovim
+  (`neovim4eclipse://messages`) that no file has, read-only; `:w` there gets Neovim's own E382, and
+  `i` changes nothing. `:wq` is refused the same way; `:x` closes it, as nothing changed.
+- **`gd`, `K` and the `gr*` keys** are Neovim's own there, not Eclipse's, since the messages are no
+  code; `gt` and `gT` still move among the editor tabs.
+- **Closing it:** `q` or `:q` closes that messages editor; **Restart Neovim** closes every messages
+  editor, as their windows belong to the Neovim that ended.
+- **In the background**, behind another editor, it keeps what it showed: Neovim draws a window only
+  while it is in front, and it is drawn anew when you come back to it.
 
 <a id="help-in-the-view-help"></a>
 

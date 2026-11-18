@@ -12,6 +12,7 @@ import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PartInitException;
@@ -69,7 +70,7 @@ public final class NeovimPageOpener {
         }
         PageKind kind = PageKind.of(content);
         NeovimPageInput input = new NeovimPageInput(kind);
-        IEditorPart open = page.findEditor(input);
+        IEditorPart open = kind == PageKind.MESSAGES ? openMessages(page) : page.findEditor(input);
         IEditorPart another = anotherPage(page, kind);
         PagePlacement placement = PagePlacement.of(open != null, another != null, from != null);
         try {
@@ -104,6 +105,25 @@ public final class NeovimPageOpener {
         }
         IEditorPart active = page.getActiveEditor();
         return active instanceof NeovimPageEditor ? null : active;
+    }
+
+    /**
+     * The messages editor to show {@code :messages} in: the one used last, else any one open (a
+     * split's other half), else {@code null}. All of them show the one messages buffer, so filling
+     * it shows the new text in each.
+     */
+    private static IEditorPart openMessages(IWorkbenchPage page) {
+        NeovimPageEditor last = NeovimPageEditor.lastUsed(PageKind.MESSAGES);
+        if (last != null && last.getSite().getPage() == page) {
+            return last;
+        }
+        for (IEditorReference reference : page.getEditorReferences()) {
+            if (NeovimPageEditor.ID.equals(reference.getId()) && reference.getEditor(false) instanceof NeovimPageEditor editor
+                    && editor.kind() == PageKind.MESSAGES) {
+                return editor;
+            }
+        }
+        return null;
     }
 
     /** An open page editor of another kind than {@code kind}, or {@code null}. */

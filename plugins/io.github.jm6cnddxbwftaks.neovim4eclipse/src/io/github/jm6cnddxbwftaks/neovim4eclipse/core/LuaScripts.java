@@ -1370,6 +1370,11 @@ final class LuaScripts {
                 vim.api.nvim_win_call(w, function()
                   vim.cmd('clearjumps') -- the current window's jumps are another editor's
                 end)
+                -- Where PAGE_TEXT puts the cursor of the page's windows ("end": on the newest
+                -- message): a window opened after the text was filled gets it too.
+                if vim.b[buf].neovim4eclipse_page_cursor == 'end' then
+                  pcall(vim.api.nvim_win_set_cursor, w, { vim.api.nvim_buf_line_count(buf), 0 })
+                end
                 for name, value in pairs(PAGE_OPTIONS) do
                   vim.wo[w][name] = value
                 end

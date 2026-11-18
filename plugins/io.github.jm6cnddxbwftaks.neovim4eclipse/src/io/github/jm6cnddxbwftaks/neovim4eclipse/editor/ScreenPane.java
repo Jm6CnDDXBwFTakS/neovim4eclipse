@@ -67,7 +67,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
  * passed on with {@code asyncExec}. Starting and closing the second Neovim blocks, so both run in a
  * background job, never on the UI thread.
  */
-final class ScreenPane {
+final class ScreenPane implements PagePane {
 
     /** What the part holding the pane does for it. Every call is on the UI thread. */
     interface Host {
@@ -181,12 +181,14 @@ final class ScreenPane {
     }
 
     /** The canvas the screen is drawn on: for the host's focus and key context, and for tests. */
-    GridCanvas canvas() {
+    @Override
+    public GridCanvas canvas() {
         return canvas;
     }
 
     /** Gives the canvas the keyboard. */
-    void setFocus() {
+    @Override
+    public void setFocus() {
         if (!canvas.isDisposed()) {
             canvas.setFocus();
         }
@@ -357,7 +359,8 @@ final class ScreenPane {
      * A Vim key Eclipse would have taken for a shortcut, from the plug-in's key binding
      * ({@link SendKeyHandler}): {@code <C-w>}, typed in the pane. UI thread.
      */
-    void sendKey(String key) {
+    @Override
+    public void sendKey(String key) {
         if (screen != null) {
             screen.inputAsync(key);
         }
@@ -393,7 +396,8 @@ final class ScreenPane {
     }
 
     /** Closes the second Neovim, in the background. UI thread; the host calls it when it is disposed. */
-    void dispose() {
+    @Override
+    public void dispose() {
         disposed = true;
         JFaceResources.getFontRegistry().removeListener(fontListener);
         ScreenSession running = screen;

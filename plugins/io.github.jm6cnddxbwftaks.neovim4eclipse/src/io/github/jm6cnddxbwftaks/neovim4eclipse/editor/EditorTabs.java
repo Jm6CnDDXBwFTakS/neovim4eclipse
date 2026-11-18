@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -47,15 +48,23 @@ final class EditorTabs {
      * @return {@code false} if the tabs could not be found (nothing changed)
      */
     static boolean go(ITextEditor editor, TabNavigation.Action action, int count) {
+        // A multi-page editor (e.g. the POM editor) is the tab; the attached text editor is a page in it.
+        return go(EditorAttachManager.getInstance().workbenchPartOf(editor), message -> HostCommands.showError(editor, message),
+                action, count);
+    }
+
+    /**
+     * The same from any editor's tab {@code tab}, a page editor's too ({@code gt} in the messages
+     * page), with {@code error} showing a failure where the command was typed.
+     */
+    static boolean go(IEditorPart tab, Consumer<String> error, TabNavigation.Action action, int count) {
         try {
-            // A multi-page editor (e.g. the POM editor) is the tab; the attached text editor is a page in it.
-            IEditorPart tab = EditorAttachManager.getInstance().workbenchPartOf(editor);
             IWorkbenchPartSite site = tab.getSite();
             MPart current = site.getService(MPart.class);
             EPartService partService = site.getService(EPartService.class);
             if (current == null || partService == null || current.getParent() == null) {
                 LOG.fine("No E4 model for the editor's tab; tab command ignored");
-                HostCommands.showError(editor, "Cannot switch tabs from this editor");
+                error.accept("Cannot switch tabs from this editor");
                 return false;
             }
             List<MPart> tabs = visibleParts(current.getParent());
@@ -67,7 +76,7 @@ final class EditorTabs {
             return true;
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Tab command " + action + " failed", e);
-            HostCommands.showError(editor, "Switching tabs failed: " + e.getMessage());
+            error.accept("Switching tabs failed: " + e.getMessage());
             return false;
         }
     }

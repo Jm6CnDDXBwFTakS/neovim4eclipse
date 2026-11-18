@@ -1129,6 +1129,8 @@ t.test("q in the page's window asks Eclipse to close the page, naming the window
   vim.api.nvim_set_current_win(win)
   page_text({ 'one', 'two', 'three', 'four' }, {}, 'end')
   t.eq(4, vim.api.nvim_win_get_cursor(win)[1], ':messages again: the cursor on the newest message')
+  local second = open_page(buf)
+  t.eq(4, vim.api.nvim_win_get_cursor(second)[1], 'a window opened after the fill: on the newest message too')
   t.forget()
   t.type('q')
   local sent = t.sent('eclipse_command')

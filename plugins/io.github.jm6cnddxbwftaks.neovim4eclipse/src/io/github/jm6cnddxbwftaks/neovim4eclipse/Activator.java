@@ -16,6 +16,8 @@ import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.util.IPropertyChangeListener;
+import org.eclipse.swt.widgets.Display;
+import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
@@ -25,6 +27,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.HealthCheck;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ClipboardBridge;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.EditorAttachManager;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimPageEditor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimPageOpener;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolderExit;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolders;
@@ -295,6 +298,9 @@ public class Activator extends AbstractUIPlugin {
      */
     private void resetSession() {
         EditorAttachManager manager = EditorAttachManager.getInstance();
+        if (PlatformUI.isWorkbenchRunning() && Display.getCurrent() != null) {
+            NeovimPageEditor.closeEditingPages(PlatformUI.getWorkbench()); // their windows go with this Neovim
+        }
         manager.detachQuietly();
         shutdownSession();
         manager.attachActiveEditor();

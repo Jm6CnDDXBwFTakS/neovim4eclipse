@@ -12,6 +12,16 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- **`:messages` is a window of your own Neovim**, the one behind your code, not a second Neovim:
+  your colors, mappings, registers and search history are there (`y` in the messages and `p` in the
+  code), the `:` box and messages show over it, and the status bar shows its mode. `:split` in it
+  gives a second view of the history in a tab group of its own, `:e file` and `gf` open the file in
+  an editor beside your code, `:new` opens an untitled editor beside it, and `q` closes it. It
+  cannot be changed or written. Restart Neovim closes it
+  ([The messages editor](docs/USER_GUIDE.md#the-messages-editor-messages)).
+
 ## [0.2.29] - 2026-11-19
 
 ### Fixed

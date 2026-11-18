@@ -217,6 +217,38 @@ final class DocumentBuffers {
         return n.intValue();
     }
 
+    /**
+     * Closes page window {@code win} (its editor closed), quietly ({@link LuaScripts#CLOSE_WINDOW}),
+     * and when it had the focus gives the focus back to the attached window. The page's buffer stays
+     * for the page's other windows (a split's other half) and the next {@code :messages}.
+     */
+    void closePage(int win) throws Exception {
+        if (pageWindows.remove(win) == null) {
+            return;
+        }
+        boolean focused = focusedPage == win;
+        if (focused) {
+            focusedPage = EditorWindow.UNKNOWN;
+        }
+        Object answer = await(api.execLua(LuaScripts.CLOSE_WINDOW, List.of(String.valueOf(win), String.valueOf(attachedBufnr))));
+        WithHome<Number> closed = WithHome.of("CLOSE_WINDOW", answer, Number.class);
+        boolean attachedHome = attachedWin == homeWin;
+        homeWin = closed.first().intValue();
+        if (attachedHome) {
+            attachedWin = homeWin;
+        }
+        adoptHome(closed.homeBuf());
+        if (focused) {
+            returnToAttached(); // the close left Neovim in the home window
+        }
+    }
+
+    /** The buffer of page window {@code win}, or {@link EditorWindow#UNKNOWN} when it is no page's. */
+    int pageBuffer(int win) {
+        Integer buf = pageWindows.get(win);
+        return buf == null ? EditorWindow.UNKNOWN : buf;
+    }
+
     /** Puts the page's own buffer back into its window {@code win} ({@link LuaScripts#RESTORE_PAGE_WINDOW}). */
     void restorePage(int win) throws Exception {
         await(api.execLua(LuaScripts.RESTORE_PAGE_WINDOW, List.of(String.valueOf(win))));

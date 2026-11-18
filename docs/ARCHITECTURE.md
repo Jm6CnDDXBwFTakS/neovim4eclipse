@@ -410,10 +410,12 @@ applied, so it is not sent back. Design and decisions: [design/VIEWPORT.md](desi
 ### 10. A second Neovim, which never writes a file
 
 Some of what Neovim shows has no Eclipse editor behind it: a `:checkhealth` report, the
-`:messages` history, the help pages. A page editor shows each in a second Neovim, beside the
-editing one, whose whole screen Eclipse draws (`core/ScreenSession`): an Eclipse editor of its own
-per kind, in the editor area with the code, as Vim shows them in a window of their own. The second Neovim knows
-nothing of the editing one's buffers: it is handed text, or for help a tag to open, never a path.
+`:messages` history, the help pages. A page editor shows each, an Eclipse editor in the editor
+area with the code, as Vim shows them in a window of their own. The `:messages` history is a
+window of the editing Neovim itself ("The messages page", at the end of this section). A
+`:checkhealth` report and the help pages are shown by a second Neovim, beside the editing one,
+whose whole screen Eclipse draws (`core/ScreenSession`). It knows nothing of the editing one's
+buffers: it is handed text, or for help a tag to open, never a path.
 
 ```text
 editing Neovim ── text (lines, a filetype) ──▶ ScreenSession ──▶ second Neovim (nvim --embed)
@@ -556,6 +558,26 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   `VimLeavePre` asks Eclipse first (`eclipse_screen_leaving`, a request, so it arrives before the
   process ends), and the end of Neovim's output is then expected (`NeovimConnection.expectEnd`),
   not logged as a crash. `ScreenSession.Listener.ended` follows once, whatever ended it.
+
+
+**The messages page.** `:messages` (`msg_history_show`, `util/ViewText.messages`) goes to the
+messages editor (`editor/NeovimPageOpener`), whose `editor/WindowPane` fills a buffer of the
+editing Neovim (`LuaScripts.PAGE_TEXT`: `neovim4eclipse://messages`, `nofile`, read-only between
+fills, made and filled with autocommands off) and shows it in a page window of its own
+(`WINDOWS.open_page`: one Eclipse editor, one Neovim window, alone in a hidden tabpage). The pane
+draws that window's grid (`NeovimSession.drawPageWindow`); when it gets the keyboard the page takes
+the focus (`focusPageAsync`, Neovim's screen sized to the page with `setEditorSizeAsync`), and the
+focus events come to it (`core/FocusTarget`): the `:` box, messages, output and floats are drawn
+over its canvas, and the mode and status line go to the status bar. The attached text editor
+stays attached meanwhile; while it does not have the focus its own size does not reach Neovim (its
+viewport's `sendSize`), and clicked again it takes the focus back
+(`NeovimEditorController.takeFocusBack`, which sends its size again). Commands typed in the page are
+decided by `util/PageCommands` and carried out by `editor/PageCommandsRun`: `:split` opens a second
+messages editor (`NeovimPageInput.another`) with a window of its own on the same buffer, window
+commands run with the page as their origin (`EditorSplits.Origin`), file commands as from the
+attached text editor. Restart Neovim closes every messages editor
+(`NeovimPageEditor.closeEditingPages`): their windows were the old Neovim's. Nothing here writes a
+file: the buffer is `nofile`, and a page window never keeps a file's buffer (`util/EnterDecision`).
 
 ## Not done
 

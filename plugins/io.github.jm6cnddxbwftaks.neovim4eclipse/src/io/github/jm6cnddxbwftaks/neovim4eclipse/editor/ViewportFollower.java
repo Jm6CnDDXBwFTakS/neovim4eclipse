@@ -136,6 +136,17 @@ final class ViewportFollower {
     }
 
     /**
+     * Sends the editor's size again, even when it did not change: a page had Neovim's screen
+     * ({@code WindowPane}), sized to the page, and the code takes the focus back. UI thread.
+     */
+    void resendSize() {
+        if (started && !text.isDisposed()) {
+            sent = null;
+            update();
+        }
+    }
+
+    /**
      * Neovim's window has {@code line1} (1-based) at its top now: the editor scrolls there, unless
      * it is there already (the same line often comes twice for one key). Call it as a change from
      * Neovim ({@code CaretSync.runAsFromNeovim}). UI thread.
