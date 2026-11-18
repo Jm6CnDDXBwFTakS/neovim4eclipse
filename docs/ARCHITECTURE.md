@@ -444,14 +444,16 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   treesitter parser for a code block's language (a native library). Their `plugin/` folders do not
   run: the path is set after the start. That is the user's own config, which their editing Neovim
   runs on the same pages; the one rule above still holds (`-M`, `'write'` off), and the readers are
-  checked at the start only. Text must never meet those scripts, so `NeovimView` keeps the kind of
+  checked at the start only. Text must never meet those scripts, so `ScreenPane` keeps the kind of
   its running second Neovim and, when the kind changes, closes it and starts the other: the
   output profile's Neovim never has the user's path, whatever was shown before. The events of a
-  Neovim closed that way are ignored (`NeovimView.Events.current`), so its end does not close the
+  Neovim closed that way are ignored (`ScreenPane.Events.current`), so its end does not close the
   view. Inside the help Neovim, a `BufWinEnter` check swaps a buffer that is no help page (`gf`,
   `:edit`) back for the page, with a message; floating windows (`ui2`) are left alone.
 - **The view** (`editor/NeovimView`, `plugin.xml`: `org.eclipse.ui.views`, placed with Problems
-  through `perspectiveExtensions`) holds one second Neovim, started in a job at its first text with
+  through `perspectiveExtensions`) is the Eclipse part around an `editor/ScreenPane`: the view
+  gives it a parent, shows its title, and turns on the key context; the pane holds the canvas,
+  the keys, the mouse, the size and one second Neovim, started in a job at its first text with
   the output profile (`core/OutputProfile`: `-M`; `LuaScripts.SCREEN_SHOW_TEXT` puts the text in a
   scratch buffer, the highlights as extmarks, the filetype, `'background'` from the editor's, and
   maps `q` to `:quit`). Keys go through `util/KeyMapping` as in the `q:` panel, the mouse through

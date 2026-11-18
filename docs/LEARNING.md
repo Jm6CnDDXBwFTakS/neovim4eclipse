@@ -944,7 +944,7 @@ The user has had a few errors and types `:messages` and Enter in an attached edi
    A *view* is the other kind of part (section 1.3): `plugin.xml` declares it under
    `org.eclipse.ui.views`, and `org.eclipse.ui.perspectiveExtensions` gives it its first place,
    stacked with Problems in every perspective.
-3. The view (`editor/NeovimView`) has no Neovim yet, so a background job starts one:
+3. The view's pane (`editor/ScreenPane`, inside `editor/NeovimView`) has no Neovim yet, so a background job starts one:
    `core/ScreenSession.start` runs the same program with `--clean -n --cmd "set nowrite nomodeline"`
    and the output profile's `-M`, attaches as a UI without `ext_multigrid` (section 2.4: the whole
    screen is one grid), and checks, by asking Neovim, that every way to write a file is off. It
