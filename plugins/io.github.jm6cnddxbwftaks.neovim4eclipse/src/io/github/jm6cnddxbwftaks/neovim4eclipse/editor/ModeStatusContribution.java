@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.util.EnumSet;
 import java.util.Set;
 import java.util.function.IntConsumer;
 import java.util.logging.Level;
@@ -83,10 +84,30 @@ public final class ModeStatusContribution extends ContributionItem {
     /** Pending command and statusline as reported by Neovim. */
     private StatusInfo info = StatusInfo.EMPTY;
 
+    /**
+     * The item's id while a page editor shown from the editing Neovim is in front
+     * ({@code PageStatus}): an id of its own, so the text editors' item and the pages' never stand
+     * in for each other in one window's status line.
+     */
+    public static final String PAGE_ID = ID + ".page";
+
+    /** Whether this item has the statusline label: a page draws its status line itself. */
+    private final boolean withStatusline;
+
     /** @param statuslineColumns hears the statusline label's width in characters whenever it changes */
     public ModeStatusContribution(IntConsumer statuslineColumns) {
-        super(ID);
+        this(ID, statuslineColumns, true);
+    }
+
+    /**
+     * An item of id {@code id}; without the statusline label when {@code withStatusline} is false
+     * (the pages', {@link #PAGE_ID}: the mode and the pending command only, the page drawing its
+     * status line below its text, as Neovim does).
+     */
+    ModeStatusContribution(String id, IntConsumer statuslineColumns, boolean withStatusline) {
+        super(id);
         this.statuslineColumns = statuslineColumns;
+        this.withStatusline = withStatusline;
         readPreferences();
     }
 
@@ -102,7 +123,7 @@ public final class ModeStatusContribution extends ContributionItem {
                 return;
             }
             IStatusLineManager statusLine = site.getActionBars().getStatusLineManager();
-            if (statusLine.find(ID) == null) {
+            if (statusLine.find(getId()) == null) {
                 manager = statusLine;
                 statusLine.add(this);
                 statusLine.update(true);
@@ -110,7 +131,7 @@ public final class ModeStatusContribution extends ContributionItem {
             // Each window has its own status bar, of its own width, and one Neovim serves them all:
             // the editor becoming active brings its window's statusline width along. Example: a wide
             // and a narrow window; switching editors between them switches the statusline's columns.
-            ModeStatusContribution shown = shownIn(statusLine);
+            ModeStatusContribution shown = shownIn(statusLine, getId());
             int columns = shown == null || shown.labels == null ? -1 : shown.labels.statuslineColumns();
             if (columns > 0) {
                 statuslineColumns.accept(columns);
@@ -125,12 +146,12 @@ public final class ModeStatusContribution extends ContributionItem {
      * manager is a {@link SubContributionManager} that adds items to the window's own manager wrapped
      * in a {@link SubContributionItem}.
      */
-    private static ModeStatusContribution shownIn(IStatusLineManager statusLine) {
+    private static ModeStatusContribution shownIn(IStatusLineManager statusLine, String id) {
         IContributionManager window = statusLine;
         while (window instanceof SubContributionManager sub) {
             window = sub.getParent();
         }
-        IContributionItem item = window.find(ID);
+        IContributionItem item = window.find(id);
         if (item instanceof SubContributionItem wrapper) {
             item = wrapper.getInnerItem();
         }
@@ -144,7 +165,7 @@ public final class ModeStatusContribution extends ContributionItem {
                 return;
             }
             IStatusLineManager statusLine = site.getActionBars().getStatusLineManager();
-            statusLine.remove(ID);
+            statusLine.remove(getId());
             statusLine.update(true);
             manager = null;
         } catch (Exception e) {
@@ -218,7 +239,12 @@ public final class ModeStatusContribution extends ContributionItem {
 
     /** The parts the user chose; only the mode while it says {@code ECLIPSE} ({@link StatusItem#shown}). */
     private Set<StatusItem> partsShown() {
-        return StatusItem.shown(chosen, eclipse);
+        Set<StatusItem> shown = StatusItem.shown(chosen, eclipse);
+        if (!withStatusline && shown.contains(StatusItem.STATUSLINE)) {
+            shown = EnumSet.copyOf(shown);
+            shown.remove(StatusItem.STATUSLINE);
+        }
+        return shown;
     }
 
     /**

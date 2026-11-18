@@ -290,9 +290,10 @@ refused with Vim's E382. A page's window is drawn from its grid (`NeovimSession.
 `util/Grids.pagesIfChanged`, one snapshot per page to the page grid listeners, its clicks through
 `pageMouseAsync` on that grid); a page in a tabpage that is not current gets no redraws from
 Neovim and keeps its last cells, so it changes only while it has the focus. The overlays a text
-editor shows (the `:` box, the message line, the output popup, floats, the `q:` panel) take any
-SWT `Canvas` as their host, sized by its line (`OverlayFrame.lineHeight`: a `StyledText` line or
-a page's grid row), so a page shows them over itself. ([GLOSSARY.md](GLOSSARY.md) has the words.)
+editor shows (the message line, the output popup, floats, the `q:` panel) take any SWT `Canvas` as
+their host, sized by its line and character (`OverlayFrame.lineHeight` and `charWidth`: a
+`StyledText` line or a page's grid cell), so a page shows them over itself. The `:` box is the
+one overlay a page does without: it draws its command line instead ("The messages page"). ([GLOSSARY.md](GLOSSARY.md) has the words.)
 
 ### 7. Eclipse is Neovim's clipboard provider
 
@@ -567,8 +568,14 @@ fills, made and filled with autocommands off) and shows it in a page window of i
 (`WINDOWS.open_page`: one Eclipse editor, one Neovim window, alone in a hidden tabpage). The pane
 draws that window's grid (`NeovimSession.drawPageWindow`); when it gets the keyboard the page takes
 the focus (`focusPageAsync`, Neovim's screen sized to the page with `setEditorSizeAsync`), and the
-focus events come to it (`core/FocusTarget`): the `:` box, messages, output and floats are drawn
-over its canvas, and the mode and status line go to the status bar. The attached text editor
+focus events come to it (`core/FocusTarget`). Below its text the pane draws two rows, as Neovim
+lays out its screen: the window's status line, the screen's (grid 1's) row below the page's
+window with its colors (`util/Grids.pageStatusIfChanged`), and the command line, painted from
+Neovim's command-line events (`util/PageRows`). No widget takes the keyboard from the page's
+canvas, so every key is Neovim's and Neovim edits the line itself. Messages, output and floats
+are drawn over the canvas; the mode and the pending command go to Eclipse's status bar through
+one item for all messages editors of a status bar (`editor/PageStatus`, id `PAGE_ID`), made by the
+first, fed by the one with the focus, removed by the last. The attached text editor
 stays attached meanwhile; while it does not have the focus its own size does not reach Neovim (its
 viewport's `sendSize`), and activated again without the focus it takes the focus back
 (`NeovimEditorController.takeFocusBack`, which sends its size again), decided on the router's

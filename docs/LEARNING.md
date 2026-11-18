@@ -961,7 +961,7 @@ The user has had a few errors and types `:messages` and Enter in an attached edi
 4. The messages editor has the keyboard, so the page takes the focus (section 3.2a's attach in
    reverse: `NeovimSession.focusPageAsync`). Neovim enters the page's window, and its `BufEnter`
    is known as the focus moving (`util/EnterDecision`); the session's focus events
-   (`core/FocusRouter`) go to the pane: `/` opens the `:` box over the page, not over the code.
+   (`core/FocusRouter`) go to the pane: `/` is drawn in the page's own command row, not over the code.
    The code's editor stays attached: its document and caret do not move.
 5. `/E486` searches in the editing Neovim; `yy` fills its unnamed register, so `p` in the code
    pastes it, with no forwarding: it is one Neovim. `Ctrl-W k` sends a window command whose origin

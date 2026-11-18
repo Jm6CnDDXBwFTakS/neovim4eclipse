@@ -16,7 +16,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - **`:messages` is a window of your own Neovim**, the one behind your code, not a second Neovim:
   your colors, mappings, registers and search history are there (`y` in the messages and `p` in the
-  code), the `:` box and messages show over it, and the status bar shows its mode. `:split` in it
+  code). It is laid out as Neovim's screen: its status line and the command line are drawn below
+  it, every key being Neovim's, and the status bar shows Neovim's mode. `:split` in it
   gives a second view of the history in a tab group of its own, `:e file` and `gf` open the file in
   an editor beside your code, `:new` opens an untitled editor beside it, and `q` closes it. It
   cannot be changed or written. Restart Neovim closes it

@@ -94,6 +94,8 @@ public final class Grids {
     private final Set<Integer> pagesChanged = ConcurrentHashMap.newKeySet();
     /** Each page's last snapshot, so that one that comes out the same is not sent again. Reader thread. */
     private final Map<Integer, GridSnapshot> lastPage = new HashMap<>();
+    /** Each page's last status line row ({@link #pageStatusIfChanged}). Reader thread. */
+    private final Map<Integer, GridSnapshot> lastPageStatus = new HashMap<>();
 
     /**
      * Draws window {@code win} from now on: {@link #snapshotIfChanged} gives its grid. Example: the
@@ -283,6 +285,58 @@ public final class Grids {
             }
         }
         return changedPages;
+    }
+
+    /**
+     * The status line row of each page on screen, if it changed: the row of the screen (grid 1)
+     * right below the page's window, where Neovim draws the window's status line, with its
+     * colors, as one-row snapshots whose {@link GridSnapshot#window()} is the page's. Called at
+     * each {@code flush}. Only a page on screen has one: Neovim draws the status lines of the
+     * current tabpage only, so a page in the background keeps the one it had, as its text.
+     * None when the window reaches the screen's bottom: no status line ({@code 'laststatus'} 0, or
+     * 1 with the page alone). The command line takes no row of the screen: the plug-in draws it
+     * from Neovim's command-line events ({@code ext_cmdline}). Example: lualine's line below the
+     * messages page, its mode in its own colors.
+     */
+    public List<GridSnapshot> pageStatusIfChanged() {
+        lastPageStatus.keySet().retainAll(pages);
+        GridCells screen = grids.get(1);
+        if (screen == null || pages.isEmpty()) {
+            return List.of();
+        }
+        List<GridSnapshot> changed = new ArrayList<>();
+        for (Integer win : pages) {
+            Integer gridId = gridOf(win);
+            GridEvent.WinPos place = gridId == null ? null : placeOfGrid.get(gridId);
+            if (place == null || place.floating()) {
+                continue; // not on screen now: it keeps its last status line
+            }
+            int row = place.row() + place.height();
+            if (row < 0 || row >= screen.height) {
+                continue; // the window reaches the screen's bottom: no status line ('laststatus' 0)
+            }
+            GridSnapshot status = rowOf(win, screen, row);
+            if (!status.equals(lastPageStatus.get(win))) {
+                lastPageStatus.put(win, status);
+                changed.add(status);
+            }
+        }
+        return changed;
+    }
+
+    /** Row {@code row} of {@code grid}, as a one-row snapshot of window {@code win}, with the highlights it uses. */
+    private GridSnapshot rowOf(int win, GridCells grid, int row) {
+        int from = row * grid.width;
+        List<String> text = new ArrayList<>(Arrays.asList(grid.text).subList(from, from + grid.width));
+        int[] hl = Arrays.copyOfRange(grid.hl, from, from + grid.width);
+        Map<Integer, GridEvent.HlAttr> usedAttrs = new HashMap<>();
+        for (int id : hl) {
+            GridEvent.HlAttr attr = attrs.get(id);
+            if (attr != null) {
+                usedAttrs.put(id, attr);
+            }
+        }
+        return new GridSnapshot(win, grid.width, 1, text, hl, usedAttrs, defaultColors, -1, -1);
     }
 
     /** The grid number of page window {@code win}, for its mouse events, or -1 while it is not known. */

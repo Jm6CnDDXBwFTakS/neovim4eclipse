@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.e4.ui.model.application.ui.basic.MPart;
+import org.eclipse.jface.action.IStatusLineManager;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Composite;
@@ -70,11 +71,28 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         enterInBox(text, line);
     }
 
-    /** Types {@code :} in the page, then {@code line} in the {@code :} box that opens over it, then Enter. */
+    /**
+     * Types {@code :} and {@code line} in the page, then Enter: every key goes to Neovim, which edits
+     * the line itself, and the page draws it in its command row.
+     */
     private static void colonInPage(NeovimPageEditor page, String line) {
         UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
         key(page.canvasForTests(), ':');
-        enterInBox(page.canvasForTests(), line);
+        waitUntil("the : line drawn in the page", TIMEOUT_MS, () -> commandRowOf(page).startsWith(":"));
+        for (char c : line.toCharArray()) {
+            key(page.canvasForTests(), c);
+        }
+        Event enter = new Event();
+        enter.keyCode = SWT.CR;
+        enter.character = SWT.CR;
+        enter.doit = true;
+        page.canvasForTests().notifyListeners(SWT.KeyDown, enter);
+    }
+
+    /** What the page's drawn command row shows, trailing blanks dropped; "" before anything was drawn. */
+    private static String commandRowOf(NeovimPageEditor page) {
+        GridSnapshot row = page.windowPane().commandRowForTests().grid();
+        return row == null ? "" : row.row(0).stripTrailing();
     }
 
     private static void enterInBox(Composite host, String line) {
@@ -145,20 +163,81 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
                 SessionProbe.lua(session, "return vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())"));
     }
 
-    /** {@code /} typed in the page opens the {@code :} box over the page, not over the code. */
+    /** {@code /} typed in the page is drawn in the page's own command row, not in a box over the code. */
     @Test
-    void searchInThePageOpensTheBoxOverThePage() {
+    void searchInThePageIsDrawnInItsCommandRow() {
         NeovimPageEditor page = messagesShowing("search here");
         UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
         key(page.canvasForTests(), '/');
-        waitUntil("the / box over the page", TIMEOUT_MS, () -> textChildOf(page.canvasForTests()) != null);
-        assertNull(textChildOf(widget), "not over the code");
-        Text box = textChildOf(page.canvasForTests());
+        key(page.canvasForTests(), 'x');
+        waitUntil("/x in the page's command row", TIMEOUT_MS, () -> {
+            settle();
+            return commandRowOf(page).equals("/x");
+        });
+        assertNull(textChildOf(widget), "no : box over the code");
+        assertTrue(page.canvasForTests().isFocusControl(), "the keys stay the page's");
         Event escape = new Event();
         escape.keyCode = SWT.ESC;
         escape.character = SWT.ESC;
         escape.doit = true;
-        box.notifyListeners(SWT.KeyDown, escape);
+        page.canvasForTests().notifyListeners(SWT.KeyDown, escape);
+        waitUntil("the command row blank again", TIMEOUT_MS, () -> {
+            settle();
+            return commandRowOf(page).isEmpty();
+        });
+    }
+
+    /** Ctrl-W on the page's command line is Neovim's: it deletes a word, and the editor stays open. */
+    @Test
+    void ctrlWOnThePagesCommandLineDeletesAWord() {
+        NeovimPageEditor page = messagesShowing("ctrl w here");
+        UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
+        for (char c : ":ab cd".toCharArray()) {
+            key(page.canvasForTests(), c);
+        }
+        waitUntil(":ab cd drawn", TIMEOUT_MS, () -> {
+            settle();
+            return commandRowOf(page).equals(":ab cd");
+        }, () -> "; drawn: '" + commandRowOf(page) + "', row of " + page.windowPane().commandRowForTests().getSize());
+        page.sendKey("<C-w>"); // what the plug-in's Ctrl+W binding does in a page editor
+        waitUntil("the word deleted by Neovim", TIMEOUT_MS, () -> {
+            settle();
+            return commandRowOf(page).equals(":ab");
+        });
+        assertTrue(page().isPartVisible(page), "still open: Ctrl+W was not Eclipse's Close");
+        session.inputAsync("<Esc>");
+    }
+
+    /** The page draws its window's status line below its text, as Neovim does. */
+    @Test
+    void thePageDrawsItsStatusLine() {
+        NeovimPageEditor page = messagesShowing("status below");
+        waitUntil("the status line row drawn", TIMEOUT_MS, () -> {
+            settle();
+            GridSnapshot row = page.windowPane().statusRowForTests().grid();
+            return row != null && row.row(0).contains("neovim4eclipse://messages");
+        });
+    }
+
+    /** One Neovim item in Eclipse's status bar for the messages editors, kept while any is open. */
+    @Test
+    void oneStatusBarItemServesBothHalvesOfASplit() {
+        NeovimPageEditor first = messagesShowing("status bar item");
+        IStatusLineManager bar = first.getEditorSite().getActionBars().getStatusLineManager();
+        waitUntil("the pages' item in the status bar", TIMEOUT_MS, () -> bar.find(ModeStatusContribution.PAGE_ID) != null);
+        colonInPage(first, "split");
+        waitUntil("two messages editors", TIMEOUT_MS, () -> {
+            settle();
+            return messagesPages().size() == 2;
+        });
+        page().closeEditor(first, false);
+        settle();
+        assertTrue(bar.find(ModeStatusContribution.PAGE_ID) != null, "the other half keeps the item");
+        for (NeovimPageEditor page : messagesPages()) {
+            page().closeEditor(page, false);
+        }
+        settle();
+        assertNull(bar.find(ModeStatusContribution.PAGE_ID), "the last one removed it");
     }
 
     /** {@code :split} in the page: a second messages editor, its own window on the same buffer. */
@@ -297,6 +376,32 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         });
         session.closeCommandWindowAsync();
         settle();
+    }
+
+    /**
+     * The command-line window open over the page, then a click into the code: the window closes, as
+     * over code, and the code has the focus and takes keys again.
+     */
+    @Test
+    void theCommandLineWindowOverThePageClosesWhenTheCodeIsClicked() {
+        NeovimPageEditor page = messagesShowing("q colon then code");
+        UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
+        waitUntil("Neovim in the page", TIMEOUT_MS, () -> currentWin() == page.windowPane().window());
+        SessionProbe.lua(session, "vim.api.nvim_feedkeys('q:', 'n', false) return 0");
+        waitUntil("the command-line window open", TIMEOUT_MS, () -> {
+            settle();
+            return !"".equals(SessionProbe.lua(session, "return vim.fn.getcmdwintype()"));
+        });
+        page().activate(editor);
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        waitUntil("the command-line window closed and the code with the focus", TIMEOUT_MS, () -> {
+            settle();
+            return "".equals(SessionProbe.lua(session, "return vim.fn.getcmdwintype()"))
+                    && EditorAttachManager.getInstance().getActiveController().hasFocus();
+        });
+        type(widget, "iafter q colon");
+        type(widget, "\u001b");
+        waitUntil("the text typed in the code", TIMEOUT_MS, () -> document.get().contains("after q colon"));
     }
 
     /** {@code :b} of the code's own buffer in the page: back to the code editor. */

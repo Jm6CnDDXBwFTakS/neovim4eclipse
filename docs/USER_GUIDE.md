@@ -649,9 +649,14 @@ error color and warnings in its warning color. Being the same Neovim as your cod
 
 - **Your colors and mappings are there**, and so are your registers and your search history: `y`
   in the messages and `p` in the code, `/` in the messages and `n` in the code.
-- **The `:` box, messages and floating windows** (which-key's panel, say) show over the messages
-  editor while it has the keyboard, as over your code. The status bar shows Neovim's mode and status
-  line for it.
+- **Laid out as Neovim's screen:** below the messages, the window's status line, as Neovim draws
+  it (lualine's, or Neovim's default with the page's name), and below that the command line. Every
+  key stays Neovim's there, so Neovim edits a `:` or `/` line itself: `Ctrl-W` deletes a word,
+  `Ctrl-R`, `Ctrl-U`, history and Tab work as in Neovim. With `'laststatus'` 0 there is no status
+  line, as in Neovim. Messages, output and floating windows (which-key's panel, say) show over the
+  messages editor, as over your code. Eclipse's status bar shows Neovim's mode and pending command
+  while it has the keyboard (as you chose them in *Preferences › Neovim › Status Bar*); its status
+  line is the one drawn in the editor.
 - **`:split`, `:vsplit`, `Ctrl-W s`, `Ctrl-W v`** in it give a second messages editor in a tab group
   of its own: two views of the one history, each with its own cursor and scroll position, as two
   Neovim windows on one buffer. `:messages` again shows the new history in both, and brings the one

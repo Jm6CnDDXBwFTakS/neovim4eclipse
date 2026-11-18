@@ -1129,6 +1129,19 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * Hears each drawn page window's status line row when it changes (the screen's row below the
+     * page's window, as Neovim draws it, with its colors), on the RPC reader thread; the listener
+     * takes its own window's ({@link GridSnapshot#window()}) and hops to the UI thread itself.
+     */
+    public void addPageStatusListener(Consumer<GridSnapshot> listener) {
+        events.addPageStatusListener(listener);
+    }
+
+    public void removePageStatusListener(Consumer<GridSnapshot> listener) {
+        events.removePageStatusListener(listener);
+    }
+
+    /**
      * A mouse event on page window {@code win}'s grid, at its {@code row} and {@code col}
      * ({@code nvim_input_mouse} with that grid, as {@link #commandWindowMouseAsync}). Nothing until
      * the page's grid has been drawn once. Queued.
@@ -2667,6 +2680,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                             pageGrids.put(page.window(), grid);
                         }
                         events.pageGrid(page);
+                    }
+                    for (GridSnapshot status : grids.pageStatusIfChanged()) {
+                        events.pageStatus(status);
                     }
                     grids.floatsIfChanged().ifPresent(floats -> {
                         floatingWindows = floats;

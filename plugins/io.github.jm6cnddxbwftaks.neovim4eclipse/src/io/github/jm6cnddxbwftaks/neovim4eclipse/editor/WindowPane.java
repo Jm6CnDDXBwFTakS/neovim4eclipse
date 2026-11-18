@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageRows;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -17,6 +19,8 @@ import org.eclipse.swt.events.TraverseEvent;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
+import org.eclipse.swt.layout.GridData;
+import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.ui.IEditorSite;
@@ -49,7 +53,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  * When the pane's canvas gets the keyboard, the page takes the focus as Neovim sees it: Neovim
  * enters the page's window ({@link NeovimSession#focusPageAsync}), Neovim's screen takes the page's
  * size, and the focus events ({@link FocusTarget}: the mode, the {@code :} line, messages, floats,
- * the commands a key asks for) come here, drawn over the page with the same overlays as over code.
+ * the commands a key asks for) come here. Below the page's text, as Neovim lays out its screen, the
+ * pane draws the window's status line (the screen's row below the window, with its colors) and
+ * the command line ({@link PageRows}): every key stays the canvas's, so Neovim edits the line
+ * itself, Ctrl-W, Ctrl-R and history included. Messages, output and floats are drawn over the
+ * page with the same overlays as over code; the mode and the pending command go to Eclipse's
+ * status bar ({@link PageStatus}).
  * The text editor it came from stays attached: its document and caret are untouched. Clicking back
  * into the code gives the focus back ({@code EditorAttachManager}). A page in the background keeps
  * its last cells: Neovim does not redraw a window of a tabpage that is not current.
@@ -74,7 +83,14 @@ final class WindowPane implements PagePane {
     }
 
     private final Host host;
+    /** The page's text: its window's grid. It alone takes the keyboard. */
     private final GridCanvas canvas;
+    /** Neovim's status line for the page's window, a row below the text, as Neovim draws it. */
+    private final GridCanvas statusRow;
+    /** Neovim's command line, a row along the bottom, while a {@code :}, {@code /} or {@code ?} line is open. */
+    private final GridCanvas commandRow;
+    /** The three, one above the other. */
+    private final Composite rows;
     private final NeovimSession session;
     /** The page's Neovim window; {@link EditorWindow#UNKNOWN} until the first page was shown. */
     private volatile int window = EditorWindow.UNKNOWN;
@@ -87,14 +103,17 @@ final class WindowPane implements PagePane {
     private boolean focused;
     private boolean disposed;
     private final MessageLine messageLine;
-    private final CommandLineBox commandLine;
+    /** Output of several lines (a listing, a long message), over the page. */
+    private final OutputPopup output;
     private final FloatingWindows floats;
     /** Neovim's command-line window ({@code q:} typed in the page), drawn over the page's bottom. */
     private final NeovimWindowPanel commandWindowPanel;
     private final Consumer<Integer> closedListener = this::onPageClosed;
-    private final ModeStatusContribution modeStatus;
+    /** The mode and pending command in Eclipse's status bar, one item for all messages editors ({@link PageStatus}). */
+    private final PageStatus status;
     private String shownMessage = "";
     private final Consumer<GridSnapshot> gridListener = this::onGrid;
+    private final Consumer<GridSnapshot> statusListener = this::onStatusRow;
     /** Eclipse's text font changed: the cells change size, so Neovim is asked for the cells that fit now. */
     private final IPropertyChangeListener fontListener;
 
@@ -102,17 +121,18 @@ final class WindowPane implements PagePane {
     private final FocusTarget target = new FocusTarget() {
         @Override
         public void onMode(String mode) {
-            modeStatus.setMode(mode);
+            onUi(() -> status.setMode(mode));
         }
 
         @Override
         public void onRecording(String register) {
-            modeStatus.setRecording(register);
+            onUi(() -> status.setRecording(register));
         }
 
         @Override
-        public void onStatus(StatusInfo status) {
-            modeStatus.setStatusInfo(status);
+        public void onStatus(StatusInfo info) {
+            StatusInfo status = info;
+            onUi(() -> WindowPane.this.status.setStatusInfo(status));
             onUi(() -> {
                 if (!status.message().equals(shownMessage)) {
                     shownMessage = status.message();
@@ -122,13 +142,13 @@ final class WindowPane implements PagePane {
         }
 
         @Override
-        public void onOutput(CommandOutput output) {
-            onUi(() -> commandLine.showOutput(output.title(), output.text()));
+        public void onOutput(CommandOutput shown) {
+            onUi(() -> output.showOverEditor(shown.title(), shown.text(), false)); // the keys stay Neovim's
         }
 
         @Override
         public void onCmdline(CmdlineState.View view) {
-            onUi(() -> commandLine.show(view));
+            onUi(() -> showCommandLine(view));
         }
 
         @Override
@@ -139,9 +159,6 @@ final class WindowPane implements PagePane {
         @Override
         public void onCommandWindow(CommandWindowView view) {
             onUi(() -> {
-                if (view.open()) {
-                    commandLine.closeForCommandWindow(); // Ctrl-F on the : line; its line is not abandoned
-                }
                 commandWindowPanel.setInsertMode(VimModes.isTyping(session.getMode()));
                 commandWindowPanel.show(view);
             });
@@ -172,8 +189,14 @@ final class WindowPane implements PagePane {
     WindowPane(Composite parent, Host host, NeovimSession session) {
         this.host = host;
         this.session = session;
-        modeStatus = new ModeStatusContribution(session::setStatuslineColumns);
-        canvas = new GridCanvas(parent, new GridCanvas.Look() {
+        status = new PageStatus(host.site());
+        rows = new Composite(parent, SWT.NONE);
+        GridLayout layout = new GridLayout(1, false);
+        layout.marginWidth = 0;
+        layout.marginHeight = 0;
+        layout.verticalSpacing = 0;
+        rows.setLayout(layout);
+        GridCanvas.Look look = new GridCanvas.Look() {
             @Override
             public Font font() {
                 return JFaceResources.getTextFont();
@@ -193,7 +216,14 @@ final class WindowPane implements PagePane {
             public int lineHeight() {
                 return WindowPane.this.lineHeight();
             }
-        }, SWT.NONE);
+        };
+        canvas = new GridCanvas(rows, look, SWT.NONE);
+        canvas.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
+        statusRow = new GridCanvas(rows, look, SWT.NO_FOCUS);
+        statusRow.setLayoutData(rowData(false));
+        commandRow = new GridCanvas(rows, look, SWT.NO_FOCUS);
+        commandRow.setLayoutData(rowData(true));
+        commandRow.setInsertCursor(true); // the command line's cursor is a bar, as Neovim's
         canvas.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -215,41 +245,78 @@ final class WindowPane implements PagePane {
         });
         fontListener = event -> {
             if (JFaceResources.TEXT_FONT.equals(event.getProperty()) && !canvas.isDisposed()) {
+                ((GridData) commandRow.getLayoutData()).heightHint = lineHeight();
+                if (((GridData) statusRow.getLayoutData()).heightHint > 0) {
+                    ((GridData) statusRow.getLayoutData()).heightHint = lineHeight();
+                }
+                rows.layout(true);
                 canvas.redraw();
                 sendSize();
             }
         };
         JFaceResources.getFontRegistry().addListener(fontListener);
         messageLine = new MessageLine(canvas, () -> false);
-        commandLine = new CommandLineBox(canvas, new CommandLineBox.Commands() {
-            @Override
-            public void type(String keys) {
-                session.inputAsync(keys);
-            }
-
-            @Override
-            public void paste(String text) {
-                session.pasteAsync(text);
-            }
-
-            @Override
-            public boolean cancellable() {
-                return !VimModes.isExMode(session.getMode());
-            }
-        }, messageLine, () -> {
-            // nothing: a page has no Copy and Paste handlers or Ctrl-key context of its own to update
-        });
+        output = new OutputPopup(canvas, () -> session.inputAsync(":"));
         floats = new FloatingWindows(canvas);
         commandWindowPanel = new NeovimWindowPanel(canvas, new NeovimEditorController.PanelCommands(session), () -> {
             // nothing to update: a page has no Ctrl-key context of its own
         });
         session.addPageGridListener(gridListener);
+        session.addPageStatusListener(statusListener);
         session.addPageClosedListener(closedListener);
+    }
+
+    /** A row's layout: one text line high; the status row starts hidden, until Neovim draws a status line. */
+    private GridData rowData(boolean shown) {
+        GridData data = new GridData(SWT.FILL, SWT.BOTTOM, true, false);
+        data.heightHint = shown ? lineHeight() : 0;
+        return data;
+    }
+
+    /**
+     * Neovim's command line, drawn along the bottom ({@link PageRows#commandRow}): Neovim edits the
+     * line, every key being Neovim's here; this only paints what it says. Blank while closed.
+     */
+    private void showCommandLine(CmdlineState.View view) {
+        GridSnapshot grid = canvas.grid();
+        GridEvent.DefaultColors colors = grid == null ? new GridEvent.DefaultColors(GridEvent.NO_COLOR, GridEvent.NO_COLOR)
+                : grid.defaultColors();
+        int columns = ScreenInput.cells(commandRow.getSize().x, commandRow.cellWidth());
+        commandRow.show(PageRows.commandRow(view, columns, window, colors));
+        if (view.open()) {
+            messageLine.hide(); // the line takes the row, as Neovim's : takes its message's
+        }
+    }
+
+    /** The status line row of a page window ({@code util/Grids.pageStatusIfChanged}); this page's is drawn. */
+    private void onStatusRow(GridSnapshot row) {
+        onUi(() -> {
+            if (row.window() != window) {
+                return;
+            }
+            GridData data = (GridData) statusRow.getLayoutData();
+            if (data.heightHint == 0) {
+                data.heightHint = lineHeight(); // the first status line: the row appears
+                rows.layout(true);
+                sendSize();
+            }
+            statusRow.show(row);
+        });
     }
 
     @Override
     public GridCanvas canvas() {
         return canvas;
+    }
+
+    /** The drawn command-line row, for tests. */
+    GridCanvas commandRowForTests() {
+        return commandRow;
+    }
+
+    /** The drawn status line row, for tests. */
+    GridCanvas statusRowForTests() {
+        return statusRow;
     }
 
     /** The editing session this page is a window of; after a crash and a new start, no longer the current one. */
@@ -319,13 +386,12 @@ final class WindowPane implements PagePane {
         focused = true;
         session.focus(target);
         session.focusPageAsync(window);
-        modeStatus.addTo(host.site());
         sendSize();
     }
 
     /**
-     * The canvas lost the keyboard: unless it went to the page's own overlays (the {@code :} box
-     * over the page is a child of the canvas, and takes the keyboard when it opens), the page no
+     * The canvas lost the keyboard: unless it went to the page's own overlays (children of the
+     * canvas: the command-line window's panel takes the keyboard when it opens), the page no
      * longer has the focus. Checked once the focus has settled ({@code asyncExec}).
      */
     void focusOut() {
@@ -345,7 +411,7 @@ final class WindowPane implements PagePane {
         if (focused) {
             focused = false;
             session.releaseFocus(target);
-            commandLine.show(CmdlineState.View.CLOSED);
+            showCommandLine(CmdlineState.View.CLOSED);
             floats.show(List.of());
         }
     }
@@ -447,11 +513,12 @@ final class WindowPane implements PagePane {
         disposed = true;
         JFaceResources.getFontRegistry().removeListener(fontListener);
         session.removePageGridListener(gridListener);
+        session.removePageStatusListener(statusListener);
         session.removePageClosedListener(closedListener);
         session.releaseFocus(target);
         commandWindowPanel.dispose();
-        modeStatus.removeFrom(host.site());
-        commandLine.dispose();
+        status.release();
+        output.close(false);
         messageLine.dispose();
         floats.dispose();
         if (window != EditorWindow.UNKNOWN) {

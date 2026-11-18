@@ -391,4 +391,46 @@ class GridsTest {
         grids.drawPage(1005);
         assertEquals(1, grids.pagesIfChanged().size());
     }
+
+    // ---- a page's status line row (pageStatusIfChanged) ----
+
+    /** The screen, grid 1, 8x7, with the page window 1005 at its top, 5 rows high: its status line on row 5. */
+    private void screenWithPage() {
+        grids.drawPage(1005);
+        grids.apply(new GridEvent.Resize(1, 8, 7));
+        grids.apply(new GridEvent.Line(1, 5, 0, text("status", 3)));
+        grids.apply(new GridEvent.Resize(5, 8, 5));
+        grids.apply(new GridEvent.WinPos(5, 1005, false, 0, 0, 8, 5, 0));
+        grids.apply(new GridEvent.Flush());
+    }
+
+    @Test
+    void aPagesStatusLineIsTheScreensRowBelowItsWindow() {
+        screenWithPage();
+        List<GridSnapshot> rows = grids.pageStatusIfChanged();
+        assertEquals(1, rows.size());
+        assertEquals(1005, rows.get(0).window());
+        assertEquals("status  ", rows.get(0).row(0));
+        assertEquals(3, rows.get(0).hlAt(0, 0), "with its colors");
+        assertTrue(grids.pageStatusIfChanged().isEmpty(), "unchanged: not sent again");
+        grids.apply(new GridEvent.Line(1, 5, 0, text("STATUS", 3)));
+        assertEquals("STATUS  ", grids.pageStatusIfChanged().get(0).row(0));
+    }
+
+    @Test
+    void noStatusLineWhenTheWindowReachesTheScreensBottom() {
+        grids.drawPage(1005);
+        grids.apply(new GridEvent.Resize(1, 8, 7));
+        grids.apply(new GridEvent.WinPos(5, 1005, false, 0, 0, 8, 7, 0)); // 'laststatus' 0: no row below it
+        assertTrue(grids.pageStatusIfChanged().isEmpty());
+    }
+
+    @Test
+    void aPageNotOnScreenKeepsItsLastStatusLine() {
+        screenWithPage();
+        grids.pageStatusIfChanged();
+        grids.apply(new GridEvent.WinGone(5));
+        grids.apply(new GridEvent.Line(1, 5, 0, text("other", 3))); // another window's status line now
+        assertTrue(grids.pageStatusIfChanged().isEmpty());
+    }
 }

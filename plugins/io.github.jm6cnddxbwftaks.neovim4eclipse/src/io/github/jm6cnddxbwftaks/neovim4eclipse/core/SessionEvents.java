@@ -40,6 +40,7 @@ final class SessionEvents implements StateSync.Listeners {
     private final java.util.Map<Runnable, Consumer<Void>> inputHandledWrappers = new java.util.concurrent.ConcurrentHashMap<>();
     private final ListenerList<CmdlineState.View> cmdlineListeners = new ListenerList<>("command line", Level.WARNING);
     private final ListenerList<GridSnapshot> pageGridListeners = new ListenerList<>("page grid", Level.WARNING);
+    private final ListenerList<GridSnapshot> pageStatusListeners = new ListenerList<>("page status line", Level.WARNING);
     private final ListenerList<CommandWindowView> commandWindowListeners = new ListenerList<>("command-line window",
             Level.WARNING);
     private final ListenerList<List<FloatWindow>> floatingWindowListeners = new ListenerList<>("floating windows",
@@ -139,6 +140,19 @@ final class SessionEvents implements StateSync.Listeners {
     }
 
     // ---- registration ----
+
+    /** A page window's status line row changed (one row of the screen; {@code util/Grids.pageStatusIfChanged}). */
+    void pageStatus(GridSnapshot row) {
+        pageStatusListeners.fire(row);
+    }
+
+    void addPageStatusListener(Consumer<GridSnapshot> listener) {
+        pageStatusListeners.add(listener);
+    }
+
+    void removePageStatusListener(Consumer<GridSnapshot> listener) {
+        pageStatusListeners.remove(listener);
+    }
 
     void addPageGridListener(Consumer<GridSnapshot> listener) {
         pageGridListeners.add(listener);
