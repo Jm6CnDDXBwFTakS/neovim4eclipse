@@ -21,7 +21,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenGrid;
 
 /**
- * A second Neovim, beside the editing one, whose whole screen Eclipse draws: the Neovim view
+ * A second Neovim, beside the editing one, whose whole screen Eclipse draws: a page editor
  * ({@code :checkhealth} and {@code :messages}, output profile {@link OutputProfile}; {@code :help},
  * help profile {@link HelpProfile}). It knows
  * nothing of what the view shows; that is the view's <em>profile</em>, which passes its own start

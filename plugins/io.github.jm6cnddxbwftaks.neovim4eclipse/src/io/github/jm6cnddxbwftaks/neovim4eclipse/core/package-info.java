@@ -72,7 +72,7 @@
  *       events and the plug-in's own {@code eclipse_*} events), and answers its two requests, the
  *       clipboard paste and the save of a document Neovim writes.</li>
  *   <li>{@code ScreenSession}: a second Neovim beside the editing one, whose whole screen the
- *       Neovim view draws ({@code :checkhealth}, {@code :messages}); it never writes a file, a rule
+ *       page editors draw ({@code :checkhealth}, {@code :messages}); it never writes a file, a rule
  *       it checks once Neovim has started ({@code docs/ARCHITECTURE.md}, decision 10). Its own
  *       connection and input thread; it shares nothing with {@code NeovimSession}.</li>
  *   <li>Subpackage {@code core/rpc}: the plug-in's own interface to the Neovim API

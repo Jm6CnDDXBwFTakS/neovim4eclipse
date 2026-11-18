@@ -4,7 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 /**
- * A help page for the Neovim view: where {@code :help} (or {@code :helpgrep}, or a plug-in's
+ * A help page for a page editor: where {@code :help} (or {@code :helpgrep}, or a plug-in's
  * {@code vim.cmd.help}) took the editing Neovim, for a second Neovim to open the same page
  * ({@code core/HelpProfile}). No path crosses: the second Neovim finds the page itself, by its tag,
  * on the same {@code 'runtimepath'}, as Neovim's {@code :help} does.

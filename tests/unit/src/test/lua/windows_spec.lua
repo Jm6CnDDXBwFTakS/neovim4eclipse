@@ -711,7 +711,7 @@ t.test('a split a plug-in opens in an editor\'s tab is closed again: the safety 
   t.ok(vim.v.errmsg:find('Window closed', 1, true), vim.v.errmsg)
 end)
 
-t.test(':checkhealth hands its report to the Neovim view and leaves no window, buffer or message', function()
+t.test(':checkhealth hands its report to a page editor and leaves no window, buffer or message', function()
   local win = commands()
   vim.v.errmsg = ''
   t.forget()
@@ -770,7 +770,7 @@ t.test(':checkhealth as a float (vim.g.health style) is read before closing wipe
   vim.g.health = nil
 end)
 
-t.test(':help hands the page to the Neovim view and leaves no window, loaded buffer or message', function()
+t.test(':help hands the page to a page editor and leaves no window, loaded buffer or message', function()
   local win = commands()
   vim.v.errmsg = ''
   t.forget()

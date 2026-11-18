@@ -310,13 +310,14 @@
             name="Neovim Ctrl-W"
             parentId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal">
       </context>
-      <!-- While the Neovim view (editor/NeovimView) has the keyboard: a child of the window's
-           context, so its Ctrl+W below wins over Eclipse's Close (M1+W in the window's context),
-           and Ctrl-W w, p and k reach the view's Neovim. Only Ctrl+W: every other shortcut stays
-           Eclipse's in the view, as in any view. -->
+      <!-- While a page editor (editor/NeovimPageEditor: :help, :messages, :checkhealth) has the
+           keyboard: a child of the window's context, so its Ctrl+W below wins over Eclipse's Close
+           Editor (M1+W in the window's context), and Ctrl-W reaches the page's Neovim. Only
+           Ctrl+W: every other shortcut stays Eclipse's there, as in any editor that is not a text
+           editor. -->
       <context
-            id="io.github.jm6cnddxbwftaks.neovim4eclipse.context.view"
-            name="In the Neovim View"
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.context.page"
+            name="In a Neovim Page Editor"
             parentId="org.eclipse.ui.contexts.window">
       </context>
       <context
@@ -1132,21 +1133,21 @@
       </key>
       <key
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.w"
-            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.view"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.page"
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
             platform="win32"
             sequence="M1+W">
       </key>
       <key
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.w"
-            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.view"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.page"
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
             platform="gtk"
             sequence="M1+W">
       </key>
       <key
             commandId="io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.w"
-            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.view"
+            contextId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.page"
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
             platform="cocoa"
             sequence="M4+W">
@@ -1262,27 +1263,6 @@
       <startup class="io.github.jm6cnddxbwftaks.neovim4eclipse.EarlyStartup"/>
    </extension>
 
-   <!-- The Neovim view (editor/NeovimView): a second Neovim's screen, for :messages and
-        :checkhealth; editor/NeovimViewOpener opens it when one of them runs. Listed under Window >
-        Show View > Other... > Neovim for Eclipse. Not allowed twice: one second Neovim per window. -->
-   <extension point="org.eclipse.ui.views">
-      <category
-            id="io.github.jm6cnddxbwftaks.neovim4eclipse.views"
-            name="Neovim for Eclipse">
-      </category>
-      <view
-            id="io.github.jm6cnddxbwftaks.neovim4eclipse.views.neovim"
-            name="Neovim"
-            category="io.github.jm6cnddxbwftaks.neovim4eclipse.views"
-            class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimView"
-            allowMultiple="false"
-            restorable="false">
-         <!-- restorable="false": open at Eclipse's exit, it is not brought back at the next start,
-              where it would be empty (its second Neovim is not); :messages or :checkhealth opens
-              it again. -->
-      </view>
-   </extension>
-
    <!-- The page editors: :help, :messages and :checkhealth, each in an editor of its own beside the
         code (editor/NeovimPageEditor). No file extension or content type: Eclipse offers it for no
         file, and opened on one through Open With it refuses. -->
@@ -1293,20 +1273,6 @@
             icon="icons/n4e-mode-on.png"
             class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimPageEditor">
       </editor>
-   </extension>
-
-   <!-- Its first place, in every perspective: in the stack of the Problems view (with Console, at
-        the bottom in the usual perspectives), not shown until :messages or :checkhealth opens it.
-        Eclipse remembers where the user moves it. -->
-   <extension point="org.eclipse.ui.perspectiveExtensions">
-      <perspectiveExtension targetID="*">
-         <view
-               id="io.github.jm6cnddxbwftaks.neovim4eclipse.views.neovim"
-               relative="org.eclipse.ui.views.ProblemView"
-               relationship="stack"
-               visible="false">
-         </view>
-      </perspectiveExtension>
    </extension>
 
    <extension point="org.eclipse.ui.preferencePages">

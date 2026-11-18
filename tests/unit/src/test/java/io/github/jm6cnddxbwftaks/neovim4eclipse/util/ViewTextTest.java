@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent.History;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText.LineHighlight;
 
-/** The text the Neovim view shows for {@code :messages} and {@code :checkhealth}. */
+/** The text a page editor shows for {@code :messages} and {@code :checkhealth}. */
 class ViewTextTest {
 
     @Test

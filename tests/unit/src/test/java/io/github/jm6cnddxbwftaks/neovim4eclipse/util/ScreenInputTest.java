@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
-/** The Neovim view's size in cells and its title. */
+/** A page editor's size in cells and its title. */
 class ScreenInputTest {
 
     @Test

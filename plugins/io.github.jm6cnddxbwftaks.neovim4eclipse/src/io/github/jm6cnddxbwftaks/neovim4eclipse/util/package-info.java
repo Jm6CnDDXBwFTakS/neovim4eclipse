@@ -33,7 +33,7 @@
  *       grid events of a {@code redraw}), {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.Grids}
  *       (the editing Neovim's grid per window: the command-line window, floats) and
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenGrid} (a second Neovim's one
- *       screen, for the Neovim view), both keeping cells in {@code GridCells}, and handing out
+ *       screen, for a page editor), both keeping cells in {@code GridCells}, and handing out
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot}s.</li>
  *   <li><b>Exceptions:</b> {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimExceptionBase},
  *       the base of every exception class the plug-in defines.</li>

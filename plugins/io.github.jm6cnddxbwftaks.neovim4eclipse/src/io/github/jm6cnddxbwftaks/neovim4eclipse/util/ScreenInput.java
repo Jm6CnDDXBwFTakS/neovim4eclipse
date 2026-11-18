@@ -4,12 +4,12 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 /**
- * The Neovim view's decisions apart from SWT, so that they are unit-tested: how many cells a view
- * of so many pixels holds, and the view's title.
+ * A page editor's decisions apart from SWT, so that they are unit-tested: how many cells an
+ * editor of so many pixels holds, and the editor's title.
  */
 public final class ScreenInput {
 
-    /** The start of every title of the Neovim view; what it shows follows ({@link #title}). */
+    /** The start of every title of a page editor; what it shows follows ({@link #title}). */
     public static final String VIEW_NAME = "Neovim";
 
     private ScreenInput() {

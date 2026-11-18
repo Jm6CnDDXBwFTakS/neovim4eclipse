@@ -73,7 +73,7 @@ class ClipboardIntegrationTest {
     }
 
     /**
-     * A plain yank in the Neovim view, with {@code 'clipboard'} set to {@code unnamedplus}: the
+     * A plain yank in a page editor, with {@code 'clipboard'} set to {@code unnamedplus}: the
      * editing Neovim's unnamed register and the clipboard get it, and the clipboard once, not
      * twice ({@code LuaScripts.SET_REGISTER_FROM_VIEW}).
      */

@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Text for the Neovim view: what the editing Neovim produced and the second Neovim shows
+ * Text for a page editor: what the editing Neovim produced and the second Neovim shows
  * ({@code core/ScreenSession}). Only text goes over, never a file name, so the second Neovim has
  * nothing to open and nothing to write. Example: {@code :messages} becomes
  * {@code ViewText("messages", "", ["E486: Pattern not found: x", "3 lines yanked"],

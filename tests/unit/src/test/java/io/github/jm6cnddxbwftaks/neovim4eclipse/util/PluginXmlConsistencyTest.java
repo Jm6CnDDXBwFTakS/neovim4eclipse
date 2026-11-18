@@ -204,16 +204,16 @@ class PluginXmlConsistencyTest {
     void everyCtrlKeyIsBoundOnWindowsLinuxAndMacInItsOwnContext() throws Exception {
         NodeList list = extension(load(), "org.eclipse.ui.bindings").getElementsByTagName("key");
         Map<String, String> sequences = new HashMap<>(); // "commandId|platform" -> sequence
-        Map<String, String> inTheView = new HashMap<>(); // platform -> sequence, in the Neovim view's context
+        Map<String, String> inThePages = new HashMap<>(); // platform -> sequence, in the page editors' context
         for (int i = 0; i < list.getLength(); i++) {
             Element e = (Element) list.item(i);
             String commandId = e.getAttribute("commandId");
             if (VimCtrlKeys.isCtrlKeyCommand(commandId)) {
                 char letter = commandId.charAt(commandId.length() - 1);
-                if (NEOVIM_VIEW_CONTEXT.equals(e.getAttribute("contextId"))) {
-                    // The one other context: Ctrl-W in the Neovim view, over Eclipse's Close.
-                    assertEquals('w', letter, "only Ctrl-W is bound in the Neovim view: " + commandId);
-                    inTheView.put(e.getAttribute("platform"), e.getAttribute("sequence"));
+                if (PAGE_CONTEXT.equals(e.getAttribute("contextId"))) {
+                    // The one other context: Ctrl-W in a page editor, over Eclipse's Close Editor.
+                    assertEquals('w', letter, "only Ctrl-W is bound in the page editors: " + commandId);
+                    inThePages.put(e.getAttribute("platform"), e.getAttribute("sequence"));
                     continue;
                 }
                 assertEquals(VimCtrlKeys.contextId(letter), e.getAttribute("contextId"), "context of " + commandId);
@@ -228,11 +228,11 @@ class PluginXmlConsistencyTest {
             // On macOS M1 is Command (Paste etc. must keep working); the Control key is M4.
             assertEquals("M4+" + upper, sequences.get(id + "|cocoa"), "cocoa Ctrl-" + letter);
         }
-        assertEquals(Map.of("win32", "M1+W", "gtk", "M1+W", "cocoa", "M4+W"), inTheView, "Ctrl-W in the Neovim view");
+        assertEquals(Map.of("win32", "M1+W", "gtk", "M1+W", "cocoa", "M4+W"), inThePages, "Ctrl-W in the page editors");
     }
 
-    /** {@code editor/NeovimView.KEY_CONTEXT_ID}: the Neovim view's key context. */
-    private static final String NEOVIM_VIEW_CONTEXT = "io.github.jm6cnddxbwftaks.neovim4eclipse.context.view";
+    /** {@code editor/NeovimPageEditor.KEY_CONTEXT_ID}: the page editors' key context. */
+    private static final String PAGE_CONTEXT = "io.github.jm6cnddxbwftaks.neovim4eclipse.context.page";
 
     /**
      * Parameterized key bindings did not deliver their parameter on Linux (see VimCtrlKeys), so no
@@ -323,39 +323,30 @@ class PluginXmlConsistencyTest {
     }
 
     /**
-     * The Neovim view's first place, in every perspective: stacked with the Problems view, hidden
-     * until :messages or :checkhealth opens it (docs/USER_GUIDE.md, "The Neovim view"). Where
-     * Eclipse then puts it is Eclipse's; this checks that plugin.xml asks for it.
+     * The page editor ({@code editor/NeovimPageEditor}) is offered for no file: no extension, file
+     * name or content type, so Eclipse never opens a file with it unless asked through Open With,
+     * where it refuses. And no view is left of the Neovim view it replaced.
      */
     @Test
-    void theNeovimViewIsStackedWithProblemsInEveryPerspective() throws Exception {
-        Element extension = extension(load(), "org.eclipse.ui.perspectiveExtensions");
-        Element perspective = (Element) extension.getElementsByTagName("perspectiveExtension").item(0);
-        assertEquals("*", perspective.getAttribute("targetID"));
-        Element view = (Element) perspective.getElementsByTagName("view").item(0);
-        assertEquals("io.github.jm6cnddxbwftaks.neovim4eclipse.views.neovim", view.getAttribute("id"));
-        assertEquals("org.eclipse.ui.views.ProblemView", view.getAttribute("relative"));
-        assertEquals("stack", view.getAttribute("relationship"));
-        assertEquals("false", view.getAttribute("visible"));
-    }
-
-    /**
-     * The Neovim view is not brought back at Eclipse's next start: its second Neovim is not, so it
-     * would come back empty, with keys that do nothing. {@code :messages} or {@code :checkhealth}
-     * opens it again (docs/USER_GUIDE.md, "The Neovim view").
-     */
-    @Test
-    void theNeovimViewIsNotRestoredAtTheNextStart() throws Exception {
-        Element extension = extension(load(), "org.eclipse.ui.views");
-        NodeList views = extension.getElementsByTagName("view");
-        Element view = null;
-        for (int i = 0; i < views.getLength(); i++) {
-            Element e = (Element) views.item(i);
-            if ("io.github.jm6cnddxbwftaks.neovim4eclipse.views.neovim".equals(e.getAttribute("id"))) {
-                view = e;
+    void thePageEditorIsOfferedForNoFileAndNoNeovimViewIsLeft() throws Exception {
+        Element extension = extension(load(), "org.eclipse.ui.editors");
+        Element editor = null;
+        NodeList editors = extension.getElementsByTagName("editor");
+        for (int i = 0; i < editors.getLength(); i++) {
+            Element e = (Element) editors.item(i);
+            if ("io.github.jm6cnddxbwftaks.neovim4eclipse.editors.page".equals(e.getAttribute("id"))) {
+                editor = e;
             }
         }
-        assertNotNull(view, "the Neovim view in plugin.xml");
-        assertEquals("false", view.getAttribute("restorable"));
+        assertNotNull(editor, "the page editor in plugin.xml");
+        assertEquals("io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimPageEditor", editor.getAttribute("class"));
+        for (String offered : new String[] { "extensions", "filenames", "default" }) {
+            assertEquals("", editor.getAttribute(offered), offered);
+        }
+        assertEquals(0, editor.getElementsByTagName("contentTypeBinding").getLength());
+        NodeList views = load().getElementsByTagName("view");
+        for (int i = 0; i < views.getLength(); i++) {
+            assertFalse(((Element) views.item(i)).getAttribute("id").endsWith(".views.neovim"), "the Neovim view is gone");
+        }
     }
 }

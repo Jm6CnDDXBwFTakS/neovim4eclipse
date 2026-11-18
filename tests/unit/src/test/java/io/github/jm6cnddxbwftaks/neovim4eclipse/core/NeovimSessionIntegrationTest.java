@@ -437,7 +437,7 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * {@code :messages} arrives as its own event (msg_history_show) and goes to the Neovim view,
+     * {@code :messages} arrives as its own event (msg_history_show) and goes to a page editor,
      * its errors marked; the output popup gets nothing.
      */
     @Test
@@ -484,7 +484,7 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * {@code :checkhealth}'s report goes to the Neovim view too, taken from its window by the
+     * {@code :checkhealth}'s report goes to a page editor too, taken from its window by the
      * {@code WinNew} net; its buffer is wiped, so {@code :ls} never lists {@code health://}.
      */
     @Test
@@ -507,7 +507,7 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * {@code :help} goes to the Neovim view: the page, taken from its window by the {@code WinNew}
+     * {@code :help} goes to a page editor: the page, taken from its window by the {@code WinNew}
      * net, as a tag, the file's name and the line, with the editing Neovim's {@code 'runtimepath'}.
      */
     @Test
@@ -552,7 +552,7 @@ class NeovimSessionIntegrationTest {
         }
     }
 
-    /** A yank in the Neovim view lands in the editing Neovim's register of the same name. */
+    /** A yank in a page editor lands in the editing Neovim's register of the same name. */
     @Test
     void aYankFromTheViewFillsTheRegister() throws Exception {
         try (NeovimSession s = start()) {

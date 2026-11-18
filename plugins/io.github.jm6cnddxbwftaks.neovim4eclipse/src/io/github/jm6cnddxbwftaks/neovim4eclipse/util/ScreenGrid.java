@@ -13,7 +13,7 @@ import java.util.Set;
 
 /**
  * The whole screen of a Neovim attached without {@code ext_multigrid}, as its grid events build
- * it: the second Neovim of the Neovim view ({@code core/ScreenSession}), whose screen is drawn
+ * it: the second Neovim of a page editor ({@code core/ScreenSession}), whose screen is drawn
  * as it is, windows, status line, {@code :} line and messages included. Used on the RPC reader
  * thread only; what leaves it is an immutable {@link GridSnapshot}.
  *

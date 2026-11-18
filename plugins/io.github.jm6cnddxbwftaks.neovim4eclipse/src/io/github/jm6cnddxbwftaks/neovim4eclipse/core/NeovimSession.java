@@ -672,7 +672,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Notified (on the RPC reader thread) of what the Neovim view shows: {@code :messages} with
+     * Notified (on the RPC reader thread) of what a page editor shows: {@code :messages} with
      * its errors marked and a {@code :checkhealth} report ({@code util/ViewText}), and the page a
      * {@code :help} reached ({@code util/HelpPage}). None goes to the output popup.
      */
@@ -896,14 +896,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Puts text yanked in the Neovim view into this Neovim's register of the same name
+     * Puts text yanked in a page editor into this Neovim's register of the same name
      * ({@link LuaScripts#SET_REGISTER_FROM_VIEW}), so that {@code p} in an editor pastes it. A
      * plain {@code yy} in the view (register {@code ""}) fills the unnamed register, and the
      * clipboard as well when this Neovim's {@code 'clipboard'} says so. Example:
      * {@code ("a", "V", ["OK"])} after {@code "ayy} on a line {@code OK}.
      */
     public void setRegisterFromViewAsync(String register, String type, List<String> lines) {
-        submit("register from the Neovim view", Level.FINE,
+        submit("register from a page editor", Level.FINE,
                 () -> await(api.execLua(LuaScripts.SET_REGISTER_FROM_VIEW, List.of(register, type, lines))));
     }
 

@@ -57,7 +57,7 @@ public sealed interface MessageEvent {
 
     /**
      * {@code msg_history_show}: what {@code :messages} lists, one entry per message, each with its
-     * kind, so that the Neovim view can color the errors. Example: {@code [("emsg", "E486: Pattern
+     * kind, so that a page editor can color the errors. Example: {@code [("emsg", "E486: Pattern
      * not found: nope"), ("", "3 substitutions on 3 lines")]}.
      */
     record History(List<Entry> entries) implements MessageEvent {

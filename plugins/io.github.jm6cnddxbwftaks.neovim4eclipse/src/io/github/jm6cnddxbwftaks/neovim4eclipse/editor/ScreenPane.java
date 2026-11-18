@@ -43,19 +43,20 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 /**
  * A second Neovim's whole screen in an SWT pane: a {@link GridCanvas} for the screen, keys and
  * mouse to Neovim, the pane's size as Neovim's screen, and the second Neovim's start and end
- * ({@link ScreenSession}). The part that holds it ({@link NeovimView}) is its {@link Host}: it gives
- * the pane a parent, shows its title, and says what "back to the editor" and "ended" mean for it.
+ * ({@link ScreenSession}). The editor that holds it ({@link NeovimPageEditor}) is its {@link Host}:
+ * it gives the pane a parent, shows its title, and says what a {@code Ctrl-W} at the edge and the
+ * end mean for it.
  * Example: {@code new ScreenPane(parent, host).show(ViewText.messages(history), 0x000000,
  * 0xFFFFFF)} starts a second Neovim with the output profile and shows the history in it.
  *
- * <h2>One second Neovim per kind</h2>
+ * <h2>One kind per pane</h2>
  * Text ({@link ViewText}) is shown by a second Neovim with the output profile
  * ({@link OutputProfile}), which loads none of the user's plug-ins; a help page ({@link HelpPage})
- * by one with the help profile ({@link HelpProfile}), given the user's {@code 'runtimepath'}. When
- * the kind changes ({@code :messages} after {@code :help}), the running one is closed and the
- * other started, so text never meets the user's plug-ins, whatever was shown before. The same kind
- * again reuses the running one (about 0.1 s saved; for help, {@code Ctrl-O} keeps the pages seen
- * since the last text).
+ * by one with the help profile ({@link HelpProfile}), given the user's {@code 'runtimepath'}. A
+ * pane shows one kind only, since its editor does ({@link NeovimPageEditor#show} refuses another),
+ * so the first content picks the profile, and text never meets the user's plug-ins. Content of the
+ * same kind again reuses the running Neovim (about 0.1 s saved; for help, {@code Ctrl-O} keeps
+ * the pages seen).
  *
  * <h2>Its look</h2>
  * The editor's text font, and the colors of the editor the content came from, taken when it
@@ -102,8 +103,6 @@ final class ScreenPane {
     private int measuredHeight = 1;
     /** The second Neovim; {@code null} before the first content and after it ended. */
     private ScreenSession screen;
-    /** Whether {@link #screen} has the help profile ({@link HelpProfile}) rather than the output one. */
-    private boolean screenForHelp;
     /** Whether a start is under way: content that arrives meanwhile waits in {@link #pending}. */
     private boolean starting;
     /** The content to show once the second Neovim has started; {@code null} for none. */
@@ -190,8 +189,8 @@ final class ScreenPane {
 
     /**
      * Shows {@code content}, replacing what the pane held, starting a second Neovim of its kind if
-     * none is running (see the class comment, "One second Neovim per kind"), in the colors of the
-     * editor it came from.
+     * none is running (see the class comment, "One kind per pane"), in the colors of the editor it
+     * came from.
      *
      * @param fg that editor's text color, {@code 0xRRGGBB}
      * @param bg its background
@@ -203,15 +202,10 @@ final class ScreenPane {
         foreground = fg;
         background = bg;
         host.titleChanged(ScreenInput.title(content.title()));
-        if (screen != null && screenForHelp == isHelp(content)) {
+        if (screen != null) {
             showOnScreen(content);
             canvas.redraw();
             return;
-        }
-        if (screen != null) {
-            ScreenSession other = screen;
-            screen = null; // its end, when it comes, is no longer this pane's (Events.ended)
-            closeInBackground(other);
         }
         pending = content;
         if (!starting) {
@@ -237,7 +231,7 @@ final class ScreenPane {
         String version = Activator.getDefault().getBundle().getVersion().toString();
         List<String> profile = forHelp ? HelpProfile.ARGS : OutputProfile.ARGS;
         Events events = new Events();
-        Job job = Job.create("Starting the Neovim view's Neovim", monitor -> {
+        Job job = Job.create("Starting a Neovim page's Neovim", monitor -> {
             ScreenSession started = null;
             Exception failure = null;
             try {
@@ -252,18 +246,17 @@ final class ScreenPane {
             }
             ScreenSession session = started;
             Exception error = failure;
-            display.asyncExec(() -> onStarted(session, events, forHelp, error, startColumns, startRows));
+            display.asyncExec(() -> onStarted(session, events, error, startColumns, startRows));
             return Status.OK_STATUS;
         });
         job.setSystem(true);
         job.schedule();
     }
 
-    private void onStarted(ScreenSession session, Events events, boolean forHelp, Exception failure, int startColumns,
-            int startRows) {
+    private void onStarted(ScreenSession session, Events events, Exception failure, int startColumns, int startRows) {
         starting = false;
         if (failure != null) {
-            LOG.log(Level.WARNING, "The Neovim view could not start its Neovim", failure);
+            LOG.log(Level.WARNING, "A Neovim page could not start its Neovim", failure);
             host.titleChanged(ScreenInput.title("could not start (see the log)"));
             return;
         }
@@ -272,17 +265,10 @@ final class ScreenPane {
             return;
         }
         ViewContent content = pending;
-        if (content != null && isHelp(content) != forHelp) {
-            // The other kind arrived while this one started: start that one instead.
-            closeInBackground(session);
-            start(isHelp(content));
-            return;
-        }
         screen = session;
-        screenForHelp = forHelp;
         events.session = session;
         if (events.endedEarly) {
-            LOG.fine("The Neovim view's Neovim ended while it started");
+            LOG.fine("A Neovim page's Neovim ended while it started");
             onEnded(); // the next content starts a new one
             return;
         }
@@ -308,9 +294,9 @@ final class ScreenPane {
         };
         shown.whenComplete((answer, failure) -> {
             if (failure != null) {
-                LOG.log(Level.FINE, "The Neovim view could not show " + content.title(), failure);
+                LOG.log(Level.FINE, "A Neovim page could not show " + content.title(), failure);
             } else if (answer instanceof String error && !error.isEmpty()) {
-                LOG.fine(() -> "The Neovim view's help: " + error);
+                LOG.fine(() -> "A Neovim page's help: " + error);
             }
         });
     }
@@ -412,7 +398,7 @@ final class ScreenPane {
 
     /** {@link ScreenSession#close} waits for the process a moment, so never on the UI thread. */
     private static void closeInBackground(ScreenSession session) {
-        Job job = Job.create("Closing the Neovim view's Neovim", monitor -> {
+        Job job = Job.create("Closing a Neovim page's Neovim", monitor -> {
             session.close();
             return Status.OK_STATUS;
         });
@@ -422,9 +408,9 @@ final class ScreenPane {
 
     /**
      * What one second Neovim reports, passed to the UI thread. Each counts only while it is the
-     * pane's {@link #screen}: one closed because the kind changed still sends its last screens, a
-     * yank or {@code Ctrl-W p} typed a moment before, and its end, which must neither draw, fill a
-     * register, move the focus nor close the pane.
+     * pane's {@link #screen}: one closed with the pane, or after it ended, may still send its last
+     * screens, a yank or a {@code Ctrl-W} typed a moment before, and its end, which must neither
+     * draw, fill a register, move the focus nor close the editor.
      */
     private final class Events implements ScreenSession.Listener {
 

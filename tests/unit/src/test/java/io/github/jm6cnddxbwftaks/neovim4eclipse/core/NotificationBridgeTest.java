@@ -520,7 +520,7 @@ class NotificationBridgeTest {
     }
 
     /**
-     * {@code eclipse_view_text}: a {@code :checkhealth} report for the Neovim view. Only that kind
+     * {@code eclipse_view_text}: a {@code :checkhealth} report for a page editor. Only that kind
      * is known; any other, or a malformed payload, reaches nobody.
      */
     @Test
@@ -533,7 +533,7 @@ class NotificationBridgeTest {
     }
 
     /**
-     * {@code eclipse_view_help}: a help page for the Neovim view. A payload whose parts lack their
+     * {@code eclipse_view_help}: a help page for a page editor. A payload whose parts lack their
      * types, or whose tag or file is empty, reaches nobody.
      */
     @Test

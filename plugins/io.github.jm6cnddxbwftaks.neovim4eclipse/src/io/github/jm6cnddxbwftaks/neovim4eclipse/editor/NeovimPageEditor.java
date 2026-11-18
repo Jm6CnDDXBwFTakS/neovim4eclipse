@@ -43,8 +43,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
  * <ul>
  *   <li>The title is the kind's, "Neovim: help" ({@link NeovimPageInput#getName}).</li>
  *   <li>Every key goes to the second Neovim, except the shortcuts Eclipse binds; Ctrl+W is
- *       Neovim's through the same key context as the Neovim view's
- *       ({@link NeovimView#KEY_CONTEXT_ID}), turned on while the screen has the keyboard.</li>
+ *       Neovim's through a key context of the page editors' own ({@link #KEY_CONTEXT_ID}), turned
+ *       on while the screen has the keyboard.</li>
  *   <li>When the second Neovim ends ({@code q}, {@code :q}, a crash), the editor closes; the next
  *       command of its kind opens a new one.</li>
  *   <li>Opened on anything but a {@link NeovimPageInput} (a file through Open With), it refuses.</li>
@@ -59,6 +59,14 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
 
     /** The editor's id in {@code plugin.xml}. */
     public static final String ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.editors.page";
+
+    /**
+     * The key context active while a page editor's screen has the keyboard ({@code plugin.xml}):
+     * there Ctrl+W runs the plug-in's Ctrl-W command, which {@link SendKeyHandler} sends to this
+     * editor's Neovim, instead of Eclipse's Close Editor (on macOS Close is Cmd+W, and Ctrl+W is
+     * free anyway).
+     */
+    static final String KEY_CONTEXT_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.context.page";
 
     private ScreenPane pane;
     /** The key context while the screen has the keyboard; {@code null} otherwise. */
@@ -104,7 +112,7 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
         if (contexts != null) {
             pane.canvas().addListener(SWT.FocusIn, e -> {
                 if (keyContext == null) {
-                    keyContext = contexts.activateContext(NeovimView.KEY_CONTEXT_ID);
+                    keyContext = contexts.activateContext(KEY_CONTEXT_ID);
                 }
             });
             pane.canvas().addListener(SWT.FocusOut, e -> {

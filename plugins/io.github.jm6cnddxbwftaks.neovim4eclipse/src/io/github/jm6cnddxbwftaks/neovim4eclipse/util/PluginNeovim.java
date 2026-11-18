@@ -128,7 +128,7 @@ public final class PluginNeovim {
      * checked in full (EarlyStartup's check, made in the background at Eclipse's start, only decides
      * whether Get Neovim opens at once). Call this off the UI thread where possible.
      *
-     * <p>Two starts at once (an editor's and the Neovim view's): an answer is kept with the
+     * <p>Two starts at once (an editor's and a page editor's): an answer is kept with the
      * {@link #forget} count from when its hash began, and reused only while that count is current.
      * So a hash that was running when another start forgot is not reused by that start, which
      * hashes again; nothing waits for anything. Example: start A begins hashing; start B forgets

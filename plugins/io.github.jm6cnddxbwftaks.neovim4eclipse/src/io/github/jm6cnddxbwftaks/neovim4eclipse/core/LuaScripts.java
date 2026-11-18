@@ -966,8 +966,8 @@ final class LuaScripts {
      * ({@code :b 1}, {@code Ctrl-^}); Eclipse's text replaces that. Only a buffer that is another
      * document's now ({@code acwrite}, see {@link #DOCUMENT_BUFFER}), or a special one (help, a
      * terminal), is not reused: a new buffer is made, left unnamed (the second result is
-     * {@code false}), since two documents must not share one. Except a help page the Neovim view
-     * took ({@link #WINDOWS}, {@code take_help}): unloaded and in no window, kept only for
+     * {@code false}), since two documents must not share one. Except a help page handed to a
+     * page editor ({@link #WINDOWS}, {@code take_help}): unloaded and in no window, kept only for
      * {@code :helpgrep}'s list. It is wiped, and the document gets its name, as if no help had
      * been opened (example: {@code :help myplugin}, then {@code doc/myplugin.txt} opened in an
      * editor from the plug-in's repository); that file's entries in the list are lost. The third result says whether the
@@ -1150,7 +1150,7 @@ final class LuaScripts {
      * <p>The second net, {@code WinNew}, closes a window Eclipse cannot show (a stray split, the
      * quickfix window, a focused float) once the command that opened it is over. One window it
      * reads first: a {@code :checkhealth} report's (its buffer's filetype is {@code checkhealth}),
-     * whose lines it sends as {@code eclipse_view_text("checkhealth", lines)} for the Neovim view,
+     * whose lines it sends as {@code eclipse_view_text("checkhealth", lines)} for a page editor,
      * then wipes the {@code health://} buffer, with no message ({@code docs/ARCHITECTURE.md},
      * decision 10).
      */
@@ -1423,7 +1423,7 @@ final class LuaScripts {
             -- A :checkhealth report opens in a window of its own however it is asked for (a new
             -- tab, a split with :vert, a float with vim.g.health's style 'float'), and Neovim has
             -- filled it and set its filetype by the time this net runs (after the command). Its
-            -- text goes to the Neovim view instead (eclipse_view_text): read before the window
+            -- text goes to a page editor instead (eclipse_view_text): read before the window
             -- closes, since closing the float wipes its buffer; then the buffer is wiped, so that
             -- :ls and :bnext never meet health://. Only text leaves, never a file name.
             -- Matched by all three marks Neovim's report has (filetype, scratch buffer, its name), so a
@@ -1508,7 +1508,7 @@ final class LuaScripts {
               return parsed.args[1], list.idx
             end
             -- A help window (:help, :helpgrep, a plug-in's vim.cmd.help, in a split, a tab or with
-            -- :vert): Eclipse shows help in the Neovim view instead, with the user's own help pages
+            -- :vert): Eclipse shows help in a page editor instead, with the user's own help pages
             -- and plug-ins (docs/ARCHITECTURE.md, decision 10). By the time this net runs, :help has
             -- set 'buftype' help and put the cursor on the topic. What leaves: the tag to open
             -- (nearest_tag), the help file's name without its folder (to check the second Neovim
@@ -5784,7 +5784,7 @@ final class LuaScripts {
             """;
 
     /**
-     * Run once in the <em>second</em> Neovim, the one whose whole screen the Neovim view draws
+     * Run once in the <em>second</em> Neovim, the one whose whole screen a page editor draws
      * ({@link ScreenSession}), right after it started. Argument: Eclipse's channel number. Not run
      * in the editing Neovim.
      *
@@ -5918,7 +5918,7 @@ final class LuaScripts {
             """;
 
     /**
-     * The output profile of the Neovim view ({@code :messages}, {@code :checkhealth}): puts text
+     * The output profile of a page editor ({@code :messages}, {@code :checkhealth}): puts text
      * into the second Neovim's one buffer, replacing what it showed, and returns its line count.
      * Arguments: the lines; the filetype ({@code "checkhealth"}, or {@code ""} for none); the lines
      * to color, as {@code {line, group}} pairs (0-based lines, Neovim's highlight groups:
@@ -5954,13 +5954,13 @@ final class LuaScripts {
             vim.bo[buf].filetype = filetype
             local count = vim.api.nvim_buf_line_count(buf)
             vim.api.nvim_win_set_cursor(0, { cursor == 'end' and count or 1, 0 })
-            vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the Neovim view' })
+            vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the page editor' })
             vim.wo.statusline = ' ' .. (title or ''):gsub('%%', '%%%%') .. '%=%l,%c%V  %P '
             return count
             """;
 
     /**
-     * The help profile of the Neovim view ({@code :help}, {@link HelpProfile}): opens a help page in
+     * The help profile of a page editor ({@code :help}, {@link HelpProfile}): opens a help page in
      * the second Neovim, as the editing Neovim had it. Arguments: the tag, the help file's name
      * without its folder, the line, the editing Neovim's {@code 'runtimepath'},
      * {@code 'background'} ({@code "light"} or {@code "dark"}), and for a {@code :helpgrep} entry
@@ -6006,7 +6006,7 @@ final class LuaScripts {
             vim.o.runtimepath = runtimepath
             local group = vim.api.nvim_create_augroup('neovim4eclipse_help_view', { clear = true })
             local function quit_with_q(buf)
-              vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the Neovim view' })
+              vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the page editor' })
             end
             vim.api.nvim_create_autocmd('BufWinEnter', {
               group = group,
@@ -6037,7 +6037,7 @@ final class LuaScripts {
                     end
                   end
                   if swapped then
-                    vim.api.nvim_echo({ { 'The Neovim view shows help only' } }, true, { err = true })
+                    vim.api.nvim_echo({ { 'The help editor shows help only' } }, true, { err = true })
                   end
                 end)
               end,
@@ -6153,7 +6153,7 @@ final class LuaScripts {
             """;
 
     /**
-     * Puts a yank from the Neovim view into the editing Neovim's register of the same name
+     * Puts a yank from a page editor into the editing Neovim's register of the same name
      * ({@code NeovimSession.setRegisterFromViewAsync}). Arguments: the register's name ({@code ""}
      * for the unnamed one), Neovim's register type and the lines. The unnamed register fills
      * {@code "}, and {@code +} or {@code *} too when {@code 'clipboard'} holds {@code unnamedplus}

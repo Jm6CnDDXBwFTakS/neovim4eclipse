@@ -10,7 +10,7 @@ import org.eclipse.swt.widgets.Event;
  * The mouse on a grid Neovim draws, sent to Neovim as {@code nvim_input_mouse} takes it: the left
  * button (press, drag, release) and the vertical wheel. The right and middle buttons are left
  * alone: there is no Eclipse text under the grid for them. Used by the command-line window's panel
- * ({@link NeovimWindowPanel}) and the Neovim view ({@link NeovimView}). One per canvas, which
+ * ({@link NeovimWindowPanel}) and the page editors ({@link NeovimPageEditor}). One per canvas, which
  * owns it: its state goes with the canvas.
  *
  * <p>Example: a click on row 2, column 5 sends {@code ("left", "press", "", 2, 5)} and

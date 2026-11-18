@@ -121,7 +121,7 @@ final class StatusTracker {
     /** One message event from Neovim; see the class comment. */
     void onMessageEvent(MessageEvent event) {
         if (event instanceof MessageEvent.History history) {
-            // :messages goes to the Neovim view, not the output popup (docs/ARCHITECTURE.md,
+            // :messages goes to a page editor, not the output popup (docs/ARCHITECTURE.md,
             // decision 10); the message line keeps what it showed. An empty history shows nothing,
             // as in Vim, rather than an empty view that takes the keyboard.
             if (!history.entries().isEmpty()) {
@@ -251,7 +251,7 @@ final class StatusTracker {
     }
 
     /**
-     * Listens for what the Neovim view shows ({@code :messages}, {@code :checkhealth},
+     * Listens for what a page editor shows ({@code :messages}, {@code :checkhealth},
      * {@code :help}); called on the RPC reader thread.
      */
     void addViewContentListener(Consumer<ViewContent> listener) {
@@ -263,7 +263,7 @@ final class StatusTracker {
     }
 
     /**
-     * Content for the Neovim view that is no message ({@code :checkhealth}'s report, a
+     * Content for a page editor that is no message ({@code :checkhealth}'s report, a
      * {@code :help} page): to the same listeners.
      */
     void onViewContent(ViewContent content) {

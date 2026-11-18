@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent.Cell;
 
-/** The one screen of a Neovim attached without {@code ext_multigrid} (the Neovim view's). */
+/** The one screen of a Neovim attached without {@code ext_multigrid} (a page editor's). */
 class ScreenGridTest {
 
     private final ScreenGrid screen = new ScreenGrid();

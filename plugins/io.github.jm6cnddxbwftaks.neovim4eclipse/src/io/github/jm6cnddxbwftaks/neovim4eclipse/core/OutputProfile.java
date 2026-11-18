@@ -10,7 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 
 /**
- * The Neovim view's output profile: what a {@link ScreenSession} is started with, and how text is
+ * A page editor's output profile: what a {@link ScreenSession} is started with, and how text is
  * put into it, for {@code :messages} and {@code :checkhealth} ({@link ViewText}). The text only
  * shows: the profile starts Neovim with {@code -M} (no changes to the text, no writes), on top of
  * the rule every second Neovim keeps ({@link ScreenSession#FIXED_ARGS}).

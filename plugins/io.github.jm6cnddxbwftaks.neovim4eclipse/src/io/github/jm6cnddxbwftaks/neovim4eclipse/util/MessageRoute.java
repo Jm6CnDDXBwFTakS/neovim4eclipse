@@ -26,7 +26,7 @@ import java.util.Set;
  *   <li>Shell output always goes to the popup, even when one line long: the {@code shell_*} kinds.
  *       (Shell output arrives appended to the {@code shell_cmd} message, so that one counts as
  *       output too.) {@code :messages} is not routed here at all: it is its own event
- *       ({@link MessageEvent.History}), which goes to the Neovim view ({@code core/StatusTracker},
+ *       ({@link MessageEvent.History}), which goes to a page editor ({@code core/StatusTracker},
  *       {@link ViewText#messages}).</li>
  *   <li>Not shown: the echo of a search ({@code search_cmd}: Eclipse's box showed it) and of a
  *       shell command (the first line of {@code shell_cmd}: the popup's title is the command), and

@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 -- SPDX-License-Identifier: EPL-2.0
 
--- LuaScripts.SCREEN_SETUP, which the second Neovim of the Neovim view runs once it started
+-- LuaScripts.SCREEN_SETUP, which the second Neovim of a page editor runs once it started
 -- (core/ScreenSession): the options the one rule rests on (it never writes a file), the yank
 -- report and the end report. What ScreenSession does with the answer is ScreenSessionTest; the
 -- real second Neovim, started with its fixed arguments, is ScreenSessionIntegrationTest.

@@ -102,7 +102,7 @@ final class NeovimConnection implements AutoCloseable {
     }
 
     /**
-     * The UI a second Neovim attaches as, the one whose whole screen the Neovim view draws
+     * The UI a second Neovim attaches as, the one whose whole screen a page editor draws
      * ({@link ScreenSession}): 24-bit color and {@code ext_linegrid} only. Everything else, the
      * command line and the messages included, Neovim draws into its one grid, as on a terminal, so
      * the view shows the screen as it is and needs no command box of its own

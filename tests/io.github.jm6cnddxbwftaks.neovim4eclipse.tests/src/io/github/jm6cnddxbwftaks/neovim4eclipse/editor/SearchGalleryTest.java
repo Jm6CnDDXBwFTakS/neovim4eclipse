@@ -102,11 +102,11 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "completed, its entries lined up with it, in Neovim's colors for the list (Pmenu), "
                             + "which follow the theme. The second entry is selected (PmenuSel) and stands out from "
                             + "the others in both themes; all entries read. The caret is after the completed word."),
-            new Picture("view-messages", "The Neovim view after :messages",
+            new Picture("view-messages", "A page editor after :messages",
                     "The view's second Neovim, in the editor's text font on the editor's background: three "
                             + "messages, the newest last with the cursor on it. The E486 error is in Neovim's error "
                             + "color (ErrorMsg), the other two in the default text color; all read in both themes."),
-            new Picture("view-checkhealth", "The Neovim view after :checkhealth neovim4eclipse",
+            new Picture("view-checkhealth", "A page editor after :checkhealth neovim4eclipse",
                     "The plug-in's own report as Neovim colors :checkhealth: the section headings stand out, OK "
                             + "in green, the WARNING (the gallery runs a Neovim program of its own, not the dedicated "
                             + "one) in Neovim's warning color; the lines read in both themes."),
@@ -466,7 +466,7 @@ class SearchGalleryTest extends EndToEndTestBase {
     }
 
     /**
-     * The Neovim view after {@code :messages} (three messages, an error among them) and after
+     * A page editor after {@code :messages} (three messages, an error among them) and after
      * {@code :checkhealth neovim4eclipse}, as the view's canvas draws them; then the view is closed
      * and the Java editor is active again, for the pictures after these.
      */

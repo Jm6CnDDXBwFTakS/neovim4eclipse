@@ -9,7 +9,7 @@ import java.util.concurrent.CompletableFuture;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
 
 /**
- * The Neovim view's help profile: what a {@link ScreenSession} for {@code :help} is started with,
+ * A page editor's help profile: what a {@link ScreenSession} for {@code :help} is started with,
  * and how a page is opened in it ({@link HelpPage}).
  *
  * <p><b>Why a profile of its own.</b> The output profile ({@link OutputProfile}) loads none of the
@@ -18,8 +18,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
  * Neovim runs the help scripts it finds there on each page (a plug-in's
  * {@code ftplugin/help.lua}, {@code after/ftplugin/help.lua}, a parser for a code block's
  * language), as it does in the user's editor. So help gets a second Neovim of its own, given that
- * path once started ({@link LuaScripts#SCREEN_SHOW_HELP}); the text profile's never is. The view
- * starts the other one when the kind of content changes ({@code editor/NeovimView}).
+ * path once started ({@link LuaScripts#SCREEN_SHOW_HELP}); the text profile's never is. Each kind
+ * has its own page editor, and with it its own second Neovim ({@code editor/NeovimPageEditor}).
  *
  * <p>What still holds in both: the rule every second Neovim keeps ({@link ScreenSession#FIXED_ARGS}:
  * {@code --clean}, no swap file, {@code 'write'} and {@code 'modeline'} off) and {@code -M}, so no

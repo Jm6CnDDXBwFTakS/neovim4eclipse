@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 -- SPDX-License-Identifier: EPL-2.0
 
--- The Lua of the Neovim view besides SCREEN_SETUP (screen_setup_spec.lua): SCREEN_SHOW_TEXT, the
+-- The Lua of a page editor besides SCREEN_SETUP (screen_setup_spec.lua): SCREEN_SHOW_TEXT, the
 -- output profile in the second Neovim; and, in the editing Neovim, HEALTH_CHECK (the plug-in's
 -- own :checkhealth neovim4eclipse) and SET_REGISTER_FROM_VIEW (a yank in the view, in a register).
 

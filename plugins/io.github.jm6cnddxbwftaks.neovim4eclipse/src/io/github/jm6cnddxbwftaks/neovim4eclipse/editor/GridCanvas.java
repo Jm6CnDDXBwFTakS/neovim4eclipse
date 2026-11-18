@@ -43,7 +43,7 @@ final class GridCanvas extends Canvas {
 
     /**
      * Where the canvas takes its font, colors and line height from. Example: the editor's
-     * {@code StyledText} for the command-line window ({@link #of(StyledText)}); the Neovim view,
+     * {@code StyledText} for the command-line window ({@link #of(StyledText)}); a page editor,
      * which has no editor of its own, gives the text font and the editor colors it took last.
      */
     interface Look {

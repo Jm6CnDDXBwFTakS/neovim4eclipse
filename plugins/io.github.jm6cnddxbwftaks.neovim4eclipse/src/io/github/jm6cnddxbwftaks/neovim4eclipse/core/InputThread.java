@@ -42,7 +42,8 @@ final class InputThread {
 
     /**
      * A thread of the given name, so that a thread dump tells which Neovim it serves. Example:
-     * {@code neovim4eclipse-screen-input} for the second Neovim of the Neovim view ({@link ScreenSession}).
+     * {@code neovim4eclipse-screen-input} for the second Neovim of a page editor
+     * ({@link ScreenSession}).
      */
     InputThread(String threadName) {
         executor = Executors.newSingleThreadExecutor(r -> {

@@ -203,7 +203,7 @@ final class NotificationBridge implements Incoming {
         void onMessageEvent(MessageEvent event);
 
         /**
-         * Content for the Neovim view that is no message, which the {@code WinNew} net of
+         * Content for a page editor that is no message, which the {@code WinNew} net of
          * {@link LuaScripts#WINDOWS} took from its window: a {@code :checkhealth} report
          * ({@code eclipse_view_text}) or a {@code :help} page ({@code eclipse_view_help}). A default
          * that does nothing, for the fakes of tests that do not use it.

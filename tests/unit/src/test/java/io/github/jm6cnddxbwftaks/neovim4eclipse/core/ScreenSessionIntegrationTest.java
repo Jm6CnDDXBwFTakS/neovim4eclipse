@@ -31,7 +31,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 
 /**
- * The second Neovim of the Neovim view against a real {@code nvim --embed}: its screen, keys,
+ * The second Neovim of a page editor against a real {@code nvim --embed}: its screen, keys,
  * yanks, size and end, and the one rule (it never writes a file). Needs Neovim:
  * {@code -Pintegration -Dnvim.path=...}.
  */
