@@ -36,7 +36,8 @@ class HistoryStepsTest {
         final List<Place> entries = new ArrayList<>();
         int current = -1;
         long nextId = 1;
-        final HistorySteps<Place, String> steps = new HistorySteps<>();
+        // "help" stands for a page editor's entries (:help, :messages, :checkhealth): never stopped at.
+        final HistorySteps<Place, String> steps = new HistorySteps<>(place -> place.editor().startsWith("help"));
 
         /** An editor switch: the user's (a tab click), or the plug-in's for a Neovim jump. */
         Place switchTo(String editor, boolean plugins) {
@@ -220,5 +221,29 @@ class HistoryStepsTest {
             steps.wentBack(id, entries, entries.get(0), "a");
         }
         assertEquals(HistorySteps.MAX_STEPS, steps.remembered());
+    }
+
+    @Test
+    void backAndForwardPassOverAPageEditorsEntries() {
+        History h = new History();
+        h.switchTo("a", false);
+        h.switchTo("help", false); // :help opened the help editor below
+        h.switchTo("b", false); // the user clicked back into b
+        long back = h.ctrlO();
+        assertEquals("a", h.at(), "Ctrl-O: past the help editor, to a");
+        h.ctrlI(back);
+        assertEquals("b", h.at(), "Ctrl-I: back to b, where the step started");
+        h.current = 0;
+        assertEquals(2, h.steps.plainForwardSteps(h.entries, h.entries.get(0), 1), "plain Forward: past it, to b");
+    }
+
+    @Test
+    void aPageEditorsEntryIsNoNewWayToGo() {
+        History h = new History();
+        h.switchTo("a", false);
+        h.switchTo("b", false);
+        h.ctrlO();
+        h.entries.add(new Place("help")); // the help editor's entry, after the Back
+        assertFalse(h.steps.userMovedOn(h.entries), "the remembered Back step stays");
     }
 }

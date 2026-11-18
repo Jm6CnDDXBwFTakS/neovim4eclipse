@@ -9,6 +9,7 @@ import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Where {@code Ctrl-O} and {@code Ctrl-I} go in Eclipse's navigation history once a Neovim
@@ -43,6 +44,12 @@ import java.util.Set;
  * {@code Ctrl-O} moved 8 times (one jump, then Back through every entry), {@code Ctrl-I} 2 times.
  * Now: one jump, then Back past the plug-in's entries to the editor switches the user made, and
  * {@code Ctrl-I} retraces the same places in reverse.
+ *
+ * <p><b>Entries never stopped at</b> ({@code elsewhere}): the page editors' ({@code :help},
+ * {@code :messages}, {@code :checkhealth}). Vim's jump history never jumps into a help window from
+ * another window, so {@code Ctrl-O} and {@code Ctrl-I} from the code step over them as over the
+ * plug-in's own entries; and like those they are nobody's new way to go. Example: {@code [a, h, b]}
+ * with {@code h} the help editor's and {@code b} current: {@code Ctrl-O} goes to {@code a}.
  *
  * <p>The remembered Back steps are forgotten when Eclipse's history gets an entry the plug-in did
  * not make (a tab click, Open Declaration, opening a file): that is a new way to go, as in Eclipse
@@ -79,10 +86,27 @@ public final class HistorySteps<L, S> {
     }
 
     private final Set<L> own = identitySet();
+    /** Entries never stopped at: a page editor's (see the class comment). */
+    private final Predicate<L> elsewhere;
     /** Newest first. */
     private final Deque<Departure<L, S>> departures = new ArrayDeque<>();
     /** The history when the last Back was remembered: an entry not in it, nor own, is the user's. */
     private Set<L> seen = identitySet();
+
+    /** Steps that stop at every entry but the plug-in's own. */
+    public HistorySteps() {
+        this(location -> false);
+    }
+
+    /** Steps that also pass over the entries {@code elsewhere} accepts (see the class comment). */
+    public HistorySteps(Predicate<L> elsewhere) {
+        this.elsewhere = elsewhere;
+    }
+
+    /** Whether Back and Forward pass over {@code location}: the plug-in's own entry, or one elsewhere. */
+    private boolean passedOver(L location) {
+        return isOwn(location) || location != null && elsewhere.test(location);
+    }
 
     /** An entry the plug-in's own editor switch added ({@code null} is ignored). */
     public void markOwn(L location) {
@@ -124,7 +148,7 @@ public final class HistorySteps<L, S> {
             return 1;
         }
         int to = from - 1;
-        while (to > 0 && isOwn(history.get(to))) {
+        while (to > 0 && passedOver(history.get(to))) {
             to--;
         }
         return to < 0 ? 0 : from - to;
@@ -190,7 +214,10 @@ public final class HistorySteps<L, S> {
         int to = from;
         for (int press = 0; press < Math.max(1, count) && to + 1 < history.size(); press++) {
             to++;
-            while (to + 1 < history.size() && isOwn(history.get(to)) && isOwn(history.get(to + 1))) {
+            // A run of the plug-in's entries to its last (where a Back started from); an entry
+            // elsewhere, past it.
+            while (to + 1 < history.size() && (isOwn(history.get(to)) && isOwn(history.get(to + 1))
+                    || elsewhere.test(history.get(to)))) {
                 to++;
             }
         }
@@ -217,7 +244,7 @@ public final class HistorySteps<L, S> {
             return false;
         }
         for (L location : history) {
-            if (location != null && !seen.contains(location) && !own.contains(location)) {
+            if (location != null && !seen.contains(location) && !passedOver(location)) {
                 departures.clear();
                 return true;
             }

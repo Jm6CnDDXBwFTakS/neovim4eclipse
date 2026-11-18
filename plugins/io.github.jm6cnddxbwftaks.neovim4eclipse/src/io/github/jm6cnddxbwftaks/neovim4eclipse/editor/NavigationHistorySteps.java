@@ -374,7 +374,8 @@ final class NavigationHistorySteps {
     private static HistorySteps<INavigationLocation, Place> steps(IWorkbenchPage page) {
         HistorySteps<INavigationLocation, Place> steps = STEPS.get(page);
         if (steps == null) {
-            steps = new HistorySteps<>();
+            // Ctrl-O and Ctrl-I never stop at a page editor's entry (:help, :messages, :checkhealth).
+            steps = new HistorySteps<>(location -> location.getInput() instanceof NeovimPageInput);
             if (isOpen(page)) {
                 STEPS.put(page, steps);
                 forgetWhenClosed(page);

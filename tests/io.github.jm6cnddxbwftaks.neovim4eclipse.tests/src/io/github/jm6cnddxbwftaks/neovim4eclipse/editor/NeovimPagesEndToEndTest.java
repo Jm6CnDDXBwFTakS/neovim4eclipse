@@ -33,6 +33,7 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.keys.IBindingService;
+import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
@@ -361,6 +362,35 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
             settle();
             return page().getActiveEditor() == help;
         }, () -> "; active: " + page().getActiveEditor().getTitle());
+    }
+
+    /**
+     * {@code Ctrl-O} from the code goes back past the help editor, as Vim's jump history never
+     * jumps into a help window: other.txt, then {@code :help} (the help editor's entry in Eclipse's
+     * history), then a click back into test.txt; {@code Ctrl-O} reaches other.txt and never the help
+     * editor.
+     */
+    @Test
+    void ctrlOFromTheCodeNeverStopsAtAPageEditor() throws Exception {
+        ITextEditor other = openOtherFile();
+        try {
+            waitForAttach(other, "other.txt");
+            session.inputAsync(":help help-context<CR>");
+            pageShowing("help-context");
+            page().activate(editor);
+            waitForAttach(editor, "test.txt");
+            settle();
+            List<String> seen = new ArrayList<>();
+            for (int i = 0; i < 3 && !"other.txt".equals(page().getActiveEditor().getTitle()); i++) {
+                session.inputAsync("<C-o>");
+                settle();
+                seen.add(page().getActiveEditor().getTitle());
+            }
+            assertTrue(seen.contains("other.txt"), "Ctrl-O reached other.txt: " + seen);
+            assertTrue(!seen.contains("Neovim: help"), "never the help editor: " + seen);
+        } finally {
+            page().closeEditor(other, false);
+        }
     }
 
     /** {@code :checkhealth neovim4eclipse} opens its editor titled for the report, with the plug-in's lines. */

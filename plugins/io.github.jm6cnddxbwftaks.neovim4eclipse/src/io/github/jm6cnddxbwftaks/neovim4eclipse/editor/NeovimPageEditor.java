@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.e4.ui.model.application.ui.basic.MPart;
@@ -15,9 +16,14 @@ import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.IEditorInput;
+import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorSite;
+import org.eclipse.ui.IMemento;
+import org.eclipse.ui.INavigationLocation;
+import org.eclipse.ui.INavigationLocationProvider;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchWindow;
+import org.eclipse.ui.NavigationLocation;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.contexts.IContextActivation;
 import org.eclipse.ui.contexts.IContextService;
@@ -44,9 +50,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
  *   <li>Opened on anything but a {@link NeovimPageInput} (a file through Open With), it refuses.</li>
  * </ul>
  *
- * <p>Not brought back at the next start: see {@link #closeLeftovers}. UI thread.
+ * <p>Not brought back at the next start: see {@link #closeLeftovers}. Not a stop for {@code Ctrl-O}
+ * and {@code Ctrl-I} from the code ({@code util/HistorySteps}): its entries in Eclipse's history
+ * carry a {@link PageLocation}, whose input says whose they are (without one, Eclipse records a
+ * {@code null} entry, which tells nothing). UI thread.
  */
-public final class NeovimPageEditor extends EditorPart {
+public final class NeovimPageEditor extends EditorPart implements INavigationLocationProvider {
 
     /** The editor's id in {@code plugin.xml}. */
     public static final String ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.editors.page";
@@ -158,6 +167,53 @@ public final class NeovimPageEditor extends EditorPart {
             for (MPart leftover : models.findElements(model, null, MPart.class, List.of(ID))) {
                 parts.hidePart(leftover, true);
             }
+        }
+    }
+
+    @Override
+    public INavigationLocation createEmptyNavigationLocation() {
+        return new PageLocation(this);
+    }
+
+    @Override
+    public INavigationLocation createNavigationLocation() {
+        return new PageLocation(this);
+    }
+
+    /**
+     * This editor's place in Eclipse's history: the editor and nothing more, since the page is the
+     * second Neovim's to keep. Two entries of the same editor merge into one, as Eclipse merges a
+     * text editor's entries at one place. Its input is the editor's ({@link NeovimPageInput}).
+     */
+    static final class PageLocation extends NavigationLocation {
+
+        PageLocation(IEditorPart editor) {
+            super(editor);
+        }
+
+        @Override
+        public void saveState(IMemento memento) {
+            // nothing: the editor is never saved either
+        }
+
+        @Override
+        public void restoreState(IMemento memento) {
+            // nothing
+        }
+
+        @Override
+        public void restoreLocation() {
+            // the editor coming to the front is all there is
+        }
+
+        @Override
+        public boolean mergeInto(INavigationLocation location) {
+            return location instanceof PageLocation other && Objects.equals(other.getInput(), getInput());
+        }
+
+        @Override
+        public void update() {
+            // nothing moves within it
         }
     }
 
