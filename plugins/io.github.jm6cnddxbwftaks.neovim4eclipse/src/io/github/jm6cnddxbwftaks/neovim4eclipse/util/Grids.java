@@ -293,8 +293,10 @@ public final class Grids {
      * colors, as one-row snapshots whose {@link GridSnapshot#window()} is the page's. Called at
      * each {@code flush}. Only a page on screen has one: Neovim draws the status lines of the
      * current tabpage only, so a page in the background keeps the one it had, as its text.
-     * None when the window reaches the screen's bottom: no status line ({@code 'laststatus'} 0, or
-     * 1 with the page alone). The command line takes no row of the screen: the plug-in draws it
+     * When the window reaches the screen's bottom there is no status line ({@code 'laststatus'} 0,
+     * or 1 with the page alone): then a snapshot of no rows ({@link GridSnapshot#height()} 0) says
+     * so, once, so that the page hides a row it showed (example: {@code :set laststatus=0} while the
+     * page is open; the row goes, and the page's grid takes that height). The command line takes no row of the screen: the plug-in draws it
      * from Neovim's command-line events ({@code ext_cmdline}). Example: lualine's line below the
      * messages page, its mode in its own colors.
      */
@@ -312,16 +314,20 @@ public final class Grids {
                 continue; // not on screen now: it keeps its last status line
             }
             int row = place.row() + place.height();
-            if (row < 0 || row >= screen.height) {
-                continue; // the window reaches the screen's bottom: no status line ('laststatus' 0)
-            }
-            GridSnapshot status = rowOf(win, screen, row);
+            GridSnapshot status = row < 0 || row >= screen.height
+                    ? noStatusLine(win) // the window reaches the screen's bottom ('laststatus' 0)
+                    : rowOf(win, screen, row);
             if (!status.equals(lastPageStatus.get(win))) {
                 lastPageStatus.put(win, status);
                 changed.add(status);
             }
         }
         return changed;
+    }
+
+    /** Window {@code win} has no status line: a snapshot of no rows ({@link #pageStatusIfChanged}). */
+    private GridSnapshot noStatusLine(int win) {
+        return new GridSnapshot(win, 0, 0, List.of(), new int[0], Map.of(), defaultColors, -1, -1);
     }
 
     /** Row {@code row} of {@code grid}, as a one-row snapshot of window {@code win}, with the highlights it uses. */

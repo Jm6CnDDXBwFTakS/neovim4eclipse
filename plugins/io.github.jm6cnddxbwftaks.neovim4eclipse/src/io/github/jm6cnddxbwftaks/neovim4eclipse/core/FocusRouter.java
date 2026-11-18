@@ -70,6 +70,16 @@ public final class FocusRouter {
         return current;
     }
 
+    /**
+     * Whether a page has the focus events now: the target shows a page window
+     * ({@link FocusTarget#pageWindow}). {@code false} with no target at all, as after a page closed
+     * and Eclipse activated a view: then nothing holds Neovim's screen. Any thread.
+     */
+    public boolean pageHasFocus() {
+        FocusTarget target = current;
+        return target != null && target.pageWindow() != HostCommand.NO_WINDOW;
+    }
+
     final Consumer<String> mode = m -> pass("mode", t -> t.onMode(m));
     final Consumer<String> recording = r -> pass("recording", t -> t.onRecording(r));
     final Consumer<StatusInfo> status = s -> pass("status", t -> t.onStatus(s));

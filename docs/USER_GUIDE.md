@@ -666,7 +666,9 @@ error color and warnings in its warning color. Being the same Neovim as your cod
   `gf` on a path in the messages does the same.
 - **It cannot be changed or written:** it is a scratch buffer of your Neovim
   (`neovim4eclipse://messages`) that no file has, read-only; `:w` there gets Neovim's own E382, and
-  `i` changes nothing. `:wq` is refused the same way; `:x` closes it, as nothing changed.
+  `i` changes nothing. `:wq` is refused the same way; `:x` closes it, as nothing changed. `:w x`,
+  `:1w x` and `:w >> x` are refused too (E382). Two commands you type on purpose still work:
+  `:noautocmd w x` saves the messages to the file `x`, and `:w !cmd` hands them to a shell command.
 - **`gd`, `K` and the `gr*` keys** are Neovim's own there, not Eclipse's, since the messages are no
   code: `K` looks the word up with your `'keywordprg'` (`:Man` by default), not Eclipse's hover.
   `gt` and `gT` still move among the editor tabs.

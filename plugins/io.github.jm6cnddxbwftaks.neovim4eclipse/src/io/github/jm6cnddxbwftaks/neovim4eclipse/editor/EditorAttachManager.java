@@ -337,8 +337,20 @@ public final class EditorAttachManager {
                 @Override
                 public void windowClosed(IWorkbenchWindow window) { }
 
+                /**
+                 * Back in a window whose editor was active all along (a second window closed, or
+                 * the user clicked into this one): Eclipse reports no part activation, since the
+                 * part did not change in its window, so Neovim would stay with the other window's
+                 * editor. The active part is taken as activated again, by the same path.
+                 */
                 @Override
-                public void windowActivated(IWorkbenchWindow window) { }
+                public void windowActivated(IWorkbenchWindow window) {
+                    IWorkbenchPage page = window.getActivePage();
+                    IWorkbenchPartReference active = page == null ? null : page.getActivePartReference();
+                    if (active != null) {
+                        maybeAutoAttach(active);
+                    }
+                }
 
                 @Override
                 public void windowDeactivated(IWorkbenchWindow window) { }

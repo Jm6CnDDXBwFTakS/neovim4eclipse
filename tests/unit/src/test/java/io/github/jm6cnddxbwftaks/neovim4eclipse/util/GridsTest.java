@@ -422,7 +422,24 @@ class GridsTest {
         grids.drawPage(1005);
         grids.apply(new GridEvent.Resize(1, 8, 7));
         grids.apply(new GridEvent.WinPos(5, 1005, false, 0, 0, 8, 7, 0)); // 'laststatus' 0: no row below it
-        assertTrue(grids.pageStatusIfChanged().isEmpty());
+        List<GridSnapshot> rows = grids.pageStatusIfChanged();
+        assertEquals(1, rows.size());
+        assertEquals(0, rows.get(0).height(), "a snapshot of no rows: no status line");
+        assertTrue(grids.pageStatusIfChanged().isEmpty(), "said once");
+    }
+
+    /** {@code :set laststatus=0} while the page shows its status line: the row is taken back. */
+    @Test
+    void aStatusLineThatGoesIsSaidToBeGone() {
+        screenWithPage();
+        assertEquals(1, grids.pageStatusIfChanged().get(0).height());
+        grids.apply(new GridEvent.WinPos(5, 1005, false, 0, 0, 8, 7, 0)); // the window grows to the bottom
+        List<GridSnapshot> rows = grids.pageStatusIfChanged();
+        assertEquals(1, rows.size());
+        assertEquals(1005, rows.get(0).window());
+        assertEquals(0, rows.get(0).height());
+        grids.apply(new GridEvent.WinPos(5, 1005, false, 0, 0, 8, 5, 0)); // :set laststatus=2
+        assertEquals("status  ", grids.pageStatusIfChanged().get(0).row(0), "and back");
     }
 
     @Test

@@ -3,8 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageRows;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -19,6 +17,7 @@ import org.eclipse.swt.events.TraverseEvent;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
+import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Composite;
@@ -34,9 +33,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageRows;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
@@ -103,6 +104,14 @@ final class WindowPane implements PagePane {
     private boolean focused;
     private boolean disposed;
     private final MessageLine messageLine;
+    /**
+     * The Tab completion candidates of an open line ({@link PageRows#candidateRow}), over the
+     * window's last row, as Neovim's own wildmenu covers a row: hidden while there are none. An
+     * overlay, not a row of the layout, so that Tab does not change the window's height.
+     */
+    private final GridCanvas candidateRow;
+    /** The command line as last said, drawn again when the row changes size. */
+    private CmdlineState.View lastView = CmdlineState.View.CLOSED;
     /** Output of several lines (a listing, a long message), over the page. */
     private final OutputPopup output;
     private final FloatingWindows floats;
@@ -219,11 +228,19 @@ final class WindowPane implements PagePane {
         };
         canvas = new GridCanvas(rows, look, SWT.NONE);
         canvas.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
+        candidateRow = new GridCanvas(canvas, look, SWT.NO_FOCUS);
+        candidateRow.setVisible(false);
         statusRow = new GridCanvas(rows, look, SWT.NO_FOCUS);
         statusRow.setLayoutData(rowData(false));
         commandRow = new GridCanvas(rows, look, SWT.NO_FOCUS);
         commandRow.setLayoutData(rowData(true));
         commandRow.setInsertCursor(true); // the command line's cursor is a bar, as Neovim's
+        commandRow.addControlListener(new ControlAdapter() {
+            @Override
+            public void controlResized(ControlEvent e) {
+                showCommandLine(lastView); // the row's cells changed: the open line is fitted again
+            }
+        });
         canvas.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -241,6 +258,7 @@ final class WindowPane implements PagePane {
             @Override
             public void controlResized(ControlEvent e) {
                 sendSize();
+                showCommandLine(lastView); // the candidates lie over the canvas's last row
             }
         });
         fontListener = event -> {
@@ -278,29 +296,70 @@ final class WindowPane implements PagePane {
      * line, every key being Neovim's here; this only paints what it says. Blank while closed.
      */
     private void showCommandLine(CmdlineState.View view) {
+        if (commandRow.isDisposed()) {
+            return;
+        }
+        lastView = view;
         GridSnapshot grid = canvas.grid();
         GridEvent.DefaultColors colors = grid == null ? new GridEvent.DefaultColors(GridEvent.NO_COLOR, GridEvent.NO_COLOR)
                 : grid.defaultColors();
         int columns = ScreenInput.cells(commandRow.getSize().x, commandRow.cellWidth());
         commandRow.show(PageRows.commandRow(view, columns, window, colors));
-        if (view.open()) {
-            messageLine.hide(); // the line takes the row, as Neovim's : takes its message's
+        showCandidates(PageRows.candidateRow(view, columns, window, colors));
+        // The line takes the row, as Neovim's : takes its message's. Not in Ex mode (gQ), where the
+        // line opens again after each command, below that command's output: there a one-line
+        // :echo stays, as Neovim scrolls it up instead of covering it.
+        if (view.open() && !VimModes.isExMode(session.getMode())) {
+            messageLine.hide();
         }
     }
 
-    /** The status line row of a page window ({@code util/Grids.pageStatusIfChanged}); this page's is drawn. */
+    /** The candidates over the canvas's last row, or nothing ({@code row} null). */
+    private void showCandidates(GridSnapshot row) {
+        if (row == null) {
+            candidateRow.setVisible(false);
+            return;
+        }
+        int height = lineHeight();
+        Rectangle area = canvas.getClientArea();
+        candidateRow.setBounds(0, Math.max(0, area.height - height), area.width, height);
+        candidateRow.show(row);
+        candidateRow.moveAbove(null);
+        candidateRow.setVisible(true);
+    }
+
+    /** The message line's text while it shows, else {@code ""}; for tests. */
+    String messageTextForTests() {
+        return messageLine.isShowing() ? messageLine.text() : "";
+    }
+
+    /** The drawn Tab candidates row, for tests. */
+    GridCanvas candidateRowForTests() {
+        return candidateRow;
+    }
+
+    /**
+     * The status line row of a page window ({@code util/Grids.pageStatusIfChanged}); this page's is
+     * drawn. A row of no height says the window has none ({@code 'laststatus'} 0): the row goes.
+     * Each time the row comes or goes, the grid canvas changes height and Neovim's screen follows
+     * it ({@link #sendSize}), so the window's rows stay the canvas's rows.
+     */
     private void onStatusRow(GridSnapshot row) {
         onUi(() -> {
             if (row.window() != window) {
                 return;
             }
             GridData data = (GridData) statusRow.getLayoutData();
-            if (data.heightHint == 0) {
-                data.heightHint = lineHeight(); // the first status line: the row appears
+            boolean shown = row.height() > 0;
+            int height = shown ? lineHeight() : 0;
+            if (data.heightHint != height) {
+                data.heightHint = height; // the row appears, or goes
                 rows.layout(true);
                 sendSize();
             }
-            statusRow.show(row);
+            if (shown) {
+                statusRow.show(row);
+            }
         });
     }
 
@@ -416,9 +475,13 @@ final class WindowPane implements PagePane {
         }
     }
 
-    /** Neovim's screen is the page's size in cells, while the page has the focus (the code's otherwise). */
+    /**
+     * Neovim's screen is the page's size in cells, while the page has the focus (the code's
+     * otherwise). The same check as the code editor's: the router's target, one rule for both
+     * ({@code NeovimSession.hasFocus}), not this pane's own {@link #focused} flag.
+     */
     private void sendSize() {
-        if (!focused || canvas.isDisposed()) {
+        if (!session.hasFocus(target) || canvas.isDisposed()) {
             return;
         }
         Point size = canvas.getSize();

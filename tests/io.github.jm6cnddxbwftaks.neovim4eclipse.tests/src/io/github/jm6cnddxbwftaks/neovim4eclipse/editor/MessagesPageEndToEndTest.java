@@ -12,18 +12,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.runtime.ILogListener;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.e4.ui.model.application.ui.basic.MPart;
 import org.eclipse.jface.action.IStatusLineManager;
+import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
+import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IPageLayout;
+import org.eclipse.ui.IWorkbenchWindow;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +43,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 
 /**
  * The messages page as a window of the editing Neovim ({@link WindowPane}): what one Neovim
@@ -413,6 +426,246 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
             settle();
             return page().getActiveEditor() == editor;
         });
+    }
+
+    /** Whether the page's Neovim window is as many cells as its grid canvas: the screen follows the page. */
+    private boolean pageWindowFitsItsCanvas(WindowPane pane) {
+        GridCanvas canvas = pane.canvas();
+        Point size = canvas.getSize();
+        List<?> window = (List<?>) SessionProbe.lua(session, "local w = " + pane.window()
+                + " return { vim.api.nvim_win_get_width(w), vim.api.nvim_win_get_height(w) }");
+        return ((Number) window.get(0)).intValue() == ScreenInput.cells(size.x, canvas.cellWidth())
+                && ((Number) window.get(1)).intValue() == ScreenInput.cells(size.y, canvas.cellHeight());
+    }
+
+    private String pageSizes(WindowPane pane) {
+        GridCanvas canvas = pane.canvas();
+        return "; canvas " + ScreenInput.cells(canvas.getSize().x, canvas.cellWidth()) + "x"
+                + ScreenInput.cells(canvas.getSize().y, canvas.cellHeight()) + ", window "
+                + SessionProbe.lua(session, "local w = " + pane.window()
+                        + " return vim.api.nvim_win_get_width(w) .. 'x' .. vim.api.nvim_win_get_height(w)");
+    }
+
+    /**
+     * The status row coming and going changes the grid canvas's height, and Neovim's window follows:
+     * its rows are always the canvas's rows ({@code :set laststatus=0}, then back).
+     */
+    @Test
+    void thePagesWindowKeepsItsCanvasRowsAsTheStatusRowComesAndGoes() {
+        NeovimPageEditor page = messagesShowing("rows follow");
+        WindowPane pane = page.windowPane();
+        UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
+        waitUntil("the status row shown", TIMEOUT_MS, () -> {
+            settle();
+            return pane.statusRowForTests().getSize().y > 0;
+        });
+        waitUntil("the window the canvas's size", TIMEOUT_MS, () -> {
+            settle();
+            return pageWindowFitsItsCanvas(pane);
+        }, () -> pageSizes(pane));
+        try {
+            SessionProbe.lua(session, "vim.o.laststatus = 0 return 0");
+            waitUntil("the status row gone", TIMEOUT_MS, () -> {
+                settle();
+                return pane.statusRowForTests().getSize().y == 0;
+            });
+            waitUntil("the window the taller canvas's size", TIMEOUT_MS, () -> {
+                settle();
+                return pageWindowFitsItsCanvas(pane);
+            }, () -> pageSizes(pane));
+        } finally {
+            SessionProbe.lua(session, "vim.o.laststatus = 2 return 0");
+        }
+        waitUntil("the status row back", TIMEOUT_MS, () -> {
+            settle();
+            return pane.statusRowForTests().getSize().y > 0 && pageWindowFitsItsCanvas(pane);
+        }, () -> pageSizes(pane));
+    }
+
+    /**
+     * While the page has the focus, Neovim's screen is the page's, however the code editor resizes;
+     * with no part holding the focus (the page closed while a view was active), the code's resize
+     * goes through again.
+     */
+    @Test
+    void theCodesResizeIsHeldOnlyWhileThePageHasTheFocus() throws Exception {
+        NeovimPageEditor page = messagesShowing("hold the size");
+        WindowPane pane = page.windowPane();
+        UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
+        Shell shell = widget.getShell();
+        Point shellSize = shell.getSize();
+        try {
+            shell.setSize(shellSize.x - 120, shellSize.y - 150); // the code editor resizes too
+            shell.layout(true, true);
+            waitUntil("the page's window the smaller page's size, not the code's", TIMEOUT_MS, () -> {
+                settle();
+                return pageWindowFitsItsCanvas(pane);
+            }, () -> pageSizes(pane));
+            page().showView(IPageLayout.ID_TASK_LIST); // the page loses the focus: no part holds it
+            settle();
+            page().closeEditor(page, false);
+            settle();
+            int lines = ((Number) SessionProbe.lua(session, "return vim.o.lines")).intValue();
+            shell.setSize(shellSize);
+            shell.layout(true, true);
+            waitUntil("the code's resize sent with no part holding the focus", TIMEOUT_MS, () -> {
+                settle();
+                return ((Number) SessionProbe.lua(session, "return vim.o.lines")).intValue() > lines;
+            });
+        } finally {
+            shell.setSize(shellSize);
+        }
+    }
+
+    /**
+     * Ctrl-F on the page's {@code :} line opens the command-line window: Neovim closes the line
+     * first ({@code cmdline_hide}), so the command row under the window is blank, not the old line.
+     */
+    @Test
+    void ctrlFLeavesTheCommandRowBlankUnderTheCommandLineWindow() {
+        NeovimPageEditor page = messagesShowing("ctrl f here");
+        UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
+        for (char c : ":abc".toCharArray()) {
+            key(page.canvasForTests(), c);
+        }
+        waitUntil(":abc drawn", TIMEOUT_MS, () -> {
+            settle();
+            return commandRowOf(page).equals(":abc");
+        });
+        page.sendKey("<C-f>");
+        waitUntil("the command-line window open", TIMEOUT_MS, () -> {
+            settle();
+            return !"".equals(SessionProbe.lua(session, "return vim.fn.getcmdwintype()"));
+        });
+        waitUntil("the command row blank", TIMEOUT_MS, () -> {
+            settle();
+            return commandRowOf(page).isEmpty();
+        }, () -> "; drawn: '" + commandRowOf(page) + "'");
+        session.closeCommandWindowAsync();
+        settle();
+    }
+
+    /** {@code :e} and Tab in the page: Neovim's candidates in a row over the page, the selected one marked. */
+    @Test
+    void tabOnThePagesCommandLineListsTheCandidates() throws Exception {
+        createFile("tabone.txt", "1\n");
+        createFile("tabtwo.txt", "2\n");
+        NeovimPageEditor page = messagesShowing("tab here");
+        UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
+        for (char c : ":e tab".toCharArray()) {
+            key(page.canvasForTests(), c);
+        }
+        waitUntil(":e tab drawn", TIMEOUT_MS, () -> {
+            settle();
+            return commandRowOf(page).equals(":e tab");
+        });
+        page.sendKey("<Tab>");
+        GridCanvas candidates = page.windowPane().candidateRowForTests();
+        waitUntil("the candidates listed", TIMEOUT_MS, () -> {
+            settle();
+            GridSnapshot row = candidates.grid();
+            return candidates.isVisible() && row != null && row.row(0).contains("tabone.txt")
+                    && row.row(0).contains("tabtwo.txt");
+        });
+        session.inputAsync("<Esc>");
+        waitUntil("the candidates gone with the line", TIMEOUT_MS, () -> {
+            settle();
+            return !candidates.isVisible();
+        });
+    }
+
+    /** Ex mode ({@code gQ}) in the page: a one-line {@code :echo} stays shown when the next line opens. */
+    @Test
+    void exModeKeepsAOneLineEchoShown() {
+        NeovimPageEditor page = messagesShowing("ex mode here");
+        UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
+        waitUntil("Neovim in the page", TIMEOUT_MS, () -> currentWin() == page.windowPane().window());
+        SessionProbe.lua(session, "vim.api.nvim_feedkeys('gQ', 'n', false) return 0");
+        waitUntil("Ex mode", TIMEOUT_MS, () -> VimModes.isExMode(session.getMode()));
+        try {
+            for (char c : "echo 'ex one'".toCharArray()) {
+                key(page.canvasForTests(), c);
+            }
+            Event enter = new Event();
+            enter.keyCode = SWT.CR;
+            enter.character = SWT.CR;
+            enter.doit = true;
+            page.canvasForTests().notifyListeners(SWT.KeyDown, enter);
+            waitUntil("the echo shown, with the next Ex line open", TIMEOUT_MS, () -> {
+                settle();
+                return page.windowPane().messageTextForTests().contains("ex one") && commandRowOf(page).startsWith(":");
+            }, () -> "; message '" + page.windowPane().messageTextForTests() + "', row '" + commandRowOf(page) + "'");
+        } finally {
+            session.inputAsync("vi<CR>"); // leaves Ex mode
+            waitUntil("Ex mode left", TIMEOUT_MS, () -> !VimModes.isExMode(session.getMode()));
+        }
+    }
+
+    /**
+     * A second workbench window (Window › New Window) with a text editor and a messages editor in
+     * it: both take keys, and closing the window leaves nothing broken: no error in the log, and the
+     * first window's editor and status bar item still work. Each workbench window has status bar
+     * items of its own ({@code PageStatus} per status line manager).
+     */
+    @Test
+    void aSecondWorkbenchWindowWithAPageClosesCleanly() throws Exception {
+        List<String> logged = new CopyOnWriteArrayList<>();
+        ILogListener listener = (status, plugin) -> {
+            if (status.getSeverity() >= IStatus.WARNING) {
+                logged.add(status.getPlugin() + ": " + status.getMessage()
+                        + (status.getException() != null ? " (" + status.getException() + ")" : ""));
+            }
+        };
+        IFile file = createFile("second.txt", "second\n");
+        Platform.addLogListener(listener);
+        IWorkbenchWindow second = PlatformUI.getWorkbench().openWorkbenchWindow(null);
+        try {
+            ITextEditor there = (ITextEditor) IDE.openEditor(second.getActivePage(), file, TEXT_EDITOR, true);
+            waitForAttach(there, "second.txt");
+            StyledText thereText = (StyledText) there.getAdapter(Control.class);
+            SessionProbe.lua(session, "vim.cmd.echomsg(\"'second window'\") return 0");
+            colonIn(thereText, "messages");
+            NeovimPageEditor[] found = new NeovimPageEditor[1];
+            waitUntil("a messages editor in the second window", TIMEOUT_MS, () -> {
+                settle();
+                for (IEditorReference reference : second.getActivePage().getEditorReferences()) {
+                    if (reference.getEditor(false) instanceof NeovimPageEditor p && p.kind() == PageKind.MESSAGES
+                            && rowsOf(p).contains("second window")) {
+                        found[0] = p;
+                        return true;
+                    }
+                }
+                return false;
+            });
+            NeovimPageEditor page = found[0];
+            UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
+            waitUntil("Neovim in the second window's page", TIMEOUT_MS, () -> currentWin() == page.windowPane().window());
+            key(page.canvasForTests(), 'k'); // a key in the page: Neovim's
+            IStatusLineManager bar = page.getEditorSite().getActionBars().getStatusLineManager();
+            waitUntil("the pages' item in the second window's status bar", TIMEOUT_MS,
+                    () -> bar.find(ModeStatusContribution.PAGE_ID) != null);
+            second.getActivePage().activate(there);
+            UiTestSupport.requireKeyboardFocus(thereText, TIMEOUT_MS);
+            type(thereText, "iSECOND ");
+            type(thereText, "\u001b");
+            IDocument thereDocument = there.getDocumentProvider().getDocument(there.getEditorInput());
+            waitUntil("typed in the second window's editor", TIMEOUT_MS, () -> thereDocument.get().contains("SECOND"));
+            there.doRevertToSaved();
+        } finally {
+            second.close();
+            settle();
+            Platform.removeLogListener(listener);
+        }
+        assertEquals(List.of(), logged, "nothing logged while the second window closed");
+        page().activate(editor);
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        waitForAttach(editor, "the first window's editor again");
+        type(widget, "ifirst still ");
+        type(widget, "\u001b");
+        waitUntil("the first window's editor takes keys", TIMEOUT_MS, () -> document.get().contains("first still"));
+        IStatusLineManager firstBar = editor.getEditorSite().getActionBars().getStatusLineManager();
+        assertTrue(firstBar.find(ModeStatusContribution.ID) != null, "the first window's Neovim item is there");
+        assertNull(firstBar.find(ModeStatusContribution.PAGE_ID), "and no pages' item left from the second");
     }
 
     private int currentWin() {

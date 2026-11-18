@@ -342,6 +342,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         return focus.has(target);
     }
 
+    /** Whether a page editor's window has the focus events now ({@link FocusRouter#pageHasFocus}). Any thread. */
+    public boolean pageHasFocus() {
+        return focus.pageHasFocus();
+    }
+
     /**
      * Hears a page's window that Neovim closed by itself (its buffer wiped, a plug-in closing
      * windows), or one that could not be entered, on the input thread: the page editor showing it

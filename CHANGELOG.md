@@ -23,6 +23,15 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   cannot be changed or written. Restart Neovim closes it
   ([The messages editor](docs/USER_GUIDE.md#the-messages-editor-messages)).
 
+### Fixed
+
+- **Back in a workbench window, Neovim follows you**: after editing in a second window
+  (Window › New Window) and closing it or clicking back, the first window's editor was left
+  without Neovim until you switched editors; its keys were Eclipse's.
+- **Ctrl+W in a page editor** (help, messages, checkhealth) could do nothing right after the
+  keyboard moved there from a text editor: Eclipse saw Ctrl+W bound twice and ran neither,
+  logging "Keybinding conflicts occurred".
+
 ## [0.2.29] - 2026-11-19
 
 ### Fixed

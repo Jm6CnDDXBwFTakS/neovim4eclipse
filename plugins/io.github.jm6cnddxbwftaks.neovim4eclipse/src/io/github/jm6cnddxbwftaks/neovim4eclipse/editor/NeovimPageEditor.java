@@ -134,8 +134,12 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
         // the active part, so the context never outlives the focus.
         IContextService contexts = getSite().getService(IContextService.class);
         if (contexts != null) {
+            // The text editors' contexts go off first, and come back only after this one is off:
+            // two active Ctrl+W bindings are a conflict, and Eclipse runs neither
+            // (EditorKeyContext.pageHasKeyboard).
             pane.canvas().addListener(SWT.FocusIn, e -> {
                 if (keyContext == null) {
+                    EditorKeyContext.pageHasKeyboard(true);
                     keyContext = contexts.activateContext(KEY_CONTEXT_ID);
                 }
             });
@@ -143,6 +147,7 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
                 if (keyContext != null) {
                     contexts.deactivateContext(keyContext);
                     keyContext = null;
+                    EditorKeyContext.pageHasKeyboard(false);
                 }
             });
         }
@@ -326,6 +331,12 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
 
     @Override
     public void dispose() {
+        if (keyContext != null) {
+            // Closed with the keyboard and no FocusOut seen: the text editors get their keys back.
+            // Eclipse ends the site's activation itself.
+            keyContext = null;
+            EditorKeyContext.pageHasKeyboard(false);
+        }
         if (pane != null) {
             pane.dispose();
         }

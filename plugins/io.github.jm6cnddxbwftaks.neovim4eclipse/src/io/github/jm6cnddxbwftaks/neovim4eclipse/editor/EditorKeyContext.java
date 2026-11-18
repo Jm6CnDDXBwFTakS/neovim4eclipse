@@ -3,6 +3,9 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -41,7 +44,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * {@link #update()} after each key too; after most keys neither the mode's column nor who types
  * changed, and then nothing is switched or read again ({@link #applied}). While Neovim completes,
  * every letter is switched on ({@link KeyContextRule#toNeovim}). In
- * Eclipse mode, on focus loss and after {@link #dispose()} they are inactive, so Eclipse's own
+ * Eclipse mode, on focus loss, while a page editor has the keyboard ({@link #pageHasKeyboard}) and
+ * after {@link #dispose()} they are inactive, so Eclipse's own
  * shortcuts (paste, content assist, other views) are untouched there. Activation is workbench-wide
  * (the standard, well-trodden path); the focus check keeps it from leaking into other parts.
  *
@@ -88,6 +92,21 @@ final class EditorKeyContext {
     private record Applied(Column column, boolean eclipseTypes, boolean completing) {
     }
 
+    /**
+     * Every editor's key context not yet disposed, so that a page editor taking the keyboard turns
+     * them all off before its own context goes on ({@link #pageHasKeyboard}). UI thread.
+     */
+    private static final Set<EditorKeyContext> LIVE = new LinkedHashSet<>();
+    /**
+     * Whether a page editor ({@code NeovimPageEditor}) has the keyboard: then no text editor's
+     * contexts are active, whatever its widget says. Why: SWT may tell the page it gained the
+     * keyboard before it tells the text widget it lost it, so for a moment the widget still counts
+     * as focused. Its Ctrl+W context and the page's own would then be active together, and Eclipse,
+     * finding Ctrl+W bound in two active contexts, logs "Keybinding conflicts occurred" and runs
+     * neither (seen with a messages editor in a second workbench window). UI thread.
+     */
+    private static boolean pageHasKeyboard;
+
     private final FocusListener focusListener = new FocusListener() {
         @Override
         public void focusGained(FocusEvent e) {
@@ -111,6 +130,19 @@ final class EditorKeyContext {
         this.neovimCompletes = neovimCompletes;
         this.completing = completing;
         widget.addFocusListener(focusListener);
+        LIVE.add(this);
+    }
+
+    /**
+     * A page editor took the keyboard ({@code true}, called before it activates its own context) or
+     * gave it up ({@code false}, after it deactivated it): every editor's contexts are applied again.
+     * UI thread.
+     */
+    static void pageHasKeyboard(boolean has) {
+        pageHasKeyboard = has;
+        for (EditorKeyContext context : List.copyOf(LIVE)) {
+            context.update();
+        }
     }
 
     /** Applies the rule (see the class comment) with Neovim's current mode. UI thread. */
@@ -121,7 +153,7 @@ final class EditorKeyContext {
     /** Applies the rule for {@code nvimMode}. UI thread. */
     void update(String nvimMode) {
         boolean onCommandLine = commandLineFocused.getAsBoolean();
-        boolean wanted = !disposed && KeyContextRule.wanted(!widget.isDisposed() && widget.isFocusControl(),
+        boolean wanted = !disposed && !pageHasKeyboard && KeyContextRule.wanted(!widget.isDisposed() && widget.isFocusControl(),
                 neovimOwnsKeys.getAsBoolean(), onCommandLine);
         try {
             IContextService service = contextService();
@@ -213,6 +245,7 @@ final class EditorKeyContext {
     /** Deactivates the contexts for good and stops listening to focus changes. UI thread. */
     void dispose() {
         disposed = true;
+        LIVE.remove(this);
         if (!widget.isDisposed()) {
             widget.removeFocusListener(focusListener);
         }

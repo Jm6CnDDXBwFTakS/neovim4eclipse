@@ -4,8 +4,10 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -69,6 +71,25 @@ class FocusRouterTest {
         router.focus(code);
         router.release(page);
         assertSame(code, router.current());
+    }
+
+    /**
+     * The code editor's resizes are held only while a page has the focus. With no target (a page
+     * closed and Eclipse activated a view), nothing holds Neovim's screen, so they go through.
+     */
+    @Test
+    void onlyAPageTargetCountsAsAPageHavingTheFocus() {
+        FocusRouter router = new FocusRouter();
+        FocusTarget page = new FocusTarget() {
+            @Override public int pageWindow() { return 1004; }
+        };
+        assertFalse(router.pageHasFocus(), "no target");
+        router.focus(new Recorder());
+        assertFalse(router.pageHasFocus(), "the code");
+        router.focus(page);
+        assertTrue(router.pageHasFocus(), "the page");
+        router.release(page);
+        assertFalse(router.pageHasFocus(), "the page closed, a view active: no target");
     }
 
     /** A target that throws is logged; the next event still reaches it. */

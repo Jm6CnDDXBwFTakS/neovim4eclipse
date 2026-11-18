@@ -617,11 +617,13 @@ public final class NeovimEditorController implements AutoCloseable {
 
         @Override
         public void sendSize(int columns, int rows) {
-            // Only while this editor has the focus events (the router's target, which the UI thread
-            // itself sets): while a page has them, Neovim's screen is the page's, and this editor
-            // sends its size again when it takes the focus back (takeFocusBack sets the target
-            // first). Example: a text font change resizes both; the page keeps the screen.
-            if (session.hasFocus(focusTarget)) {
+            // Not while a page has the focus events (the router's target, which the UI thread
+            // itself sets): Neovim's screen is the page's then, and this editor sends its size
+            // again when it takes the focus back (takeFocusBack sets the target first). Example:
+            // a text font change resizes both; the page keeps the screen. With no target at all
+            // (a page closed and Eclipse activated a view, say), nothing holds the screen, and
+            // the code's resize goes through, as before pages had windows of their own.
+            if (!session.pageHasFocus()) {
                 session.setEditorSizeAsync(columns, rows);
             }
         }

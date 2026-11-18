@@ -1175,7 +1175,7 @@ t.test('a buffer that only took the page\'s name is not taken for the page', fun
   t.eq(buf, page_text({ 'again' }), 'and the page is found again by its mark')
 end)
 
-t.test("a page window's folder is checked where chdir() landed: $VAR in a name is not followed", function()
+t.test("a folder with $ in its name is not given: chdir() would expand it, even for a moment", function()
   start()
   local root = vim.fn.tempname()
   vim.fn.mkdir(root .. '/e$HOME', 'p')
@@ -1183,16 +1183,36 @@ t.test("a page window's folder is checked where chdir() landed: $VAR in a name i
   vim.fn.mkdir(expanded, 'p') -- where chdir() would land, expanding $HOME
   local code = open(buffer(3), root)
   local page = open_page(page_text({ 'one' }))
+  local visited = {}
+  local au = vim.api.nvim_create_autocmd('DirChanged', { callback = function()
+    visited[#visited + 1] = vim.v.event.cwd
+  end })
   t.eq(false, require('neovim4eclipse.windows').set_folder(page, root .. '/e$HOME'))
+  t.eq({}, visited, 'no chdir() at all, so no DirChanged sees the expanded folder')
   t.ok(not require('neovim4eclipse.paths').same(cwd(page)[1], expanded), 'not the folder the name expands to: ' .. cwd(page)[1])
+  vim.api.nvim_del_autocmd(au)
   t.eq(true, require('neovim4eclipse.windows').set_folder(page, root), 'a plain folder is set')
   t.same_file(root, cwd(page)[1])
   local editor = open(buffer(3), root .. '/e$HOME')
   t.ok(not require('neovim4eclipse.paths').same(cwd(editor)[1], expanded), "an editor's window does not land there either")
+  t.ok(code ~= editor)
   vim.fn.delete(root, 'rf')
 end)
 
-t.test('every way of writing the page is refused, and leaves no file', function()
+t.test("an editor's window gets a local folder even when Neovim's folder is that folder already", function()
+  start()
+  local root = vim.fn.resolve(vim.fn.tempname())
+  vim.fn.mkdir(root, 'p')
+  vim.cmd.cd(root) -- the global folder, as when Eclipse was started in the project
+  local editor = open(buffer(3), root)
+  t.same_file(root, cwd(editor)[1])
+  t.eq(1, cwd(editor)[2], 'a window-local folder, so a later :cd elsewhere does not move it')
+  vim.cmd.cd('/')
+  t.same_file(root, cwd(editor)[1], 'still the project folder after a global :cd')
+  vim.fn.delete(root, 'rf')
+end)
+
+t.test('every write of the page that runs autocommands is refused, and leaves no file', function()
   start()
   local buf = page_text({ 'one', 'two' })
   local win = open_page(buf)
@@ -1205,6 +1225,7 @@ t.test('every way of writing the page is refused, and leaves no file', function(
     local ok, err = pcall(vim.cmd, cmd)
     t.eq(false, ok, ':' .. cmd .. ' is refused')
     t.ok(tostring(err):find('E382', 1, true), ':' .. cmd .. ': ' .. tostring(err))
+    t.ok(not tostring(err):find('traceback', 1, true), 'Vim\'s own words, no Lua stack: ' .. tostring(err))
   end
   t.eq(0, vim.fn.filereadable(dir .. '/a.txt'))
   t.eq(0, vim.fn.filereadable(dir .. '/b.txt'))

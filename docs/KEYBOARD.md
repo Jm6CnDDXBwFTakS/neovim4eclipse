@@ -260,5 +260,10 @@ editor shares.
 - `prefs/CtrlKeysPage`: the check boxes (`CtrlKeysPreferencePage` gives it the plug-in's store).
 - `core/LuaScripts` (`SETUP`) and `editor/IdeActions`: the keys handed to Eclipse.
 - `editor/VimKeyContexts`: activates the contexts of the letters sent to Neovim.
+- `editor/EditorKeyContext`: when they are active: while the editor's text (or its `:` box) has
+  the keyboard and Neovim owns the keys. A page editor taking the keyboard turns every editor's
+  contexts off before its own Ctrl+W context goes on: SWT may report the page's focus-in before the
+  text's focus-out, and two active Ctrl+W bindings are a conflict Eclipse resolves by running
+  neither.
 - `core/KeyRouter`: decides who handles every other key (unit-tested in `KeyRouterTest`);
   `editor/KeyInterceptor` is the SWT listener that feeds it.

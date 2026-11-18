@@ -141,7 +141,7 @@ final class SessionEvents implements StateSync.Listeners {
 
     // ---- registration ----
 
-    /** A page window's status line row changed (one row of the screen; {@code util/Grids.pageStatusIfChanged}). */
+    /** A page window's status line row changed (one row of the screen, or none: height 0; {@code util/Grids.pageStatusIfChanged}). */
     void pageStatus(GridSnapshot row) {
         pageStatusListeners.fire(row);
     }
