@@ -770,6 +770,45 @@ t.test(':checkhealth as a float (vim.g.health style) is read before closing wipe
   vim.g.health = nil
 end)
 
+t.test(':help hands the page to the Neovim view and leaves no window, buffer or message', function()
+  local win = commands()
+  vim.v.errmsg = ''
+  t.forget()
+  vim.cmd('help help-context')
+  t.wait_for('the page', function() return #t.sent('eclipse_view_help') == 1 end)
+  local tag, file, line, runtimepath = unpack(t.sent('eclipse_view_help')[1])
+  t.eq('help-context', tag, 'the tag the cursor is on')
+  t.eq('helphelp.txt', file, 'the name only, no folder')
+  t.ok(line > 1, 'the line :help put the cursor on: ' .. tostring(line))
+  t.eq(vim.o.runtimepath, runtimepath)
+  t.eq(win, vim.api.nvim_get_current_win(), "back in the editor's window")
+  t.eq(1, windows_in_tab())
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    t.ok(vim.bo[buf].buftype ~= 'help', 'the help buffer is wiped')
+  end
+  t.eq('', vim.v.errmsg, 'no "Window closed" message: the page went somewhere')
+end)
+
+t.test(':vert help and :tab help are handed over too, back in the editor they came from', function()
+  local win = commands()
+  for _, command in ipairs({ 'vert help help-context', 'tab help help-context' }) do
+    t.forget()
+    vim.cmd(command)
+    t.wait_for('the page of ' .. command, function() return #t.sent('eclipse_view_help') == 1 end)
+    t.eq(win, vim.api.nvim_get_current_win(), command)
+  end
+end)
+
+t.test('a line under a tag is reached by that tag; a page with no tag above the cursor by its first', function()
+  commands()
+  t.forget()
+  vim.cmd('help helphelp.txt')
+  t.wait_for('the page', function() return #t.sent('eclipse_view_help') == 1 end)
+  local tag, _, line = unpack(t.sent('eclipse_view_help')[1])
+  t.eq('helphelp.txt', tag, 'line 1 holds the file tag')
+  t.eq(1, line)
+end)
+
 t.test('floating windows are left alone', function()
   commands()
   local float = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })

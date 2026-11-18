@@ -407,7 +407,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:on[ly]`, `:res[ize]`, `:winc[md]` | Vim's windows as editors: see [Splits](#splits-split-vsplit-ctrl-w) |
 | `:tabnew`, `:tabe[dit]`, `:tabf[ind]` | a new editor tab: see [Splits](#splits-split-vsplit-ctrl-w) |
 | `:tabo[nly]` | close the other editor tabs: see [Splits](#splits-split-vsplit-ctrl-w) |
-| `:tabonly!`, `:stag` | refused, with a message. A window opened some other way (a plug-in's `vim.cmd.split()`, `:help`) is closed again with a message. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
+| `:tabonly!`, `:stag` | refused, with a message. A window opened some other way (a plug-in's `vim.cmd.split()`) is closed again with a message; a help window's page opens in the [Neovim view](#help-in-the-view-help) instead. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →
@@ -627,6 +627,27 @@ again, since it would be empty; the next `:messages` or `:checkhealth` opens it.
   background, in Eclipse's text font; your mappings are not there.
 - **Long messages** in the view itself (a refusal after `:w`, say) do not stop at "Press ENTER":
   they are cut to the first lines with a `[+N]` marker, and `g<` shows them all (Neovim's `ui2`).
+
+### Help in the view (`:help`)
+
+`:help` opens the page in the same view, titled *Neovim: help*: Neovim's own help, with the pages
+of your plug-ins, as in a terminal Neovim. So do `:helpgrep` (and `:cnext` through its matches,
+from the editor), `:vert help`, `:tab help` and a plug-in's `vim.cmd.help()`. The editor keeps no
+help window: Eclipse shows each Neovim window as an editor, and a help page is no file of yours.
+
+- **It is Neovim's help:** `Ctrl-]` (or a double click) follows a link, `Ctrl-T` and `Ctrl-O` go
+  back, `:help` again opens another page there, `K` looks up the word under the cursor, `/`
+  searches and `y` yanks into your registers, as above. `q` or `:q` closes the view.
+- **With your plug-ins' help:** the view's Neovim has your Neovim's `'runtimepath'`, so it finds
+  the help pages of the plug-ins you installed, and runs the help scripts they bring
+  (`ftplugin/help.lua`, `after/ftplugin/help.lua`, a parser for a code block's language), as your
+  editor's Neovim does on a help page. Your `init.lua` and the plug-ins' start-up scripts
+  (`plugin/`) do not run there. Writing stays off: no help page can be changed or written.
+- **Help only:** a file opened from a page (`gf` on a path, `:edit`) is swapped back for the page,
+  with the message "The Neovim view shows help only". Open files in an editor.
+- `:messages` or `:checkhealth` afterwards replaces the page with text, shown by a second Neovim
+  without your plug-ins, as above; the next `:help` starts the help one again (about a tenth of a
+  second).
 
 **`:checkhealth neovim4eclipse`** is the plug-in's own check: which Neovim runs and whether it is new
 enough, whether it is the dedicated Neovim (checked before it started) or a program of your own

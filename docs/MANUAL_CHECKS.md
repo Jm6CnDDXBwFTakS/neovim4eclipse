@@ -351,6 +351,28 @@ Accessibility permission, so the real key is checked by hand.
 
 **Expect:** each step's result, after its ⇒.
 
+### `nv-help` Your plug-ins' help in the Neovim view
+
+- **On:** any
+- **Launch:** normal
+- **Areas:** core/HelpProfile.java, util/HelpPage.java
+
+The mechanism is tested with a plug-in of the tests' own (`ScreenSessionIntegrationTest`,
+`windows_spec.lua`, `NeovimViewEndToEndTest`); which pages a real setup has depends on its plug-in
+manager (one that loads plug-ins only when first used adds their folders to `'runtimepath'` only
+then), so it is checked with your own plug-ins.
+
+1. Open any text file, type `:help` and the name of a plug-in you installed (its help tag, as
+   in a terminal Neovim: `:help lazy.nvim`, `:help telescope`), and Enter.
+   ⇒ The view *Neovim: help* opens on that plug-in's page, with its colors.
+2. In the view, `Ctrl-]` on a link, then `Ctrl-T`.
+   ⇒ The link's page, then back.
+3. `q`.
+   ⇒ The view closes.
+
+**Expect:** each step's result, after its ⇒; a tag a terminal Neovim with your config does not find
+either is not this card's failure.
+
 ## Starting Neovim
 
 ### `st-busy` The busy cursor while Neovim starts

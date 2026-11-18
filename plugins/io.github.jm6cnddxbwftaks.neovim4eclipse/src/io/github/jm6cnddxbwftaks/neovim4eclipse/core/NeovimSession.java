@@ -44,7 +44,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
@@ -672,16 +672,16 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Notified (on the RPC reader thread) of text for the Neovim view: {@code :messages} with its
-     * errors marked, and a {@code :checkhealth} report ({@code util/ViewText}). Neither goes to the
-     * output popup.
+     * Notified (on the RPC reader thread) of what the Neovim view shows: {@code :messages} with
+     * its errors marked and a {@code :checkhealth} report ({@code util/ViewText}), and the page a
+     * {@code :help} reached ({@code util/HelpPage}). None goes to the output popup.
      */
-    public void addViewTextListener(Consumer<ViewText> listener) {
-        status.addViewTextListener(listener);
+    public void addViewContentListener(Consumer<ViewContent> listener) {
+        status.addViewContentListener(listener);
     }
 
-    public void removeViewTextListener(Consumer<ViewText> listener) {
-        status.removeViewTextListener(listener);
+    public void removeViewContentListener(Consumer<ViewContent> listener) {
+        status.removeViewContentListener(listener);
     }
 
     /**
@@ -2314,8 +2314,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onViewText(ViewText text) {
-            status.onViewText(text);
+        public void onViewContent(ViewContent content) {
+            status.onViewContent(content);
         }
 
         /**

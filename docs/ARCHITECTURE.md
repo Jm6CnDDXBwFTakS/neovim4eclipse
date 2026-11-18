@@ -376,9 +376,9 @@ applied, so it is not sent back. Design and decisions: [design/VIEWPORT.md](desi
 ### 10. A second Neovim, which never writes a file
 
 Some of what Neovim shows has no Eclipse editor behind it: a `:checkhealth` report, the
-`:messages` history, later the help pages. The Neovim view shows these in a second Neovim, beside
-the editing one, whose whole screen Eclipse draws (`core/ScreenSession`). The second Neovim knows
-nothing of the editing one's buffers: it is handed text, never a file name.
+`:messages` history, the help pages. The Neovim view shows these in a second Neovim, beside the
+editing one, whose whole screen Eclipse draws (`core/ScreenSession`). The second Neovim knows
+nothing of the editing one's buffers: it is handed text, or for help a tag to open, never a path.
 
 ```text
 editing Neovim ── text (lines, a filetype) ──▶ ScreenSession ──▶ second Neovim (nvim --embed)
@@ -411,14 +411,33 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   `ui2` (new in Neovim 0.12, experimental, `:help ui2`), which has no such prompt: long messages
   are cut with a `[+N]` marker and `g<` shows them all. Loaded with `pcall`; a Neovim without it
   keeps the prompt, logged once at start.
-- **What reaches it**, in the editing session's view-text listeners (`NeovimSession.addViewTextListener`,
-  which `Activator` points at `editor/NeovimViewOpener`): `:messages`, from its own UI event
+- **What reaches it**, in the editing session's view-content listeners (`NeovimSession.addViewContentListener`,
+  which `Activator` points at `editor/NeovimViewOpener`; `util/ViewContent`, sealed: `ViewText` or `HelpPage`): `:messages`, from its own UI event
   (`msg_history_show`, see "Messages and output"), and a `:checkhealth` report, which the
   `WinNew` net of `LuaScripts.WINDOWS` takes from its window. Every way the report opens (a new tab,
   a split with `:vert`, a focused float with `vim.g.health`'s style `'float'`) passes that one net,
   with the report already in the buffer: the net reads its lines first (closing the float wipes its
   buffer), closes the window, wipes `health://` and sends `eclipse_view_text("checkhealth", lines)`.
-  `NotificationBridge` passes on that kind only.
+  `NotificationBridge` passes on that kind only. A help window (`:help`, `:helpgrep`, `:vert` or
+  `:tab help`, a plug-in's `vim.cmd.help`) passes the same net, `'buftype'` `help` set by then:
+  the net sends `eclipse_view_help(tag, file, line, runtimepath)` (the nearest `*tag*` at or above
+  the cursor, the file's name without its folder, the cursor's line, the editing Neovim's
+  `'runtimepath'`), goes back to the window it came from, closes the help window and wipes its
+  buffer (`util/HelpPage`).
+- **Two profiles, one second Neovim per kind.** Text gets the output profile; a help page the help
+  profile (`core/HelpProfile`: `-M`; `LuaScripts.SCREEN_SHOW_HELP` sets the editing Neovim's
+  `'runtimepath'`, runs `:help tag` and `:only`, and puts the cursor on the line if the file is the
+  same). Help is the user's own pages, so the help Neovim runs what Neovim runs for a help page
+  from the user's plug-ins: `ftplugin/help.*`, `after/ftplugin/help.*`, `indent/help.*`, a
+  treesitter parser for a code block's language (a native library). Their `plugin/` folders do not
+  run: the path is set after the start. That is the user's own config, which their editing Neovim
+  runs on the same pages; the one rule above still holds (`-M`, `'write'` off), and the readers are
+  checked at the start only. Text must never meet those scripts, so `NeovimView` keeps the kind of
+  its running second Neovim and, when the kind changes, closes it and starts the other: the
+  output profile's Neovim never has the user's path, whatever was shown before. The events of a
+  Neovim closed that way are ignored (`NeovimView.Events.current`), so its end does not close the
+  view. Inside the help Neovim, a `BufWinEnter` check swaps a buffer that is no help page (`gf`,
+  `:edit`) back for the page, with a message; floating windows (`ui2`) are left alone.
 - **The view** (`editor/NeovimView`, `plugin.xml`: `org.eclipse.ui.views`, placed with Problems
   through `perspectiveExtensions`) holds one second Neovim, started in a job at its first text with
   the output profile (`core/OutputProfile`: `-M`; `LuaScripts.SCREEN_SHOW_TEXT` puts the text in a

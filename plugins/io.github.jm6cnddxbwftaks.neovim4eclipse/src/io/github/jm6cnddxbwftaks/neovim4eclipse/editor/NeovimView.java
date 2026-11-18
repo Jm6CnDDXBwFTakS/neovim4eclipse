@@ -32,23 +32,34 @@ import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.part.ViewPart;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.HelpProfile;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.OutputProfile;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ScreenSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PluginNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 
 /**
- * The Neovim view: a second Neovim's whole screen in an Eclipse view, first for {@code :messages}
- * and {@code :checkhealth} ({@link NeovimViewOpener} opens it with their text). The second Neovim
- * ({@link ScreenSession}, output profile {@link OutputProfile}) shows the text and never writes a
- * file; this class is the thin SWT part: a {@link GridCanvas} for the screen, keys and mouse to
- * Neovim, the view's size as Neovim's screen, and the way back to the editor.
+ * The Neovim view: a second Neovim's whole screen in an Eclipse view, for {@code :messages},
+ * {@code :checkhealth} and {@code :help} ({@link NeovimViewOpener} opens it with what the editing
+ * Neovim handed over). The second Neovim ({@link ScreenSession}) never writes a file; this class is
+ * the thin SWT part: a {@link GridCanvas} for the screen, keys and mouse to Neovim, the view's size
+ * as Neovim's screen, and the way back to the editor.
+ *
+ * <h2>One second Neovim per kind</h2>
+ * Text ({@link ViewText}) is shown by a second Neovim with the output profile
+ * ({@link OutputProfile}), which loads none of the user's plug-ins; a help page ({@link HelpPage})
+ * by one with the help profile ({@link HelpProfile}), given the user's {@code 'runtimepath'}. When
+ * the kind changes ({@code :messages} after {@code :help}), the running one is closed and the
+ * other started, so text never meets the user's plug-ins, whatever was shown before. The same kind
+ * again reuses the running one (about 0.1 s saved, and {@code Ctrl-O} keeps the help history).
  *
  * <h2>What the user sees</h2>
  * <ul>
@@ -97,12 +108,14 @@ public final class NeovimView extends ViewPart {
     private int measuredHeight = 1;
 
     private GridCanvas canvas;
-    /** The second Neovim; {@code null} before the first text and after it ended. */
+    /** The second Neovim; {@code null} before the first content and after it ended. */
     private ScreenSession screen;
-    /** Whether a start is under way: text that arrives meanwhile waits in {@link #pending}. */
+    /** Whether {@link #screen} has the help profile ({@link HelpProfile}) rather than the output one. */
+    private boolean screenForHelp;
+    /** Whether a start is under way: content that arrives meanwhile waits in {@link #pending}. */
     private boolean starting;
-    /** The text to show once the second Neovim has started; {@code null} for none. */
-    private ViewText pending;
+    /** The content to show once the second Neovim has started; {@code null} for none. */
+    private ViewContent pending;
     /** The editor the last text came from, for {@code Ctrl-W p}; {@code null} if none. */
     private IEditorPart cameFrom;
     /** The screen size last asked for, in cells, so a resize that changes nothing sends nothing. */
@@ -199,35 +212,48 @@ public final class NeovimView extends ViewPart {
     }
 
     /**
-     * Shows {@code text}, replacing what the view held, starting the second Neovim if it is not
-     * running. {@code from} is the editor it came from: its colors are the view's, and
-     * {@code Ctrl-W p} goes back to it. UI thread.
+     * Shows {@code content}, replacing what the view held, starting a second Neovim of its kind if
+     * none is running (see the class comment, "One second Neovim per kind"). {@code from} is the
+     * editor it came from: its colors are the view's, and {@code Ctrl-W p} goes back to it. UI
+     * thread.
      *
-     * @param from the editor whose Neovim produced the text, or {@code null} if none is active
+     * @param from the editor whose Neovim produced the content, or {@code null} if none is active
      * @param fg   that editor's text color, {@code 0xRRGGBB}
      * @param bg   its background
      */
-    void show(ViewText text, IEditorPart from, int fg, int bg) {
+    void show(ViewContent content, IEditorPart from, int fg, int bg) {
         if (disposed) {
             return;
         }
         cameFrom = from;
         foreground = fg;
         background = bg;
-        setPartName(ScreenInput.title(text.title()));
-        if (screen != null) {
-            showOnScreen(text);
+        setPartName(ScreenInput.title(content.title()));
+        if (screen != null && screenForHelp == isHelp(content)) {
+            showOnScreen(content);
             canvas.redraw();
             return;
         }
-        pending = text;
+        if (screen != null) {
+            ScreenSession other = screen;
+            screen = null; // its end, when it comes, is no longer this view's (Events.ended)
+            closeInBackground(other);
+        }
+        pending = content;
         if (!starting) {
-            start();
+            start(isHelp(content));
         }
     }
 
-    /** Starts the second Neovim in a background job, at the view's size, then shows {@link #pending}. */
-    private void start() {
+    private static boolean isHelp(ViewContent content) {
+        return content instanceof HelpPage;
+    }
+
+    /**
+     * Starts a second Neovim of the kind asked for in a background job, at the view's size, then
+     * shows {@link #pending}.
+     */
+    private void start(boolean forHelp) {
         starting = true;
         Point size = canvas.getSize();
         int startColumns = ScreenInput.cells(size.x, canvas.cellWidth());
@@ -235,6 +261,8 @@ public final class NeovimView extends ViewPart {
         Display display = canvas.getDisplay();
         String program = Activator.getDefault().getNvimExecutable();
         String version = Activator.getDefault().getBundle().getVersion().toString();
+        List<String> profile = forHelp ? HelpProfile.ARGS : OutputProfile.ARGS;
+        Events events = new Events();
         Job job = Job.create("Starting the Neovim view's Neovim", monitor -> {
             ScreenSession started = null;
             Exception failure = null;
@@ -243,21 +271,22 @@ public final class NeovimView extends ViewPart {
                 // kept answer notices a reinstall, not a runtime file edited in place
                 // (PluginNeovim.verified). About 0.1 s, here in the job.
                 PluginNeovim.forget();
-                started = ScreenSession.start(program, OutputProfile.ARGS, version, SCREEN_FOLDER.get(), startColumns,
-                        startRows, new Events());
+                started = ScreenSession.start(program, profile, version, SCREEN_FOLDER.get(), startColumns,
+                        startRows, events);
             } catch (Exception e) {
                 failure = e;
             }
             ScreenSession session = started;
             Exception error = failure;
-            display.asyncExec(() -> onStarted(session, error, startColumns, startRows));
+            display.asyncExec(() -> onStarted(session, events, forHelp, error, startColumns, startRows));
             return Status.OK_STATUS;
         });
         job.setSystem(true);
         job.schedule();
     }
 
-    private void onStarted(ScreenSession session, Exception failure, int startColumns, int startRows) {
+    private void onStarted(ScreenSession session, Events events, boolean forHelp, Exception failure, int startColumns,
+            int startRows) {
         starting = false;
         if (failure != null) {
             LOG.log(Level.WARNING, "The Neovim view could not start its Neovim", failure);
@@ -268,25 +297,41 @@ public final class NeovimView extends ViewPart {
             closeInBackground(session);
             return;
         }
+        ViewContent content = pending;
+        if (content != null && isHelp(content) != forHelp) {
+            // The other kind arrived while this one started: start that one instead.
+            closeInBackground(session);
+            start(isHelp(content));
+            return;
+        }
         screen = session;
+        screenForHelp = forHelp;
+        events.session = session;
         columns = startColumns;
         rows = startRows;
         resizeScreen(); // the view may have changed size while Neovim started
-        ViewText text = pending;
         pending = null;
-        if (text != null) {
-            showOnScreen(text);
+        if (content != null) {
+            showOnScreen(content);
         }
     }
 
     /**
-     * Puts {@code text} into the second Neovim. A failure (it ended a moment ago, after a
-     * {@code :q} whose end is still on its way) is logged; the next text starts a new one.
+     * Puts {@code content} into the second Neovim, by its profile. A failure (it ended a moment ago,
+     * after a {@code :q} whose end is still on its way) is logged; the next content starts a new
+     * one. A help tag the second Neovim did not find shows Neovim's own error on its message line.
      */
-    private void showOnScreen(ViewText text) {
-        OutputProfile.show(screen, text, OverlayColors.isDark(background)).whenComplete((count, failure) -> {
+    private void showOnScreen(ViewContent content) {
+        boolean dark = OverlayColors.isDark(background);
+        var shown = switch (content) {
+            case ViewText text -> OutputProfile.show(screen, text, dark);
+            case HelpPage page -> HelpProfile.show(screen, page, dark);
+        };
+        shown.whenComplete((answer, failure) -> {
             if (failure != null) {
-                LOG.log(Level.FINE, "The Neovim view could not show " + text.title(), failure);
+                LOG.log(Level.FINE, "The Neovim view could not show " + content.title(), failure);
+            } else if (answer instanceof String error && !error.isEmpty()) {
+                LOG.fine(() -> "The Neovim view's help: " + error);
             }
         });
     }
@@ -407,12 +452,27 @@ public final class NeovimView extends ViewPart {
         job.schedule();
     }
 
-    /** What the second Neovim reports, passed to the UI thread. */
+    /**
+     * What one second Neovim reports, passed to the UI thread. Its screen and its end count only
+     * while it is the view's {@link #screen}: one closed because the kind changed still sends its
+     * last screens and its end, which must neither draw nor close the view.
+     */
     private final class Events implements ScreenSession.Listener {
+
+        /** The session these events are from, once it started; UI thread. */
+        private ScreenSession session;
+
+        private boolean current() {
+            return session != null && session == screen;
+        }
 
         @Override
         public void screen(GridSnapshot snapshot) {
-            onUi(() -> canvas.show(snapshot));
+            onUi(() -> {
+                if (current()) {
+                    canvas.show(snapshot);
+                }
+            });
         }
 
         @Override
@@ -430,7 +490,11 @@ public final class NeovimView extends ViewPart {
 
         @Override
         public void ended() {
-            onUi(NeovimView.this::onEnded);
+            onUi(() -> {
+                if (current()) {
+                    onEnded();
+                }
+            });
         }
 
         private void onUi(Runnable work) {

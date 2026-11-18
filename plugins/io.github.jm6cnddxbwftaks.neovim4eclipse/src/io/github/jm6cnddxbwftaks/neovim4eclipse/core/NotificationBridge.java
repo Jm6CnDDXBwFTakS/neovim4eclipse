@@ -14,6 +14,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
@@ -201,12 +203,12 @@ final class NotificationBridge implements Incoming {
         void onMessageEvent(MessageEvent event);
 
         /**
-         * Text for the Neovim view that is no message: a {@code :checkhealth} report, which the
-         * {@code WinNew} net of {@link LuaScripts#WINDOWS} took from its window
-         * ({@code eclipse_view_text}). A default that does nothing, for the fakes of tests that do
-         * not use it.
+         * Content for the Neovim view that is no message, which the {@code WinNew} net of
+         * {@link LuaScripts#WINDOWS} took from its window: a {@code :checkhealth} report
+         * ({@code eclipse_view_text}) or a {@code :help} page ({@code eclipse_view_help}). A default
+         * that does nothing, for the fakes of tests that do not use it.
          */
-        default void onViewText(ViewText text) {
+        default void onViewContent(ViewContent content) {
         }
 
         /**
@@ -271,6 +273,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_highlights" -> onHighlights(args);
             case "eclipse_window_closed" -> onWindowClosed(args);
             case "eclipse_view_text" -> onViewText(args);
+            case "eclipse_view_help" -> onViewHelp(args);
             case "eclipse_echo" -> onEcho(args);
             case "eclipse_cmdwin" -> onCommandWindow(args);
             case "eclipse_cmdwin_closed" -> sink.onCommandWindowClosed();
@@ -390,7 +393,21 @@ final class NotificationBridge implements Incoming {
         for (Object line : raw) {
             lines.add(String.valueOf(line));
         }
-        sink.onViewText(ViewText.checkhealth(lines));
+        sink.onViewContent(ViewText.checkhealth(lines));
+    }
+
+    /**
+     * Payload: {@code [tag, file, line, runtimepath]}, from the {@code WinNew} net of
+     * {@link LuaScripts#WINDOWS}: a help window it took ({@code util/HelpPage}). Ignored unless
+     * each part has its type and the tag and file are not empty.
+     */
+    private void onViewHelp(List<?> args) {
+        if (args.size() < 4 || !(args.get(0) instanceof String tag) || !(args.get(1) instanceof String file)
+                || !(args.get(2) instanceof Number line) || !(args.get(3) instanceof String runtimepath)
+                || tag.isEmpty() || file.isEmpty()) {
+            return;
+        }
+        sink.onViewContent(new HelpPage(tag, file, line.intValue(), runtimepath));
     }
 
     private void onWindowClosed(List<?> args) {

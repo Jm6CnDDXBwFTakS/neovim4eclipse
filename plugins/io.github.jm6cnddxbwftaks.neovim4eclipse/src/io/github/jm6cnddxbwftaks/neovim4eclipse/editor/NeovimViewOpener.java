@@ -16,11 +16,11 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 
 /**
  * Opens the Neovim view ({@link NeovimView}) with text the editing Neovim produced:
- * {@code :messages} and {@code :checkhealth} ({@code NeovimSession.addViewTextListener}, which
+ * {@code :messages}, {@code :checkhealth} and {@code :help} ({@code NeovimSession.addViewContentListener}, which
  * {@code Activator} points here when it starts the session). The view takes the keyboard, as
  * Vim's {@code :messages} pager and {@code :checkhealth} window do; it opens in the active
  * workbench window, at the place Eclipse keeps for it ({@code plugin.xml}: with Console and
@@ -36,16 +36,16 @@ public final class NeovimViewOpener {
     private NeovimViewOpener() {
     }
 
-    /** Shows {@code text} in the Neovim view; any thread (the RPC reader thread, usually). */
-    public static void show(ViewText text) {
+    /** Shows {@code content} (text or a help page) in the Neovim view; any thread (the RPC reader thread, usually). */
+    public static void show(ViewContent content) {
         if (!PlatformUI.isWorkbenchRunning()) {
             return;
         }
         Display display = PlatformUI.getWorkbench().getDisplay();
-        display.asyncExec(() -> showOnUi(text));
+        display.asyncExec(() -> showOnUi(content));
     }
 
-    private static void showOnUi(ViewText text) {
+    private static void showOnUi(ViewContent content) {
         IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
         if (window == null) {
             IWorkbenchWindow[] windows = PlatformUI.getWorkbench().getWorkbenchWindows();
@@ -53,7 +53,7 @@ public final class NeovimViewOpener {
         }
         IWorkbenchPage page = window == null ? null : window.getActivePage();
         if (page == null) {
-            LOG.fine(() -> "No workbench page to show " + text.title() + " in");
+            LOG.fine(() -> "No workbench page to show " + content.title() + " in");
             return;
         }
         IEditorPart editor = page.getActiveEditor();
@@ -65,7 +65,7 @@ public final class NeovimViewOpener {
         }
         try {
             if (page.showView(NeovimView.ID) instanceof NeovimView view) {
-                view.show(text, editor, foreground, background);
+                view.show(content, editor, foreground, background);
             }
         } catch (PartInitException e) {
             LOG.log(Level.WARNING, "Could not open the Neovim view", e);

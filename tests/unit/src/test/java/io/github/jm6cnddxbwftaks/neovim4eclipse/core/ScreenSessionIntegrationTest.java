@@ -25,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
@@ -245,6 +246,70 @@ class ScreenSessionIntegrationTest {
         try (ScreenSession s = start(OutputProfile.ARGS)) {
             Object cwd = s.execLuaAsync("return vim.fn.getcwd()", List.of()).get(TestWait.millis(), TimeUnit.MILLISECONDS);
             assertEquals(folder.toRealPath(), Path.of(String.valueOf(cwd)).toRealPath());
+        }
+    }
+
+    /** A plug-in of the user's, for the help profile: one help page, and a help script that leaves a mark. */
+    private static Path helpPlugin(Path root) throws Exception {
+        Path doc = Files.createDirectories(root.resolve("plug/doc"));
+        Files.writeString(doc.resolve("probe.txt"), String.join("\n", "*probe.txt*  A probe", "", "*probe-topic*",
+                "See |probe-other|.", "", "*probe-other*", "other", "", " vim:tw=78:ts=8:ft=help:norl:", ""));
+        Files.writeString(doc.resolve("tags"), "probe-other\tprobe.txt\t/*probe-other*\n"
+                + "probe-topic\tprobe.txt\t/*probe-topic*\nprobe.txt\tprobe.txt\t/*probe.txt*\n");
+        Path ftplugin = Files.createDirectories(root.resolve("plug/ftplugin"));
+        Files.writeString(ftplugin.resolve("help.lua"), "vim.g.probe_help_script = (vim.g.probe_help_script or 0) + 1\n");
+        return root.resolve("plug");
+    }
+
+    private static Object lua(ScreenSession s, String code) throws Exception {
+        return s.execLuaAsync(code, List.of()).get(TestWait.millis(), TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * The help profile: the page a plug-in of the user's has, found on the editing Neovim's
+     * {@code 'runtimepath'}, opened as Neovim's own help (a help buffer, its script run), the whole
+     * screen, the cursor on the line the editing Neovim had. A file opened from it is swapped back
+     * for the page; {@code q} closes it all.
+     */
+    @Test
+    void theHelpProfileOpensTheUsersPageWithItsHelpScript(@TempDir Path user) throws Exception {
+        Path plugin = helpPlugin(user);
+        Path other = Files.writeString(user.resolve("notes.txt"), "not help\n");
+        try (ScreenSession s = start(HelpProfile.ARGS)) {
+            String runtimepath = lua(s, "return vim.o.runtimepath") + "," + plugin;
+            assertEquals("", HelpProfile.show(s, new HelpPage("probe-other", "probe.txt", 7, runtimepath), true)
+                    .get(TestWait.millis(), TimeUnit.MILLISECONDS));
+            assertEquals("help", lua(s, "return vim.bo.buftype"));
+            assertEquals(7L, ((Number) lua(s, "return vim.fn.line('.')")).longValue(), "the line it had");
+            assertEquals(1L, ((Number) lua(s, "return #vim.api.nvim_tabpage_list_wins(0)")).longValue(), "the whole screen");
+            assertEquals(1L, ((Number) lua(s, "return vim.g.probe_help_script")).longValue(), "the plug-in's help script ran");
+            waitFor(() -> recorder.text().startsWith("other") && recorder.text().contains("[Help]"),
+                    "the page from its line on, under Neovim's help status line: " + recorder.text());
+
+            s.inputAsync(":edit " + other.toString().replace("\\", "/") + "<CR>");
+            pass(s);
+            waitFor(() -> {
+                try {
+                    return "help".equals(lua(s, "return vim.bo.buftype"));
+                } catch (Exception e) {
+                    return false;
+                }
+            }, "the page back after :edit");
+            assertTrue(String.valueOf(lua(s, "return vim.fn.execute('messages')")).contains("shows help only"));
+
+            s.inputAsync("q");
+            waitFor(() -> recorder.ends.get() == 1, "q closing it");
+        }
+    }
+
+    /** A tag the second Neovim does not find answers Neovim's error, for the log. */
+    @Test
+    void anUnknownTagAnswersNeovimsError() throws Exception {
+        try (ScreenSession s = start(HelpProfile.ARGS)) {
+            String runtimepath = String.valueOf(lua(s, "return vim.o.runtimepath"));
+            Object answer = HelpProfile.show(s, new HelpPage("no-such-tag-anywhere", "x.txt", 1, runtimepath), false)
+                    .get(TestWait.millis(), TimeUnit.MILLISECONDS);
+            assertTrue(String.valueOf(answer).contains("E149"), String.valueOf(answer));
         }
     }
 }

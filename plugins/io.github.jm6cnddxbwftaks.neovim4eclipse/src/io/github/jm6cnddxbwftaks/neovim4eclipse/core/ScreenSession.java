@@ -22,7 +22,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenGrid;
 
 /**
  * A second Neovim, beside the editing one, whose whole screen Eclipse draws: the Neovim view
- * (first for {@code :checkhealth} and {@code :messages}, later for {@code :help}). It knows
+ * ({@code :checkhealth} and {@code :messages}, output profile {@link OutputProfile}; {@code :help},
+ * help profile {@link HelpProfile}). It knows
  * nothing of what the view shows; that is the view's <em>profile</em>, which passes its own start
  * arguments and Lua. This class holds what every profile shares: the process, the screen, keys,
  * mouse, size, yanks and the end.

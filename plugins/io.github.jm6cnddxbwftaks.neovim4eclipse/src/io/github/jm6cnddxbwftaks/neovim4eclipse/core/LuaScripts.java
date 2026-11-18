@@ -1445,6 +1445,55 @@ final class LuaScripts {
               vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_text', 'checkhealth', lines)
               return true
             end
+            -- The help tag to reach line `line` (1-based) of a help file by: the last tag at or above
+            -- it (*tag* in the text), else the first in the file, else nil. Example: on the line under
+            -- "*help-context*", that tag; on line 1 of helphelp.txt, "helphelp.txt".
+            local function nearest_tag(lines, line)
+              local first, above
+              for i = 1, #lines do
+                local last
+                for tag in lines[i]:gmatch('%*([^%s%*|]+)%*') do
+                  last = tag
+                end
+                first = first or last
+                if i <= line and last then
+                  above = last
+                end
+              end
+              return above or first
+            end
+            -- A help window (:help, :helpgrep, a plug-in's vim.cmd.help, in a split, a tab or with
+            -- :vert): Eclipse shows help in the Neovim view instead, with the user's own help pages
+            -- and plug-ins (docs/ARCHITECTURE.md, decision 10). By the time this net runs, :help has
+            -- set 'buftype' help and put the cursor on the topic. What leaves: the tag to open
+            -- (nearest_tag), the help file's name without its folder (to check the second Neovim
+            -- reached the same file), the cursor's line, and 'runtimepath', where the second Neovim
+            -- finds the same pages. Then, as for a report, back to the window it came from and the
+            -- window closed; the help buffer is wiped unless another window shows it.
+            local function take_help(win)
+              if not vim.api.nvim_win_is_valid(win) or vim.fn.win_gettype(win) ~= '' then
+                return false
+              end
+              local buf = vim.api.nvim_win_get_buf(win)
+              if vim.bo[buf].buftype ~= 'help' then
+                return false
+              end
+              local line = vim.api.nvim_win_get_cursor(win)[1]
+              local tag = nearest_tag(vim.api.nvim_buf_get_lines(buf, 0, -1, false), line)
+              local file = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':t')
+              local before = opened_from[win]
+              if before and own[before] and vim.api.nvim_win_is_valid(before) then
+                pcall(vim.api.nvim_set_current_win, before)
+              end
+              pcall(vim.api.nvim_win_close, win, true)
+              if vim.api.nvim_buf_is_valid(buf) and #vim.fn.win_findbuf(buf) == 0 then
+                pcall(vim.api.nvim_buf_delete, buf, { force = true })
+              end
+              if tag then
+                vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_help', tag, file, line, vim.o.runtimepath)
+              end
+              return true
+            end
             -- The window last left: when a command opens a window and enters it (:checkhealth's
             -- `tab sbuffer`, a split), WinLeave fires in the old window first, then WinNew in the new.
             local left_from = home
@@ -1472,7 +1521,7 @@ final class LuaScripts {
                     seen[win] = true
                     local wintype = vim.fn.win_gettype(win)
                     -- A report taken leaves its window closed: the checks below then pass it by.
-                    local taken = new and not own[win] and take_health_report(win)
+                    local taken = new and not own[win] and (take_health_report(win) or take_help(win))
                     if not taken and new and win == current and wintype == 'popup' and not own[win] then
                       local name = float_name(win)
                       local prompt = vim.bo[vim.api.nvim_win_get_buf(win)].buftype == 'prompt'
@@ -5829,6 +5878,76 @@ final class LuaScripts {
             vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the Neovim view' })
             vim.wo.statusline = ' ' .. (title or ''):gsub('%%', '%%%%') .. '%=%l,%c%V  %P '
             return count
+            """;
+
+    /**
+     * The help profile of the Neovim view ({@code :help}, {@link HelpProfile}): opens a help page in
+     * the second Neovim, as the editing Neovim had it. Arguments: the tag, the help file's name
+     * without its folder, the line, the editing Neovim's {@code 'runtimepath'} and
+     * {@code 'background'} ({@code "light"} or {@code "dark"}). Example:
+     * {@code ("help-context", "helphelp.txt", 27, rtp, "dark")}.
+     *
+     * <ol>
+     *   <li>{@code 'runtimepath'} becomes the editing Neovim's, so the user's plug-ins' help pages
+     *       are found, and their help scripts ({@code ftplugin/help.lua}, {@code after/ftplugin})
+     *       run on each page, as in the user's editor. Set after the start, so their
+     *       {@code plugin/} folders do not run: only what Neovim loads for a help page.</li>
+     *   <li>{@code :help tag}, Neovim's own: the page opens as a help buffer (tags concealed,
+     *       {@code Ctrl-]} follows them, {@code :help} again replaces it). Then {@code :only}: the
+     *       page is the whole screen.</li>
+     *   <li>If the page is the file the editing Neovim had, the cursor goes to its line, at the top
+     *       of the window, as {@code :help} puts a topic; otherwise it stays on the tag (two files
+     *       of the same name on the path).</li>
+     * </ol>
+     *
+     * <p>The view shows help only: a buffer that is no help page, in a window of the screen
+     * ({@code gf} on a path, {@code :edit}), is swapped back for the page it replaced, with a
+     * message; floating windows ({@code ui2}'s pager) and the command-line window are left alone.
+     * {@code q} quits the window, as in the text profile: the last one ends the second Neovim and
+     * closes the view. Returns {@code ""}, or Neovim's error if the tag is not found (the second
+     * Neovim then shows it on its message line).
+     */
+    static final String SCREEN_SHOW_HELP = """
+            local tag, file, line, runtimepath, background = ...
+            if background == 'light' or background == 'dark' then
+              vim.o.background = background
+            end
+            vim.o.runtimepath = runtimepath
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_help_view', { clear = true })
+            vim.api.nvim_create_autocmd('BufWinEnter', {
+              group = group,
+              callback = function()
+                -- 'buftype' help is set only after the buffer is entered: checked once that is over.
+                vim.schedule(function()
+                  local win = vim.api.nvim_get_current_win()
+                  if vim.fn.win_gettype(win) ~= '' then
+                    return
+                  end
+                  local buf = vim.api.nvim_win_get_buf(win)
+                  if vim.bo[buf].buftype == 'help' then
+                    vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the Neovim view' })
+                    return
+                  end
+                  local alternate = vim.fn.bufnr('#')
+                  if alternate > 0 and vim.bo[alternate].buftype == 'help' then
+                    vim.api.nvim_win_set_buf(win, alternate)
+                  else
+                    pcall(vim.cmd.help)
+                  end
+                  vim.api.nvim_echo({ { 'The Neovim view shows help only' } }, true, { err = true })
+                end)
+              end,
+            })
+            local ok, err = pcall(vim.cmd.help, tag)
+            if not ok then
+              return tostring(err)
+            end
+            pcall(vim.cmd.only)
+            if vim.fn.expand('%:t') == file and line >= 1 and line <= vim.api.nvim_buf_line_count(0) then
+              vim.api.nvim_win_set_cursor(0, { line, 0 })
+              vim.cmd('normal! zt')
+            end
+            return ''
             """;
 
     /**

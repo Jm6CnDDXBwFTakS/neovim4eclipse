@@ -69,6 +69,10 @@ What stays as in Vim, because it takes a key you press on purpose or your own se
   unpacked with the system's `gzip`), `editorconfig` (a repository's `.editorconfig` may set
   indent, line-ending and text-width options) and the `man://` reader of manual pages.
 - Your own `init.lua` and the plug-ins it loads run with your rights, as in any Neovim.
+- The Neovim view's help (`:help`) runs the help scripts of your plug-ins (`ftplugin/help.lua`,
+  `after/ftplugin/help.lua`, a parser for a code block's language) on each page, as your Neovim
+  does: it has your `'runtimepath'`. A help page is a plug-in's, not a cloned repository's file.
+  The view's `:messages` and `:checkhealth` run in another Neovim, without your plug-ins.
 
 A way around the first list is a vulnerability: please report it as described above.
 

@@ -290,6 +290,29 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
         }, () -> "; the cursor is on row " + canvas.grid().cursorRow());
     }
 
+    /**
+     * {@code :help} opens the page in the view, as Neovim's own help (the editing Neovim keeps no
+     * help window), and {@code :messages} afterwards replaces it with text, from a second Neovim of
+     * the text's kind (NeovimView, "One second Neovim per kind").
+     */
+    @Test
+    void helpOpensInTheViewAndMessagesReplaceIt() {
+        colon("help help-context");
+        NeovimView view = viewShowing("help-context");
+        assertEquals("Neovim: help", view.getPartName());
+        assertTrue(rowsOf(view).contains("[Help]"), rowsOf(view));
+        assertEquals(1L, ((Number) SessionProbe.lua(session, "return #vim.api.nvim_tabpage_list_wins(0)")).longValue(),
+                "no help window left in the editing Neovim");
+
+        SessionProbe.lua(session, "vim.cmd.echomsg(\"'after help'\") return 0");
+        page().activate(editor);
+        waitUntil("the editor has the keyboard", TIMEOUT_MS, widget::isFocusControl);
+        colon("messages");
+        view = viewShowing("after help");
+        assertEquals("Neovim: messages", view.getPartName());
+        assertTrue(!rowsOf(view).contains("[Help]"), rowsOf(view));
+    }
+
     /** {@code :checkhealth neovim4eclipse} opens the view titled for the report, with the plug-in's lines. */
     @Test
     void thePluginsHealthCheckInTheView() {

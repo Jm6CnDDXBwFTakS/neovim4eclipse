@@ -34,6 +34,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 
 import org.junit.jupiter.api.Tag;
@@ -444,7 +445,11 @@ class NeovimSessionIntegrationTest {
         try (NeovimSession s = start()) {
             Shown shown = new Shown(s);
             List<ViewText> texts = new CopyOnWriteArrayList<>();
-            s.addViewTextListener(texts::add);
+            s.addViewContentListener(c -> {
+                if (c instanceof ViewText t) {
+                    texts.add(t);
+                }
+            });
             s.commandAsync("echomsg 'remember me'");
             s.commandAsync("lua vim.api.nvim_echo({ { 'E999: made up' } }, true, { err = true })");
             s.commandAsync("messages");
@@ -466,7 +471,11 @@ class NeovimSessionIntegrationTest {
     void anEmptyHistoryOpensNothing() throws Exception {
         try (NeovimSession s = start()) {
             List<ViewText> texts = new CopyOnWriteArrayList<>();
-            s.addViewTextListener(texts::add);
+            s.addViewContentListener(c -> {
+                if (c instanceof ViewText t) {
+                    texts.add(t);
+                }
+            });
             s.commandAsync("messages clear");
             s.commandAsync("messages");
             NeovimBarrier.pass(s);
@@ -482,7 +491,11 @@ class NeovimSessionIntegrationTest {
     void aCheckhealthReportGoesToTheView() throws Exception {
         try (NeovimSession s = start()) {
             List<ViewText> texts = new CopyOnWriteArrayList<>();
-            s.addViewTextListener(texts::add);
+            s.addViewContentListener(c -> {
+                if (c instanceof ViewText t) {
+                    texts.add(t);
+                }
+            });
             s.commandAsync("checkhealth vim.health");
             waitFor(() -> !texts.isEmpty(), "the report");
             ViewText text = texts.get(0);
@@ -493,13 +506,40 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * {@code :help} goes to the Neovim view: the page, taken from its window by the {@code WinNew}
+     * net, as a tag, the file's name and the line, with the editing Neovim's {@code 'runtimepath'}.
+     */
+    @Test
+    void aHelpPageGoesToTheView() throws Exception {
+        try (NeovimSession s = start()) {
+            List<HelpPage> pages = new CopyOnWriteArrayList<>();
+            s.addViewContentListener(c -> {
+                if (c instanceof HelpPage page) {
+                    pages.add(page);
+                }
+            });
+            s.commandAsync("help help-context");
+            waitFor(() -> !pages.isEmpty(), "the page");
+            HelpPage page = pages.get(0);
+            assertEquals("help-context", page.tag());
+            assertEquals("helphelp.txt", page.file());
+            assertTrue(page.line() > 1, "the topic's line: " + page.line());
+            assertEquals(s.lua("return vim.o.runtimepath"), page.runtimepath());
+        }
+    }
+
     /** {@code :checkhealth neovim4eclipse}: the plug-in's own check, registered after the start. */
     @Test
     void thePluginsOwnHealthCheckReports(@TempDir Path runtime) throws Exception {
         try (NeovimSession s = start()) {
             s.installHealthCheckAsync(runtime, new HealthCheck.Info(false, "0.2.27", "4.38.0"));
             List<ViewText> texts = new CopyOnWriteArrayList<>();
-            s.addViewTextListener(texts::add);
+            s.addViewContentListener(c -> {
+                if (c instanceof ViewText t) {
+                    texts.add(t);
+                }
+            });
             s.commandAsync("checkhealth neovim4eclipse");
             waitFor(() -> !texts.isEmpty(), "the report");
             String report = String.join("\n", texts.get(0).lines());

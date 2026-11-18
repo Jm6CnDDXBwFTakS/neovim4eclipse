@@ -962,9 +962,20 @@ The user has had a few errors and types `:messages` and Enter in an attached edi
 
 `:checkhealth` takes another road to the same view: its report opens in a Neovim window Eclipse
 cannot show, and the `WinNew` net (`LuaScripts.WINDOWS`) reads the lines, closes the window, wipes
-the buffer and sends `eclipse_view_text`. Design: [ARCHITECTURE.md](ARCHITECTURE.md), decision 10.
+the buffer and sends `eclipse_view_text`.
+
+`:help help-context` takes the same net, with a page instead of text. Neovim opens its help
+window; once the command is over, the net sees `'buftype'` `help` and sends
+`eclipse_view_help("help-context", "helphelp.txt", 27, rtp)`: the nearest tag above the cursor,
+the file's name, the line and `'runtimepath'`. No path crosses; the second Neovim finds the page
+itself. The view sees a `HelpPage`, not a `ViewText` (`util/ViewContent` is sealed, so its
+`switch` names both), and since its running second Neovim is a text one, it closes that and starts
+a help one (`core/HelpProfile`). `SCREEN_SHOW_HELP` sets the path, runs `:help help-context`,
+`:only`, and puts the cursor on line 27. Why two Neovims: help should run the user's help plug-ins,
+as Neovim does; text should meet none of them. Keeping them apart is one check, the kind, rather
+than a list of what each script may do. Design: [ARCHITECTURE.md](ARCHITECTURE.md), decision 10.
 Tests: `ScreenGridTest`, `ViewTextTest`, `screen_setup_spec.lua`, `view_scripts_spec.lua`,
-`ScreenSessionIntegrationTest`, `NeovimViewEndToEndTest`.
+`windows_spec.lua`, `ScreenSessionIntegrationTest`, `NeovimViewEndToEndTest`.
 
 ### 3.3 Insert mode
 

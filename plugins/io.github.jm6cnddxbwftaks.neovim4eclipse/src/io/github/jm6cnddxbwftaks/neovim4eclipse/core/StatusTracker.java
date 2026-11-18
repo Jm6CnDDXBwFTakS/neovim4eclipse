@@ -10,6 +10,7 @@ import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageRoute;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
@@ -71,7 +72,7 @@ final class StatusTracker {
 
     private final ListenerList<StatusInfo> statusListeners = new ListenerList<>("status", Level.FINE);
     private final ListenerList<CommandOutput> outputListeners = new ListenerList<>("output", Level.FINE);
-    private final ListenerList<ViewText> viewTextListeners = new ListenerList<>("view text", Level.FINE);
+    private final ListenerList<ViewContent> viewListeners = new ListenerList<>("view content", Level.FINE);
     private final ListenerList<String> recordingListeners = new ListenerList<>("recording", Level.FINE);
 
     /**
@@ -124,7 +125,7 @@ final class StatusTracker {
             // decision 10); the message line keeps what it showed. An empty history shows nothing,
             // as in Vim, rather than an empty view that takes the keyboard.
             if (!history.entries().isEmpty()) {
-                viewTextListeners.fire(ViewText.messages(history));
+                viewListeners.fire(ViewText.messages(history));
             }
             return;
         }
@@ -250,20 +251,23 @@ final class StatusTracker {
     }
 
     /**
-     * Listens for text for the Neovim view ({@code :messages}, {@code :checkhealth}); called on the
-     * RPC reader thread.
+     * Listens for what the Neovim view shows ({@code :messages}, {@code :checkhealth},
+     * {@code :help}); called on the RPC reader thread.
      */
-    void addViewTextListener(Consumer<ViewText> listener) {
-        viewTextListeners.add(listener);
+    void addViewContentListener(Consumer<ViewContent> listener) {
+        viewListeners.add(listener);
     }
 
-    void removeViewTextListener(Consumer<ViewText> listener) {
-        viewTextListeners.remove(listener);
+    void removeViewContentListener(Consumer<ViewContent> listener) {
+        viewListeners.remove(listener);
     }
 
-    /** Text for the Neovim view that is no message ({@code :checkhealth}): to the same listeners. */
-    void onViewText(ViewText text) {
-        viewTextListeners.fire(text);
+    /**
+     * Content for the Neovim view that is no message ({@code :checkhealth}'s report, a
+     * {@code :help} page): to the same listeners.
+     */
+    void onViewContent(ViewContent content) {
+        viewListeners.fire(content);
     }
 
     void addRecordingListener(Consumer<String> listener) {

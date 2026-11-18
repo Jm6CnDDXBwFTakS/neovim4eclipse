@@ -18,6 +18,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -107,7 +109,12 @@ class NotificationBridgeTest {
             @Override public void onMessageEvent(MessageEvent event) {
                 events.add("message:" + event);
             }
-            @Override public void onViewText(ViewText text) { events.add("view:" + text.title() + ":" + text.lines()); }
+            @Override public void onViewContent(ViewContent content) {
+                events.add(switch (content) {
+                    case ViewText text -> "view:" + text.title() + ":" + text.lines();
+                    case HelpPage page -> "help:" + page;
+                });
+            }
             @Override public void onGridEvents(List<GridEvent> grid) { events.add("grid:" + grid); }
             @Override public void onCommandWindow(int winid, String type) { events.add("cmdwin:" + winid + ":" + type); }
             @Override public void onCommandWindowClosed() { events.add("cmdwin closed"); }
@@ -523,5 +530,19 @@ class NotificationBridgeTest {
         notify("eclipse_view_text", "checkhealth", "not a list");
         notify("eclipse_view_text");
         assertEquals(List.of("view:checkhealth:[vim.health: OK, - OK fine]"), events);
+    }
+
+    /**
+     * {@code eclipse_view_help}: a help page for the Neovim view. A payload whose parts lack their
+     * types, or whose tag or file is empty, reaches nobody.
+     */
+    @Test
+    void aHelpPageWithEveryPartOnly() {
+        notify("eclipse_view_help", "help-context", "helphelp.txt", 27, "/rt");
+        notify("eclipse_view_help", "", "helphelp.txt", 27, "/rt");
+        notify("eclipse_view_help", "help-context", "", 27, "/rt");
+        notify("eclipse_view_help", "help-context", "helphelp.txt", "27", "/rt");
+        notify("eclipse_view_help", "help-context", "helphelp.txt", 27);
+        assertEquals(List.of("help:" + new HelpPage("help-context", "helphelp.txt", 27, "/rt")), events);
     }
 }

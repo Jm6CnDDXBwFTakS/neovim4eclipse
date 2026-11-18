@@ -230,8 +230,8 @@ public class Activator extends AbstractUIPlugin {
             session = NeovimSession.start(getNvimExecutable(), List.of(), ClipboardBridge.INSTANCE,
                     getBundle().getVersion().toString());
             session.setStatusItems(getStatusItems());
-            // :messages and :checkhealth open the Neovim view (docs/ARCHITECTURE.md, decision 10).
-            session.addViewTextListener(NeovimViewOpener::show);
+            // :messages, :checkhealth and :help open the Neovim view (docs/ARCHITECTURE.md, decision 10).
+            session.addViewContentListener(NeovimViewOpener::show);
             installHealthCheck(session);
         }
         return session;

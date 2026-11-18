@@ -12,6 +12,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- **`:help` in the Neovim view**: the page opens as Neovim's own help, with your plug-ins' pages
+  and their help scripts, as in a terminal Neovim: `Ctrl-]` follows a link, `Ctrl-T` goes back,
+  `q` closes. `:helpgrep`, `:vert help` and `:tab help` open there too. Before, a help window was
+  closed at once with a message ([Help in the view](docs/USER_GUIDE.md#help-in-the-view-help)).
+
 ## [0.2.27] - 2026-11-18
 
 ### Added

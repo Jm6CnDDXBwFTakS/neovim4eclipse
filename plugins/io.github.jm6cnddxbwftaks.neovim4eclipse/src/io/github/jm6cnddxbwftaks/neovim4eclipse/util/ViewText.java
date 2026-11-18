@@ -21,7 +21,8 @@ import java.util.Set;
  * @param lines      the text, one string per line, without line breaks
  * @param highlights lines drawn in a highlight group of Neovim's, on top of the filetype's
  */
-public record ViewText(String title, String filetype, List<String> lines, List<LineHighlight> highlights) {
+public record ViewText(String title, String filetype, List<String> lines, List<LineHighlight> highlights)
+        implements ViewContent {
 
     /** The title of {@link #messages}. */
     public static final String MESSAGES = "messages";
