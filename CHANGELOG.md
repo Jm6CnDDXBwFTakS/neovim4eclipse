@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.28] - 2026-11-18
+
 ### Added
 
 - **`:help` in a help editor**: the page opens as Neovim's own help, with your plug-ins' pages
