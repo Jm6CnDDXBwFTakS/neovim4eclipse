@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.IEditorPart;
@@ -65,8 +66,8 @@ public final class NeovimView extends ViewPart {
             }
 
             @Override
-            public void toEditor() {
-                NeovimView.this.toEditor();
+            public void window(char key, int count, Point cursor) {
+                NeovimView.this.toEditor(); // the view lies outside the editor area: every key leads back
             }
 
             @Override

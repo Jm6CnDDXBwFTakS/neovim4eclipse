@@ -5797,10 +5797,17 @@ final class LuaScripts {
      *       yank in the view reaches the editing Neovim's register of the same name. Example:
      *       {@code "ayy} on a line {@code OK} sends {@code ("a", "V", {"OK"})}; a plain {@code yy}
      *       sends {@code regname ""}.</li>
-     *   <li>{@code Ctrl-W w}, {@code Ctrl-W p} and {@code Ctrl-W k} (with or without Ctrl on the
-     *       second key), in normal mode: {@code eclipse_screen_to_editor}, and Eclipse gives the
-     *       keyboard back to the editor the user came from. In Vim these keys go to the next,
-     *       previous or upper window; the view lies below the editor, so they lead back to it.</li>
+     *   <li>{@code Ctrl-W h j k l w W t b p} (with or without Ctrl on the second key, with a
+     *       count), in normal mode: first among this Neovim's own windows, as Vim's own keys (a help
+     *       page and its {@code :copen} list, the user's help splits); when there is none in that
+     *       direction, {@code eclipse_screen_window(key, count)}, and Eclipse goes on among its
+     *       editors from this one, by the same rule as from a code editor ({@code EditorSplits}).
+     *       Example: {@code Ctrl-W k} from the list goes to the page above it; from the page, to the
+     *       code above. Neovim says which: {@code winnr('k')} is the current window's own number
+     *       when nothing is above. {@code w} goes out from the last window (it would wrap to the
+     *       first), {@code W} from the first, {@code p} when there is no previous window;
+     *       {@code t} and {@code b} always go out, since the first and last window are Eclipse's to
+     *       pick. With a count, {@code w} goes to window N if there is one.</li>
      *   <li>Neovim's own message and command-line UI, {@code ui2} (new in Neovim 0.12, experimental:
      *       {@code :help ui2}), loaded with {@code pcall}. Why: the second Neovim draws its messages
      *       into its screen, and without {@code ui2} messages longer than the message area stop at
@@ -5852,10 +5859,34 @@ final class LuaScripts {
                 vim.rpcnotify(channel, 'eclipse_screen_yank', e.regname, e.regtype, e.regcontents)
               end,
             })
-            for _, key in ipairs({ '<C-w>w', '<C-w><C-w>', '<C-w>p', '<C-w><C-p>', '<C-w>k', '<C-w><C-k>' }) do
-              vim.keymap.set('n', key, function()
-                vim.rpcnotify(channel, 'eclipse_screen_to_editor')
-              end, { desc = 'Back to the Eclipse editor' })
+            -- Whether Ctrl-W `key` with `count` has a window of this Neovim's own to go to.
+            local function inside(key, count)
+              local here, last = vim.fn.winnr(), vim.fn.winnr('$')
+              if key == 'h' or key == 'j' or key == 'k' or key == 'l' then
+                return vim.fn.winnr((count > 0 and count or '') .. key) ~= here
+              elseif key == 'w' then
+                return count > 0 and count <= last or count == 0 and here < last
+              elseif key == 'W' then
+                return here > 1
+              elseif key == 'p' then
+                local previous = vim.fn.winnr('#')
+                return previous > 0 and previous ~= here
+              end
+              return false -- t, b: Eclipse's first and last editor
+            end
+            for _, key in ipairs({ 'h', 'j', 'k', 'l', 'w', 'W', 't', 'b', 'p' }) do
+              local function go()
+                local count = vim.v.count
+                if inside(key, count) then
+                  vim.cmd.wincmd({ args = { key }, count = count > 0 and count or nil })
+                else
+                  vim.rpcnotify(channel, 'eclipse_screen_window', key, count)
+                end
+              end
+              vim.keymap.set('n', '<C-w>' .. key, go, { desc = 'Ctrl-W ' .. key .. ', on to Eclipse at the edge' })
+              if key ~= 'W' then
+                vim.keymap.set('n', '<C-w><C-' .. key .. '>', go, { desc = 'Ctrl-W ' .. key .. ', on to Eclipse at the edge' })
+              end
             end
             pcall(vim.api.nvim_clear_autocmds, { group = 'nvim.terminal', event = 'BufReadCmd' })
             -- Every reader of a name left, whatever its group or pattern, except the two kept on

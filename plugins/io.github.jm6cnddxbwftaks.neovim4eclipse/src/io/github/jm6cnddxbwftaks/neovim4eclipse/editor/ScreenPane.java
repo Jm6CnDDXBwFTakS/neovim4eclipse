@@ -73,8 +73,15 @@ final class ScreenPane {
         /** The pane's title changed, such as "Neovim: help" ({@link ScreenInput#title}). */
         void titleChanged(String title);
 
-        /** {@code Ctrl-W w}, {@code p} or {@code k} in the second Neovim: the keyboard back to the editor. */
-        void toEditor();
+        /**
+         * {@code Ctrl-W key} in the second Neovim found no window of its own in that direction
+         * ({@link ScreenSession.Listener#window}): Eclipse goes on among its editors.
+         *
+         * @param count  Neovim's count, 0 for none
+         * @param cursor the second Neovim's cursor in display pixels, which {@code Ctrl-W l}
+         *               keeps the row of, as from a code editor's caret
+         */
+        void window(char key, int count, Point cursor);
 
         /** The second Neovim ended ({@code :q}, {@code q}, a crash); the next content starts a new one. */
         void ended();
@@ -375,6 +382,16 @@ final class ScreenPane {
         }
     }
 
+    /** The second Neovim's cursor cell, its middle, in display pixels; the canvas's corner without one. */
+    private Point cursorOnScreen() {
+        GridSnapshot grid = canvas.grid();
+        if (grid == null || grid.cursorRow() < 0) {
+            return canvas.toDisplay(0, 0);
+        }
+        return canvas.toDisplay(grid.cursorCol() * canvas.cellWidth() + canvas.cellWidth() / 2,
+                grid.cursorRow() * canvas.cellHeight() + canvas.cellHeight() / 2);
+    }
+
     private void onEnded() {
         screen = null;
         if (!disposed) {
@@ -440,10 +457,10 @@ final class ScreenPane {
         }
 
         @Override
-        public void toEditor() {
+        public void window(char key, int count) {
             onUi(() -> {
                 if (current()) {
-                    host.toEditor();
+                    host.window(key, count, cursorOnScreen());
                 }
             });
         }

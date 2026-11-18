@@ -96,10 +96,12 @@ public final class ScreenSession implements AutoCloseable {
         void yank(String register, String type, List<String> lines);
 
         /**
-         * {@code Ctrl-W w}, {@code p} or {@code k} in the view ({@link LuaScripts#SCREEN_SETUP}):
-         * the keyboard goes back to the editor the user came from.
+         * {@code Ctrl-W key} with Neovim's {@code count} (0 for none) found no window of the second
+         * Neovim's own in that direction ({@link LuaScripts#SCREEN_SETUP}): Eclipse goes on among
+         * its editors. Example: {@code ('k', 0)} from the top window of a page editor below the
+         * code: the code's editor.
          */
-        void toEditor();
+        void window(char key, int count);
 
         /** The Neovim process ended: {@link #close}, {@code :q} in the view, or a crash. Called once. */
         void ended();
@@ -289,9 +291,9 @@ public final class ScreenSession implements AutoCloseable {
             switch (method) {
                 case "redraw" -> redraw(params);
                 case "eclipse_screen_yank" -> yank(params);
-                case "eclipse_screen_to_editor" -> listener.toEditor();
+                case "eclipse_screen_window" -> window(params);
                 default -> {
-                    // nothing else is expected from a Neovim that runs none of the user's plug-ins
+                    // nothing else is asked for (a help plug-in's own notifications go nowhere)
                 }
             }
         }
@@ -312,6 +314,18 @@ public final class ScreenSession implements AutoCloseable {
                     screen.snapshotIfChanged().ifPresent(listener::screen);
                 }
             }
+        }
+
+        /**
+         * {@code [key, count]}: one of the window keys {@code SCREEN_SETUP} maps, else ignored, so
+         * that only the keys the plug-in chose move Eclipse's focus.
+         */
+        private void window(List<?> params) {
+            if (params.size() < 2 || !(params.get(0) instanceof String key) || key.length() != 1
+                    || "hjklwWtbp".indexOf(key.charAt(0)) < 0 || !(params.get(1) instanceof Number count)) {
+                return;
+            }
+            listener.window(key.charAt(0), Math.max(0, count.intValue()));
         }
 
         private void yank(List<?> params) {

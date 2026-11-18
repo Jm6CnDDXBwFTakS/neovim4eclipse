@@ -340,6 +340,29 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
                 EditorSplits.stackOf(view.getSite().getService(MPart.class)), "a tab in the help editor's stack");
     }
 
+    /**
+     * {@code Ctrl-W} goes both ways by where the editors are: {@code Ctrl-W k} from the help editor
+     * below the code reaches the code's editor (the help Neovim has no window above its own), and
+     * {@code Ctrl-W j} from the code reaches the help editor again.
+     */
+    @Test
+    void ctrlWGoesBetweenTheCodeAndThePageByWhereTheyAre() {
+        colon("help help-context");
+        NeovimPageEditor help = pageShowing("help-context");
+        UiTestSupport.requireKeyboardFocus(help.canvasForTests(), TIMEOUT_MS);
+        runCtrlW(help);
+        key(help.canvasForTests(), 'k', 'k', 0);
+        waitUntil("Ctrl-W k: the code above", TIMEOUT_MS, () -> {
+            settle();
+            return page().getActiveEditor() == editor && widget.isFocusControl();
+        }, () -> "; active: " + page().getActiveEditor().getTitle());
+        session.inputAsync("<C-w>j");
+        waitUntil("Ctrl-W j: the help editor below", TIMEOUT_MS, () -> {
+            settle();
+            return page().getActiveEditor() == help;
+        }, () -> "; active: " + page().getActiveEditor().getTitle());
+    }
+
     /** {@code :checkhealth neovim4eclipse} opens its editor titled for the report, with the plug-in's lines. */
     @Test
     void thePluginsHealthCheckInItsEditor() {

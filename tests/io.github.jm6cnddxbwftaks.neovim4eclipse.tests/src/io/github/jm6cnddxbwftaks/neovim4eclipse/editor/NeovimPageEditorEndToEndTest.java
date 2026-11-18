@@ -77,7 +77,7 @@ class NeovimPageEditorEndToEndTest extends EndToEndTestBase {
     void aHelpPageShowsInTheHelpEditorWhichTheSameKindReuses() throws Exception {
         NeovimPageEditor help = open(PageKind.HELP);
         assertEquals("Neovim: help", help.getPartName());
-        help.show(helpContext(), editor, 0x000000, 0xFFFFFF);
+        help.show(helpContext(), 0x000000, 0xFFFFFF);
         waitUntil("the page", TIMEOUT_MS, () -> {
             settle();
             return rowsOf(help).contains("help-context");
@@ -90,7 +90,7 @@ class NeovimPageEditorEndToEndTest extends EndToEndTestBase {
     @Test
     void qClosesTheEditor() throws Exception {
         NeovimPageEditor help = open(PageKind.HELP);
-        help.show(helpContext(), editor, 0x000000, 0xFFFFFF);
+        help.show(helpContext(), 0x000000, 0xFFFFFF);
         waitUntil("the page", TIMEOUT_MS, () -> {
             settle();
             return rowsOf(help).contains("help-context");

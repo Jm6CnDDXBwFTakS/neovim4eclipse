@@ -84,7 +84,7 @@ public final class NeovimPageOpener {
             page.activate(opened);
             opened.setFocus();
             if (opened instanceof NeovimPageEditor editor) {
-                editor.show(content, from, foreground, background);
+                editor.show(content, foreground, background);
             }
         } catch (PartInitException e) {
             LOG.log(Level.WARNING, "Could not open the " + input.getName() + " editor", e);

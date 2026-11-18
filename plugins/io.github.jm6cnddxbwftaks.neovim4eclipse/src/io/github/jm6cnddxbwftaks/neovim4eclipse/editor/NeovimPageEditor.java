@@ -11,13 +11,12 @@ import org.eclipse.e4.ui.model.application.ui.basic.MWindow;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.e4.ui.workbench.modeling.EPartService;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.IEditorInput;
-import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorSite;
 import org.eclipse.ui.IWorkbench;
-import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.contexts.IContextActivation;
@@ -53,8 +52,6 @@ public final class NeovimPageEditor extends EditorPart {
     public static final String ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.editors.page";
 
     private ScreenPane pane;
-    /** The editor the last content came from, for the way back; {@code null} if none. */
-    private IEditorPart cameFrom;
     /** The key context while the screen has the keyboard; {@code null} otherwise. */
     private IContextActivation keyContext;
 
@@ -83,8 +80,8 @@ public final class NeovimPageEditor extends EditorPart {
             }
 
             @Override
-            public void toEditor() {
-                NeovimPageEditor.this.toEditor();
+            public void window(char key, int count, Point cursor) {
+                EditorSplits.focusFrom(NeovimPageEditor.this, key, count, cursor);
             }
 
             @Override
@@ -119,37 +116,21 @@ public final class NeovimPageEditor extends EditorPart {
 
     /**
      * Shows {@code content}, which must be of this editor's kind, replacing what it held
-     * ({@link ScreenPane#show}). {@code from} is the editor it came from: its colors are this
-     * editor's, and the way back leads to it. UI thread.
+     * ({@link ScreenPane#show}), in the colors of the editor it came from. UI thread.
      *
-     * @param from the editor whose Neovim produced the content, or {@code null} if none is active
-     * @param fg   that editor's text color, {@code 0xRRGGBB}
-     * @param bg   its background
+     * @param fg that editor's text color, {@code 0xRRGGBB}
+     * @param bg its background
      */
-    void show(ViewContent content, IEditorPart from, int fg, int bg) {
+    void show(ViewContent content, int fg, int bg) {
         if (PageKind.of(content) != kind()) {
             throw new IllegalArgumentException(content.title() + " is not shown in the " + getPartName() + " editor");
         }
-        cameFrom = from;
         pane.show(content, fg, bg);
     }
 
     /** {@code <C-w>} from the plug-in's key binding ({@link SendKeyHandler}), typed here. UI thread. */
     void sendKey(String key) {
         pane.sendKey(key);
-    }
-
-    /**
-     * {@code Ctrl-W w}, {@code p} or {@code k}: the editor of the file the content came from, or
-     * the page's active one. The editor found by its file: if that editor was closed and its file
-     * opened again, the open one is a new part.
-     */
-    private void toEditor() {
-        IWorkbenchPage page = getSite().getPage();
-        IEditorPart found = cameFrom == null ? null : page.findEditor(cameFrom.getEditorInput());
-        if (found != null && found != this) {
-            page.activate(found);
-        }
     }
 
     /** The canvas the screen is drawn on, for tests. UI thread. */

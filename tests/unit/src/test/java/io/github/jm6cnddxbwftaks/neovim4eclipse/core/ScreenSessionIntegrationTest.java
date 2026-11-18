@@ -43,7 +43,7 @@ class ScreenSessionIntegrationTest {
         final AtomicReference<GridSnapshot> screen = new AtomicReference<>();
         final List<List<Object>> yanks = new CopyOnWriteArrayList<>();
         final AtomicInteger ends = new AtomicInteger();
-        final AtomicInteger toEditor = new AtomicInteger();
+        final List<String> windows = new CopyOnWriteArrayList<>();
 
         @Override
         public void screen(GridSnapshot snapshot) {
@@ -56,8 +56,8 @@ class ScreenSessionIntegrationTest {
         }
 
         @Override
-        public void toEditor() {
-            toEditor.incrementAndGet();
+        public void window(char key, int count) {
+            windows.add(key + ":" + count);
         }
 
         @Override
@@ -230,13 +230,16 @@ class ScreenSessionIntegrationTest {
         }
     }
 
+    /** Alone in its screen, every Ctrl-W move goes on to Eclipse, with its key and count. */
     @Test
-    void ctrlWBackToTheEditor() throws Exception {
+    void ctrlWWithNoWindowOfItsOwnThereGoesOnToEclipse() throws Exception {
         try (ScreenSession s = start(OutputProfile.ARGS)) {
             s.inputAsync("<C-w>p");
             s.inputAsync("<C-w><C-w>");
             s.inputAsync("<C-w>k");
-            waitFor(() -> recorder.toEditor.get() == 3, "each key asking for the editor");
+            s.inputAsync("2<C-w>l");
+            waitFor(() -> recorder.windows.size() == 4, "each key: " + recorder.windows);
+            assertEquals(List.of("p:0", "w:0", "k:0", "l:2"), recorder.windows);
         }
     }
 

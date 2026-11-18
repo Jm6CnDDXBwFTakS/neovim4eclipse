@@ -565,17 +565,26 @@ final class EditorSplits {
     // ---- Ctrl-W h j k l w W t b p ----
 
     private static void focus(ITextEditor editor, IEditorPart part, WindowCommand command) {
+        focusFrom(part, command.key(), command.count(), caretOnScreen(editor));
+    }
+
+    /**
+     * {@code Ctrl-W key} from {@code part}, which may be a page editor ({@code NeovimPageEditor}:
+     * its second Neovim had no window of its own in that direction): the same rule as from a code
+     * editor ({@link WindowLayout#focus}), with {@code caret}, in display pixels, as the point
+     * whose row or column {@code h j k l} keep. Example: {@code Ctrl-W k} from the help editor
+     * below the code goes to the code's editor.
+     */
+    static void focusFrom(IEditorPart part, char key, int count, Point caret) {
         Picture picture = Picture.of(part);
         if (picture == null || picture.current < 0) {
             return;
         }
-        Point caret = caretOnScreen(editor);
         IEditorPart before = previous.get();
         int previousId = before == null ? -1 : picture.idOf(before);
-        int target = WindowLayout.focus(picture.root, picture.current, previousId, command.key(), command.count(),
-                caret.x, caret.y);
+        int target = WindowLayout.focus(picture.root, picture.current, previousId, key, count, caret.x, caret.y);
         // Each step, for a report when Ctrl-W goes elsewhere than expected (the UI tests show it).
-        LOG.fine(() -> "Ctrl-W " + command.key() + " from window " + picture.current + " " + picture.editors
+        LOG.fine(() -> "Ctrl-W " + key + " from window " + picture.current + " " + picture.editors
                 + " in " + picture.root + ", caret " + caret + ": window " + target);
         if (target != picture.current) {
             IEditorPart next = picture.editors.get(target);
