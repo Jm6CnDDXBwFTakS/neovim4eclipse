@@ -2,7 +2,8 @@
 
 What the plug-in does and why. For the Eclipse and Neovim concepts it is built on (bundles,
 `plugin.xml`, editors, key bindings, msgpack-rpc, `nvim_input`, buffer events), read
-[LEARNING.md](LEARNING.md) first.
+[LEARNING.md](LEARNING.md) first; [GLOSSARY.md](GLOSSARY.md) says which words are Eclipse's and which
+Neovim's (an editor tab is no tab page).
 
 ## Goals
 

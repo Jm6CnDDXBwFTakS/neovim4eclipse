@@ -10,7 +10,8 @@ Maven and Tycho into a p2 update site ZIP. It is also a learning project: code a
 Eclipse plug-in and Neovim API concepts, and must stay maintainable by humans for the long term.
 
 Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNING.md](docs/LEARNING.md)
-(concepts), [docs/KEYBOARD.md](docs/KEYBOARD.md) (key routing).
+(concepts), [docs/KEYBOARD.md](docs/KEYBOARD.md) (key routing), [docs/GLOSSARY.md](docs/GLOSSARY.md)
+(Eclipse's and Neovim's words that look alike).
 
 ## How to work
 

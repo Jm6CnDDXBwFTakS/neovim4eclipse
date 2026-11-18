@@ -2,7 +2,9 @@
 
 This guide explains the ideas that the code depends on, in the order you need them. It is meant to be
 read next to the source. [ARCHITECTURE.md](ARCHITECTURE.md) describes *what* the plug-in does and
-why; this file explains the *Eclipse and Neovim machinery* it is built from.
+why; this file explains the *Eclipse and Neovim machinery* it is built from. Where the two sides use
+like words (an editor tab, a tab page; an Eclipse split, a Vim split), [GLOSSARY.md](GLOSSARY.md)
+says which is which.
 
 Suggested reading order of the code, once you have read parts 1 and 2:
 

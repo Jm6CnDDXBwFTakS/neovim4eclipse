@@ -21,6 +21,8 @@ edges, see [Known limitations](#known-limitations).
 - [docs/LEARNING.md](docs/LEARNING.md): how Eclipse plug-ins and the Neovim API work, as used here.
   Start here if you want to understand or maintain the code.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): design decisions and how each feature works.
+- [docs/GLOSSARY.md](docs/GLOSSARY.md): Eclipse's and Neovim's words that look alike (an editor tab is
+  no tab page), and which side each belongs to.
 - [docs/KEYBOARD.md](docs/KEYBOARD.md): which keys go to Neovim and which to Eclipse, and why.
 - [CONTRIBUTING.md](CONTRIBUTING.md): building, testing, the rules the code relies on, and style.
 - [docs/PACKAGING.md](docs/PACKAGING.md), [docs/HOWTO_ECLIPSE.md](docs/HOWTO_ECLIPSE.md),
