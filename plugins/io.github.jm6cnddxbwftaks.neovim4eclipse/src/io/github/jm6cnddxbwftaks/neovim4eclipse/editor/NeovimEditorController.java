@@ -1473,8 +1473,7 @@ public final class NeovimEditorController implements AutoCloseable {
         LOG.fine("Detached Neovim from editor: " + editor.getTitle());
     }
 
-    /** What the command-line window panel asks of Neovim. */
-    /** The command-line window panel's way to the session; a page's panel uses it too ({@code WindowPane}). */
+    /** What the command-line window panel asks of Neovim; a page's panel uses it too ({@code WindowPane}). */
     record PanelCommands(NeovimSession session) implements NeovimWindowPanel.Commands {
         @Override
         public void type(String keys) {

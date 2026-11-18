@@ -356,9 +356,11 @@ final class WindowPane implements PagePane {
 
     /** Neovim closed a page's window by itself, or this one could not be entered: if it is this page's, the editor closes. */
     private void onPageClosed(int win) {
-        if (win == window) {
-            onUi(host::close);
-        }
+        onUi(() -> {
+            if (win == window) { // compared here, on the UI thread, which alone writes window
+                host.close();
+            }
+        });
     }
 
     private void onGrid(GridSnapshot grid) {

@@ -344,7 +344,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Hears a page's window that Neovim closed by itself (its buffer wiped, a plug-in closing
-     * windows), on the RPC reader thread: the page editor showing it closes
+     * windows), or one that could not be entered, on the input thread: the page editor showing it
+     * closes
      * ({@link DocumentBuffers#setPageClosedHandler}).
      */
     public void addPageClosedListener(Consumer<Integer> listener) {

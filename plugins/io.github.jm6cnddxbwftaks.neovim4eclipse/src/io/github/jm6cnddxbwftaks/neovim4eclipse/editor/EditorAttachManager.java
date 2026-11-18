@@ -374,14 +374,6 @@ public final class EditorAttachManager {
     }
 
     /**
-     * Attaches to {@code partRef}'s editor, opened or activated, once the events of the moment are
-     * through, and only if it is then the page's active editor: Neovim follows the editor Eclipse
-     * makes active. On macOS, Toggle Split Editor opens its new half without activating either
-     * half: the first half stays the active editor, and the new half only sends {@code partOpened}.
-     * Attached to the new half, Neovim would work there while Eclipse takes the first as current,
-     * and {@code Ctrl-W j} would start from the wrong half.
-     */
-    /**
      * The attached text editor activated again without the focus events (a click back from the
      * messages page, or from a view after the page closed): it takes the focus back, still
      * attached, with no new attach ({@link NeovimEditorController#takeFocusBack}). Decided on what
@@ -401,6 +393,14 @@ public final class EditorAttachManager {
         }
     }
 
+    /**
+     * Attaches to {@code partRef}'s editor, opened or activated, once the events of the moment are
+     * through, and only if it is then the page's active editor: Neovim follows the editor Eclipse
+     * makes active. On macOS, Toggle Split Editor opens its new half without activating either
+     * half: the first half stays the active editor, and the new half only sends {@code partOpened}.
+     * Attached to the new half, Neovim would work there while Eclipse takes the first as current,
+     * and {@code Ctrl-W j} would start from the wrong half.
+     */
     private void maybeAutoAttach(IWorkbenchPartReference partRef) {
         if (!autoAttach) {
             return;
@@ -675,8 +675,10 @@ public final class EditorAttachManager {
                     // gives it the focus again (takeFocusFromPage).
                     IEditorPart code = attachedPart;
                     Display.getDefault().asyncExec(() -> {
-                        code.getSite().getPage().activate(code);
-                        code.setFocus();
+                        if (code.getSite().getPage().findEditor(code.getEditorInput()) != null) { // still open
+                            code.getSite().getPage().activate(code);
+                            code.setFocus();
+                        }
                     });
                 }
                 return; // Eclipse switched there itself in the meantime

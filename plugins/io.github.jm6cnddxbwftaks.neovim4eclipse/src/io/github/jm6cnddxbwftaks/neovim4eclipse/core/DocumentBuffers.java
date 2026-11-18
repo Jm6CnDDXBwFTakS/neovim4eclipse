@@ -198,12 +198,16 @@ final class DocumentBuffers {
         }
         int before = focusedPage;
         focusedPage = win;
-        Object answer = await(api.execLua(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(win), String.valueOf(attachedWin))));
-        if (answer instanceof Number n && n.intValue() == win) {
-            return true;
+        boolean entered = false;
+        try {
+            Object answer = await(api.execLua(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(win), String.valueOf(attachedWin))));
+            entered = answer instanceof Number n && n.intValue() == win;
+            return entered;
+        } finally {
+            if (!entered) {
+                focusedPage = before; // refused or failed (E11 in the command-line window): the focus stays
+            }
         }
-        focusedPage = before;
-        return false;
     }
 
     /**
