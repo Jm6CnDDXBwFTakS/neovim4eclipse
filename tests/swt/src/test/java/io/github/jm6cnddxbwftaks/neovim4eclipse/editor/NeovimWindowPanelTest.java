@@ -185,11 +185,21 @@ class NeovimWindowPanelTest {
         other.setBounds(0, 0, 50, 20);
         panel.show(window());
         KeyboardFocus.require(panel.canvas(), TIMEOUT_MS);
-        KeyboardFocus.require(other, TIMEOUT_MS);
-        settle();
+        clickAway(other);
         assertEquals(List.of("close"), calls);
         assertFalse(panel.isOpen());
         assertTrue(other.isFocusControl(), "the focus stays where it went");
+    }
+
+    /**
+     * A click away from the open panel, into {@code other}: moves the focus from the panel there,
+     * again until the panel has closed. The panel closes from an {@code asyncExec} after the focus
+     * event, and only if the focus is then in Eclipse; when the test's window was not active at that
+     * moment, a single move left the panel open (seen on macOS), so the move is made again.
+     */
+    private void clickAway(Text other) {
+        KeyboardFocus.moveUntil(panel.canvas(), other, () -> !panel.isOpen(),
+                () -> "the panel closed by the focus going elsewhere", TIMEOUT_MS);
     }
 
     /** Redraws on the way to Neovim's close (leaving Insert mode redraws) do not open it again. */
@@ -199,8 +209,7 @@ class NeovimWindowPanelTest {
         other.setBounds(0, 0, 50, 20);
         panel.show(window());
         KeyboardFocus.require(panel.canvas(), TIMEOUT_MS);
-        KeyboardFocus.require(other, TIMEOUT_MS);
-        settle();
+        clickAway(other);
         panel.show(window()); // a redraw before Neovim's window is gone
         assertFalse(panel.isOpen(), "not opened again");
         assertTrue(other.isFocusControl(), "the focus stays where the user clicked");

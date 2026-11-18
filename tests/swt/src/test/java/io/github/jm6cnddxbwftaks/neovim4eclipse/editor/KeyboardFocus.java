@@ -71,6 +71,32 @@ final class KeyboardFocus {
     }
 
     /**
+     * Moves the keyboard focus from {@code from} to {@code to}, activating their shell first, again
+     * every {@value #RETRY_MS} ms until {@code done} holds; fails with {@code what} and a
+     * {@link #report} after {@code timeoutMs}. Each try gives {@code from} the focus and then
+     * {@code to}, so each one is a real focus change with its own focus event.
+     *
+     * <p>Why not {@link #give}: when code under test reacts to the focus event later (an
+     * {@code asyncExec}) and finds the window not active at that moment, the reaction does nothing;
+     * the window hands the focus back to {@code to} when it is active again, with no new event.
+     * {@code to} then holds the focus, and giving it the focus again does nothing either: SWT returns
+     * at once for a control that has it ({@code Control.forceFocus} on macOS), with no event. Moving
+     * it away and back makes the event again. Example: the {@code q:} panel closes when the focus
+     * goes elsewhere:
+     * {@code KeyboardFocus.moveUntil(panel.canvas(), other, () -> !panel.isOpen(), () -> "the panel closed", TestWait.millis())}.
+     */
+    static void moveUntil(Control from, Control to, BooleanSupplier done, Supplier<String> what, long timeoutMs) {
+        Shell shell = to.getShell();
+        loop(shell, done, what, timeoutMs, () -> {
+            activate(shell);
+            if (!from.isDisposed() && from.isVisible()) {
+                from.forceFocus();
+            }
+            to.forceFocus();
+        });
+    }
+
+    /**
      * Activates {@code shell} again if another window took the activation, and runs the event loop
      * until a control in it has the keyboard focus; returns that control. Unlike {@link #require}
      * it gives no control the focus: an activated window hands it back to the control last given
