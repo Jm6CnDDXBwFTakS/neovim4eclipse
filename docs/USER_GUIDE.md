@@ -666,6 +666,9 @@ checkhealth editor opens the help editor too, as if typed in your code.
 - **Help only:** a file opened from a page (`gf` on a path, `:edit`) is swapped back for the page,
   with the message "The help editor shows help only". Open files in an editor of their own.
 
+**`:help neovim4eclipse`** opens the plug-in's own help page: a short one, pointing to the README
+and this guide, where its documentation is.
+
 **`:checkhealth neovim4eclipse`** is the plug-in's own check: which Neovim runs and whether it is new
 enough, whether it is the dedicated Neovim (checked before it started) or a program of your own
 (`-Dneovim4eclipse.nvim`), the plug-in's and Eclipse's versions, and whether what

@@ -20,6 +20,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   and `:cnext` in the help editor step through the matches; `:help` typed in the messages or
   checkhealth editor opens it too. Before, a help window was closed at once with a message
   ([The help editor](docs/USER_GUIDE.md#the-help-editor-help)).
+- **`:help neovim4eclipse`**: the plug-in's own help page, pointing to the README and the user
+  guide.
 
 ### Changed
 

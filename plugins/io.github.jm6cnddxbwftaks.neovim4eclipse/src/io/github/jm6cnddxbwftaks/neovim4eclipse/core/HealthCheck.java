@@ -26,9 +26,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
  * {@code 'runtimepath'}. The file holds no check: the check itself is Lua the plug-in sends at
  * start ({@link LuaScripts#HEALTH_CHECK}), which puts the module in {@code package.loaded}, where
  * {@code require} finds it before it would read the file. The file answers only if that did not
- * happen, with an error saying so. Nothing else is in the folder, so appending it to the
- * runtimepath adds this one check and nothing that runs on its own ({@code plugin/},
- * {@code ftplugin/}).
+ * happen, with an error saying so. The only other files in the folder are the plug-in's help page
+ * and its tags ({@link PluginHelp}, in {@code doc/}), so appending it to the runtimepath adds this
+ * check and that page, and nothing that runs on its own ({@code plugin/}, {@code ftplugin/}).
  */
 public final class HealthCheck {
 

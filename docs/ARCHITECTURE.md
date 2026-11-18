@@ -507,7 +507,9 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   finds checks only among runtime files, so a stub `lua/neovim4eclipse/health.lua` is written at
   every start into `<plug-in folder>/runtime`, which is appended to the editing Neovim's
   `'runtimepath'`; the check itself is sent from Java and put in `package.loaded`, where `require`
-  finds it first. The folder holds nothing else, so it adds no script that runs by itself. A folder
+  finds it first. The folder also holds the plug-in's help page, `doc/neovim4eclipse.txt`, and its
+  `doc/tags`, written by Java beside it (`core/PluginHelp`), so `:help neovim4eclipse` finds it in
+  the editing Neovim and the help editor; nothing else, so it adds no script that runs by itself. A folder
   whose name holds a comma is refused (`HealthCheck.fitsRuntimepath`): `'runtimepath'` would split
   it into two entries, the second relative.
 - **The report is matched** by all three marks Neovim gives it: filetype `checkhealth`, a `nofile`

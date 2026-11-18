@@ -552,6 +552,24 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /** {@code :help neovim4eclipse}: the plug-in's own page, found through the tags written beside it. */
+    @Test
+    void thePluginsOwnHelpPageIsFound(@TempDir Path runtime) throws Exception {
+        try (NeovimSession s = start()) {
+            s.installHealthCheckAsync(runtime, new HealthCheck.Info(false, "0.2.28", ""));
+            List<HelpPage> pages = new CopyOnWriteArrayList<>();
+            s.addViewContentListener(c -> {
+                if (c instanceof HelpPage p) {
+                    pages.add(p);
+                }
+            });
+            s.commandAsync("help neovim4eclipse");
+            waitFor(() -> !pages.isEmpty(), "the page");
+            assertEquals("neovim4eclipse", pages.get(0).tag());
+            assertEquals("neovim4eclipse.txt", pages.get(0).file());
+        }
+    }
+
     /** A yank in a page editor lands in the editing Neovim's register of the same name. */
     @Test
     void aYankFromTheViewFillsTheRegister() throws Exception {

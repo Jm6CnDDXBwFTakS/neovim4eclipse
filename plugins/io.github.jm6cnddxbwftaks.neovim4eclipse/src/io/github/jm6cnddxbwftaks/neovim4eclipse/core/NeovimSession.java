@@ -515,8 +515,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Registers {@code :checkhealth neovim4eclipse} ({@link HealthCheck}): writes the stub into
-     * {@code runtimeFolder} and sends the check, both on the input thread, so the UI thread (where
+     * Registers {@code :checkhealth neovim4eclipse} ({@link HealthCheck}) and the plug-in's help
+     * page, {@code :help neovim4eclipse} ({@link PluginHelp}): writes the stub and the help file
+     * into {@code runtimeFolder}, which goes on {@code 'runtimepath'}, and sends the check, both on the input thread, so the UI thread (where
      * the first editor's attach starts the session) waits for neither. Queued like any
      * {@code *Async} call: a {@code :checkhealth} queued after it finds the check. A failure is
      * logged at WARNING and costs only the check. Called once after {@link #start}. Any thread.
@@ -530,6 +531,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
         submit("register :checkhealth neovim4eclipse", Level.WARNING, () -> {
             HealthCheck.writeStub(runtimeFolder);
+            PluginHelp.write(runtimeFolder);
             await(api.execLua(LuaScripts.HEALTH_CHECK, List.of(runtimeFolder.toString(), info.toLua())));
         });
     }
