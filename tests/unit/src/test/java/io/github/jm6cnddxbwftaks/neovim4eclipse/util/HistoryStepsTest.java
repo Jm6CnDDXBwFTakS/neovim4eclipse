@@ -246,4 +246,32 @@ class HistoryStepsTest {
         h.entries.add(new Place("help")); // the help editor's entry, after the Back
         assertFalse(h.steps.userMovedOn(h.entries), "the remembered Back step stays");
     }
+
+    @Test
+    void anEntryWithoutALocationAheadIsNoFailure() {
+        History h = new History();
+        h.switchTo("a", false);
+        h.entries.add(null); // Eclipse keeps entries without a location (restored, or no provider)
+        h.entries.add(new Place("b"));
+        h.current = 0;
+        assertEquals(1, h.steps.plainForwardSteps(h.entries, h.entries.get(0), 1), "to the entry, as Eclipse's Forward");
+    }
+
+    @Test
+    void forwardStopsBeforeAPageEditorsEntryThatIsTheNewest() {
+        History h = new History();
+        h.switchTo("a", false);
+        h.switchTo("b", false);
+        h.switchTo("help", false);
+        h.current = 1; // Alt+Left from the help editor back to b
+        assertEquals(0, h.steps.plainForwardSteps(h.entries, h.entries.get(1), 1), "Ctrl-I stays in b");
+    }
+
+    @Test
+    void backStaysWhenOnlyAPageEditorsEntryIsOlder() {
+        History h = new History();
+        h.switchTo("help", false); // Eclipse dropped everything older
+        h.switchTo("b", false);
+        assertEquals(0, h.steps.backSteps(h.entries, h.entries.get(1)), "Ctrl-O stays in b");
+    }
 }

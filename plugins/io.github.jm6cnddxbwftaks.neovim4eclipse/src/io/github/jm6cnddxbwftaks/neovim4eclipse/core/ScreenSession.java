@@ -24,7 +24,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenGrid;
  * A second Neovim, beside the editing one, whose whole screen Eclipse draws: a page editor
  * ({@code :checkhealth} and {@code :messages}, output profile {@link OutputProfile}; {@code :help},
  * help profile {@link HelpProfile}). It knows
- * nothing of what the view shows; that is the view's <em>profile</em>, which passes its own start
+ * nothing of what the page editor shows; that is the page editor's <em>profile</em>, which passes its own start
  * arguments and Lua. This class holds what every profile shares: the process, the screen, keys,
  * mouse, size, yanks and the end.
  *
@@ -43,7 +43,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenGrid;
  * {@code gf} on shown text would reach it. Checked once, at the start: a reader added later can
  * only come from a command the user types ({@code :packadd}, {@code :runtime}), which stays
  * theirs. A profile may also forbid
- * changes to the text ({@code -M}: {@code nomodifiable}). What the user types in the view
+ * changes to the text ({@code -M}: {@code nomodifiable}). What the user types in the page editor
  * ({@code :set write}, {@code :!}) stays their own, as in the editing Neovim.
  *
  * <h2>The screen</h2>
@@ -64,9 +64,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenGrid;
  * <pre>{@code
  * ScreenSession screen = ScreenSession.start(nvimPath, List.of("-M"), version, folder, 80, 24, listener);
  * screen.execLuaAsync(profileScript, List.of(lines));   // the profile fills the screen
- * screen.inputAsync("/OK<CR>");                          // a search, typed in the view
- * screen.resizeAsync(100, 30);                           // the view grew
- * screen.close();                                        // or :q in the view: listener.ended()
+ * screen.inputAsync("/OK<CR>");                          // a search, typed in the page editor
+ * screen.resizeAsync(100, 30);                           // the page editor grew
+ * screen.close();                                        // or :q in the page editor: listener.ended()
  * }</pre>
  */
 public final class ScreenSession implements AutoCloseable {
@@ -86,7 +86,7 @@ public final class ScreenSession implements AutoCloseable {
         void screen(GridSnapshot screen);
 
         /**
-         * Text was yanked in the view. Example: {@code "ayy} on a line {@code OK} gives
+         * Text was yanked in the page editor. Example: {@code "ayy} on a line {@code OK} gives
          * {@code ("a", "V", ["OK"])}; a plain {@code yy} gives the register {@code ""}.
          *
          * @param register the register's name, {@code ""} for the unnamed one
@@ -103,7 +103,7 @@ public final class ScreenSession implements AutoCloseable {
          */
         void window(char key, int count);
 
-        /** The Neovim process ended: {@link #close}, {@code :q} in the view, or a crash. Called once. */
+        /** The Neovim process ended: {@link #close}, {@code :q} in the page editor, or a crash. Called once. */
         void ended();
     }
 
@@ -159,7 +159,7 @@ public final class ScreenSession implements AutoCloseable {
             }
             if (!(options instanceof Map<?, ?> m && Boolean.TRUE.equals(m.get("ui2")))) {
                 LOG.info("The second Neovim has no ui2 (vim._core.ui2): long messages stop at a Press ENTER prompt"
-                        + " there, and hold back new content until a key is pressed in the view");
+                        + " there, and hold back new content until a key is pressed in the page editor");
             }
             Rpc.await(session.api.command("redraw!"));
         } catch (Exception e) {

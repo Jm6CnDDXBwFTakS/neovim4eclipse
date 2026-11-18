@@ -220,7 +220,6 @@ function t.document(name, lines)
   return buf, vim.api.nvim_buf_get_name(buf)
 end
 
---- Fails unless `expected` and `actual` are equal (deeply, for tables).
 --- The folder of the Neovim plug-in pinned as `name` (releng/test-plugins.properties), or a skip:
 --- not fetched (no network when the tool ran), or another commit or archive than the pin. The
 --- plug-ins are not in the repository: `java releng/tools/plugins/TestPlugins.java fetch` unpacks
@@ -254,6 +253,7 @@ function t.pinned_plugin(name)
   return dir
 end
 
+--- Fails unless `expected` and `actual` are equal (deeply, for tables).
 function t.eq(expected, actual, what)
   if not vim.deep_equal(expected, actual) then
     error(('%s\n  expected: %s\n  actual:   %s'):format(what or 'not equal', vim.inspect(expected),

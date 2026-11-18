@@ -127,7 +127,11 @@ class NeovimPageEditorEndToEndTest extends EndToEndTestBase {
         page().closeEditor(opened, false);
     }
 
-    /** The start's sweep closes every page editor, as it would the tabs a restart brings back. */
+    /**
+     * The start's sweep closes every page editor and nothing else. Live editors only: the
+     * placeholder tab a real restart brings back is the manual card pg-restart's, since the tests'
+     * Eclipse saves its layout differently.
+     */
     @Test
     void theStartsSweepClosesThePageEditors() throws Exception {
         open(PageKind.HELP);

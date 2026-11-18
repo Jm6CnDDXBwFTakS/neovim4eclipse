@@ -105,7 +105,15 @@ public final class HistorySteps<L, S> {
 
     /** Whether Back and Forward pass over {@code location}: the plug-in's own entry, or one elsewhere. */
     private boolean passedOver(L location) {
-        return isOwn(location) || location != null && elsewhere.test(location);
+        return isOwn(location) || isElsewhere(location);
+    }
+
+    /**
+     * Whether {@code location} is an entry never stopped at. {@code null} is not: Eclipse keeps
+     * entries without a location (restored from the last session, an editor that gives none).
+     */
+    private boolean isElsewhere(L location) {
+        return location != null && elsewhere.test(location);
     }
 
     /** An entry the plug-in's own editor switch added ({@code null} is ignored). */
@@ -135,7 +143,7 @@ public final class HistorySteps<L, S> {
      * How many of Eclipse's Back steps one press of {@code Ctrl-O} takes: to the nearest older entry
      * the plug-in did not add. Example: {@code [a, b*, c*, d]} with {@code d} current and {@code *}
      * the plug-in's: 3 steps, to {@code a}. When the oldest entries are all the plug-in's, it stops
-     * on the oldest entry.
+     * on the oldest entry; when that is an entry never stopped at, nowhere (0).
      *
      * @param history Eclipse's entries, oldest first
      * @param current the current entry
@@ -151,7 +159,10 @@ public final class HistorySteps<L, S> {
         while (to > 0 && passedOver(history.get(to))) {
             to--;
         }
-        return to < 0 ? 0 : from - to;
+        if (to < 0 || isElsewhere(history.get(to))) {
+            return 0; // nothing older but entries never stopped at: Back stays
+        }
+        return from - to;
     }
 
     /**
@@ -217,9 +228,13 @@ public final class HistorySteps<L, S> {
             // A run of the plug-in's entries to its last (where a Back started from); an entry
             // elsewhere, past it.
             while (to + 1 < history.size() && (isOwn(history.get(to)) && isOwn(history.get(to + 1))
-                    || elsewhere.test(history.get(to)))) {
+                    || isElsewhere(history.get(to)))) {
                 to++;
             }
+        }
+        // The newest entries never stopped at: Forward stops before them, or stays.
+        while (to > from && isElsewhere(history.get(to))) {
+            to--;
         }
         return to - from;
     }

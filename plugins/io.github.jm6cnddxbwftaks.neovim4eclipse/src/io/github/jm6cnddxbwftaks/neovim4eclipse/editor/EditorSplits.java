@@ -214,12 +214,24 @@ final class EditorSplits {
      * editors, which open below the code as Vim's {@code :help} does.
      */
     static boolean intoNewStack(IEditorPart from, IEditorPart opened, int side) {
-        MPartStack fromStack = stackOf(from.getSite().getService(MPart.class));
+        MPart fromPart = from.getSite().getService(MPart.class);
+        MPartStack fromStack = stackOf(fromPart);
         if (fromStack == null) {
             return false;
         }
-        intoNewStack(from, fromStack, fromStack.getSelectedElement(), opened, side);
+        // The tab that holds from: not the stack's selected one, which opening the new editor in
+        // this stack made the new editor (split() takes it before opening instead).
+        intoNewStack(from, fromStack, tabOf(fromStack, fromPart), opened, side);
         return true;
+    }
+
+    /** The child of {@code stack} that holds {@code element} (itself, or Eclipse's halves around it), or {@code null}. */
+    private static MStackElement tabOf(MPartStack stack, MUIElement element) {
+        MUIElement at = element;
+        while (at != null && (Object) at.getParent() != stack) {
+            at = at.getParent();
+        }
+        return at instanceof MStackElement tab ? tab : null;
     }
 
     private static void intoNewStack(IEditorPart from, MPartStack fromStack, MStackElement fromTab, IEditorPart opened,

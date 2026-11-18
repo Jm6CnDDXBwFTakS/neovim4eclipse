@@ -847,6 +847,15 @@ t.test(':helpgrep and :cnext go on through the matches, one page each, even insi
   t.eq(list[3].lnum, t.sent('eclipse_view_help')[5][3])
 end)
 
+t.test(':helpgrep with a space in its pattern is carried over whole', function()
+  commands()
+  t.forget()
+  vim.cmd('silent helpgrep tab page')
+  t.wait_for('the first match', function() return #t.sent('eclipse_view_help') == 1 end)
+  t.eq('tab page', t.sent('eclipse_view_help')[1][5])
+  t.eq(1, t.sent('eclipse_view_help')[1][6])
+end)
+
 t.test('text between stars that is no tag is passed over: the tag sent is one help knows, in that file', function()
   commands()
   t.forget()

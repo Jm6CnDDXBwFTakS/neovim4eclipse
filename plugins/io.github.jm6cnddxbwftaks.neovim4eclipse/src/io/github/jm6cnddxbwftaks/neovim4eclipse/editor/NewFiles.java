@@ -352,7 +352,9 @@ final class NewFiles {
     /** Whether {@code descriptor} is an editor inside Eclipse: not external, not in-place (OLE). */
     private static boolean isInside(IEditorDescriptor descriptor) {
         return descriptor != null && descriptor.isInternal() && !descriptor.isOpenExternal()
-                && !descriptor.isOpenInPlace();
+                && !descriptor.isOpenInPlace()
+                // a file once opened with Open With > Neovim Page would show only its refusal
+                && !NeovimPageEditor.ID.equals(descriptor.getId());
     }
 
     /** Whether {@code fileName}'s content type is text, or it has none (see {@link #internalOr}). */

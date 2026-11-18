@@ -18,7 +18,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * @param file        the help file's name, without its folder, such as {@code helphelp.txt}
  * @param line        the cursor's line in that file, 1-based
  * @param runtimepath the editing Neovim's {@code 'runtimepath'}, where the help files are
- * @param helpgrep    the pattern of the {@code :helpgrep} whose entry this page is, so the view runs
+ * @param helpgrep    the pattern of the {@code :helpgrep} whose entry this page is, so the page editor runs
  *                    it too and {@code ]q} goes on there; {@code ""} for a page reached otherwise
  * @param index       that entry's number in the list, 1-based; 0 without {@code helpgrep}
  */
@@ -30,7 +30,7 @@ public record HelpPage(String tag, String file, int line, String runtimepath, St
         this(tag, file, line, runtimepath, "", 0);
     }
 
-    /** The view's title for a help page. */
+    /** The page editor's title for a help page. */
     public static final String TITLE = "help";
 
     @Override

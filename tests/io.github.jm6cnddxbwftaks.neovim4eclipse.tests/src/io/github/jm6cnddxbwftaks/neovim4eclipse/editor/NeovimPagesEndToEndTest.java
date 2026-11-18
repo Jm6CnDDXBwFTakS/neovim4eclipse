@@ -342,6 +342,32 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * In a stack of two tabs, the editor the page editor splits from stays in front of its stack:
+     * test.txt, not other.txt, so {@code Ctrl-W k} from the page goes back to it.
+     */
+    @Test
+    void theEditorSplitFromStaysInFrontOfItsStack() throws Exception {
+        ITextEditor other = openOtherFile();
+        try {
+            assertEquals(EditorSplits.stackOf(other.getSite().getService(MPart.class)),
+                    EditorSplits.stackOf(editor.getSite().getService(MPart.class)), "two tabs in one stack");
+            page().activate(editor);
+            waitForAttach(editor, "test.txt");
+            SessionProbe.lua(session, "vim.cmd.echomsg(\"'before the split'\") return 0");
+            colon("messages");
+            NeovimPageEditor messages = pageShowing("before the split");
+            MPart code = editor.getSite().getService(MPart.class);
+            waitUntil("test.txt in front of its stack", TIMEOUT_MS, () -> {
+                settle();
+                return EditorSplits.stackOf(code).getSelectedElement() == code;
+            }, () -> "; in front: " + EditorSplits.stackOf(code).getSelectedElement());
+            assertTrue(messages != null);
+        } finally {
+            page().closeEditor(other, false);
+        }
+    }
+
+    /**
      * {@code Ctrl-W} goes both ways by where the editors are: {@code Ctrl-W k} from the help editor
      * below the code reaches the code's editor (the help Neovim has no window above its own), and
      * {@code Ctrl-W j} from the code reaches the help editor again.

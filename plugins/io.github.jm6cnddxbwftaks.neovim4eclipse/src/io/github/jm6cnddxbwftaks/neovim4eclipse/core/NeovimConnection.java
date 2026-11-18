@@ -105,7 +105,7 @@ final class NeovimConnection implements AutoCloseable {
      * The UI a second Neovim attaches as, the one whose whole screen a page editor draws
      * ({@link ScreenSession}): 24-bit color and {@code ext_linegrid} only. Everything else, the
      * command line and the messages included, Neovim draws into its one grid, as on a terminal, so
-     * the view shows the screen as it is and needs no command box of its own
+     * the page editor shows the screen as it is and needs no command box of its own
      * ({@code util/ScreenGrid}). The "Press ENTER" prompt that long messages would bring is
      * avoided inside that Neovim, by its own {@code ui2} ({@link LuaScripts#SCREEN_SETUP}).
      */
@@ -190,7 +190,7 @@ final class NeovimConnection implements AutoCloseable {
 
     /**
      * {@link #open(String, List, String)} with a UI of the caller's: a second Neovim attaches with
-     * {@link #SCREEN_UI} at the size of the view that shows it ({@link ScreenSession}).
+     * {@link #SCREEN_UI} at the size of the page editor that shows it ({@link ScreenSession}).
      */
     static NeovimConnection open(String nvimPath, List<String> extraArgs, String clientVersion, Ui ui) throws Exception {
         List<String> cmd = NvimExecutable.embedCommand(nvimPath, extraArgs);

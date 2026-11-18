@@ -5,7 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 /**
  * Where a page editor ({@code :help}, {@code :messages}, {@code :checkhealth}) goes when its
- * content arrives, as {@code editor/NeovimViewOpener} applies it. The first one splits the code's
+ * content arrives, as {@code editor/NeovimPageOpener} applies it. The first one splits the code's
  * editor below, as Vim's {@code :help} splits the window; the others join it as tabs, so the code
  * area is split once; the same kind again stays where it is, wherever the user moved it.
  *

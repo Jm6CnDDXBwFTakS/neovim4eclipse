@@ -17,6 +17,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  */
 public sealed interface ViewContent permits ViewText, HelpPage {
 
-    /** What the view's title says after "Neovim: ", such as {@code messages} or {@code help}. */
+    /** What the page editor's title says after "Neovim: ", such as {@code messages} or {@code help}. */
     String title();
 }

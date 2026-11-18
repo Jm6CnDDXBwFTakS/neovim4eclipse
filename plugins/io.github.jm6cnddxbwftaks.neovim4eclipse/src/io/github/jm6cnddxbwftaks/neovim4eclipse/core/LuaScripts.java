@@ -1490,22 +1490,23 @@ final class LuaScripts {
               return found or file
             end
             -- Whether this help window is the current entry of a :helpgrep list (:helpgrep itself, or
-            -- :cnext through it): its pattern and the entry's number, so that the view runs the same
-            -- :helpgrep and goes on through it there (]q, :cnext typed in the view). The pattern is
+            -- :cnext through it): its pattern and the entry's number, so that the page editor runs the same
+            -- :helpgrep and goes on through it there (]q, :cnext typed in the page editor). The pattern is
             -- read from the list's title, the command line Neovim keeps there (":silent helpgrep
             -- runtimepath"), parsed by Neovim itself (nvim_parse_cmd), not by matching its text. Else
             -- ("", 0): the page goes over by its tag.
             local function helpgrep_at(buf, line)
               local list = vim.fn.getqflist({ title = 0, idx = 0 })
               local ok, parsed = pcall(vim.api.nvim_parse_cmd, (list.title or ''):sub(2), {})
-              if not ok or parsed.cmd ~= 'helpgrep' or #parsed.args ~= 1 or (list.idx or 0) < 1 then
+              if not ok or parsed.cmd ~= 'helpgrep' or #parsed.args < 1 or (list.idx or 0) < 1 then
                 return '', 0
               end
               local entry = vim.fn.getqflist({ idx = list.idx, items = 0 }).items[1]
               if not entry or entry.bufnr ~= buf or entry.lnum ~= line then
                 return '', 0
               end
-              return parsed.args[1], list.idx
+              -- nvim_parse_cmd splits the pattern at spaces (:helpgrep foo bar): joined again.
+              return table.concat(parsed.args, ' '), list.idx
             end
             -- A help window (:help, :helpgrep, a plug-in's vim.cmd.help, in a split, a tab or with
             -- :vert): Eclipse shows help in a page editor instead, with the user's own help pages
@@ -5792,9 +5793,9 @@ final class LuaScripts {
      *   <li>{@code VimLeavePre}: {@code eclipse_screen_leaving}, a request (not a notification),
      *       so that it has reached Eclipse before the process ends, whatever ended it ({@code :q},
      *       {@code :qa}, {@code ZZ}). Eclipse then takes the end of Neovim's output as expected,
-     *       and closes the view.</li>
+     *       and closes the page editor.</li>
      *   <li>{@code TextYankPost}: {@code eclipse_screen_yank(regname, regtype, lines)}, so that a
-     *       yank in the view reaches the editing Neovim's register of the same name. Example:
+     *       yank in the page editor reaches the editing Neovim's register of the same name. Example:
      *       {@code "ayy} on a line {@code OK} sends {@code ("a", "V", {"OK"})}; a plain {@code yy}
      *       sends {@code regname ""}.</li>
      *   <li>{@code Ctrl-W h j k l w W t b p} (with or without Ctrl on the second key, with a
@@ -5812,11 +5813,11 @@ final class LuaScripts {
      *       {@code :help ui2}), loaded with {@code pcall}. Why: the second Neovim draws its messages
      *       into its screen, and without {@code ui2} messages longer than the message area stop at
      *       a "Press ENTER" prompt, while which Neovim holds back every call that is not "fast"
-     *       ({@code nvim_exec_lua}, {@code nvim_command}): new content for the view, and the
-     *       {@code :qa!} that ends it, would wait for a key in the view. With {@code ui2} there is
+     *       ({@code nvim_exec_lua}, {@code nvim_command}): new content for the page editor, and the
+     *       {@code :qa!} that ends it, would wait for a key in the page editor. With {@code ui2} there is
      *       no such prompt: long messages are cut with a {@code [+N]} marker, and {@code g<}
      *       shows them all in a pager window. A Neovim without it (its module moved, say) keeps
-     *       the classic prompt; the view still works, and the answer's {@code ui2} says so.</li>
+     *       the classic prompt; the page editor still works, and the answer's {@code ui2} says so.</li>
      *   <li>The {@code term://} reader off, as {@link #NO_TERMINAL_URLS} turns it off in the
      *       editing Neovim: {@code --clean} keeps Neovim's own {@code nvim.terminal} autocmd, so
      *       {@code gf} on a shown {@code term:///path/build.sh} (in a message a linter printed,
@@ -5833,7 +5834,7 @@ final class LuaScripts {
      * group or pattern, but for the two kept on purpose: {@code nvim.man} (as in the editing
      * Neovim, SECURITY.md) and {@code nvim.shada}. It must be 0; it is absent if Neovim could not
      * list them. A known set allowed, not one reader looked for: a reader a later Neovim adds or
-     * renames shows here, and the view refuses to start until it is turned off or allowed; then
+     * renames shows here, and the page editor refuses to start until it is turned off or allowed; then
      * {@code first_reader} names the first one left, as {@code group:event:pattern} (example:
      * {@code nvim.net.remotefile:BufReadCmd:http://*}), for the log. Counted once, here at the
      * start: a reader added later can only come from a command the user types ({@code :packadd},
@@ -5932,7 +5933,7 @@ final class LuaScripts {
      *
      * <p>The buffer is a scratch one ({@code buftype=nofile}), changeable only while its text is
      * set: the profile starts Neovim with {@code -M}, and the buffer is {@code nomodifiable} again
-     * at the end. {@code q} quits, which ends the second Neovim and closes the view, as {@code q}
+     * at the end. {@code q} quits, which ends the second Neovim and closes the page editor, as {@code q}
      * closes Neovim's own {@code :checkhealth}. Example: {@code ({"E486: x", "3 lines yanked"}, "",
      * {{0, "ErrorMsg"}}, "dark", "end")} shows two lines, the first in red, the cursor on the second.
      */
@@ -5969,7 +5970,7 @@ final class LuaScripts {
      *
      * <p><b>{@code :helpgrep}.</b> With a pattern, the same {@code :helpgrep} runs here (unless this
      * Neovim's list is that one already) and {@code :cc} goes to the entry, so {@code ]q},
-     * {@code [q}, {@code :cnext} and {@code :copen} typed in the view go on through the matches
+     * {@code [q}, {@code :cnext} and {@code :copen} typed in the page editor go on through the matches
      * without a trip to the editor. If the entry is not that file (the path differs), the tag is
      * used instead.
      *
@@ -5989,14 +5990,14 @@ final class LuaScripts {
      *       of the same name on the path).</li>
      * </ol>
      *
-     * <p>The view shows help only: a buffer that is no help page, in a window of the screen
+     * <p>The page editor shows help only: a buffer that is no help page, in a window of the screen
      * ({@code gf} on a path, {@code :edit}), in any window that shows it, is swapped back for the
      * page it replaced, with a message; floating windows ({@code ui2}'s pager), the command-line
      * window and the quickfix window are left alone. The file has been read by then, with its filetype's scripts: the rule
-     * keeps the view on help, it does not stop a read the user asked for. {@code q} quits the
-     * window, as in the text profile: the last one ends the second Neovim and closes the view.
+     * keeps the page editor on help, it does not stop a read the user asked for. {@code q} quits the
+     * window, as in the text profile: the last one ends the second Neovim and closes the page editor.
      * Returns {@code ""}, or Neovim's error if neither the tag nor the file is found; the second
-     * Neovim then shows it on its message line, and {@code q} still closes the view.
+     * Neovim then shows it on its message line, and {@code q} still closes the page editor.
      */
     static final String SCREEN_SHOW_HELP = """
             local tag, file, line, runtimepath, background, grep, index = ...
@@ -6048,7 +6049,7 @@ final class LuaScripts {
               -- The same :helpgrep, run here unless this list is it already, then its entry.
               local title = vim.fn.getqflist({ title = 0 }).title or ''
               local same, parsed = pcall(vim.api.nvim_parse_cmd, title:sub(2), {})
-              ok = same and parsed.cmd == 'helpgrep' and parsed.args[1] == grep
+              ok = same and parsed.cmd == 'helpgrep' and table.concat(parsed.args, ' ') == grep
               if not ok then
                 ok = pcall(vim.cmd.helpgrep, { args = { grep }, mods = { silent = true } })
               end
@@ -6062,7 +6063,7 @@ final class LuaScripts {
               ok = pcall(vim.cmd.help, file)
             end
             if not ok then
-              -- Shown where the page would be, and q still closes the view.
+              -- Shown where the page would be, and q still closes the page editor.
               quit_with_q(vim.api.nvim_get_current_buf())
               vim.api.nvim_echo({ { tostring(err) } }, true, { err = true })
               return tostring(err)
