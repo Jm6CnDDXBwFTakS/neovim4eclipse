@@ -40,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
 
 /**
  * Neovim moving by itself into a project's file that has no editor ({@code gf}, {@code :b} into a
@@ -397,7 +398,8 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
 
     /**
      * Files Eclipse would open outside the IDE (a zip: the system's program) or not as text are not
-     * opened, and Neovim goes back, as before; {@code :help} is still undone too. Neovim's {@code zip.vim} lists the archive in the
+     * opened, and Neovim goes back, as before; {@code :help} afterwards still goes to the help
+     * editor, with Neovim back in the file it came from. Neovim's {@code zip.vim} lists the archive in the
      * buffer ({@code 'buftype'} set), so Neovim does not name it to Eclipse at all; were it named,
      * {@link ProjectFileEditors}' check would still keep the system's program from starting.
      *
@@ -422,11 +424,13 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             assertEquals(null, editorTitled("x.zip"), "no editor opened");
             assertEquals("a.txt", String.valueOf(SessionProbe.lua(session, "return vim.fn.expand('%:t')")));
 
-            session.inputAsync(":help<CR>"); // Neovim reads help itself (is_help), in a window the net closes
+            session.inputAsync(":help<CR>"); // the net hands the page to the help editor and closes the window
+            waitUntil("the help editor", TIMEOUT_MS,
+                    () -> page().findEditor(new NeovimPageInput(PageKind.HELP)) instanceof NeovimPageEditor);
             settle();
             waitUntil("Neovim back in a.txt after :help", TIMEOUT_MS,
                     () -> "a.txt".equals(String.valueOf(SessionProbe.lua(session, "return vim.fn.expand('%:t')"))));
-            assertEquals(a, page().getActiveEditor());
+            assertEquals(null, editorTitled("x.zip"), "still no editor for the zip");
         } finally {
             closeAllBut(null);
         }
