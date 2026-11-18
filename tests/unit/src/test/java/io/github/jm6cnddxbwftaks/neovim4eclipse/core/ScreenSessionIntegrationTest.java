@@ -142,7 +142,9 @@ class ScreenSessionIntegrationTest {
     void aYankReachesTheListenerWithItsRegister() throws Exception {
         try (ScreenSession s = start(List.of("-M"))) {
             s.execLuaAsync("vim.bo.modifiable = true; vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'OK one', 'two' });"
-                    + " vim.bo.modifiable = false", List.of());
+                    + " vim.bo.modifiable = false", List.of()).get(TestWait.millis(), TimeUnit.MILLISECONDS);
+            // Waited for: keys (nvim_input) go into the typeahead at once, while the Lua waits for the main
+            // loop, so keys sent right after it can be taken first and yank the empty buffer.
             s.inputAsync("gg\"ayy");
             waitFor(() -> !recorder.yanks.isEmpty(), "the yank");
             s.inputAsync("jyw");
@@ -156,7 +158,8 @@ class ScreenSessionIntegrationTest {
     void nothingIsWrittenWhatTheUserTypes(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("out.txt");
         try (ScreenSession s = start(List.of())) {
-            s.execLuaAsync("vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'text' })", List.of());
+            s.execLuaAsync("vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'text' })", List.of())
+                    .get(TestWait.millis(), TimeUnit.MILLISECONDS); // before the keys, as in the yank test
             s.inputAsync(":w " + file.toString().replace(" ", "\\ ") + "<CR>");
             s.inputAsync(":saveas " + dir.resolve("other.txt").toString().replace(" ", "\\ ") + "<CR>");
             // Two refusals, more lines than the message area: without ui2 (LuaScripts.SCREEN_SETUP)
