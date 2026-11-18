@@ -112,5 +112,8 @@ t.test('Ctrl-W moves among its own windows first, and goes on to Eclipse at the 
   t.eq({ { 'k', 0 }, { 'w', 0 }, { 't', 0 } }, t.sent('eclipse_screen_window'), 't: always Eclipse\'s')
   t.type('1<C-w>w')
   t.ok(vim.api.nvim_get_current_win() ~= below, '1 Ctrl-W w: its own window 1')
+  t.type('5<C-w>w')
+  t.eq(below, vim.api.nvim_get_current_win(), '5 Ctrl-W w with two windows: the last, as in Vim')
+  t.eq(3, #t.sent('eclipse_screen_window'), 'nothing more to Eclipse')
   vim.cmd('only')
 end)

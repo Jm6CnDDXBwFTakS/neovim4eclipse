@@ -5808,7 +5808,8 @@ final class LuaScripts {
      *       when nothing is above. {@code w} goes out from the last window (it would wrap to the
      *       first), {@code W} from the first, {@code p} when there is no previous window;
      *       {@code t} and {@code b} always go out, since the first and last window are Eclipse's to
-     *       pick. With a count, {@code w} goes to window N if there is one.</li>
+     *       pick. With a count, {@code w} stays inside: window N, or the last one when there
+     *       are fewer, as Vim's {@code N Ctrl-W w}.</li>
      *   <li>Neovim's own message and command-line UI, {@code ui2} (new in Neovim 0.12, experimental:
      *       {@code :help ui2}), loaded with {@code pcall}. Why: the second Neovim draws its messages
      *       into its screen, and without {@code ui2} messages longer than the message area stop at
@@ -5866,7 +5867,7 @@ final class LuaScripts {
               if key == 'h' or key == 'j' or key == 'k' or key == 'l' then
                 return vim.fn.winnr((count > 0 and count or '') .. key) ~= here
               elseif key == 'w' then
-                return count > 0 and count <= last or count == 0 and here < last
+                return count > 0 or here < last
               elseif key == 'W' then
                 return here > 1
               elseif key == 'p' then

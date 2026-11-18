@@ -479,7 +479,8 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   entries whose input is a `NeovimPageInput`, as over the plug-in's own (`NavigationHistorySteps`).
 - **`Ctrl-W`**: `SCREEN_SETUP` maps `Ctrl-W h j k l w W t b p` (and the Ctrl- forms, with a
   count). Neovim moves among its own windows when it has one in that direction (`winnr('k')` and
-  its like; the last window for `w`, the first for `W`, a previous one for `p`); else it sends
+  its like; `w` but from the last window, and always with a count, as Vim's `N Ctrl-W w`; `W`
+  but from the first; `p` with a previous window); else it sends
   `eclipse_screen_window(key, count)`, and `EditorSplits.focusFrom` moves among Eclipse's editors
   by the rule of a code editor's `Ctrl-W` (`util/WindowLayout.focus`), from the page editor, with
   its screen cursor as the caret. `t` and `b` always go to Eclipse. `Ctrl-W` from the code reaches
