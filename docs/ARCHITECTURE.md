@@ -421,9 +421,14 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   `NotificationBridge` passes on that kind only. A help window (`:help`, `:helpgrep`, `:vert` or
   `:tab help`, a plug-in's `vim.cmd.help`) passes the same net, `'buftype'` `help` set by then:
   the net sends `eclipse_view_help(tag, file, line, runtimepath)` (the nearest `*tag*` at or above
-  the cursor, the file's name without its folder, the cursor's line, the editing Neovim's
-  `'runtimepath'`), goes back to the window it came from, closes the help window and wipes its
-  buffer (`util/HelpPage`).
+  the cursor that the help tags know and that lead to this file, else the file's own name; the
+  file's name without its folder; the cursor's line; the editing Neovim's `'runtimepath'`), goes
+  back to the window it came from, closes the help window and unloads its buffer
+  (`util/HelpPage`). Unloaded, not wiped: a wiped buffer's quickfix entries lose their file, and
+  `:cnext` after `:helpgrep` stopped at the next match in the same file. Text between stars is not
+  always a tag (`*.c,*.txt` in an example), so each candidate is looked up in the help tags
+  (`taglist()` in the help buffer), not taken by its looks. The help Neovim falls back to
+  `:help <file>` if the tag is not found, and shows Neovim's error if neither is.
 - **Two profiles, one second Neovim per kind.** Text gets the output profile; a help page the help
   profile (`core/HelpProfile`: `-M`; `LuaScripts.SCREEN_SHOW_HELP` sets the editing Neovim's
   `'runtimepath'`, runs `:help tag` and `:only`, and puts the cursor on the line if the file is the

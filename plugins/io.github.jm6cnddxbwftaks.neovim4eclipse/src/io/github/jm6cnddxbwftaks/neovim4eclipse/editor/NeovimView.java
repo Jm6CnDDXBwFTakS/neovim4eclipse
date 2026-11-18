@@ -59,7 +59,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
  * by one with the help profile ({@link HelpProfile}), given the user's {@code 'runtimepath'}. When
  * the kind changes ({@code :messages} after {@code :help}), the running one is closed and the
  * other started, so text never meets the user's plug-ins, whatever was shown before. The same kind
- * again reuses the running one (about 0.1 s saved, and {@code Ctrl-O} keeps the help history).
+ * again reuses the running one (about 0.1 s saved; for help, {@code Ctrl-O} keeps the pages seen
+ * since the last text).
  *
  * <h2>What the user sees</h2>
  * <ul>
@@ -307,6 +308,10 @@ public final class NeovimView extends ViewPart {
         screen = session;
         screenForHelp = forHelp;
         events.session = session;
+        if (events.endedEarly) {
+            onEnded(); // it ended while starting: the next content starts a new one
+            return;
+        }
         columns = startColumns;
         rows = startRows;
         resizeScreen(); // the view may have changed size while Neovim started
@@ -453,14 +458,17 @@ public final class NeovimView extends ViewPart {
     }
 
     /**
-     * What one second Neovim reports, passed to the UI thread. Its screen and its end count only
-     * while it is the view's {@link #screen}: one closed because the kind changed still sends its
-     * last screens and its end, which must neither draw nor close the view.
+     * What one second Neovim reports, passed to the UI thread. Each counts only while it is the
+     * view's {@link #screen}: one closed because the kind changed still sends its last screens, a
+     * yank or {@code Ctrl-W p} typed a moment before, and its end, which must neither draw, fill a
+     * register, move the focus nor close the view.
      */
     private final class Events implements ScreenSession.Listener {
 
         /** The session these events are from, once it started; UI thread. */
         private ScreenSession session;
+        /** It ended before {@link #onStarted} took it: {@link #onStarted} closes the view then. UI thread. */
+        private boolean endedEarly;
 
         private boolean current() {
             return session != null && session == screen;
@@ -477,21 +485,29 @@ public final class NeovimView extends ViewPart {
 
         @Override
         public void yank(String register, String type, List<String> lines) {
-            NeovimSession editing = Activator.getDefault().currentSession();
-            if (editing != null) {
-                editing.setRegisterFromViewAsync(register, type, lines);
-            }
+            onUi(() -> {
+                NeovimSession editing = Activator.getDefault().currentSession();
+                if (current() && editing != null) {
+                    editing.setRegisterFromViewAsync(register, type, lines);
+                }
+            });
         }
 
         @Override
         public void toEditor() {
-            onUi(NeovimView.this::toEditor);
+            onUi(() -> {
+                if (current()) {
+                    NeovimView.this.toEditor();
+                }
+            });
         }
 
         @Override
         public void ended() {
             onUi(() -> {
-                if (current()) {
+                if (session == null) {
+                    endedEarly = true;
+                } else if (current()) {
                     onEnded();
                 }
             });

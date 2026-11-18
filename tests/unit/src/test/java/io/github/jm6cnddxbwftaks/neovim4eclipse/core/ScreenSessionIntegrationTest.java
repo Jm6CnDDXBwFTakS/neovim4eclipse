@@ -302,14 +302,33 @@ class ScreenSessionIntegrationTest {
         }
     }
 
-    /** A tag the second Neovim does not find answers Neovim's error, for the log. */
+    /** A tag the second Neovim does not find, in a file it does: the file opens, on the line. */
     @Test
-    void anUnknownTagAnswersNeovimsError() throws Exception {
+    void anUnknownTagFallsBackToTheFile(@TempDir Path user) throws Exception {
+        Path plugin = helpPlugin(user);
+        try (ScreenSession s = start(HelpProfile.ARGS)) {
+            String runtimepath = lua(s, "return vim.o.runtimepath") + "," + plugin;
+            assertEquals("", HelpProfile.show(s, new HelpPage("not-a-tag", "probe.txt", 7, runtimepath), false)
+                    .get(TestWait.millis(), TimeUnit.MILLISECONDS));
+            assertEquals("probe.txt", lua(s, "return vim.fn.expand('%:t')"));
+            assertEquals(7L, ((Number) lua(s, "return vim.fn.line('.')")).longValue());
+        }
+    }
+
+    /**
+     * Neither the tag nor the file found: Neovim's error, shown on its message line and answered
+     * for the log, and {@code q} still closes the view.
+     */
+    @Test
+    void anUnknownTagAndFileShowNeovimsError() throws Exception {
         try (ScreenSession s = start(HelpProfile.ARGS)) {
             String runtimepath = String.valueOf(lua(s, "return vim.o.runtimepath"));
-            Object answer = HelpProfile.show(s, new HelpPage("no-such-tag-anywhere", "x.txt", 1, runtimepath), false)
+            Object answer = HelpProfile.show(s, new HelpPage("no-such-tag-anywhere", "no-such-file-anywhere.txt", 1, runtimepath), false)
                     .get(TestWait.millis(), TimeUnit.MILLISECONDS);
             assertTrue(String.valueOf(answer).contains("E149"), String.valueOf(answer));
+            waitFor(() -> recorder.text().contains("E149"), "the error on the screen: " + recorder.text());
+            s.inputAsync("q");
+            waitFor(() -> recorder.ends.get() == 1, "q closing it");
         }
     }
 }

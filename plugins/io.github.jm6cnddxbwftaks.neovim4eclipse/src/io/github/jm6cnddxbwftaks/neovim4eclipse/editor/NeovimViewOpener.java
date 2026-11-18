@@ -19,7 +19,7 @@ import org.eclipse.ui.PlatformUI;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 
 /**
- * Opens the Neovim view ({@link NeovimView}) with text the editing Neovim produced:
+ * Opens the Neovim view ({@link NeovimView}) with what the editing Neovim handed over:
  * {@code :messages}, {@code :checkhealth} and {@code :help} ({@code NeovimSession.addViewContentListener}, which
  * {@code Activator} points here when it starts the session). The view takes the keyboard, as
  * Vim's {@code :messages} pager and {@code :checkhealth} window do; it opens in the active

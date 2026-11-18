@@ -1445,22 +1445,33 @@ final class LuaScripts {
               vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_text', 'checkhealth', lines)
               return true
             end
-            -- The help tag to reach line `line` (1-based) of a help file by: the last tag at or above
-            -- it (*tag* in the text), else the first in the file, else nil. Example: on the line under
-            -- "*help-context*", that tag; on line 1 of helphelp.txt, "helphelp.txt".
-            local function nearest_tag(lines, line)
-              local first, above
-              for i = 1, #lines do
-                local last
-                for tag in lines[i]:gmatch('%*([^%s%*|]+)%*') do
-                  last = tag
+            -- The help tag to reach line `line` (1-based) of help buffer `buf` by: the nearest one at
+            -- or above it that Neovim's help knows and that leads to this same file, else the file's
+            -- own name (every help file starts with *its-name.txt*). Text between stars is not always
+            -- a tag (`*.c,*.txt` in an example, `a*b*`), so each candidate is checked where it ends,
+            -- in the help tags (taglist() in a help buffer reads them), not by its looks. Example:
+            -- on the line under "*help-context*", that tag; on line 1 of helphelp.txt, "helphelp.txt".
+            local function nearest_tag(buf, line, file)
+              local lines = vim.api.nvim_buf_get_lines(buf, 0, line, false)
+              local found
+              vim.api.nvim_buf_call(buf, function()
+                for i = #lines, 1, -1 do
+                  local candidates = {}
+                  for tag in lines[i]:gmatch('%*([^%s%*|]+)%*') do
+                    table.insert(candidates, 1, tag)
+                  end
+                  for _, tag in ipairs(candidates) do
+                    local ok, entries = pcall(vim.fn.taglist, '^' .. vim.fn.escape(tag, '\\\\.*[]~^$') .. '$')
+                    for _, entry in ipairs(ok and entries or {}) do
+                      if entry.name == tag and vim.fn.fnamemodify(entry.filename, ':t') == file then
+                        found = tag
+                        return
+                      end
+                    end
+                  end
                 end
-                first = first or last
-                if i <= line and last then
-                  above = last
-                end
-              end
-              return above or first
+              end)
+              return found or file
             end
             -- A help window (:help, :helpgrep, a plug-in's vim.cmd.help, in a split, a tab or with
             -- :vert): Eclipse shows help in the Neovim view instead, with the user's own help pages
@@ -1469,7 +1480,9 @@ final class LuaScripts {
             -- (nearest_tag), the help file's name without its folder (to check the second Neovim
             -- reached the same file), the cursor's line, and 'runtimepath', where the second Neovim
             -- finds the same pages. Then, as for a report, back to the window it came from and the
-            -- window closed; the help buffer is wiped unless another window shows it.
+            -- window closed; the help buffer is unloaded unless another window shows it. Unloaded,
+            -- not wiped: a wiped buffer's quickfix entries lose their file, and :cnext after
+            -- :helpgrep would stop at the next file.
             local function take_help(win)
               if not vim.api.nvim_win_is_valid(win) or vim.fn.win_gettype(win) ~= '' then
                 return false
@@ -1479,19 +1492,17 @@ final class LuaScripts {
                 return false
               end
               local line = vim.api.nvim_win_get_cursor(win)[1]
-              local tag = nearest_tag(vim.api.nvim_buf_get_lines(buf, 0, -1, false), line)
               local file = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':t')
+              local tag = nearest_tag(buf, line, file)
               local before = opened_from[win]
               if before and own[before] and vim.api.nvim_win_is_valid(before) then
                 pcall(vim.api.nvim_set_current_win, before)
               end
               pcall(vim.api.nvim_win_close, win, true)
               if vim.api.nvim_buf_is_valid(buf) and #vim.fn.win_findbuf(buf) == 0 then
-                pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                pcall(vim.api.nvim_buf_delete, buf, { force = true, unload = true })
               end
-              if tag then
-                vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_help', tag, file, line, vim.o.runtimepath)
-              end
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_help', tag, file, line, vim.o.runtimepath)
               return true
             end
             -- The window last left: when a command opens a window and enters it (:checkhealth's
@@ -5893,19 +5904,23 @@ final class LuaScripts {
      *       run on each page, as in the user's editor. Set after the start, so their
      *       {@code plugin/} folders do not run: only what Neovim loads for a help page.</li>
      *   <li>{@code :help tag}, Neovim's own: the page opens as a help buffer (tags concealed,
-     *       {@code Ctrl-]} follows them, {@code :help} again replaces it). Then {@code :only}: the
-     *       page is the whole screen.</li>
+     *       {@code Ctrl-]} follows them, {@code :help} again replaces it); if the tag is not found,
+     *       {@code :help file} (every help file starts with its own name as a tag). Then
+     *       {@code :only}: the page is the whole screen. At the first page, {@code :clearjumps}, so
+     *       that {@code Ctrl-O} does not end on the empty buffer Neovim started with.</li>
      *   <li>If the page is the file the editing Neovim had, the cursor goes to its line, at the top
      *       of the window, as {@code :help} puts a topic; otherwise it stays on the tag (two files
      *       of the same name on the path).</li>
      * </ol>
      *
      * <p>The view shows help only: a buffer that is no help page, in a window of the screen
-     * ({@code gf} on a path, {@code :edit}), is swapped back for the page it replaced, with a
-     * message; floating windows ({@code ui2}'s pager) and the command-line window are left alone.
-     * {@code q} quits the window, as in the text profile: the last one ends the second Neovim and
-     * closes the view. Returns {@code ""}, or Neovim's error if the tag is not found (the second
-     * Neovim then shows it on its message line).
+     * ({@code gf} on a path, {@code :edit}), in any window that shows it, is swapped back for the
+     * page it replaced, with a message; floating windows ({@code ui2}'s pager) and the command-line
+     * window are left alone. The file has been read by then, with its filetype's scripts: the rule
+     * keeps the view on help, it does not stop a read the user asked for. {@code q} quits the
+     * window, as in the text profile: the last one ends the second Neovim and closes the view.
+     * Returns {@code ""}, or Neovim's error if neither the tag nor the file is found; the second
+     * Neovim then shows it on its message line, and {@code q} still closes the view.
      */
     static final String SCREEN_SHOW_HELP = """
             local tag, file, line, runtimepath, background = ...
@@ -5914,35 +5929,56 @@ final class LuaScripts {
             end
             vim.o.runtimepath = runtimepath
             local group = vim.api.nvim_create_augroup('neovim4eclipse_help_view', { clear = true })
+            local function quit_with_q(buf)
+              vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the Neovim view' })
+            end
             vim.api.nvim_create_autocmd('BufWinEnter', {
               group = group,
-              callback = function()
-                -- 'buftype' help is set only after the buffer is entered: checked once that is over.
+              callback = function(ev)
+                -- 'buftype' help is set only after the buffer is entered: checked once that is over,
+                -- in every window that shows the buffer, current or not.
                 vim.schedule(function()
-                  local win = vim.api.nvim_get_current_win()
-                  if vim.fn.win_gettype(win) ~= '' then
+                  if not vim.api.nvim_buf_is_valid(ev.buf) then
                     return
                   end
-                  local buf = vim.api.nvim_win_get_buf(win)
-                  if vim.bo[buf].buftype == 'help' then
-                    vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the Neovim view' })
+                  if vim.bo[ev.buf].buftype == 'help' then
+                    quit_with_q(ev.buf)
                     return
                   end
-                  local alternate = vim.fn.bufnr('#')
-                  if alternate > 0 and vim.bo[alternate].buftype == 'help' then
-                    vim.api.nvim_win_set_buf(win, alternate)
-                  else
-                    pcall(vim.cmd.help)
+                  local swapped = false
+                  for _, win in ipairs(vim.fn.win_findbuf(ev.buf)) do
+                    if vim.fn.win_gettype(win) == '' then
+                      local alternate = vim.api.nvim_win_call(win, function() return vim.fn.bufnr('#') end)
+                      if alternate > 0 and vim.bo[alternate].buftype == 'help' then
+                        vim.api.nvim_win_set_buf(win, alternate)
+                      else
+                        vim.api.nvim_win_call(win, function() pcall(vim.cmd, 'help | only') end)
+                      end
+                      swapped = true
+                    end
                   end
-                  vim.api.nvim_echo({ { 'The Neovim view shows help only' } }, true, { err = true })
+                  if swapped then
+                    vim.api.nvim_echo({ { 'The Neovim view shows help only' } }, true, { err = true })
+                  end
                 end)
               end,
             })
+            local first = vim.bo.buftype ~= 'help'
             local ok, err = pcall(vim.cmd.help, tag)
+            if not ok and tag ~= file then
+              ok = pcall(vim.cmd.help, file)
+            end
             if not ok then
+              -- Shown where the page would be, and q still closes the view.
+              quit_with_q(vim.api.nvim_get_current_buf())
+              vim.api.nvim_echo({ { tostring(err) } }, true, { err = true })
               return tostring(err)
             end
             pcall(vim.cmd.only)
+            if first then
+              -- The empty buffer the second Neovim started with would be Ctrl-O's last stop.
+              vim.cmd.clearjumps()
+            end
             if vim.fn.expand('%:t') == file and line >= 1 and line <= vim.api.nvim_buf_line_count(0) then
               vim.api.nvim_win_set_cursor(0, { line, 0 })
               vim.cmd('normal! zt')

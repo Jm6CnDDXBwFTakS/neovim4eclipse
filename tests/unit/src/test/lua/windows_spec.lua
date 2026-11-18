@@ -770,7 +770,7 @@ t.test(':checkhealth as a float (vim.g.health style) is read before closing wipe
   vim.g.health = nil
 end)
 
-t.test(':help hands the page to the Neovim view and leaves no window, buffer or message', function()
+t.test(':help hands the page to the Neovim view and leaves no window, loaded buffer or message', function()
   local win = commands()
   vim.v.errmsg = ''
   t.forget()
@@ -784,7 +784,8 @@ t.test(':help hands the page to the Neovim view and leaves no window, buffer or 
   t.eq(win, vim.api.nvim_get_current_win(), "back in the editor's window")
   t.eq(1, windows_in_tab())
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    t.ok(vim.bo[buf].buftype ~= 'help', 'the help buffer is wiped')
+    t.ok(vim.bo[buf].buftype ~= 'help' or not vim.api.nvim_buf_is_loaded(buf),
+      'the help buffer is unloaded (kept for the quickfix list, unlisted)')
   end
   t.eq('', vim.v.errmsg, 'no "Window closed" message: the page went somewhere')
 end)
@@ -807,6 +808,37 @@ t.test('a line under a tag is reached by that tag; a page with no tag above the 
   local tag, _, line = unpack(t.sent('eclipse_view_help')[1])
   t.eq('helphelp.txt', tag, 'line 1 holds the file tag')
   t.eq(1, line)
+end)
+
+t.test(':helpgrep and :cnext go on through the matches, one page each, even inside one file', function()
+  commands()
+  t.forget()
+  vim.cmd('silent helpgrep runtimepath')
+  t.wait_for('the first match', function() return #t.sent('eclipse_view_help') == 1 end)
+  local list = vim.fn.getqflist()
+  t.ok(#list > 3, 'matches to go through')
+  for n = 2, 4 do
+    vim.cmd('silent cnext')
+    t.wait_for('match ' .. n, function() return #t.sent('eclipse_view_help') == n end)
+    t.eq(n, vim.fn.getqflist({ idx = 0 }).idx, 'the list moved on')
+    t.eq(list[n].lnum, t.sent('eclipse_view_help')[n][3], 'the line of match ' .. n)
+  end
+  vim.cmd('silent cprevious')
+  t.wait_for('back one', function() return #t.sent('eclipse_view_help') == 5 end)
+  t.eq(list[3].lnum, t.sent('eclipse_view_help')[5][3])
+end)
+
+t.test('text between stars that is no tag is passed over: the tag sent is one help knows, in that file', function()
+  commands()
+  t.forget()
+  -- autocmd.txt has a line with *.txt,*.info in an example: no tag, though it looks like two.
+  vim.cmd('silent helpgrep \\*\\.txt,\\*\\.info')
+  t.wait_for('the page', function() return #t.sent('eclipse_view_help') == 1 end)
+  local tag, file = unpack(t.sent('eclipse_view_help')[1])
+  t.eq('autocmd.txt', file)
+  vim.cmd('help ' .. tag)
+  t.eq('autocmd.txt', vim.fn.expand('%:t'), 'the tag ' .. tag .. ' leads to the same file')
+  vim.cmd('helpclose')
 end)
 
 t.test('floating windows are left alone', function()
