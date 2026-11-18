@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.27] - 2026-11-18
+
 ### Added
 
 - The **Neovim view**: `:messages` and `:checkhealth` open an Eclipse view (first with Console and
