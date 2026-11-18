@@ -137,8 +137,8 @@ class ToolCacheTest {
         String pinned = Files.readString(root.resolve(
                 "tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/io/github/jm6cnddxbwftaks/neovim4eclipse/editor/PinnedPlugins.java"));
         assertTrue(pinned.contains("static final String FOLDER = \"" + ToolCache.TEST_PLUGINS + "\";"), "PinnedPlugins.FOLDER");
-        String spec = Files.readString(root.resolve("tests/unit/src/test/lua/jump_plugins_spec.lua"));
-        assertTrue(spec.contains("local folder = '" + ToolCache.TEST_PLUGINS + "'"), "jump_plugins_spec.lua: local folder");
+        String harness = Files.readString(root.resolve("tests/unit/src/test/lua/harness.lua"));
+        assertTrue(harness.contains("local folder = '" + ToolCache.TEST_PLUGINS + "'"), "harness.lua (t.pinned_plugin): local folder");
     }
 
     @Test

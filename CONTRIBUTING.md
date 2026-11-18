@@ -566,7 +566,7 @@ The folder is git-ignored and safe to delete: to start from nothing, delete `.to
 `git clean -x` does); each tool downloads again (hash-checked, as always) or asks for its step to be
 run again. The names are in `releng/tools/common/ToolCache.java`; `ToolCacheTest` fails when a
 tool names a folder under `target/` other than a Maven output, and checks the three literal copies
-(`LikeCi`, `PinnedPlugins`, `jump_plugins_spec.lua`). If the repository is a project in an Eclipse
+(`LikeCi`, `PinnedPlugins`, the Lua tests' `harness.lua`). If the repository is a project in an Eclipse
 workspace, mark `.tool-cache/` as derived (*Properties › Resource*), so that searches and the Open
 Resource dialog leave its Neovim runtime and plug-ins out.
 

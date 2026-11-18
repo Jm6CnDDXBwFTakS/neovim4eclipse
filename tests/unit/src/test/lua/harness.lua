@@ -229,6 +229,7 @@ end
 --- writes beside each, "<commit> <sha256>", must be the pin's. Example: t.pinned_plugin('flash').
 function t.pinned_plugin(name)
   local root = vim.fs.normalize(t.spec_dir .. '/../../../../..')
+  local folder = '.tool-cache/test-plugins'
   local commit, sha
   for line in io.lines(root .. '/releng/test-plugins.properties') do
     commit = commit or line:match('^' .. vim.pesc(name) .. '%.commit=(%x+)%s*$')
@@ -237,7 +238,7 @@ function t.pinned_plugin(name)
   if not commit or not sha then
     error('no pin named ' .. name)
   end
-  local dir = root .. '/.tool-cache/test-plugins/' .. name
+  local dir = root .. '/' .. folder .. '/' .. name
   local marker = io.open(dir .. '.pin')
   if not marker or vim.fn.isdirectory(dir) == 0 then
     if marker then

@@ -23,7 +23,7 @@ package common;
  *
  * <p>Three readers outside the tools that use a Java 22 launcher hold a literal copy of a name, as
  * they cannot import this class: {@code LikeCi.java} (one file that runs on JDK 21), and the UI
- * tests' {@code PinnedPlugins} and the Lua spec {@code jump_plugins_spec.lua} (other languages or
+ * tests' {@code PinnedPlugins} and the Lua tests' {@code harness.lua} (other languages or
  * modules). {@code ToolCacheTest} checks each copy equals the name here, and that no tool writes
  * into {@code target/}.
  */
