@@ -39,10 +39,13 @@ local function show(win, buf)
   return t.run('SHOW_WINDOW', tostring(win), tostring(buf))
 end
 
+--- A window's folder and whether it is its own (:lcd), as { folder, 1 or 0 }; win 0 is the current
+--- one. Read by window and tabpage number, not inside nvim_win_call(): there getcwd() on a window
+--- of another tabpage answers with another window's folder (probed on 0.12.6).
 local function cwd(win)
-  return vim.api.nvim_win_call(win, function()
-    return { vim.fn.getcwd(), vim.fn.haslocaldir() }
-  end)
+  win = win == 0 and vim.api.nvim_get_current_win() or win
+  local at = vim.fn.win_id2tabwin(win)
+  return { vim.fn.getcwd(at[2], at[1]), vim.fn.haslocaldir(at[2], at[1]) }
 end
 
 t.test('WINDOWS returns the current window as the home window and hides the tab line', function()
@@ -1148,11 +1151,8 @@ end)
 
 t.test("entering a page gives its window the attached editor's folder", function()
   start()
-  -- By window and tabpage number: getcwd() inside nvim_win_call() on a window of another
-  -- tabpage answers with another window's folder.
   local function folder_of(w)
-    local at = vim.fn.win_id2tabwin(w)
-    return vim.fn.getcwd(at[2], at[1])
+    return cwd(w)[1]
   end
   local code = open(buffer(3), vim.fn.fnamemodify(vim.fn.tempname(), ':h'))
   local folder = folder_of(code)
