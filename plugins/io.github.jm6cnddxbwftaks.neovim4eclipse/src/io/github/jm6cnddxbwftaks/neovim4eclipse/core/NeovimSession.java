@@ -898,7 +898,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /**
      * Puts text yanked in a page editor into this Neovim's register of the same name
      * ({@link LuaScripts#SET_REGISTER_FROM_VIEW}), so that {@code p} in an editor pastes it. A
-     * plain {@code yy} in the view (register {@code ""}) fills the unnamed register, and the
+     * plain {@code yy} in a page editor (register {@code ""}) fills the unnamed register, and the
      * clipboard as well when this Neovim's {@code 'clipboard'} says so. Example:
      * {@code ("a", "V", ["OK"])} after {@code "ayy} on a line {@code OK}.
      */

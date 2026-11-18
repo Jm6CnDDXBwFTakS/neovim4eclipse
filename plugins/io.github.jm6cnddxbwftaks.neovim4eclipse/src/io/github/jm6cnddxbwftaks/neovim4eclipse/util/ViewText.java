@@ -14,7 +14,7 @@ import java.util.Set;
  * {@code ViewText("messages", "", ["E486: Pattern not found: x", "3 lines yanked"],
  * [(0, "ErrorMsg")])}.
  *
- * @param title      what the view's title says after "Neovim: ", such as {@code messages} or
+ * @param title      what the page editor's title says after "Neovim: ", such as {@code messages} or
  *                   {@code checkhealth}
  * @param filetype   the filetype the second Neovim gives the text, for Neovim's own highlighting
  *                   ({@code checkhealth}); {@code ""} for none
@@ -42,7 +42,7 @@ public record ViewText(String title, String filetype, List<String> lines, List<L
     }
 
     /**
-     * {@code :messages} as the view shows it: each entry on its own lines, an error in
+     * {@code :messages} as its page editor shows it: each entry on its own lines, an error in
      * {@code ErrorMsg}, a warning in {@code WarningMsg}, the rest in the default colors. A message
      * of three lines (a Lua error and its traceback) colors all three. No highlight definitions are
      * copied: the second Neovim draws its own {@code ErrorMsg}.

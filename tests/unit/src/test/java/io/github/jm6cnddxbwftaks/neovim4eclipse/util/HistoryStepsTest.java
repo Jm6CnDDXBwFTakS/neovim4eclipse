@@ -274,4 +274,13 @@ class HistoryStepsTest {
         h.switchTo("b", false);
         assertEquals(0, h.steps.backSteps(h.entries, h.entries.get(1)), "Ctrl-O stays in b");
     }
+
+    @Test
+    void backStaysWhenOnlyThePluginsAndAPageEditorsEntriesAreOlder() {
+        History h = new History();
+        h.switchTo("help", false);
+        h.switchTo("b", true); // the plug-in's, for a Neovim jump that Neovim's own history has
+        h.switchTo("c", false);
+        assertEquals(0, h.steps.backSteps(h.entries, h.entries.get(2)), "Ctrl-O stays in c");
+    }
 }

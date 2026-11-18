@@ -383,7 +383,7 @@ final class NotificationBridge implements Incoming {
     /**
      * Payload: {@code [kind, lines]}, from the {@code WinNew} net of {@link LuaScripts#WINDOWS}.
      * Only the kind {@code "checkhealth"} is known; any other is ignored, so that no text reaches
-     * the view under a name the plug-in did not choose.
+     * a page editor under a name the plug-in did not choose.
      */
     private void onViewText(List<?> args) {
         if (args.size() < 2 || !ViewText.CHECKHEALTH.equals(args.get(0)) || !(args.get(1) instanceof List<?> raw)) {

@@ -18,6 +18,7 @@ import org.eclipse.jface.bindings.Binding;
 import org.eclipse.jface.bindings.keys.KeySequence;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Event;
+import org.eclipse.ui.IEditorDescriptor;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.PlatformUI;
@@ -142,5 +143,16 @@ class NeovimPageEditorEndToEndTest extends EndToEndTestBase {
         assertEquals(null, page().findEditor(new NeovimPageInput(PageKind.HELP)));
         assertEquals(null, page().findEditor(new NeovimPageInput(PageKind.MESSAGES)));
         assertTrue(page().findEditor(editor.getEditorInput()) == editor, "the code editor stays");
+    }
+
+    /**
+     * A file Eclipse would open in the page editor (Open With remembers the editor once picked)
+     * opens in the Text Editor instead when Neovim opens it ({@code :e}, {@code gf}).
+     */
+    @Test
+    void neovimNeverOpensAFileInThePageEditor() {
+        IEditorDescriptor page = PlatformUI.getWorkbench().getEditorRegistry().findEditor(NeovimPageEditor.ID);
+        assertNotNull(page);
+        assertEquals(NewFiles.TEXT_EDITOR, NewFiles.internalOr(page, "notes.txt"));
     }
 }

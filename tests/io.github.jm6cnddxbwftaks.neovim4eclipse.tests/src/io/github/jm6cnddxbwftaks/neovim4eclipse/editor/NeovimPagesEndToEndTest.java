@@ -343,7 +343,10 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
 
     /**
      * In a stack of two tabs, the editor the page editor splits from stays in front of its stack:
-     * test.txt, not other.txt, so {@code Ctrl-W k} from the page goes back to it.
+     * test.txt, not other.txt, so {@code Ctrl-W k} from the page goes back to it. This Eclipse
+     * leaves it in front by itself too (opened without activating, the page editor did not become
+     * the stack's selected tab); EditorSplits.intoNewStack re-selects the tab that holds test.txt so
+     * that it does not depend on that.
      */
     @Test
     void theEditorSplitFromStaysInFrontOfItsStack() throws Exception {
@@ -355,13 +358,12 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
             waitForAttach(editor, "test.txt");
             SessionProbe.lua(session, "vim.cmd.echomsg(\"'before the split'\") return 0");
             colon("messages");
-            NeovimPageEditor messages = pageShowing("before the split");
+            pageShowing("before the split");
             MPart code = editor.getSite().getService(MPart.class);
             waitUntil("test.txt in front of its stack", TIMEOUT_MS, () -> {
                 settle();
                 return EditorSplits.stackOf(code).getSelectedElement() == code;
             }, () -> "; in front: " + EditorSplits.stackOf(code).getSelectedElement());
-            assertTrue(messages != null);
         } finally {
             page().closeEditor(other, false);
         }
