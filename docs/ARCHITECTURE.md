@@ -488,12 +488,14 @@ Two bounded exceptions, each waiting on purpose:
   `EditorAttachManager.attach`): the hash of the dedicated Neovim's files, the process, the
   handshake, the user's `init.lua` and the plug-in's setup scripts. Measured without an
   `init.lua`: about 0.2 s on Linux, 0.5 s on macOS, 0.5 to 0.6 s on Windows for the first start;
-  0.05 to 0.3 s for a restart. Bounded by the connection's limits: 5 s for each request while
-  opening, 10 s for the user's `init.lua` (`NeovimConnection`), then the RPC limit for each setup
-  script. It blocks on purpose: while the UI thread waits, the keys typed meanwhile wait in the
-  system's queue and reach Neovim in order once the editor is attached (`dd` typed while Neovim
-  starts deletes a line). Keys typed before that, while Eclipse is still opening the editor, are
-  Eclipse's own, as before any attach. A start in
+  0.05 to 0.3 s for a restart. The steps after the hash are bounded by the connection's limits:
+  5 s for each request while opening, 10 s for the user's `init.lua` (`NeovimConnection`), then
+  the RPC limit for each setup script. The hash has no limit of its own: it reads the dedicated
+  Neovim's files once, so its time grows only with their size and the disk (the figures above
+  include it). It blocks on purpose: while the UI
+  thread waits, the keys typed meanwhile wait in the system's queue and reach Neovim in order once
+  the editor is attached (`dd` typed while Neovim starts deletes a line). Keys typed before that,
+  while Eclipse is still opening the editor, are Eclipse's own, as before any attach. A start in
   the background would leave the editor to Eclipse's own editing meanwhile, and a progress dialog
   would take the keys itself. Meanwhile the cursor is busy (`util/BusyStart`). A message in the
   status bar cannot be shown: GTK and Cocoa paint only from the event loop, which the start blocks

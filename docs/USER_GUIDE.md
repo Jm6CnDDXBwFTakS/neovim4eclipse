@@ -6,10 +6,12 @@ overview: how to install, the first five minutes, the [Settings](../README.md#se
 
 ## Starting Neovim
 
-Neovim starts with the first text editor you open, and again with the next one after *Neovim →
-Restart Neovim...*. Eclipse waits for it, with the busy cursor: usually well under a second, plus
-your `init.lua`. What you type meanwhile is kept, and reaches Neovim in order once it is ready, so
-`dd` typed while it starts deletes a line.
+Neovim starts with the first text editor that opens, whether you open it or Eclipse reopens it at
+launch, and again with the next one after *Neovim → Restart Neovim...* or after Neovim quit or
+stopped. Eclipse waits for it, with the busy cursor: usually well under a second, plus your
+`init.lua`. What you type meanwhile is kept, and reaches Neovim in order once it is ready, so `dd`
+typed while it starts deletes a line. Keys typed before that, while Eclipse is still opening the
+editor, are Eclipse's own, as in an editor without Neovim.
 
 ## Status bar
 

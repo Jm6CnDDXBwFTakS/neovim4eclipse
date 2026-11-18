@@ -55,11 +55,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DiagnosticsSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.UnattachedDocumentSync;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BufferRefs;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BusyStart;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InputRebind;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LocalFiles;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimNotFoundException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BusyStart;
 
 /**
  * Manages attach/detach of Neovim to text editors, including automatic attach
