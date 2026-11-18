@@ -1114,15 +1114,35 @@ final class LuaScripts {
             """;
 
     /**
-     * Makes window {@code win} (argument, its id as a string) Neovim's current window, the focus
-     * moving to a page's window ({@code DocumentBuffers.focusPage}). With autocommands: entering a
-     * window is what the user's config and Neovim expect to hear about, as for any window. Returns
-     * the window's id, or -1 for a window that no longer exists (nothing entered).
+     * Makes window {@code win} (first argument, its id as a string) Neovim's current window, the
+     * focus moving to a page's window ({@code DocumentBuffers.focusPage}), and gives it the folder
+     * of window {@code from} (second argument, the attached editor's; -1 for none), so that a
+     * relative name typed in the page ({@code :e b.txt}) is the code's, as {@code :e} from the code
+     * would take it. With autocommands: entering a window is what the user's config and Neovim
+     * expect to hear about, as for any window. Returns the window's id, or -1 for a window that no
+     * longer exists (nothing entered). The folder is set with {@code chdir()}, never a command
+     * line: a folder's name is not expanded (see {@link #WINDOWS}, {@code open}).
      */
     static final String FOCUS_WINDOW = """
-            local win = tonumber(...)
+            local win, from = tonumber((select(1, ...))), tonumber((select(2, ...)))
             if not win or not vim.api.nvim_win_is_valid(win) then
               return -1
+            end
+            if from and from > 0 and vim.api.nvim_win_is_valid(from) and not vim.o.autochdir then
+              -- Read by window and tabpage number: getcwd() with only the window id of another
+              -- tabpage finds no window, and getcwd() inside nvim_win_call() on one answers with
+              -- another window's folder (probed on 0.12.6). chdir() inside nvim_win_call() does
+              -- set the right window's.
+              local function folder_of(w)
+                local at = vim.fn.win_id2tabwin(w)
+                return vim.fn.getcwd(at[2], at[1])
+              end
+              local folder = folder_of(from)
+              if folder ~= '' and folder ~= folder_of(win) then
+                vim.api.nvim_win_call(win, function()
+                  pcall(vim.fn.chdir, folder, 'window')
+                end)
+              end
             end
             vim.api.nvim_set_current_win(win)
             return win
@@ -2156,15 +2176,18 @@ final class LuaScripts {
             local saved = vim.o.eventignore
             vim.o.eventignore = 'all'
             local ok, result = pcall(function()
+              -- Found by a mark of the plug-in's own, not by the name: a buffer that only took the
+              -- same name (gf on the text neovim4eclipse://messages) is never taken for the page.
               local buf
               for _, b in ipairs(vim.api.nvim_list_bufs()) do
-                if vim.api.nvim_buf_get_name(b) == full then
+                if vim.b[b].neovim4eclipse_page == name then
                   buf = b
                 end
               end
               if not buf then
                 buf = vim.api.nvim_create_buf(false, true)
-                vim.api.nvim_buf_set_name(buf, full)
+                pcall(vim.api.nvim_buf_set_name, buf, full)
+                vim.b[buf].neovim4eclipse_page = name
               end
               local bo = vim.bo[buf]
               bo.buftype, bo.bufhidden, bo.swapfile, bo.buflisted = 'nofile', 'hide', false, false

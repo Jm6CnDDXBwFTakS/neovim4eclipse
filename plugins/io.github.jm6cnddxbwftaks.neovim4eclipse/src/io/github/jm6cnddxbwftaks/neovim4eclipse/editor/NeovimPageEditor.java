@@ -119,6 +119,11 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
                 public void action(IdeAction action) {
                     PageCommandsRun.action(NeovimPageEditor.this, action);
                 }
+
+                @Override
+                public void close() {
+                    getSite().getPage().closeEditor(NeovimPageEditor.this, false);
+                }
             }, editing);
             pane.canvas().addListener(SWT.FocusIn, e -> lastMessages = new WeakReference<>(this));
             pane.canvas().addListener(SWT.FocusOut, e -> ((WindowPane) pane).focusOut());

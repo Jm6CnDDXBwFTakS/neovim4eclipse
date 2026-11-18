@@ -28,6 +28,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
@@ -67,6 +68,9 @@ final class WindowPane implements PagePane {
 
         /** A key the plug-in maps for the IDE, typed in the page ({@code gt}, {@code gT}). */
         void action(IdeAction action);
+
+        /** Neovim closed the page's window by itself, or it could not be entered: the editor closes. */
+        void close();
     }
 
     private final Host host;
@@ -85,6 +89,9 @@ final class WindowPane implements PagePane {
     private final MessageLine messageLine;
     private final CommandLineBox commandLine;
     private final FloatingWindows floats;
+    /** Neovim's command-line window ({@code q:} typed in the page), drawn over the page's bottom. */
+    private final NeovimWindowPanel commandWindowPanel;
+    private final Consumer<Integer> closedListener = this::onPageClosed;
     private final ModeStatusContribution modeStatus;
     private String shownMessage = "";
     private final Consumer<GridSnapshot> gridListener = this::onGrid;
@@ -127,6 +134,17 @@ final class WindowPane implements PagePane {
         @Override
         public void onFloatingWindows(List<FloatWindow> windows) {
             onUi(() -> floats.show(windows));
+        }
+
+        @Override
+        public void onCommandWindow(CommandWindowView view) {
+            onUi(() -> {
+                if (view.open()) {
+                    commandLine.closeForCommandWindow(); // Ctrl-F on the : line; its line is not abandoned
+                }
+                commandWindowPanel.setInsertMode(VimModes.isTyping(session.getMode()));
+                commandWindowPanel.show(view);
+            });
         }
 
         @Override
@@ -217,12 +235,26 @@ final class WindowPane implements PagePane {
             // nothing: a page has no Copy and Paste handlers or Ctrl-key context of its own to update
         });
         floats = new FloatingWindows(canvas);
+        commandWindowPanel = new NeovimWindowPanel(canvas, new NeovimEditorController.PanelCommands(session), () -> {
+            // nothing to update: a page has no Ctrl-key context of its own
+        });
         session.addPageGridListener(gridListener);
+        session.addPageClosedListener(closedListener);
     }
 
     @Override
     public GridCanvas canvas() {
         return canvas;
+    }
+
+    /** The editing session this page is a window of; after a crash and a new start, no longer the current one. */
+    NeovimSession session() {
+        return session;
+    }
+
+    /** The colors of the editor the page came from, {@code {foreground, background}}, for a split's second half. */
+    int[] colors() {
+        return new int[] { foreground, background };
     }
 
     /** The page's Neovim window, {@link EditorWindow#UNKNOWN} before the first page was shown. */
@@ -322,6 +354,13 @@ final class WindowPane implements PagePane {
         session.setEditorSizeAsync(ScreenInput.cells(size.x, canvas.cellWidth()), ScreenInput.cells(size.y, canvas.cellHeight()));
     }
 
+    /** Neovim closed a page's window by itself, or this one could not be entered: if it is this page's, the editor closes. */
+    private void onPageClosed(int win) {
+        if (win == window) {
+            onUi(host::close);
+        }
+    }
+
     private void onGrid(GridSnapshot grid) {
         if (grid.window() == window) {
             onUi(() -> canvas.show(grid));
@@ -399,7 +438,9 @@ final class WindowPane implements PagePane {
         disposed = true;
         JFaceResources.getFontRegistry().removeListener(fontListener);
         session.removePageGridListener(gridListener);
+        session.removePageClosedListener(closedListener);
         session.releaseFocus(target);
+        commandWindowPanel.dispose();
         modeStatus.removeFrom(host.site());
         commandLine.dispose();
         messageLine.dispose();

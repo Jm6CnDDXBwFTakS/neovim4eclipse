@@ -18,6 +18,8 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PagePlacement;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
@@ -113,6 +115,16 @@ public final class NeovimPageOpener {
      * it shows the new text in each.
      */
     private static IEditorPart openMessages(IWorkbenchPage page) {
+        NeovimSession current = Activator.getDefault().currentSession();
+        // An editor of a Neovim that ended (a crash, then a new start) shows a window that is
+        // gone: it closes, and the new history gets an editor on the new Neovim.
+        for (IEditorReference reference : page.getEditorReferences()) {
+            if (NeovimPageEditor.ID.equals(reference.getId()) && reference.getEditor(false) instanceof NeovimPageEditor editor
+                    && editor.kind() == PageKind.MESSAGES && editor.windowPane() != null
+                    && editor.windowPane().session() != current) {
+                page.closeEditor(editor, false);
+            }
+        }
         NeovimPageEditor last = NeovimPageEditor.lastUsed(PageKind.MESSAGES);
         if (last != null && last.getSite().getPage() == page) {
             return last;

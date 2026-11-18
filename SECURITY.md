@@ -72,7 +72,11 @@ What stays as in Vim, because it takes a key you press on purpose or your own se
 - The help editor (`:help`) runs the help scripts of your plug-ins (`ftplugin/help.lua`,
   `after/ftplugin/help.lua`, a parser for a code block's language) on each page, as your Neovim
   does: it has your `'runtimepath'`. A help page is a plug-in's, not a cloned repository's file.
-  The `:messages` and `:checkhealth` editors run in other Neovims, without your plug-ins.
+  The `:checkhealth` editor runs in another Neovim, without your plug-ins. The `:messages`
+  editor is a read-only window of your own Neovim (a `nofile` buffer that no file has), so your
+  config and plug-ins act there as in any of your windows, with the same switches as above: the
+  readers and modelines stay off, and a file you open from it (`gf`, `:e`) opens in an editor of
+  its own, never in that window.
 
 A way around the first list is a vulnerability: please report it as described above.
 

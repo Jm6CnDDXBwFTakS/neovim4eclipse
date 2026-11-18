@@ -85,8 +85,10 @@ final class PageCommandsRun {
             }
             workbench.activate(opened);
             opened.setFocus();
+            WindowPane pane = page.windowPane();
+            int[] colors = pane == null ? new int[] { 0x000000, 0xFFFFFF } : pane.colors();
             if (opened instanceof NeovimPageEditor half) {
-                half.showSameAs(page, 0x000000, 0xFFFFFF);
+                half.showSameAs(page, colors[0], colors[1]);
             }
         } catch (PartInitException e) {
             LOG.log(Level.WARNING, "Could not open a second " + page.getPartName() + " editor", e);

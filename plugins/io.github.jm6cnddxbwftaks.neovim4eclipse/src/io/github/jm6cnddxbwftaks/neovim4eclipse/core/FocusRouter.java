@@ -40,8 +40,13 @@ public final class FocusRouter {
     private volatile Predicate<HostCommand> ownCommand = c -> true;
 
     /** Gives the focus to {@code target}; the part that had it hears nothing more. */
-    public void focus(FocusTarget target) {
+    public synchronized void focus(FocusTarget target) {
         current = target;
+    }
+
+    /** Whether {@code target} has the focus now. Example: the code clicked again, while it has not. */
+    public boolean has(FocusTarget target) {
+        return target != null && current == target;
     }
 
     /**
@@ -49,11 +54,9 @@ public final class FocusRouter {
      * A target that no longer has it changes nothing: a page that closed after the code took the
      * focus back does not take it from the code.
      */
-    public void release(FocusTarget target) {
-        synchronized (this) {
-            if (current == target) {
-                current = null;
-            }
+    public synchronized void release(FocusTarget target) {
+        if (current == target) {
+            current = null;
         }
     }
 

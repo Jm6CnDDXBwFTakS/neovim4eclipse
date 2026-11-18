@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -139,6 +140,8 @@ final class DocumentBuffers {
      * not travel. Written before {@link #enteredBufnr}'s handlers run, on the same thread.
      */
     private volatile boolean enteredFromPage;
+    /** Told of a page window Neovim closed by itself ({@link #setPageClosedHandler}). */
+    private volatile IntConsumer pageClosedHandler;
 
     /**
      * @param home    the home buffer, shown in the home window
@@ -195,12 +198,21 @@ final class DocumentBuffers {
         }
         int before = focusedPage;
         focusedPage = win;
-        Object answer = await(api.execLua(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(win))));
+        Object answer = await(api.execLua(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(win), String.valueOf(attachedWin))));
         if (answer instanceof Number n && n.intValue() == win) {
             return true;
         }
         focusedPage = before;
         return false;
+    }
+
+    /**
+     * Called with a page's window when Neovim closed it by itself ({@code :bwipeout} of the page's
+     * buffer, a plug-in closing windows): the page editor that showed it closes too, so that no key
+     * typed into it goes to whatever window Neovim is in now.
+     */
+    void setPageClosedHandler(IntConsumer handler) {
+        pageClosedHandler = handler;
     }
 
     /**
@@ -579,7 +591,10 @@ final class DocumentBuffers {
         if (winid == focusedPage) {
             focusedPage = EditorWindow.UNKNOWN; // Neovim enters another window, whose BufEnter decides
         }
-        pageWindows.remove(winid);
+        IntConsumer pageClosed = pageClosedHandler;
+        if (pageWindows.remove(winid) != null && pageClosed != null) {
+            pageClosed.accept(winid);
+        }
     }
 
     /**
@@ -890,6 +905,13 @@ final class DocumentBuffers {
             return;
         }
         attachedWin = shown;
+        int page = focusedPage;
+        if (page != EditorWindow.UNKNOWN && pageWindows.containsKey(page)) {
+            // A page has the focus (the attached document closed under it, Neovim went elsewhere by
+            // itself): back into the page's window, which keeps the keyboard. One place every way
+            // back to the attached window passes; focusAttached ended the page's focus before.
+            await(api.execLua(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(page), "-1")));
+        }
     }
 
     /**

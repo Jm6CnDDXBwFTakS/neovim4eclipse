@@ -255,6 +255,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final SessionEvents events = new SessionEvents();
     /** Hands the focus events to the part with the focus ({@link #focus}). */
     private final FocusRouter focus = new FocusRouter();
+    /** The page editors to close because Neovim closed their window ({@link #addPageClosedListener}). */
+    private final ListenerList<Integer> pageClosedListeners = new ListenerList<>("page closed", Level.WARNING);
 
     /** Single thread that performs all blocking RPC, preserving key order. */
     private final InputThread inputThread = new InputThread();
@@ -298,6 +300,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         this.clipboard = new ClipboardRegisters(clipboard, System.lineSeparator());
         focus.setCommandRule(c -> CommandOrigin.belongsToFocus(c.origin(), buffers.focusedPage(),
                 buffers.isPageWindow(c.origin())));
+        buffers.setPageClosedHandler(win -> {
+            grids.stopDrawingPage(win);
+            pageGrids.remove(win);
+            pageClosedListeners.fire(win);
+        });
         listenForFocus();
     }
 
@@ -330,6 +337,24 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         focus.focus(target);
     }
 
+    /** Whether {@code target} has the focus events now ({@link FocusRouter#has}). Any thread. */
+    public boolean hasFocus(FocusTarget target) {
+        return focus.has(target);
+    }
+
+    /**
+     * Hears a page's window that Neovim closed by itself (its buffer wiped, a plug-in closing
+     * windows), on the RPC reader thread: the page editor showing it closes
+     * ({@link DocumentBuffers#setPageClosedHandler}).
+     */
+    public void addPageClosedListener(Consumer<Integer> listener) {
+        pageClosedListeners.add(listener);
+    }
+
+    public void removePageClosedListener(Consumer<Integer> listener) {
+        pageClosedListeners.remove(listener);
+    }
+
     /** Takes the focus from {@code target} if it still has it ({@link FocusRouter#release}). Any thread. */
     public void releaseFocus(FocusTarget target) {
         focus.release(target);
@@ -341,7 +366,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * focus events too ({@link #focus}). Queued on the input thread.
      */
     public void focusPageAsync(int win) {
-        submit("focus page window " + win, Level.FINE, () -> buffers.focusPage(win));
+        submit("focus page window " + win, Level.FINE, () -> {
+            if (!buffers.focusPage(win)) {
+                pageClosedListeners.fire(win); // gone, or no page's: its editor cannot show it
+            }
+        });
     }
 
     /** Gives the focus back to the attached editor's window ({@link DocumentBuffers#focusAttached}). Queued. */
@@ -1070,18 +1099,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     static final String CLOSE_COMMAND_WINDOW_KEYS = "<C-\\><C-N><C-\\><C-N>";
 
     /**
-     * A mouse event on cell ({@code row}, {@code col}) of the command-line window, as drawn in its
-     * panel: {@code nvim_input_mouse} on the window's grid, in order with the keys, so Neovim counts
-     * double clicks and drags itself, and its {@code 'mouse'} and mappings apply. Nothing while the
-     * window is not drawn. Any thread. Example: a click on the third history line is
-     * {@code ("left", "press", "", 2, 0)}, then the release.
-     *
-     * @param button   {@code "left"} or {@code "wheel"}
-     * @param action   {@code "press"}, {@code "drag"} or {@code "release"}; {@code "up"} or
-     *                 {@code "down"} for the wheel
-     * @param modifier Neovim's modifier letters ({@code "S"}, {@code "C"}, {@code "A"}), or {@code ""}
-     */
-    /**
      * Draws page window {@code win} ({@link #openPageWindow}) from now on: its grid goes to the
      * page grid listeners ({@link #addPageGridListener}) whenever it changes, which is while the
      * page has the focus (a page in a tabpage that is not current gets no redraws, and keeps its
@@ -1124,6 +1141,18 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         });
     }
 
+    /**
+     * A mouse event on cell ({@code row}, {@code col}) of the command-line window, as drawn in its
+     * panel: {@code nvim_input_mouse} on the window's grid, in order with the keys, so Neovim counts
+     * double clicks and drags itself, and its {@code 'mouse'} and mappings apply. Nothing while the
+     * window is not drawn. Any thread. Example: a click on the third history line is
+     * {@code ("left", "press", "", 2, 0)}, then the release.
+     *
+     * @param button   {@code "left"} or {@code "wheel"}
+     * @param action   {@code "press"}, {@code "drag"} or {@code "release"}; {@code "up"} or
+     *                 {@code "down"} for the wheel
+     * @param modifier Neovim's modifier letters ({@code "S"}, {@code "C"}, {@code "A"}), or {@code ""}
+     */
     public void commandWindowMouseAsync(String button, String action, String modifier, int row, int col) {
         submit("command-line window mouse " + button + " " + action, Level.FINE, () -> {
             int grid = commandWindowGrid;

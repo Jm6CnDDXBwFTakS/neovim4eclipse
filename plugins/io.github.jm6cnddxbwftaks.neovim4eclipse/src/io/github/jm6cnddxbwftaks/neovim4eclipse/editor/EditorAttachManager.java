@@ -382,17 +382,21 @@ public final class EditorAttachManager {
      * and {@code Ctrl-W j} would start from the wrong half.
      */
     /**
-     * The attached text editor activated again while a page shown from the editing Neovim had the
-     * focus (a click back from the messages page): it takes the focus back, still attached, with no
-     * new attach ({@link NeovimEditorController#takeFocusBack}). Another editor activated attaches as
-     * always, and its attach takes the focus from any page ({@code DocumentBuffers.show}).
+     * The attached text editor activated again without the focus events (a click back from the
+     * messages page, or from a view after the page closed): it takes the focus back, still
+     * attached, with no new attach ({@link NeovimEditorController#takeFocusBack}). Decided on what
+     * this thread itself sees, the router's target ({@link NeovimEditorController#hasFocus}), not on
+     * Neovim's state the input thread writes: a click back before Neovim even entered the page
+     * still comes back, its {@code focusAttached} queued behind the page's {@code focusPage}.
+     * Another editor activated attaches as always, and its attach takes the focus from any page
+     * ({@code DocumentBuffers.show}).
      */
     private void takeFocusFromPage(NeovimSession session, IEditorPart activated) {
         NeovimEditorController controller;
         synchronized (this) {
             controller = activated != null && activated == attachedPart ? activeController : null;
         }
-        if (session != null && controller != null && session.focusedPage() != EditorWindow.UNKNOWN) {
+        if (session != null && controller != null && !controller.isClosed() && !controller.hasFocus()) {
             controller.takeFocusBack();
         }
     }
@@ -666,8 +670,14 @@ public final class EditorAttachManager {
             fromPage = session.wasEnteredFromPage();
             mover = fromPage || attachedPart == null ? null : windows.get(attachedPart);
             if (bufnr == session.getAttachedBufnr()) {
-                if (fromPage) {
-                    session.focusAttachedAsync(); // the attached document's own file: back to it
+                if (fromPage && attachedPart != null) {
+                    // gf in the page onto the code's own file: back to the code, whose activation
+                    // gives it the focus again (takeFocusFromPage).
+                    IEditorPart code = attachedPart;
+                    Display.getDefault().asyncExec(() -> {
+                        code.getSite().getPage().activate(code);
+                        code.setFocus();
+                    });
                 }
                 return; // Eclipse switched there itself in the meantime
             }

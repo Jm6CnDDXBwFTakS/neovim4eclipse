@@ -664,8 +664,12 @@ error color and warnings in its warning color. Being the same Neovim as your cod
   `i` changes nothing. `:wq` is refused the same way; `:x` closes it, as nothing changed.
 - **`gd`, `K` and the `gr*` keys** are Neovim's own there, not Eclipse's, since the messages are no
   code; `gt` and `gT` still move among the editor tabs.
-- **Closing it:** `q` or `:q` closes that messages editor; **Restart Neovim** closes every messages
-  editor, as their windows belong to the Neovim that ended.
+- **Closing it:** `q` or `:q` closes that messages editor, as `q` closes Neovim's own message
+  pager (so `q:` there closes it too; `Ctrl-F` on its `:` line opens the command-line window, over
+  the messages editor). **Restart Neovim** closes every messages editor, as their windows belong to
+  the Neovim that ended; so does Neovim closing its window by itself (`:bwipeout` of its buffer).
+- **`:e b.txt`** typed in it means the same `b.txt` as typed in the code you came from: the
+  messages editor takes the code's folder each time it gets the keyboard.
 - **In the background**, behind another editor, it keeps what it showed: Neovim draws a window only
   while it is in front, and it is drawn anew when you come back to it.
 

@@ -259,6 +259,7 @@ public final class Grids {
      * left for a later flush. Example: the messages page has the focus and scrolls: its snapshot.
      */
     public List<GridSnapshot> pagesIfChanged() {
+        lastPage.keySet().retainAll(pages); // a page no longer drawn keeps no snapshot
         if (pagesChanged.isEmpty()) {
             return List.of();
         }

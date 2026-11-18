@@ -513,7 +513,7 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   location of its own an editor's entry is `null`, which says nothing. So the page editor gives one
   (`NeovimPageEditor.PageLocation`, one entry per editor), and `util/HistorySteps` passes over the
   entries whose input is a `NeovimPageInput`, as over the plug-in's own (`NavigationHistorySteps`).
-- **`:help` in a text page**: the messages and checkhealth editors' Neovim has neither the user's
+- **`:help` in a text page**: the checkhealth editor's Neovim has neither the user's
   help pages nor the help editor's rules, so `SCREEN_SETUP`'s `CmdlineLeave` hook has Neovim
   parse the line (`nvim_parse_cmd`) and, for a `:help`, aborts it there and sends
   `eclipse_screen_help(topic)`; the page editor runs it in the editing Neovim
@@ -570,8 +570,15 @@ the focus (`focusPageAsync`, Neovim's screen sized to the page with `setEditorSi
 focus events come to it (`core/FocusTarget`): the `:` box, messages, output and floats are drawn
 over its canvas, and the mode and status line go to the status bar. The attached text editor
 stays attached meanwhile; while it does not have the focus its own size does not reach Neovim (its
-viewport's `sendSize`), and clicked again it takes the focus back
-(`NeovimEditorController.takeFocusBack`, which sends its size again). Commands typed in the page are
+viewport's `sendSize`), and activated again without the focus it takes the focus back
+(`NeovimEditorController.takeFocusBack`, which sends its size again), decided on the router's
+target, which the UI thread itself sets. Every way back to the attached window
+(`DocumentBuffers.returnToAttached`: the attached document closed under the page, Neovim gone
+elsewhere by itself) enters the focused page's window again, and a page window Neovim closed by
+itself closes its editor (`NeovimSession.addPageClosedListener`). Entering the page gives its
+window the attached window's folder (`FOCUS_WINDOW`), so `:e b.txt` typed there means the code's
+`b.txt`. While a page has the focus, a host command from a floating window entered from it (a
+picker's) is dropped: its origin is not the page's window (`util/CommandOrigin`). Commands typed in the page are
 decided by `util/PageCommands` and carried out by `editor/PageCommandsRun`: `:split` opens a second
 messages editor (`NeovimPageInput.another`) with a window of its own on the same buffer, window
 commands run with the page as their origin (`EditorSplits.Origin`), file commands as from the

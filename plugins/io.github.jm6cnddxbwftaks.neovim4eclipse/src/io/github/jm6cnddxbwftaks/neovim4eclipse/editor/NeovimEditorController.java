@@ -1093,6 +1093,11 @@ public final class NeovimEditorController implements AutoCloseable {
         });
     }
 
+    /** Whether this editor has the focus events now (no page took them; {@link #takeFocusBack}). Any thread. */
+    boolean hasFocus() {
+        return session.hasFocus(focusTarget);
+    }
+
     /**
      * This editor, still attached, takes the focus back from a page shown from a window of the
      * editing Neovim ({@code WindowPane}): the focus events come here again, Neovim enters this
@@ -1469,7 +1474,8 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /** What the command-line window panel asks of Neovim. */
-    private record PanelCommands(NeovimSession session) implements NeovimWindowPanel.Commands {
+    /** The command-line window panel's way to the session; a page's panel uses it too ({@code WindowPane}). */
+    record PanelCommands(NeovimSession session) implements NeovimWindowPanel.Commands {
         @Override
         public void type(String keys) {
             session.inputAsync(keys);

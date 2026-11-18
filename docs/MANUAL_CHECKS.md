@@ -343,7 +343,9 @@ error color, the cursor, the background, search, yank and paste, the wheel and a
 `:checkhealth neovim4eclipse`, `:help` and `:messages` side by side, `Ctrl-W` both ways,
 `Ctrl-O` passing over them, `q`; on Linux and Windows a real Ctrl+W posted through the system;
 `NeovimPageEditorEndToEndTest`; the messages page as a window of the editing Neovim, with `/`
-over it, `:split`, `:q`, `:e` and typing in the code after it: `MessagesPageEndToEndTest`), and their look in both themes is in the gallery (card
+over it, `:split`, `:q`, `:e`, typing in the code after it, the focus back from a view, the code
+closed under it, its window closed by Neovim, the command-line window over it:
+`MessagesPageEndToEndTest`), and their look in both themes is in the gallery (card
 `sh-colors`). On macOS posting keys needs the Accessibility permission, so the real key is checked
 by hand.
 
