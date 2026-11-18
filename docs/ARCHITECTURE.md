@@ -376,14 +376,16 @@ applied, so it is not sent back. Design and decisions: [design/VIEWPORT.md](desi
 ### 10. A second Neovim, which never writes a file
 
 Some of what Neovim shows has no Eclipse editor behind it: a `:checkhealth` report, the
-`:messages` history, the help pages. The Neovim view shows these in a second Neovim, beside the
-editing one, whose whole screen Eclipse draws (`core/ScreenSession`). The second Neovim knows
+`:messages` history, the help pages. A page editor shows each in a second Neovim, beside the
+editing one, whose whole screen Eclipse draws (`core/ScreenSession`): an Eclipse editor of its own
+per kind, in the editor area with the code, as Vim shows them in a window of their own. The second Neovim knows
 nothing of the editing one's buffers: it is handed text, or for help a tag to open, never a path.
 
 ```text
 editing Neovim ── text (lines, a filetype) ──▶ ScreenSession ──▶ second Neovim (nvim --embed)
-second Neovim ── redraw: one grid, the whole screen ──▶ util/ScreenGrid ──▶ GridSnapshot ──▶ the view
-the view ── keys, mouse, size ──▶ ScreenSession (its own input thread) ──▶ second Neovim
+second Neovim ── redraw: one grid, the whole screen ──▶ util/ScreenGrid ──▶ GridSnapshot ──▶ the page editor
+the page editor ── keys, mouse, size ──▶ ScreenSession (its own input thread) ──▶ second Neovim
+second Neovim ── Ctrl-W at its edge ──▶ eclipse_screen_window ──▶ EditorSplits.focusFrom
 second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the editing Neovim's register
 ```
 
@@ -398,7 +400,7 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   write). The same answer counts the readers of a name left (`BufReadCmd`, `FileReadCmd`,
   `SourceCmd`, any group or pattern) outside a known set, `nvim.man` and `nvim.shada`, and the
   start is refused unless there are none: netrw, zip, tar, http and `term://` are checked off
-  where they end, so `gf` on shown text reaches none of them. What the user types in the view
+  where they end, so `gf` on shown text reaches none of them. What the user types in a page editor
   (`:set write`, `:!`) stays their own, as in the editing Neovim.
 - **The screen, as on a terminal**: attached with `NeovimConnection.SCREEN_UI` (24-bit color and
   `ext_linegrid`, nothing else), Neovim draws its windows, status line, `:` line and messages
@@ -407,12 +409,12 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   so the session sets the size it attached with and asks for `:redraw!`.
 - **No "Press ENTER"**: without `ext_messages`, Neovim would stop at that prompt when messages
   overflow, and hold back every call that is not "fast" (`nvim_exec_lua`, the `:qa!` that ends
-  it) until a key is pressed in the view. `SCREEN_SETUP` turns on Neovim's own message UI,
+  it) until a key is pressed in the page editor. `SCREEN_SETUP` turns on Neovim's own message UI,
   `ui2` (new in Neovim 0.12, experimental, `:help ui2`), which has no such prompt: long messages
   are cut with a `[+N]` marker and `g<` shows them all. Loaded with `pcall`; a Neovim without it
   keeps the prompt, logged once at start.
 - **What reaches it**, in the editing session's view-content listeners (`NeovimSession.addViewContentListener`,
-  which `Activator` points at `editor/NeovimViewOpener`; `util/ViewContent`, sealed: `ViewText` or `HelpPage`): `:messages`, from its own UI event
+  which `Activator` points at `editor/NeovimPageOpener`; `util/ViewContent`, sealed: `ViewText` or `HelpPage`): `:messages`, from its own UI event
   (`msg_history_show`, see "Messages and output"), and a `:checkhealth` report, which the
   `WinNew` net of `LuaScripts.WINDOWS` takes from its window. Every way the report opens (a new tab,
   a split with `:vert`, a focused float with `vim.g.health`'s style `'float'`) passes that one net,
@@ -434,38 +436,59 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   the current entry of a `:helpgrep` list also carries its pattern and entry number: the net reads
   the pattern from the list's title, the command line Neovim keeps there, parsed by Neovim
   (`nvim_parse_cmd`), and the help Neovim runs the same `:helpgrep` (unless its list is that one
-  already) and `:cc N`. So `]q` and `:cnext` in the view go on without the editor, and `:copen`
+  already) and `:cc N`. So `]q` and `:cnext` in the help editor go on without the code's, and `:copen`
   there is allowed beside the page.
-- **Two profiles, one second Neovim per kind.** Text gets the output profile; a help page the help
+- **Two profiles, one page editor per kind.** Text gets the output profile; a help page the help
   profile (`core/HelpProfile`: `-M`; `LuaScripts.SCREEN_SHOW_HELP` sets the editing Neovim's
-  `'runtimepath'`, runs `:help tag` and `:only`, and puts the cursor on the line if the file is the
-  same). Help is the user's own pages, so the help Neovim runs what Neovim runs for a help page
+  `'runtimepath'`, runs `:help tag`, closes every other plain window but help pages, and puts the
+  cursor on the line if the file is the same). Help is the user's own pages, so the help Neovim runs what Neovim runs for a help page
   from the user's plug-ins: `ftplugin/help.*`, `after/ftplugin/help.*`, `indent/help.*`, a
   treesitter parser for a code block's language (a native library). Their `plugin/` folders do not
   run: the path is set after the start. That is the user's own config, which their editing Neovim
   runs on the same pages; the one rule above still holds (`-M`, `'write'` off), and the readers are
-  checked at the start only. Text must never meet those scripts, so `ScreenPane` keeps the kind of
-  its running second Neovim and, when the kind changes, closes it and starts the other: the
-  output profile's Neovim never has the user's path, whatever was shown before. The events of a
-  Neovim closed that way are ignored (`ScreenPane.Events.current`), so its end does not close the
-  view. Inside the help Neovim, a `BufWinEnter` check swaps a buffer that is no help page (`gf`,
+  checked at the start only. Text must never meet those scripts, so each kind has its own page
+  editor (`util/PageKind`, `editor/NeovimPageInput`, equal by kind), and its `ScreenPane` shows
+  that kind only (`NeovimPageEditor.show` refuses another): the output profile's Neovim never has
+  the user's path. A second Neovim's events count only while it is its pane's
+  (`ScreenPane.Events.current`), so a closed one's end does not close the editor. Inside the help Neovim, a `BufWinEnter` check swaps a buffer that is no help page (`gf`,
   `:edit`) back for the page, with a message; floating windows (`ui2`) are left alone.
-- **The view** (`editor/NeovimView`, `plugin.xml`: `org.eclipse.ui.views`, placed with Problems
-  through `perspectiveExtensions`) is the Eclipse part around an `editor/ScreenPane`: the view
-  gives it a parent, shows its title, and turns on the key context; the pane holds the canvas,
-  the keys, the mouse, the size and one second Neovim, started in a job at its first text with
-  the output profile (`core/OutputProfile`: `-M`; `LuaScripts.SCREEN_SHOW_TEXT` puts the text in a
+- **The page editor** (`editor/NeovimPageEditor`, `plugin.xml`: `org.eclipse.ui.editors`, offered
+  for no file; opened on anything but its own input it refuses) is an Eclipse editor that is no
+  text editor, around an `editor/ScreenPane`: the editor gives it a parent, shows its title, and
+  turns on the key context; the pane holds the canvas, the keys, the mouse, the size and one
+  second Neovim, started in a job at its first content, for text with the output profile (`core/OutputProfile`: `-M`; `LuaScripts.SCREEN_SHOW_TEXT` puts the text in a
   scratch buffer, the highlights as extmarks, the filetype, `'background'` from the editor's, and
   maps `q` to `:quit`). Keys go through `util/KeyMapping` as in the `q:` panel, the mouse through
   `editor/GridMouse` (shared with that panel), the size through `util/ScreenInput.cells`.
-  `GridCanvas.Look` gives it the text font and the colors of the editor the text came from.
-- **Back to the editor**: `SCREEN_SETUP` maps `Ctrl-W w`, `p` and `k` to `eclipse_screen_to_editor`;
-  the view activates the editor it last got text from. Ctrl+W itself would be Eclipse's Close on
-  Linux and Windows (M1+W in the window's context, dispatched before the canvas sees the key), so
-  while the canvas has the keyboard the view activates a key context of its own
-  (`NeovimView.KEY_CONTEXT_ID`, a child of the window's context, so its binding wins), where Ctrl+W
-  runs the plug-in's Ctrl-W command; `SendKeyHandler` sends it to the view when the view is the
-  active part.
+  `GridCanvas.Look` gives it the text font and the colors of the editor the text came from. The
+  plug-in attaches no Neovim to it (`EditorAttachManager.textEditorOf` is `null`), as to any
+  editor that is no text editor, so going back to the code needs nothing.
+- **Where it opens** (`editor/NeovimPageOpener`, the rule in `util/PagePlacement`): the kind's
+  editor where it is; else a tab in another page editor's stack; else a new stack below the editor
+  the content came from (`EditorSplits.intoNewStack`, the same model steps as `:split`). It takes
+  the keyboard.
+- **Not restored**: its input is never saved (`NeovimPageInput.getPersistable` is `null`), but
+  Eclipse keeps its tab in the saved layout and brings it back as a placeholder that shows nothing
+  (Linux, macOS, Windows). `NeovimPageEditor.closeLeftovers`, at the start
+  (`EditorAttachManager.installWorkbenchListeners`), hides every model part tagged with the editor's
+  id, the tag a placeholder keeps when its own id is Eclipse's empty-tab id. One place every start
+  passes, so it holds after a crash too.
+- **Not a `Ctrl-O` stop**: Eclipse records a Back entry for every editor activation; without a
+  location of its own an editor's entry is `null`, which says nothing. So the page editor gives one
+  (`NeovimPageEditor.PageLocation`, one entry per editor), and `util/HistorySteps` passes over the
+  entries whose input is a `NeovimPageInput`, as over the plug-in's own (`NavigationHistorySteps`).
+- **`Ctrl-W`**: `SCREEN_SETUP` maps `Ctrl-W h j k l w W t b p` (and the Ctrl- forms, with a
+  count). Neovim moves among its own windows when it has one in that direction (`winnr('k')` and
+  its like; the last window for `w`, the first for `W`, a previous one for `p`); else it sends
+  `eclipse_screen_window(key, count)`, and `EditorSplits.focusFrom` moves among Eclipse's editors
+  by the rule of a code editor's `Ctrl-W` (`util/WindowLayout.focus`), from the page editor, with
+  its screen cursor as the caret. `t` and `b` always go to Eclipse. `Ctrl-W` from the code reaches
+  a page editor with nothing new: the picture holds every editor. Ctrl+W itself would be Eclipse's
+  Close Editor on Linux and Windows (M1+W in the window's context, dispatched before the canvas
+  sees the key), so while the canvas has the keyboard the editor activates a key context of its
+  own (`NeovimPageEditor.KEY_CONTEXT_ID`, a child of the window's context, so its binding wins),
+  where Ctrl+W runs the plug-in's Ctrl-W command; `SendKeyHandler` sends it to the page editor
+  when it is the active part.
 - **Its own folder**: the second Neovim starts in `<plug-in folder>/screen`
   (`NeovimConnection.Ui.directory`), never Eclipse's working folder: Lua's `require` also looks in
   `./`, so a module Neovim lacks (`vim._core.ui2` moved, in a Neovim of the user's) could otherwise
@@ -486,7 +509,7 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   window last left (a `WinLeave` autocmd keeps it; by `WinNew` Neovim is already in the new one),
   kept per new window, since a check scheduled for an earlier window may be the one that finds it: closed while current, its tab would hand Neovim
   to the next tab, another editor's.
-- **The end**: `:q` in the view ends the process (its last window). `SCREEN_SETUP`'s
+- **The end**: `:q` in a page editor ends the process (its last window), and the editor closes. `SCREEN_SETUP`'s
   `VimLeavePre` asks Eclipse first (`eclipse_screen_leaving`, a request, so it arrives before the
   process ends), and the end of Neovim's output is then expected (`NeovimConnection.expectEnd`),
   not logged as a crash. `ScreenSession.Listener.ended` follows once, whatever ended it.
@@ -614,7 +637,7 @@ key or a submitted line until the next) in a `util/MessageRoute` and passes on t
 | --- | --- | --- |
 | one message of one line, a listing (`list_cmd`) too | the message line; errors (`emsg`, `echoerr`, `lua_error`, `rpc_error`) in the error color | `3 lines yanked`, `E486: Pattern not found: x`, `:echo "hi"`, `:set ts?`, a typed `:b`'s file info |
 | shell output (`shell_*`), even one line | the output popup, titled with the command line | `:!make` |
-| `:messages` (`msg_history_show`, its own event) | the Neovim view, not through `MessageRoute`: `StatusTracker` makes it a `util/ViewText` (each entry's lines, errors marked `ErrorMsg`, warnings `WarningMsg`) for the view-text listeners (decision 10) | `:messages` |
+| `:messages` (`msg_history_show`, its own event) | a page editor, not through `MessageRoute`: `StatusTracker` makes it a `util/ViewText` (each entry's lines, errors marked `ErrorMsg`, warnings `WarningMsg`) for the view-text listeners (decision 10) | `:messages` |
 | more than one line, in one message or several | the output popup, as Vim shows it above "Press ENTER" | `:ls`, a failed save with its `Error in BufWriteCmd Autocommands` header, a Lua traceback |
 | the echo of a search (`search_cmd`) or of a shell command (first line of `shell_cmd`), empty messages | nowhere | |
 

@@ -931,36 +931,40 @@ group's (`IncSearch`) background and text color, read with `nvim_get_hl`, sent a
 Design: [SPLITS.md](design/SPLITS.md). Tests: `windows_spec.lua`, `WindowLayoutTest`,
 `SplitsEndToEndTest`.
 
-### 3.2g `:messages`: a second Neovim in a view
+### 3.2g `:messages`: a second Neovim in an editor of its own
 
 The user has had a few errors and types `:messages` and Enter in an attached editor.
 
 1. Neovim, attached with `ext_messages`, sends the history as one UI event, `msg_history_show`,
    each entry with its kind (`emsg` for an error). `util/MessageEvent` reads it, and
    `core/StatusTracker` makes it a `util/ViewText`: the lines, an `ErrorMsg` highlight on each
-   error's lines. It goes to the view-text listeners, not to the output box.
-2. `editor/NeovimViewOpener` (the listener `Activator` added) runs on the UI thread: it notes the
-   active editor and its colors, and asks the page for the view, `page.showView(NeovimView.ID)`.
-   A *view* is the other kind of part (section 1.3): `plugin.xml` declares it under
-   `org.eclipse.ui.views`, and `org.eclipse.ui.perspectiveExtensions` gives it its first place,
-   stacked with Problems in every perspective.
-3. The view's pane (`editor/ScreenPane`, inside `editor/NeovimView`) has no Neovim yet, so a background job starts one:
-   `core/ScreenSession.start` runs the same program with `--clean -n --cmd "set nowrite nomodeline"`
-   and the output profile's `-M`, attaches as a UI without `ext_multigrid` (section 2.4: the whole
-   screen is one grid), and checks, by asking Neovim, that every way to write a file is off. It
-   also turns on Neovim's own message UI, `ui2`, so that nothing in that Neovim can stop at
-   "Press ENTER" and hold back the calls that follow (section 2.6).
+   error's lines. It goes to the view-content listeners, not to the output box.
+2. `editor/NeovimPageOpener` (the listener `Activator` added) runs on the UI thread: it notes the
+   editor Neovim is attached to and its colors, and opens the messages editor,
+   `page.openEditor(new NeovimPageInput(MESSAGES), NeovimPageEditor.ID, false)`. An editor need not
+   be a text editor (section 1.3): `plugin.xml` declares this one under `org.eclipse.ui.editors`
+   with no file extension, so Eclipse offers it for no file. Its input is equal by kind, so the
+   next `:messages` finds the same editor. The first page editor moves into a new stack below the
+   code (`util/PagePlacement`, `EditorSplits.intoNewStack`, the same model steps as `:split`).
+3. The editor's pane (`editor/ScreenPane`, inside `editor/NeovimPageEditor`) has no Neovim yet, so
+   a background job starts one: `core/ScreenSession.start` runs the same program with
+   `--clean -n --cmd "set nowrite nomodeline"` and the output profile's `-M`, attaches as a UI
+   without `ext_multigrid` (section 2.4: the whole screen is one grid), and checks, by asking
+   Neovim, that every way to write a file is off. It also turns on Neovim's own message UI, `ui2`,
+   so that nothing in that Neovim can stop at "Press ENTER" and hold back the calls that follow
+   (section 2.6).
 4. `core/OutputProfile.show` sends the text with `LuaScripts.SCREEN_SHOW_TEXT`: a scratch buffer, the
    highlights as extmarks, the cursor on the last line. Neovim redraws; `util/ScreenGrid` keeps
-   the cells, and at each `flush` a `GridSnapshot` reaches the view's `GridCanvas`, which paints it
+   the cells, and at each `flush` a `GridSnapshot` reaches the pane's `GridCanvas`, which paints it
    in the text font and the editor's colors.
-5. The view has the keyboard. `/E486` searches in the second Neovim; `yy` there sends
-   `eclipse_screen_yank`, and the editing Neovim gets the line in its unnamed register;
-   `Ctrl-W p` sends `eclipse_screen_to_editor`, and the view activates the editor again. `q` quits
-   the second Neovim; its `VimLeavePre` tells Eclipse first, so the end is expected, and the view
-   closes.
+5. The messages editor has the keyboard. `/E486` searches in the second Neovim; `yy` there sends
+   `eclipse_screen_yank`, and the editing Neovim gets the line in its unnamed register. `Ctrl-W k`
+   finds no window of that Neovim's own above (`winnr('k')` is the current one), so it sends
+   `eclipse_screen_window("k", 0)`, and `EditorSplits.focusFrom` takes Eclipse to the code above,
+   by the same rule as a code editor's `Ctrl-W`. `q` quits the second Neovim; its `VimLeavePre`
+   tells Eclipse first, so the end is expected, and the editor closes.
 
-`:checkhealth` takes another road to the same view: its report opens in a Neovim window Eclipse
+`:checkhealth` takes another road to its editor: its report opens in a Neovim window Eclipse
 cannot show, and the `WinNew` net (`LuaScripts.WINDOWS`) reads the lines, closes the window, wipes
 the buffer and sends `eclipse_view_text`.
 
@@ -968,14 +972,16 @@ the buffer and sends `eclipse_view_text`.
 window; once the command is over, the net sees `'buftype'` `help` and sends
 `eclipse_view_help("help-context", "helphelp.txt", 27, rtp)`: the nearest tag above the cursor,
 the file's name, the line and `'runtimepath'`. No path crosses; the second Neovim finds the page
-itself. The view sees a `HelpPage`, not a `ViewText` (`util/ViewContent` is sealed, so its
-`switch` names both), and since its running second Neovim is a text one, it closes that and starts
-a help one (`core/HelpProfile`). `SCREEN_SHOW_HELP` sets the path, runs `:help help-context`,
-`:only`, and puts the cursor on line 27. Why two Neovims: help should run the user's help plug-ins,
-as Neovim does; text should meet none of them. Keeping them apart is one check, the kind, rather
-than a list of what each script may do. Design: [ARCHITECTURE.md](ARCHITECTURE.md), decision 10.
-Tests: `ScreenGridTest`, `ViewTextTest`, `screen_setup_spec.lua`, `view_scripts_spec.lua`,
-`windows_spec.lua`, `ScreenSessionIntegrationTest`, `NeovimViewEndToEndTest`.
+itself. The opener sees a `HelpPage`, not a `ViewText` (`util/ViewContent` is sealed, so a
+`switch` over it names both), and opens the help editor, a tab beside the messages editor, with a
+second Neovim of the help profile (`core/HelpProfile`). `SCREEN_SHOW_HELP` sets the path, runs
+`:help help-context` and puts the cursor on line 27. Why one editor per kind: help should run the
+user's help plug-ins, as Neovim does; text should meet none of them. Keeping them apart is one
+check, the kind, rather than a list of what each script may do. Design:
+[ARCHITECTURE.md](ARCHITECTURE.md), decision 10. Tests: `ScreenGridTest`, `ViewTextTest`,
+`PageKindTest`, `PagePlacementTest`, `screen_setup_spec.lua`, `view_scripts_spec.lua`,
+`windows_spec.lua`, `ScreenSessionIntegrationTest`, `NeovimPagesEndToEndTest`,
+`NeovimPageEditorEndToEndTest`.
 
 ### 3.3 Insert mode
 

@@ -14,11 +14,20 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Added
 
-- **`:help` in the Neovim view**: the page opens as Neovim's own help, with your plug-ins' pages
+- **`:help` in a help editor**: the page opens as Neovim's own help, with your plug-ins' pages
   and their help scripts, as in a terminal Neovim: `Ctrl-]` follows a link, `Ctrl-T` goes back,
   `q` closes. `:helpgrep`, `:vert help` and `:tab help` open there too; after `:helpgrep`, `]q`
-  and `:cnext` in the view step through the matches. Before, a help window was
-  closed at once with a message ([Help in the view](docs/USER_GUIDE.md#help-in-the-view-help)).
+  and `:cnext` in the help editor step through the matches. Before, a help window was closed at
+  once with a message ([The help editor](docs/USER_GUIDE.md#the-help-editor-help)).
+
+### Changed
+
+- **`:messages` and `:checkhealth` open in an editor**, not in the Neovim view, which is gone:
+  each in a page editor of its own, *Neovim: messages* and *Neovim: checkhealth*, the first below
+  the editor you typed in, the others as tabs beside it, as Vim opens them in a window. `Ctrl-W`
+  moves between them and your code by where they are, and `Ctrl-O` from your code passes over
+  them. They are not brought back when Eclipse starts again
+  ([The page editors](docs/USER_GUIDE.md#the-page-editors-help-messages-checkhealth)).
 
 ## [0.2.27] - 2026-11-18
 

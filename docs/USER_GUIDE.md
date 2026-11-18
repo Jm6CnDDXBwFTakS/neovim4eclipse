@@ -52,8 +52,8 @@ its messages and where the `:` box opens:
 - **Other messages** in the editor's text color: `3 lines yanked`, `3 substitutions on 3 lines`.
 
 As in Vim, the message stays until the next key; a click also hides it. A message too long for the
-line ends in `...`. Its tooltip shows all of it, and `:messages` lists the recent ones in the
-[Neovim view](#the-neovim-view-messages-checkhealth).
+line ends in `...`. Its tooltip shows all of it, and `:messages` lists the recent ones in a
+[page editor](#the-page-editors-help-messages-checkhealth).
 
 The line shows every message of one line that Neovim gives, whatever printed it: a key, a `:` command
 (`:echo "hi"`, `:pwd`), a mapping, a timer or an autocommand; and the plug-in's own errors from the file
@@ -407,7 +407,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:on[ly]`, `:res[ize]`, `:winc[md]` | Vim's windows as editors: see [Splits](#splits-split-vsplit-ctrl-w) |
 | `:tabnew`, `:tabe[dit]`, `:tabf[ind]` | a new editor tab: see [Splits](#splits-split-vsplit-ctrl-w) |
 | `:tabo[nly]` | close the other editor tabs: see [Splits](#splits-split-vsplit-ctrl-w) |
-| `:tabonly!`, `:stag` | refused, with a message. A window opened some other way (a plug-in's `vim.cmd.split()`) is closed again with a message; a help window's page opens in the [Neovim view](#help-in-the-view-help) instead. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
+| `:tabonly!`, `:stag` | refused, with a message. A window opened some other way (a plug-in's `vim.cmd.split()`) is closed again with a message; a help window's page opens in the [help editor](#the-help-editor-help) instead. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →
@@ -467,8 +467,8 @@ line show in a read-only box in the same place, with the command as its first li
 scroll it; any other key or a click closes it. Output that comes while you type elsewhere in Eclipse
 (a timer's or an autocommand's) opens the box without taking the keyboard from there. Like a message,
 it then closes with your next key or click in the editor, and the key works as usual; click into the
-box to scroll it. `:messages` and `:checkhealth` open the
-[Neovim view](#the-neovim-view-messages-checkhealth) instead, which stays open beside the code. One-line output (`:echo "hi"`, `:set ts?`, a `:s` report) goes to
+box to scroll it. `:messages` and `:checkhealth` open a
+[page editor](#the-page-editors-help-messages-checkhealth) instead, which stays open beside the code. One-line output (`:echo "hi"`, `:set ts?`, a `:s` report) goes to
 the message line instead, as on Neovim's own screen, and so do errors. Your own `:redir` collects as in Vim.
 
 ## Completion (`Ctrl-N`, `Ctrl-P`)
@@ -597,61 +597,73 @@ the cursor into it.
 exist unseen, as before 0.2.23. Nothing is drawn either with `vim.g.neovim4eclipse_viewport = 0`:
 Neovim's screen is then not the editor's size, and a window "at the bottom" would land anywhere.
 
-## The Neovim view (`:messages`, `:checkhealth`)
+<a id="the-neovim-view-messages-checkhealth"></a>
 
-Two commands print more than the box over the editor is good for: `:messages`, Neovim's message
-history, and `:checkhealth`, its report on your setup. They open the **Neovim view** instead, an
-Eclipse view (first with Console and Problems; Eclipse remembers where you move it), titled with what
-it holds: *Neovim: messages*, *Neovim: checkhealth*. It is not brought back when Eclipse starts
-again, since it would be empty; the next `:messages` or `:checkhealth` opens it.
+## The page editors (`:help`, `:messages`, `:checkhealth`)
 
-- **What you see:** Neovim's own screen, from a second Neovim the plug-in starts for the view. The
-  messages are in order, the newest last and the cursor on it, errors in Neovim's error color and
-  warnings in its warning color. The report is colored as Neovim colors `:checkhealth`, its
-  OK, WARNING and ERROR lines included. Running either again replaces what the view shows.
-- **It takes the keyboard**, as Vim's own `:messages` and `:checkhealth` do. Every key is Neovim's:
-  `/` searches, `n` goes on, `y` yanks into your Neovim's register of the same name (so `p` in an
-  editor pastes it; a plain `yy` fills the unnamed register, and the clipboard when your
+Three commands show more than the box over the editor is good for: `:help`, `:messages`
+(Neovim's message history) and `:checkhealth` (its report on your setup). Each opens a **page
+editor** instead, an editor of its own beside your code, titled with what it holds: *Neovim: help*,
+*Neovim: messages*, *Neovim: checkhealth*. Vim opens these in a window of their own; here that
+window is an Eclipse editor.
+
+- **Where it opens:** the first one below the editor you typed in, as Vim's `:help` splits the
+  window; the others as tabs beside it, so the code is split only once. Running a command again
+  brings its editor to the front and shows the new content there, wherever you moved it. Drag it
+  anywhere in the editor area, as any editor.
+- **What you see:** Neovim's own screen, from a second Neovim the plug-in starts for each page
+  editor. The messages are in order, the newest last and the cursor on it, errors in Neovim's error
+  color and warnings in its warning color. The report is colored as Neovim colors `:checkhealth`,
+  its OK, WARNING and ERROR lines included. Its look is Neovim's default colorscheme on your
+  editor's background, in Eclipse's text font; your mappings are not there.
+- **It takes the keyboard**, as Vim's own `:help`, `:messages` and `:checkhealth` do. Every key is
+  Neovim's: `/` searches, `n` goes on, `y` yanks into your Neovim's register of the same name (so
+  `p` in an editor pastes it; a plain `yy` fills the unnamed register, and the clipboard when your
   `'clipboard'` says so). The left button and the wheel work as in Neovim. Eclipse's own shortcuts
-  stay Eclipse's, as in any view.
-- **Back to the editor:** `Ctrl-W p`, `Ctrl-W w` or `Ctrl-W k`, or a click in the editor. While
-  the view has the keyboard, Ctrl+W is Neovim's, not Eclipse's Close (on Linux and Windows).
-- **Closing it:** `q` or `:q`, or the view's close button. The next `:messages` opens it again.
-- **Only text goes over:** the second Neovim gets the lines, never a file name, and it starts
-  without your config or plug-ins (`--clean`), in a folder of the plug-in's own, with writing turned
-  off. Nothing it shows and nothing it does by itself writes a file, so it cannot get in the way of
-  your editors; a command you type there that writes on purpose (`:call writefile(...)`,
-  `:mksession`) is yours, as in any Neovim. The readers that could run a program from a name in
-  the text (netrw, zip, tar, http, `term://`) are off there too, as in the editing Neovim, so `gf` on a
-  shown `term://…` runs nothing. Its look is Neovim's default colorscheme on your editor's
-  background, in Eclipse's text font; your mappings are not there.
-- **Long messages** in the view itself (a refusal after `:w`, say) do not stop at "Press ENTER":
-  they are cut to the first lines with a `[+N]` marker, and `g<` shows them all (Neovim's `ui2`).
+  stay Eclipse's, as in any editor that is not a text editor.
+- **`Ctrl-W`** moves as in Vim, by where the windows are: inside the page editor first (a help
+  page and its `:copen` list), then on to Eclipse's editors, as from your code. So `Ctrl-W k` from
+  a page editor below the code goes to the code, `Ctrl-W j` from the code comes back, and
+  `Ctrl-W p` goes to the editor you were in before. Ctrl+W there is Neovim's, not Eclipse's Close
+  Editor (on macOS Close is Cmd+W, as everywhere).
+- **Not a `Ctrl-O` stop:** `Ctrl-O` and `Ctrl-I` from your code pass over the page editors, as
+  Vim's jumps never go into a help window. Inside a page editor they are its Neovim's own.
+- **Closing it:** `q` or `:q`, or its tab's close button. The next command opens it again. Page
+  editors are not brought back when Eclipse starts again: their Neovim ended with Eclipse.
+- **`:messages` and `:checkhealth` get text only:** their second Neovim gets the lines, never a
+  file name, and it starts without your config or plug-ins (`--clean`), in a folder of the
+  plug-in's own, with writing turned off. Nothing it shows and nothing it does by itself writes a
+  file, so it cannot get in the way of your editors; a command you type there that writes on purpose
+  (`:call writefile(...)`, `:mksession`) is yours, as in any Neovim. The readers that could run a
+  program from a name in the text (netrw, zip, tar, http, `term://`) are off there too, as in the
+  editing Neovim, so `gf` on a shown `term://…` runs nothing.
+- **Long messages** in a page editor itself (a refusal after `:w`, say) do not stop at "Press
+  ENTER": they are cut to the first lines with a `[+N]` marker, and `g<` shows them all (Neovim's
+  `ui2`).
 
-### Help in the view (`:help`)
+<a id="help-in-the-view-help"></a>
 
-`:help` opens the page in the same view, titled *Neovim: help*: Neovim's own help, with the pages
-of your plug-ins, as in a terminal Neovim. So do `:helpgrep`, `:vert help`, `:tab help` and a
-plug-in's `vim.cmd.help()`. The editor keeps no
-help window: Eclipse shows each Neovim window as an editor, and a help page is no file of yours.
+### The help editor (`:help`)
+
+`:help` opens the page in the help editor: Neovim's own help, with the pages of your plug-ins, as
+in a terminal Neovim. So do `:helpgrep`, `:vert help`, `:tab help` and a plug-in's
+`vim.cmd.help()`. The editor you typed in keeps no help window.
 
 - **It is Neovim's help:** `Ctrl-]` (or a double click) follows a link, `Ctrl-T` and `Ctrl-O` go
   back, `:help` again opens another page there, `K` looks up the word under the cursor, `/`
-  searches and `y` yanks into your registers, as above. `q` or `:q` closes the view.
-- **With your plug-ins' help:** the view's Neovim has your Neovim's `'runtimepath'`, so it finds
-  the help pages of the plug-ins you installed, and runs the help scripts they bring
+  searches and `y` yanks into your registers, as above.
+- **With your plug-ins' help:** the help editor's Neovim has your Neovim's `'runtimepath'`, so it
+  finds the help pages of the plug-ins you installed, and runs the help scripts they bring
   (`ftplugin/help.lua`, `after/ftplugin/help.lua`, a parser for a code block's language), as your
   editor's Neovim does on a help page. Your `init.lua` and the plug-ins' start-up scripts
-  (`plugin/`) do not run there. Writing stays off: no help page can be changed or written.
-- **`:helpgrep`** goes on in the view: typed in the editor, the view runs the same search, so
-  `]q`, `[q`, `:cnext` and `:cprevious` in the view step through the matches there, and `:copen`
-  shows the list beside the page (Enter opens a match). Typed in the view, it stays there. From the
-  editor, `:cnext` still works too.
+  (`plugin/`) do not run there. Writing stays off: no help page can be changed or written. A
+  plug-in your plug-in manager loads only when first used has its help there once it is loaded.
+- **`:helpgrep`** goes on in the help editor: typed in your code, the help editor runs the same
+  search, so `]q`, `[q`, `:cnext` and `:cprevious` there step through the matches, and `:copen`
+  shows the list beside the page (Enter opens a match). Typed in the help editor, it stays there.
+  From your code, `:cnext` still works too.
 - **Help only:** a file opened from a page (`gf` on a path, `:edit`) is swapped back for the page,
-  with the message "The Neovim view shows help only". Open files in an editor.
-- `:messages` or `:checkhealth` afterwards replaces the page with text, shown by a second Neovim
-  without your plug-ins, as above; the next `:help` starts the help one again (about a tenth of a
-  second).
+  with the message "The help editor shows help only". Open files in an editor of their own.
 
 **`:checkhealth neovim4eclipse`** is the plug-in's own check: which Neovim runs and whether it is new
 enough, whether it is the dedicated Neovim (checked before it started) or a program of your own
@@ -1015,7 +1027,7 @@ narrowly as it can, and it is listed here.
 
 - **`'runtimepath'`: one folder of the plug-in's appended.** `<plug-in folder>/runtime` (on Linux
   `~/.local/share/neovim4eclipse-plugin/runtime`) holds one file, `lua/neovim4eclipse/health.lua`,
-  so that `:checkhealth` finds the plug-in's check ([The Neovim view](#the-neovim-view-messages-checkhealth));
+  so that `:checkhealth` finds the plug-in's check ([The page editors](#the-page-editors-help-messages-checkhealth));
   `:checkhealth` looks for checks only among runtime files. The plug-in writes that file again at
   each start and puts nothing else there, so the folder adds no plug-in, filetype script or color
   scheme.
