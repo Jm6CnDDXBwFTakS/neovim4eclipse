@@ -388,7 +388,7 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
             settle();
             return page().findEditor(new NeovimPageInput(PageKind.HELP)) instanceof NeovimPageEditor help
                     && rowsOf(help).contains("help-context");
-        });
+        }, () -> "; open: " + pages().stream().map(p -> p.getPartName() + " showing " + rowsOf(p)).toList());
     }
 
     /**

@@ -5909,7 +5909,7 @@ final class LuaScripts {
             -- :help typed in the messages or checkhealth editor: Neovim parses the line, and a :help
             -- is not run here (this Neovim has neither the user's help pages nor the help editor's
             -- rules) but handed to Eclipse, which runs it in the editing Neovim, so the help editor
-            -- opens (eclipse_screen_help, with the topic as typed). The help editor's own Neovim
+            -- opens (eclipse_screen_help, with the topic as Neovim parsed it). The help editor's own Neovim
             -- (SCREEN_SHOW_HELP sets neovim4eclipse_help_page) runs :help itself.
             vim.api.nvim_create_autocmd('CmdlineLeave', {
               group = group,
@@ -6198,7 +6198,8 @@ final class LuaScripts {
 
     /**
      * Runs {@code :help topic} in the editing Neovim ({@link NeovimSession#helpAsync}), for a
-     * {@code :help} typed in the messages or checkhealth editor. Argument: the topic as typed,
+     * {@code :help} typed in the messages or checkhealth editor. Argument: the topic as Neovim
+     * parsed the typed line ({@code nvim_parse_cmd}'s arguments, joined by spaces),
      * {@code ""} for none. A structured call ({@code vim.cmd.help}), so the topic is never read as
      * a command line. A topic Neovim does not know shows its own error (E149) on the message line.
      */

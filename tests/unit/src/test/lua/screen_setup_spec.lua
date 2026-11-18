@@ -127,8 +127,12 @@ t.test(':help typed in a text page is not run there but handed to Eclipse, with 
   t.eq({ { 'telescope' } }, t.sent('eclipse_screen_help'))
   t.type(':vert h<CR>')
   t.eq({ { 'telescope' }, { '' } }, t.sent('eclipse_screen_help'), ':help alone: no topic')
+  t.type(':filter /h/ help help-context<CR>')
+  t.eq({ 'help-context' }, t.sent('eclipse_screen_help')[3], "Neovim's parse: the topic, not the modifier")
+  t.type([[:help /\v<CR>]])
+  t.eq({ [[/\v]] }, t.sent('eclipse_screen_help')[4], 'a backslash kept')
   t.type(':echo 1<CR>')
-  t.eq(2, #t.sent('eclipse_screen_help'), 'other commands run as typed')
+  t.eq(4, #t.sent('eclipse_screen_help'), 'other commands run as typed')
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     t.ok(vim.bo[vim.api.nvim_win_get_buf(win)].buftype ~= 'help', 'no help window here')
   end
