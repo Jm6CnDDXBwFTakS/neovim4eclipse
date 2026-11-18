@@ -1174,3 +1174,40 @@ t.test('a buffer that only took the page\'s name is not taken for the page', fun
   t.eq({ 'not the page' }, vim.api.nvim_buf_get_lines(other, 0, -1, false), 'the other buffer is untouched')
   t.eq(buf, page_text({ 'again' }), 'and the page is found again by its mark')
 end)
+
+t.test("a page window's folder is checked where chdir() landed: $VAR in a name is not followed", function()
+  start()
+  local root = vim.fn.tempname()
+  vim.fn.mkdir(root .. '/e$HOME', 'p')
+  local expanded = root .. '/e' .. vim.env.HOME
+  vim.fn.mkdir(expanded, 'p') -- where chdir() would land, expanding $HOME
+  local code = open(buffer(3), root)
+  local page = open_page(page_text({ 'one' }))
+  t.eq(false, require('neovim4eclipse.windows').set_folder(page, root .. '/e$HOME'))
+  t.ok(not require('neovim4eclipse.paths').same(cwd(page)[1], expanded), 'not the folder the name expands to: ' .. cwd(page)[1])
+  t.eq(true, require('neovim4eclipse.windows').set_folder(page, root), 'a plain folder is set')
+  t.same_file(root, cwd(page)[1])
+  local editor = open(buffer(3), root .. '/e$HOME')
+  t.ok(not require('neovim4eclipse.paths').same(cwd(editor)[1], expanded), "an editor's window does not land there either")
+  vim.fn.delete(root, 'rf')
+end)
+
+t.test('every way of writing the page is refused, and leaves no file', function()
+  start()
+  local buf = page_text({ 'one', 'two' })
+  local win = open_page(buf)
+  vim.api.nvim_set_current_win(win)
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, 'p')
+  vim.fn.writefile({ 'kept' }, dir .. '/old.txt')
+  for _, cmd in ipairs({ 'w ' .. dir .. '/a.txt', '1w ' .. dir .. '/b.txt', 'w >> ' .. dir .. '/old.txt',
+                         'w! ' .. dir .. '/old.txt', 'w' }) do
+    local ok, err = pcall(vim.cmd, cmd)
+    t.eq(false, ok, ':' .. cmd .. ' is refused')
+    t.ok(tostring(err):find('E382', 1, true), ':' .. cmd .. ': ' .. tostring(err))
+  end
+  t.eq(0, vim.fn.filereadable(dir .. '/a.txt'))
+  t.eq(0, vim.fn.filereadable(dir .. '/b.txt'))
+  t.eq({ 'kept' }, vim.fn.readfile(dir .. '/old.txt'), 'an existing file is untouched')
+  vim.fn.delete(dir, 'rf')
+end)

