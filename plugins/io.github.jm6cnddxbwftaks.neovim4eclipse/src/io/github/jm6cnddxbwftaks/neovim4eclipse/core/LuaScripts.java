@@ -2127,6 +2127,71 @@ final class LuaScripts {
             """;
 
     /**
+     * A page's text in the editing Neovim, for a page editor shown from a window of this Neovim
+     * (the messages page): puts text into the page's own buffer, made on first use, and returns
+     * its number. Arguments: the page's name ({@code "messages"}); the lines; the lines to color, as
+     * {@code {line, group}} pairs (0-based lines, Neovim's highlight groups: {@code {0, "ErrorMsg"}});
+     * and {@code "end"} or {@code "top"}, where the page's windows put the cursor ({@code :messages}:
+     * on the newest message, the last line).
+     *
+     * <p>The buffer is a scratch one that no file has ({@code buftype=nofile}, unlisted, no swap
+     * file, kept when hidden), named {@code neovim4eclipse://<name>} so that {@code :ls!} and the
+     * status line say what it is, and changeable only while its text is set ({@code nomodifiable}
+     * again at the end), so a page can never be typed into or written: {@code :w} there gets Neovim's
+     * own E382. Made and filled quietly: no {@code BufNew}, {@code BufFilePost} or {@code TextChanged}
+     * for the user's config or the plug-in's own buffer hooks, which are about files. {@code q} in it
+     * closes the page editor ({@code :Eclipse quit}, which names the page's window as its origin);
+     * a {@code q} the user mapped for the buffer is kept. The colors are the user's: this is their
+     * Neovim. Example: {@code ("messages", {"E486: x", "3 lines yanked"}, {{0, "ErrorMsg"}}, "end")}
+     * fills {@code neovim4eclipse://messages} with two lines, the first in the error color.
+     */
+    static final String PAGE_TEXT = """
+            local name, lines, highlights, cursor = ...
+            local full = 'neovim4eclipse://' .. name
+            local saved = vim.o.eventignore
+            vim.o.eventignore = 'all'
+            local ok, result = pcall(function()
+              local buf
+              for _, b in ipairs(vim.api.nvim_list_bufs()) do
+                if vim.api.nvim_buf_get_name(b) == full then
+                  buf = b
+                end
+              end
+              if not buf then
+                buf = vim.api.nvim_create_buf(false, true)
+                vim.api.nvim_buf_set_name(buf, full)
+              end
+              local bo = vim.bo[buf]
+              bo.buftype, bo.bufhidden, bo.swapfile, bo.buflisted = 'nofile', 'hide', false, false
+              bo.modifiable = true
+              vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+              bo.modifiable, bo.modified = false, false
+              local ns = vim.api.nvim_create_namespace('neovim4eclipse.page')
+              vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+              for _, h in ipairs(highlights) do
+                pcall(vim.api.nvim_buf_set_extmark, buf, ns, h[1], 0, { line_hl_group = h[2] })
+              end
+              local own_q = vim.api.nvim_buf_call(buf, function()
+                return vim.fn.maparg('q', 'n', false, true)
+              end)
+              if own_q.buffer ~= 1 or own_q.desc == 'Close the page editor' then
+                vim.keymap.set('n', 'q', '<Cmd>Eclipse quit<CR>', { buffer = buf, nowait = true, desc = 'Close the page editor' })
+              end
+              local line = cursor == 'end' and vim.api.nvim_buf_line_count(buf) or 1
+              for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+                pcall(vim.api.nvim_win_set_cursor, win, { line, 0 })
+              end
+              vim.b[buf].neovim4eclipse_page_cursor = cursor
+              return buf
+            end)
+            vim.o.eventignore = saved
+            if not ok then
+              error(result, 0)
+            end
+            return result
+            """;
+
+    /**
      * Opens a page's window on a buffer (argument: its number) in a new tabpage, quietly, without
      * entering it, and returns its id; -2 when the buffer is gone. Its options are a page's, and
      * the IDE keys are Neovim's in that buffer. See {@link #WINDOWS} ({@code open_page}).

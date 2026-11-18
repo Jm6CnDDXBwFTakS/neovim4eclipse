@@ -1095,3 +1095,51 @@ t.test("in a page's buffer the IDE keys are Neovim's, but gt stays Eclipse's", f
   t.type('gt')
   t.eq({ { 'next_tab', 0 } }, t.sent('eclipse_action'), 'gt moves among the editor tabs')
 end)
+
+-- PAGE_TEXT: a page's text in the editing Neovim (the messages page).
+
+local function page_text(lines, highlights, cursor)
+  return t.run('PAGE_TEXT', 'messages', lines, highlights or {}, cursor or 'end')
+end
+
+t.test('PAGE_TEXT makes the page buffer once, quietly, and fills it read-only', function()
+  start()
+  local fired = {}
+  vim.api.nvim_create_autocmd({ 'BufNew', 'BufAdd', 'BufFilePost', 'TextChanged' }, {
+    callback = function(ev) fired[#fired + 1] = ev.event end,
+  })
+  local buf = page_text({ 'E486: Pattern not found: x', '3 lines yanked' }, { { 0, 'ErrorMsg' } })
+  t.eq({}, fired, "no autocommand: the user's and the plug-in's buffer hooks are about files")
+  t.eq('neovim4eclipse://messages', vim.api.nvim_buf_get_name(buf))
+  t.eq({ 'nofile', false, false, false }, { vim.bo[buf].buftype, vim.bo[buf].modifiable, vim.bo[buf].buflisted, vim.bo[buf].swapfile })
+  t.eq({ 'E486: Pattern not found: x', '3 lines yanked' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+  local marks = vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true })
+  t.eq(1, #marks)
+  t.eq({ 0, 'ErrorMsg' }, { marks[1][2], marks[1][4].line_hl_group })
+  t.eq(buf, page_text({ 'only one now' }), 'the same buffer again')
+  t.eq({ 'only one now' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+  t.eq(0, #vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, {}), 'the old colors are gone')
+end)
+
+t.test("q in the page's window asks Eclipse to close the page, naming the window", function()
+  start()
+  t.run('HOST_COMMANDS', t.host_rules)
+  local buf = page_text({ 'one', 'two', 'three' }, {}, 'end')
+  local win = open_page(buf)
+  vim.api.nvim_set_current_win(win)
+  page_text({ 'one', 'two', 'three', 'four' }, {}, 'end')
+  t.eq(4, vim.api.nvim_win_get_cursor(win)[1], ':messages again: the cursor on the newest message')
+  t.forget()
+  t.type('q')
+  local sent = t.sent('eclipse_command')
+  t.eq({ 'quit', win }, { sent[1][1], sent[1][4] })
+  t.ok(vim.api.nvim_win_is_valid(win), 'Neovim closed nothing itself')
+end)
+
+t.test('a q the user mapped for the page buffer is kept', function()
+  start()
+  local buf = page_text({ 'one' })
+  vim.keymap.set('n', 'q', '<Cmd>let g:mine = 1<CR>', { buffer = buf })
+  page_text({ 'two' })
+  t.eq('<Cmd>let g:mine = 1<CR>', vim.api.nvim_buf_call(buf, function() return vim.fn.maparg('q', 'n') end))
+end)
