@@ -1283,6 +1283,18 @@
       </view>
    </extension>
 
+   <!-- The page editors: :help, :messages and :checkhealth, each in an editor of its own beside the
+        code (editor/NeovimPageEditor). No file extension or content type: Eclipse offers it for no
+        file, and opened on one through Open With it refuses. -->
+   <extension point="org.eclipse.ui.editors">
+      <editor
+            id="io.github.jm6cnddxbwftaks.neovim4eclipse.editors.page"
+            name="Neovim Page"
+            icon="icons/n4e-mode-on.png"
+            class="io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimPageEditor">
+      </editor>
+   </extension>
+
    <!-- Its first place, in every perspective: in the stack of the Problems view (with Console, at
         the bottom in the usual perspectives), not shown until :messages or :checkhealth opens it.
         Eclipse remembers where the user moves it. -->

@@ -14,7 +14,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
  * Sends one Vim {@code Ctrl} key (for example {@code <C-v>}) to the attached Neovim, or, for
- * {@code <C-w>} typed in the Neovim view, to the view's Neovim ({@link NeovimView#KEY_CONTEXT_ID}).
+ * {@code <C-w>} typed in the Neovim view or a page editor, to its Neovim ({@link NeovimView#KEY_CONTEXT_ID}).
  *
  * <p>Bound in plugin.xml, in the {@link EditorKeyContext#KEY_CONTEXT_ID} context, to the
  * {@code Ctrl} keys that Eclipse would otherwise handle itself before the editor sees them (the
@@ -34,6 +34,11 @@ public final class SendKeyHandler extends AbstractHandler {
         if (key != null && HandlerUtil.getActivePart(event) instanceof NeovimView view) {
             LOG.fine(() -> "Ctrl-key command " + commandId + " -> " + key + " in the Neovim view");
             view.sendKey(key);
+            return null;
+        }
+        if (key != null && HandlerUtil.getActivePart(event) instanceof NeovimPageEditor page) {
+            LOG.fine(() -> "Ctrl-key command " + commandId + " -> " + key + " in " + page.getPartName());
+            page.sendKey(key);
             return null;
         }
         NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();

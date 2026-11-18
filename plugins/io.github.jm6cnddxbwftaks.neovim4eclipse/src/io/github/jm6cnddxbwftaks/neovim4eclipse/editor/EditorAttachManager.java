@@ -321,6 +321,8 @@ public final class EditorAttachManager {
             listenersRegistered = true;
         }
         workbench.getDisplay().asyncExec(() -> {
+            // The page editors' tabs Eclipse kept from the last session show nothing: closed first.
+            NeovimPageEditor.closeLeftovers(workbench);
             for (IWorkbenchWindow window : workbench.getWorkbenchWindows()) {
                 addPartListener(window);
             }
