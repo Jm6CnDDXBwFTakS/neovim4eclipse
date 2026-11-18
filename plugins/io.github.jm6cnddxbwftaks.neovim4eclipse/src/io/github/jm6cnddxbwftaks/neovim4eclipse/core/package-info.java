@@ -34,6 +34,10 @@
  *         <li>{@code StateSnapshot}: reading the per-key state answer;</li>
  *         <li>{@code SessionEvents}: the mode, buffer change, cursor, selection and IDE action
  *             listeners (the session's {@code add...Listener} methods pass through to it);</li>
+ *         <li>{@code FocusRouter}: hears the focus events once (mode, status, {@code :} line,
+ *             floats, completion, host commands, ...) and hands each to the one
+ *             {@code FocusTarget} with the focus, the part shown from Neovim's current window;
+ *             the document's events stay listeners of the attached editor;</li>
  *         <li>{@code StatusTracker}: status bar parts (showcmd, message, statusline), output for the
  *             popup ({@code CommandOutput}) and macro recording, fired to listeners only when they
  *             change; messages and showcmd come from Neovim's UI events ({@code ext_messages});</li>

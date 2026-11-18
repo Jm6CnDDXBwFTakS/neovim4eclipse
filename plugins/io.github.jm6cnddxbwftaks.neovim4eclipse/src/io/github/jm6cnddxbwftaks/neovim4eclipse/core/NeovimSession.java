@@ -250,6 +250,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** Mode, buffer change, cursor, selection and IDE action listeners. */
     private final SessionEvents events = new SessionEvents();
+    /** Hands the focus events to the part with the focus ({@link #focus}). */
+    private final FocusRouter focus = new FocusRouter();
 
     /** Single thread that performs all blocking RPC, preserving key order. */
     private final InputThread inputThread = new InputThread();
@@ -286,6 +288,60 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 this::modeChanged);
         this.keyInput = new KeyInput(new KeyInputNeovim(), state, status, () -> leaveInsertPush);
         this.clipboard = new ClipboardRegisters(clipboard, System.lineSeparator());
+        listenForFocus();
+    }
+
+    /**
+     * The focus router hears every focus event once, for the whole session; the part with the
+     * focus gets them from it ({@link #focus}). Before the router, each text editor's controller
+     * added and removed these ten listeners itself.
+     */
+    private void listenForFocus() {
+        events.addModeListener(focus.mode);
+        status.addRecordingListener(focus.recording);
+        status.addStatusListener(focus.status);
+        status.addOutputListener(focus.output);
+        events.addIdeActionListener(focus.ideAction);
+        events.addHostCommandListener(focus.hostCommand);
+        events.addCmdlineListener(focus.cmdline);
+        events.addCommandWindowListener(focus.commandWindow);
+        events.addFloatingWindowListener(focus.floatingWindows);
+        events.addCompletionMenuListener(focus.completionMenu);
+    }
+
+    // ---- focus ----
+
+    /**
+     * Gives the focus events ({@link FocusTarget}: mode, status, {@code :} line, floats,
+     * completion, host commands, ...) to {@code target}, the part that has the focus now. The text
+     * editor's controller takes it when it attaches. Any thread.
+     */
+    public void focus(FocusTarget target) {
+        focus.focus(target);
+    }
+
+    /** Takes the focus from {@code target} if it still has it ({@link FocusRouter#release}). Any thread. */
+    public void releaseFocus(FocusTarget target) {
+        focus.release(target);
+    }
+
+    /**
+     * Makes a page's Neovim window {@code win} the current one, with the focus, while the attached
+     * document stays attached ({@link DocumentBuffers#focusPage}). Give the page's target the
+     * focus events too ({@link #focus}). Queued on the input thread.
+     */
+    public void focusPageAsync(int win) {
+        submit("focus page window " + win, Level.FINE, () -> buffers.focusPage(win));
+    }
+
+    /** Gives the focus back to the attached editor's window ({@link DocumentBuffers#focusAttached}). Queued. */
+    public void focusAttachedAsync() {
+        submit("focus attached window", Level.FINE, buffers::focusAttached);
+    }
+
+    /** The focused page's window, or {@link EditorWindow#UNKNOWN} while the attached window has the focus. */
+    public int focusedPage() {
+        return buffers.focusedPage();
     }
 
     // ---- lifecycle ----
@@ -1715,7 +1771,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     public void setCursor(int line1Based, int col0Based) throws Exception {
         WinCursor placed = new WinCursor(line1Based, col0Based);
         try {
-            await(api.winSetCursor(Handle.CURRENT_WINDOW, placed));
+            await(api.winSetCursor(attachedWindow(), placed));
         } catch (ExecutionException e) {
             if (!(e.getCause() instanceof NeovimErrorException refused)) {
                 throw e;
@@ -1739,7 +1795,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * count, so this holds for every caller, today's and later ones.
      */
     private WinCursor onTheLastLine(int line1Based, NeovimErrorException refused) throws Exception {
-        Handle buffer = Handle.buffer(0); // the current window's buffer
+        Handle buffer = buffers.attached(); // the attached window's buffer
         int last = await(api.bufLineCount(buffer));
         if (line1Based <= last) {
             throw refused; // not a line past the end: a real error
@@ -1747,13 +1803,23 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         List<String> lastLine = await(api.bufGetLines(buffer, last - 1, last, true));
         int end = lastLine.isEmpty() ? 0 : lastLine.get(0).getBytes(StandardCharsets.UTF_8).length;
         WinCursor placed = new WinCursor(last, end);
-        await(api.winSetCursor(Handle.CURRENT_WINDOW, placed));
+        await(api.winSetCursor(attachedWindow(), placed));
         LOG.fine(() -> "cursor line " + line1Based + " is past Neovim's last line, " + last + "; put at its end");
         return placed;
     }
 
+    /**
+     * The attached editor's Neovim window, for the caret's calls: the current one only while no
+     * page has the focus ({@link #focusPageAsync}), so these name it. Neovim's current window when
+     * the attached window was closed in Neovim, as before windows were named here.
+     */
+    private Handle attachedWindow() {
+        int win = buffers.attachedWin();
+        return win == EditorWindow.UNKNOWN ? Handle.CURRENT_WINDOW : Handle.window(win);
+    }
+
     public CursorPos getCursor() throws Exception {
-        WinCursor cursor = await(api.winGetCursor(Handle.CURRENT_WINDOW));
+        WinCursor cursor = await(api.winGetCursor(attachedWindow()));
         // WinCursor is the RPC layer's type, CursorPos the listeners' (see WinCursor): same meaning.
         return cursor == null ? new CursorPos(1, 0) : new CursorPos(cursor.row(), cursor.col());
     }

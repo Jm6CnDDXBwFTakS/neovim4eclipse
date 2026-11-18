@@ -454,4 +454,103 @@ class NeovimWindowsIntegrationTest {
             assertEquals(a.winid(), currentWin(second));
         }
     }
+
+    /**
+     * A scratch window with {@code lines} (a Lua list) in a tabpage of its own, opened as the
+     * editors' windows are, with autocommands off: otherwise the WINDOWS net closes a plain window
+     * the plug-in did not open, as it should for any other.
+     */
+    private static int openPageWindow(NeovimSession s, String lines) throws Exception {
+        return number(s, "local b = vim.api.nvim_create_buf(false, true)"
+                + " vim.api.nvim_buf_set_lines(b, 0, -1, false, " + lines + ")"
+                + " local ei = vim.o.eventignore vim.o.eventignore = 'all'"
+                + " local w = vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(b, false, {}))"
+                + " vim.o.eventignore = ei return w");
+    }
+
+    /**
+     * A page's window takes the focus while the text editor stays attached (the plan's "focused
+     * window beside the attached document"): Neovim enters the page's window and is not sent back,
+     * the page's cursor is no caret of the document's, the caret's calls still move the attached
+     * window's cursor, the focus events reach the target that has the focus, and the focus comes
+     * back to the attached window. The page here is a scratch window in a tabpage of its own, as
+     * the editors' windows are.
+     */
+    @Test
+    void aPageWindowTakesTheFocusAndTheAttachedDocumentStaysAttached() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer doc = new DocumentBuffer("");
+            EditorWindow a = new EditorWindow();
+            s.showWindow(doc, a, "");
+            s.lua("vim.api.nvim_buf_set_lines(0, 0, -1, false, {'one', 'two', 'three'})");
+            int page = openPageWindow(s, "{'p1', 'p2', 'p3'}");
+            List<CursorPos> cursors = new CopyOnWriteArrayList<>();
+            s.addCursorListener(cursors::add);
+            List<String> modes = new CopyOnWriteArrayList<>();
+            s.focus(new FocusTarget() {
+                @Override
+                public void onMode(String mode) {
+                    modes.add(mode);
+                }
+            });
+
+            s.focusPageAsync(page);
+            NeovimBarrier.pass(s);
+            assertEquals(page, currentWin(s), "Neovim is in the page's window, and was not sent back");
+            assertEquals(page, s.focusedPage());
+            assertEquals(a.winid(), s.getAttachedWinid(), "the document is still attached");
+
+            cursors.clear();
+            s.inputAsync("jj");
+            NeovimBarrier.pass(s);
+            assertEquals(3, cursorLine(s), "the page's cursor moved");
+            assertTrue(cursors.stream().noneMatch(c -> c.line1Based() == 3), "but it is no caret of the document's: " + cursors);
+
+            s.setCursor(2, 1);
+            assertEquals(2, number(s, "return vim.api.nvim_win_get_cursor(" + a.winid() + ")[1]"),
+                    "the caret's call moves the attached window's cursor");
+            assertEquals(3, cursorLine(s), "not the page's");
+            assertEquals(new CursorPos(2, 1), s.getCursor(), "and reads it back from there");
+
+            s.inputAsync("v");
+            waitFor(() -> modes.contains("v"), "visual mode reaching the target with the focus");
+            s.inputAsync("<Esc>");
+
+            s.focusAttachedAsync();
+            NeovimBarrier.pass(s);
+            assertEquals(a.winid(), currentWin(s), "back in the attached window");
+            assertEquals(EditorWindow.UNKNOWN, s.focusedPage());
+        }
+    }
+
+    /** A page window closed in Neovim gives up the focus; a later BufEnter elsewhere is judged as before. */
+    @Test
+    void aClosedPageWindowGivesUpTheFocus() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer doc = new DocumentBuffer("");
+            EditorWindow a = new EditorWindow();
+            s.showWindow(doc, a, "");
+            int page = openPageWindow(s, "{'p1'}");
+            s.focusPageAsync(page);
+            NeovimBarrier.pass(s);
+            assertEquals(page, s.focusedPage());
+            s.lua("vim.api.nvim_win_close(" + page + ", true)");
+            waitFor(() -> s.focusedPage() == EditorWindow.UNKNOWN, "the page's focus to end");
+            waitFor(() -> currentWin(s) == a.winid(), "Neovim back in the attached window");
+        }
+    }
+
+    /** A window that no longer exists is not focused, and the focus stays where it was. */
+    @Test
+    void aGoneWindowIsNotFocused() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer doc = new DocumentBuffer("");
+            EditorWindow a = new EditorWindow();
+            s.showWindow(doc, a, "");
+            s.focusPageAsync(99999);
+            NeovimBarrier.pass(s);
+            assertEquals(EditorWindow.UNKNOWN, s.focusedPage());
+            assertEquals(a.winid(), currentWin(s));
+        }
+    }
 }

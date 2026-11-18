@@ -51,6 +51,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimConnectionClosedE
  * editors on one file are told apart. The Neovim side is {@link LuaScripts#WINDOWS}; which token
  * holds which window is {@link EditorWindows}.
  *
+ * <h2>The focus</h2>
+ * A page shown from a window of this Neovim can have the focus while a text editor stays attached
+ * ({@link #focusPage}, {@link #focusedPage}): Neovim's current window is then the page's. The
+ * attached buffer and window keep their meaning, the document's; only the focus moved.
+ *
  * <p>Methods that talk to Neovim block and must run on the session's input thread.
  */
 final class DocumentBuffers {
@@ -110,6 +115,16 @@ final class DocumentBuffers {
      * {@code BufEnter} autocommand of {@link LuaScripts#SETUP}). Written before it, on the same thread.
      */
     private volatile boolean enteredByJump;
+    /**
+     * The window of a page that has the focus ({@link #focusPage}), or {@link EditorWindow#UNKNOWN}
+     * while the attached window has it, as it always did before pages. Neovim's current window is
+     * then the page's, and the attached document stays attached: its buffer and window are still
+     * the ones its events count from ({@link #isAttached(int, int)}). Example: the messages page
+     * has the focus over a.txt's editor; {@code BufEnter} in the page's window is the focus moving
+     * there, not something to undo, and a cursor report from it is no caret of a.txt's.
+     * Written on the input and RPC threads, read from any thread.
+     */
+    private volatile int focusedPage = EditorWindow.UNKNOWN;
 
     /**
      * @param home    the home buffer, shown in the home window
@@ -141,6 +156,39 @@ final class DocumentBuffers {
     /** The window showing the attached buffer: an editor's own, or the home window. */
     int attachedWin() {
         return attachedWin;
+    }
+
+    /**
+     * The focused page's window, or {@link EditorWindow#UNKNOWN} while the attached window has the
+     * focus ({@link #focusPage}).
+     */
+    int focusedPage() {
+        return focusedPage;
+    }
+
+    /**
+     * Gives the focus to a page's window {@code win}: Neovim's current window becomes it, while
+     * the attached document stays attached. The focus is set first, so the {@code BufEnter} the
+     * switch causes is known as Eclipse's own ({@link #onEntered}), as {@link #show} sets the
+     * attachment first. A window gone in Neovim is not entered, and the focus stays where it was.
+     *
+     * @return whether Neovim entered it
+     */
+    boolean focusPage(int win) throws Exception {
+        int before = focusedPage;
+        focusedPage = win;
+        Object answer = await(api.execLua(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(win))));
+        if (answer instanceof Number n && n.intValue() == win) {
+            return true;
+        }
+        focusedPage = before;
+        return false;
+    }
+
+    /** Gives the focus back to the attached window ({@link #returnToAttached}); a page loses it. */
+    void focusAttached() throws Exception {
+        focusedPage = EditorWindow.UNKNOWN;
+        returnToAttached();
     }
 
     /** The editor windows of this session. */
@@ -225,6 +273,7 @@ final class DocumentBuffers {
      *               of its own (an untitled one): see {@link #folderOfNewWindow}
      */
     void show(DocumentBuffer buffer, EditorWindow window, String folder) throws Exception {
+        focusedPage = EditorWindow.UNKNOWN; // an editor shown takes the focus from any page
         if (showOnce(buffer, window, folder) != BUFFER_GONE) {
             return;
         }
@@ -447,6 +496,9 @@ final class DocumentBuffers {
         }
         if (winid == attachedWin) {
             attachedWin = EditorWindow.UNKNOWN;
+        }
+        if (winid == focusedPage) {
+            focusedPage = EditorWindow.UNKNOWN; // Neovim enters another window, whose BufEnter decides
         }
     }
 
@@ -876,9 +928,15 @@ final class DocumentBuffers {
     void onEntered(int bufnr, int winid, boolean jumped, String projectFile, Runnable returnBack) {
         enteredByJump = jumped;
         enteredBufnr = bufnr; // first: a follow-up queued for an earlier buffer must see it
+        if (winid != EditorWindow.UNKNOWN && winid == focusedPage) {
+            return; // the focus moved to a page's window (focusPage)
+        }
         boolean attachedWindow = winid == EditorWindow.UNKNOWN || winid == attachedWin;
         if (attachedWindow && bufnr == attachedBufnr) {
-            return; // Eclipse's own switch, or Neovim came back
+            // Eclipse's own switch, or Neovim came back. Not a reason to take the focus from a
+            // page: this notice can be older than the page's focusPage (read on another thread),
+            // and only show, focusAttached and the page window's close end the page's focus.
+            return;
         }
         if (!attachedWindow) {
             returnBack.run();

@@ -43,7 +43,7 @@ content is a whole second Neovim, and only the editors' windows sit in hidden ta
 |---|---|---|
 | A text editor | One window, alone in a hidden tab page | Each editor keeps its own cursor, scroll position and jumps, and two editors on one file have a cursor each. The tab pages are bookkeeping and never shown (`'showtabline'` 0). |
 | The document | The buffer | Kept in step both ways (`sync/BufferSynchronizer`). |
-| The text editor with the focus | The current window | The *attached* editor and its window (`DocumentBuffers.isAttached`). |
+| The text editor with the focus | The current window | The *attached* editor and its window (`DocumentBuffers.isAttached`), and the focused window too. A page's window can take the focus while the text editor stays attached (`DocumentBuffers.focusPage`). |
 | A new editor stack | — | What a Vim split (`:split`, `:vsplit`, `Ctrl-W s`) opens: Eclipse splits, not Neovim splits (`editor/EditorSplits`). |
 | Editor tabs | — | What Vim's tab commands move between (`editor/EditorTabs`); Neovim's tab pages are not used for them. |
 | The text editor's `StyledText` | — | Eclipse draws the text and the caret; Neovim's grid for that window is not drawn. |
@@ -56,7 +56,8 @@ content is a whole second Neovim, and only the editors' windows sit in hidden ta
 |---|---|
 | Editing Neovim | The one Neovim behind every text editor of a workbench. |
 | Second Neovim | A page editor's own Neovim, started at its first content; it never writes a file. |
-| Attached | The text editor (and its window) that Neovim follows now; keys go to it. |
+| Attached | The text editor (and its window) whose document Neovim mirrors now: its buffer is kept in step and its caret follows Neovim's cursor. |
+| Focused window | Neovim's current window, and the part shown from it. The mode, the `:` box, messages, floats and host commands follow it (`core/FocusRouter`). Usually the attached editor's; a page's window can have it while the text editor stays attached. |
 | Home window | The window Neovim starts with. Documents are shown in it only by tests that pass no editor window. |
 | Page kind | help, messages or checkhealth (`util/PageKind`); each kind has one page editor. |
 | Dedicated Neovim | The Neovim the plug-in installs with Get Neovim and checks at every start. |

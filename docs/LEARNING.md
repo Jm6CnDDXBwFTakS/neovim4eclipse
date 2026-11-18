@@ -705,8 +705,10 @@ reported errors (`NeovimConnection.waitForStartup`).
    process, RPC stack, `nvim_set_client_info`, version check, `nvim_ui_attach`, home buffer, notification handlers,
    `LuaScripts.SETUP`. Once that succeeded, `WelcomeNotice.afterStart` queues the welcome check
    (`util/WelcomeNote` decides; the dialog opens after the attach, at most once per run).
-4. `NeovimEditorController.attach` prepends the key interceptor, registers listeners, shows the
-   document's buffer (`showBuffer`) and pushes the document text into it.
+4. `NeovimEditorController.attach` prepends the key interceptor, takes the focus
+   (`NeovimSession.focus`: mode, status bar, `:` box, floats and host commands now come to it
+   through `core/FocusRouter`), registers its document listeners (cursor, selection, folds),
+   shows the document's buffer (`showBuffer`) and pushes the document text into it.
 
 ### 3.2 One normal-mode key: `x`
 
@@ -1195,7 +1197,11 @@ commands; docs/design/WINDOWS.md, E2).
 its `Sink`; implement it in `NeovimSession.EventSink`. Test the autocommand in a Lua spec
 (`t.sent('eclipse_<name>')`) and the reading in `NotificationBridgeTest`. If the
 event changes state the session keeps (like mode or cursor), record it in `StateSync` and give it a
-listener list in `SessionEvents`.
+listener list in `SessionEvents`. Then decide whose it is: an event a terminal Neovim shows for the
+current window, whichever it is (like the mode or the `:` line), is a focus event, a method of
+`core/FocusTarget` that `core/FocusRouter` passes on; one about the attached text editor's
+document (like the cursor or folds) stays a listener the controller adds (ARCHITECTURE.md, "The
+focus and the attached document").
 
 **Answer a question from Neovim.** In Lua, call `vim.rpcrequest(chan, 'eclipse_<name>', ...)`, where
 `chan` is the channel number `LuaScripts.SETUP` receives as its argument and keeps in

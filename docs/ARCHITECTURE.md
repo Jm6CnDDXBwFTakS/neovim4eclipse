@@ -261,6 +261,23 @@ keys, and so is one the user's config leaves the focus in at start (lazy.nvim's 
 the home buffer goes into it (`LuaScripts.LEAVE_START_FLOAT`); in a floating window the user entered later, `:q` and
 `:close` are left to Neovim (the host commands' `leave_to_neovim` hook).
 
+**The focus and the attached document.** Two things that used to be one: the *focused window*,
+Neovim's current window, and the *attached document*, the text editor whose buffer and caret
+Neovim mirrors. What a terminal Neovim shows for the current window, whichever it is, follows the
+focus: the mode, the recording register, the status line and messages, command output, the `:`
+line, the command-line window, floating windows, the completion list, and the host commands and
+IDE actions a key asks for. `core/FocusRouter` hears these once for the session and hands each to
+the one `core/FocusTarget` that has the focus (`NeovimSession.focus`); a text editor's controller
+takes it when it attaches and gives it up when it closes. The document's own events (cursor,
+selection, folds, wrap, top line, search, highlights, buffer lines) stay with the attached editor,
+filtered by window and buffer as above. While a text editor has the focus the two are the same
+editor, as before. A page's window can take the focus without the document
+(`NeovimSession.focusPageAsync`, `DocumentBuffers.focusPage`): Neovim enters that window, its
+`BufEnter` is known as the focus moving (not undone), its cursor reports are no caret's, and the
+caret's calls (`setCursor`, `getCursor`) name the attached window instead of Neovim's current one.
+`focusAttachedAsync`, an editor shown, or the page window's close give the focus back.
+([GLOSSARY.md](GLOSSARY.md) has the words.)
+
 ### 7. Eclipse is Neovim's clipboard provider
 
 Neovim reads and writes the system clipboard only through a *provider*, the `copy` and `paste`
@@ -782,8 +799,8 @@ view to the controller, which shows it in the box. The box edits nothing:
   activated). Neovim sends the notice during the wipe, before any later answer, so the show
   cannot have changed the number yet. A `:noautocmd bwipeout` sends no notice; there the editor
   stays, and its next show makes the buffer anew (`DocumentBuffers.show`).
-- The notification becomes a `util/HostCommand` (`NotificationBridge`), reaches the attached editor
-  (`NeovimSession.addHostCommandListener`), is turned into IDE calls by `util/HostCommandRunner`
+- The notification becomes a `util/HostCommand` (`NotificationBridge`), reaches the editor with
+  the focus (`core/FocusRouter`, `FocusTarget.onHostCommand`), is turned into IDE calls by `util/HostCommandRunner`
   (`:wq` saves, then closes only if the save worked; `:wq other.txt` writes a copy instead,
   `HostCommand.writeTarget`, then closes as `:q` does) and carried out by `editor/HostCommands`.
   `editor/NewFiles` handles files that do not exist yet: `:e new.txt` opens an empty editor, picked by

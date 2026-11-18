@@ -1112,6 +1112,21 @@ final class LuaScripts {
             """;
 
     /**
+     * Makes window {@code win} (argument, its id as a string) Neovim's current window, the focus
+     * moving to a page's window ({@code DocumentBuffers.focusPage}). With autocommands: entering a
+     * window is what the user's config and Neovim expect to hear about, as for any window. Returns
+     * the window's id, or -1 for a window that no longer exists (nothing entered).
+     */
+    static final String FOCUS_WINDOW = """
+            local win = tonumber(...)
+            if not win or not vim.api.nvim_win_is_valid(win) then
+              return -1
+            end
+            vim.api.nvim_set_current_win(win)
+            return win
+            """;
+
+    /**
      * Installs the module {@code neovim4eclipse.windows}: a Neovim window per Eclipse editor, each
      * alone in its own tabpage (docs/design/WINDOWS.md; Java side {@code DocumentBuffers} and
      * {@code EditorWindows}). Argument: the home buffer's number. Returns the <em>home window</em>'s

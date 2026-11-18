@@ -39,6 +39,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CommandOutput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CursorPos;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.FocusTarget;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.FoldState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.KeyRouter;
@@ -190,18 +191,29 @@ public final class NeovimEditorController implements AutoCloseable {
     /** When false, keys go to Eclipse (plain editing); Neovim session stays alive. */
     private volatile boolean neovimModeActive = true;
 
-    private final Consumer<String> modeListener = this::onModeChanged;
+    /**
+     * What this editor shows while it has the focus ({@link FocusTarget}, given to the session's
+     * {@link io.github.jm6cnddxbwftaks.neovim4eclipse.core.FocusRouter} at {@link #start}): the
+     * mode, the status bar, the {@code :} box, messages, floats, the completion list, and the
+     * commands Neovim hands to Eclipse. The document events (cursor, selection, folds, wrap, top
+     * line, search, highlights) stay ordinary listeners below: they are this editor's while it is
+     * attached, whichever part has the focus.
+     */
+    private final FocusTarget focusTarget = new FocusTarget() {
+        @Override public void onMode(String mode) { onModeChanged(mode); }
+        @Override public void onRecording(String register) { onRecordingChanged(register); }
+        @Override public void onStatus(StatusInfo status) { onStatusChanged(status); }
+        @Override public void onOutput(CommandOutput output) { NeovimEditorController.this.onOutput(output); }
+        @Override public void onIdeAction(IdeAction action) { NeovimEditorController.this.onIdeAction(action); }
+        @Override public void onHostCommand(HostCommand command) { NeovimEditorController.this.onHostCommand(command); }
+        @Override public void onCmdline(CmdlineState.View view) { NeovimEditorController.this.onCmdline(view); }
+        @Override public void onCommandWindow(CommandWindowView view) { NeovimEditorController.this.onCommandWindow(view); }
+        @Override public void onFloatingWindows(List<FloatWindow> windows) { NeovimEditorController.this.onFloatingWindows(windows); }
+        @Override public void onCompletionMenu(CompletionMenu.View view) { NeovimEditorController.this.onCompletionMenu(view); }
+        @Override public String toString() { return "focus of " + NeovimEditorController.this; }
+    };
     private final Consumer<CursorPos> cursorListener = this::onCursorChanged;
     private final Consumer<VisualSelection> selectionListener = this::onVisualSelection;
-    private final Consumer<String> recordingListener = this::onRecordingChanged;
-    private final Consumer<StatusInfo> statusListener = this::onStatusChanged;
-    private final Consumer<CommandOutput> outputListener = this::onOutput;
-    private final Consumer<IdeAction> ideActionListener = this::onIdeAction;
-    private final Consumer<HostCommand> hostCommandListener = this::onHostCommand;
-    private final Consumer<CmdlineState.View> cmdlineListener = this::onCmdline;
-    private final Consumer<CommandWindowView> commandWindowListener = this::onCommandWindow;
-    private final Consumer<List<FloatWindow>> floatingWindowListener = this::onFloatingWindows;
-    private final Consumer<CompletionMenu.View> completionMenuListener = this::onCompletionMenu;
     /**
      * A click into the text or a loss of the focus while Neovim completes, or while a
      * {@code Ctrl-X} waits for its second key, ends that ({@link #endCompletion}): the list belongs to the word at the caret, and Neovim would go on
@@ -368,20 +380,11 @@ public final class NeovimEditorController implements AutoCloseable {
             });
         }
 
-        session.addModeListener(modeListener);
+        session.focus(focusTarget);
         styledText.addListener(SWT.Paint, themeFollower);
         followTheme();
         session.addCursorListener(cursorListener);
         session.addSelectionListener(selectionListener);
-        session.addRecordingListener(recordingListener);
-        session.addStatusListener(statusListener);
-        session.addOutputListener(outputListener);
-        session.addIdeActionListener(ideActionListener);
-        session.addHostCommandListener(hostCommandListener);
-        session.addCmdlineListener(cmdlineListener);
-        session.addCommandWindowListener(commandWindowListener);
-        session.addFloatingWindowListener(floatingWindowListener);
-        session.addCompletionMenuListener(completionMenuListener);
         styledText.addListener(SWT.MouseDown, endCompletionListener);
         styledText.addListener(SWT.FocusOut, endCompletionListener);
         // A float reported before this editor listened (it lives in this editor's tab page, and
@@ -1371,21 +1374,12 @@ public final class NeovimEditorController implements AutoCloseable {
         closed = true;
         ToggleButtonRefresh.request(); // greys the toolbar button out, unless another editor attaches
         try {
-            session.removeModeListener(modeListener);
+            session.releaseFocus(focusTarget);
             if (!styledText.isDisposed()) {
                 styledText.removeListener(SWT.Paint, themeFollower);
             }
             session.removeCursorListener(cursorListener);
             session.removeSelectionListener(selectionListener);
-            session.removeRecordingListener(recordingListener);
-            session.removeStatusListener(statusListener);
-            session.removeOutputListener(outputListener);
-            session.removeIdeActionListener(ideActionListener);
-            session.removeHostCommandListener(hostCommandListener);
-            session.removeCmdlineListener(cmdlineListener);
-            session.removeCommandWindowListener(commandWindowListener);
-            session.removeFloatingWindowListener(floatingWindowListener);
-            session.removeCompletionMenuListener(completionMenuListener);
             session.removeFoldStateListener(foldListener);
             session.removeWrapListener(wrapListener);
             session.removeTopLineListener(topLineListener);
