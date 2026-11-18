@@ -5821,6 +5821,11 @@ final class LuaScripts {
      *       {@code t} and {@code b} always go out, since the first and last window are Eclipse's to
      *       pick. With a count, {@code w} stays inside: window N, or the last one when there
      *       are fewer, as Vim's {@code N Ctrl-W w}.</li>
+     *   <li>{@code :help} typed in a text page ({@code :messages}, {@code :checkhealth}): a
+     *       {@code CmdlineLeave} hook has Neovim parse the line, aborts a {@code :help} and sends
+     *       {@code eclipse_screen_help(topic)}, so that Eclipse runs it in the editing Neovim and the
+     *       help editor opens ({@code NeovimSession.helpAsync}). Not in the help editor's own Neovim
+     *       ({@code vim.g.neovim4eclipse_help_page}, set by {@link #SCREEN_SHOW_HELP}).</li>
      *   <li>Neovim's own message and command-line UI, {@code ui2} (new in Neovim 0.12, experimental:
      *       {@code :help ui2}), loaded with {@code pcall}. Why: the second Neovim draws its messages
      *       into its screen, and without {@code ui2} messages longer than the message area stop at
@@ -5918,10 +5923,10 @@ final class LuaScripts {
                 if not ok or parsed.cmd ~= 'help' then
                   return
                 end
-                local after = vim.fn.matchend(line, [[\\C\\<h\\%[elp]\\>!\\=\\s*]])
                 -- v:event seen from Lua is a copy: the abort is set on the real one.
                 vim.cmd('let v:event.abort = v:true')
-                vim.rpcnotify(channel, 'eclipse_screen_help', after < 0 and '' or line:sub(after + 1))
+                -- The topic as Neovim parsed it (a help topic is one word; :filter /h/ help x gives x).
+                vim.rpcnotify(channel, 'eclipse_screen_help', table.concat(parsed.args, ' '))
               end,
             })
             pcall(vim.api.nvim_clear_autocmds, { group = 'nvim.terminal', event = 'BufReadCmd' })
@@ -6201,7 +6206,7 @@ final class LuaScripts {
             local topic = ...
             local ok, err = pcall(vim.cmd.help, topic ~= '' and { args = { topic } } or {})
             if not ok then
-              vim.api.nvim_echo({ { tostring(err):gsub('^.-(E%d+:)', '%1') } }, true, { err = true })
+              vim.api.nvim_echo({ { (tostring(err):gsub('^.-(E%d+:)', '%1')) } }, true, { err = true })
             end
             return ok
             """;

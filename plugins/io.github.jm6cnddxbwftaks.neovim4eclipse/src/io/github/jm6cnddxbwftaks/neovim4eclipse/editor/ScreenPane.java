@@ -106,6 +106,8 @@ final class ScreenPane {
     private int measuredHeight = 1;
     /** The second Neovim; {@code null} before the first content and after it ended. */
     private ScreenSession screen;
+    /** Whether {@link #screen} has the help profile; a {@code :help} handed over counts only from a text one. */
+    private boolean screenForHelp;
     /** Whether a start is under way: content that arrives meanwhile waits in {@link #pending}. */
     private boolean starting;
     /** The content to show once the second Neovim has started; {@code null} for none. */
@@ -249,14 +251,15 @@ final class ScreenPane {
             }
             ScreenSession session = started;
             Exception error = failure;
-            display.asyncExec(() -> onStarted(session, events, error, startColumns, startRows));
+            display.asyncExec(() -> onStarted(session, events, forHelp, error, startColumns, startRows));
             return Status.OK_STATUS;
         });
         job.setSystem(true);
         job.schedule();
     }
 
-    private void onStarted(ScreenSession session, Events events, Exception failure, int startColumns, int startRows) {
+    private void onStarted(ScreenSession session, Events events, boolean forHelp, Exception failure, int startColumns,
+            int startRows) {
         starting = false;
         if (failure != null) {
             LOG.log(Level.WARNING, "A Neovim page could not start its Neovim", failure);
@@ -269,6 +272,7 @@ final class ScreenPane {
         }
         ViewContent content = pending;
         screen = session;
+        screenForHelp = forHelp;
         events.session = session;
         if (events.endedEarly) {
             LOG.fine("A Neovim page's Neovim ended while it started");
@@ -457,7 +461,9 @@ final class ScreenPane {
         @Override
         public void help(String topic) {
             onUi(() -> {
-                if (current()) {
+                // Only a text page hands :help over; the help editor's Neovim runs its own (a help
+                // plug-in there could send this too: it asks for nothing then).
+                if (current() && !screenForHelp) {
                     host.help(topic);
                 }
             });

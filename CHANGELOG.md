@@ -17,8 +17,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - **`:help` in a help editor**: the page opens as Neovim's own help, with your plug-ins' pages
   and their help scripts, as in a terminal Neovim: `Ctrl-]` follows a link, `Ctrl-T` goes back,
   `q` closes. `:helpgrep`, `:vert help` and `:tab help` open there too; after `:helpgrep`, `]q`
-  and `:cnext` in the help editor step through the matches. Before, a help window was closed at
-  once with a message ([The help editor](docs/USER_GUIDE.md#the-help-editor-help)).
+  and `:cnext` in the help editor step through the matches; `:help` typed in the messages or
+  checkhealth editor opens it too. Before, a help window was closed at once with a message ([The help editor](docs/USER_GUIDE.md#the-help-editor-help)).
 
 ### Changed
 

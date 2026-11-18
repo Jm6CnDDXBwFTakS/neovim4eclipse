@@ -383,8 +383,12 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
             key(messages.canvasForTests(), c, c, 0);
         }
         key(messages.canvasForTests(), SWT.CR, SWT.CR, 0);
-        NeovimPageEditor help = pageShowing("*help-context*".substring(1, 13));
-        assertEquals("Neovim: help", help.getPartName());
+        // The help editor, not the messages editor's own row with the typed :help help-context.
+        waitUntil("the help editor on help-context", TIMEOUT_MS, () -> {
+            settle();
+            return page().findEditor(new NeovimPageInput(PageKind.HELP)) instanceof NeovimPageEditor help
+                    && rowsOf(help).contains("help-context");
+        });
     }
 
     /**

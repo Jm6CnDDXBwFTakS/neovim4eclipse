@@ -111,6 +111,7 @@ class SettingsNamesTest {
      */
     private static final Set<String> NOT_PROMISED = Set.of(
             "vim.g.neovim4eclipse_channel", // the RPC channel, for the plug-in's own scripts
+            "vim.g.neovim4eclipse_help_page", // set in the help editor's own Neovim, never the user's
             "eclipseSplits", // unsupported: no control on any page (PreferenceConstants says so)
             "welcomeShownForVersion", // the plug-in's own record of which note it last showed
             "nvimExecutable"); // the preference before 0.2.1, read only to show a note once
