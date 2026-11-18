@@ -201,13 +201,37 @@ final class EditorSplits {
         if (opened == null || opened == from) {
             return; // not opened: the reason is shown already
         }
+        intoNewStack(from, fromStack, fromTab, opened, side(command.where()));
+        page.activate(opened);
+        opened.setFocus();
+    }
+
+    /**
+     * Moves {@code opened}, an editor just opened in {@code from}'s stack, into a new stack on
+     * {@code side} of that stack ({@link EModelService#BELOW} and its like), taking half of it, as
+     * dragging its tab there would. {@code fromTab} stays in front in the old stack. Returns whether
+     * it moved: not when {@code from} is in no editor stack. Used by {@link #split} and by the page
+     * editors, which open below the code as Vim's {@code :help} does.
+     */
+    static boolean intoNewStack(IEditorPart from, IEditorPart opened, int side) {
+        MPartStack fromStack = stackOf(from.getSite().getService(MPart.class));
+        if (fromStack == null) {
+            return false;
+        }
+        intoNewStack(from, fromStack, fromStack.getSelectedElement(), opened, side);
+        return true;
+    }
+
+    private static void intoNewStack(IEditorPart from, MPartStack fromStack, MStackElement fromTab, IEditorPart opened,
+            int side) {
+        EModelService models = from.getSite().getService(EModelService.class);
         MPart openedPart = opened.getSite().getService(MPart.class);
         Shell shell = from.getSite().getShell();
         shell.setRedraw(false); // one redraw for the new stack, not one per step
         try {
             MPartStack stack = models.createModelElement(MPartStack.class);
             stack.getTags().add(EDITOR_STACK_TAG);
-            models.insert(stack, fromStack, side(command.where()), 0.5f);
+            models.insert(stack, fromStack, side, 0.5f);
             models.move(openedPart, stack);
             stack.setSelectedElement(openedPart);
             if (fromTab != null && fromStack.getChildren().contains(fromTab)) {
@@ -216,8 +240,25 @@ final class EditorSplits {
         } finally {
             shell.setRedraw(true);
         }
-        page.activate(opened);
-        opened.setFocus();
+    }
+
+    /**
+     * Moves {@code opened} into the stack {@code anchor} is in, as a tab in front, unless it is
+     * there already. Returns whether {@code anchor} is in a stack. Example: {@code :messages} while
+     * the help editor is open joins it in its stack below the code.
+     */
+    static boolean intoStackOf(IEditorPart anchor, IEditorPart opened) {
+        MPartStack stack = stackOf(anchor.getSite().getService(MPart.class));
+        MPart openedPart = opened.getSite().getService(MPart.class);
+        EModelService models = anchor.getSite().getService(EModelService.class);
+        if (stack == null || openedPart == null || models == null) {
+            return false;
+        }
+        if (stackOf(openedPart) != stack) {
+            models.move(openedPart, stack);
+        }
+        stack.setSelectedElement(openedPart);
+        return true;
     }
 
     /** {@link EModelService}'s side for a split's {@link WindowCommand.Where}. */

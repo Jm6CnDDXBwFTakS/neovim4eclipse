@@ -9,9 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.eclipse.e4.ui.model.application.ui.MUIElement;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.eclipse.e4.ui.model.application.ui.basic.MPart;
-import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.jface.bindings.Binding;
 import org.eclipse.jface.bindings.keys.KeySequence;
 import org.eclipse.jface.bindings.keys.ParseException;
@@ -28,7 +29,7 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Text;
-import org.eclipse.ui.IViewPart;
+import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.keys.IBindingService;
@@ -39,25 +40,42 @@ import org.junit.jupiter.api.condition.OS;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
 
 /**
- * The Neovim view in a real workbench: {@code :messages} typed in an editor opens it, titled with
- * what it holds and showing the history in a second Neovim; {@code Ctrl-W p} gives the keyboard
- * back to the editor; {@code q} in the view closes it.
+ * The page editors in a real workbench, opened by the commands typed in an editor:
+ * {@code :messages}, {@code :checkhealth} and {@code :help} each open an editor of their own below
+ * the code (the next ones as tabs beside the first), titled with what it holds and showing it in a
+ * second Neovim; {@code Ctrl-W p} gives the keyboard back to the editor; {@code q} closes it. The
+ * editor itself, opened directly, is {@link NeovimPageEditorEndToEndTest}'s.
  */
-class NeovimViewEndToEndTest extends EndToEndTestBase {
+class NeovimPagesEndToEndTest extends EndToEndTestBase {
 
     private static final String CTRL_W = "io.github.jm6cnddxbwftaks.neovim4eclipse.commands.ctrl.w";
 
     @AfterEach
-    void closeTheView() {
-        IViewPart view = page().findView(NeovimView.ID);
-        if (view != null) {
-            page().hideView(view); // a failed test leaves no view (and no second Neovim) for the next one
+    void closeThePages() {
+        // A failed test leaves no page editor (and no second Neovim) for the next one.
+        for (PageKind kind : PageKind.values()) {
+            IEditorPart page = page().findEditor(new NeovimPageInput(kind));
+            if (page != null) {
+                page().closeEditor(page, false);
+            }
         }
         settle();
+    }
+
+    /** The open page editors, of any kind. */
+    private List<NeovimPageEditor> pages() {
+        List<NeovimPageEditor> pages = new ArrayList<>();
+        for (PageKind kind : PageKind.values()) {
+            if (page().findEditor(new NeovimPageInput(kind)) instanceof NeovimPageEditor page) {
+                pages.add(page);
+            }
+        }
+        return pages;
     }
 
     /** Runs {@code line} from the editor's {@code :} box, as typed. */
@@ -74,16 +92,23 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
         box.notifyListeners(SWT.KeyDown, enter);
     }
 
-    /** Waits for the Neovim view to show a row holding {@code text}, and returns it. */
-    private NeovimView viewShowing(String text) {
-        waitUntil("the Neovim view showing " + text, TIMEOUT_MS, () -> {
+    /** Waits for a page editor to show a row holding {@code text}, and returns it. */
+    private NeovimPageEditor pageShowing(String text) {
+        NeovimPageEditor[] found = new NeovimPageEditor[1];
+        waitUntil("a page editor showing " + text, TIMEOUT_MS, () -> {
             settle();
-            return page().findView(NeovimView.ID) instanceof NeovimView view && rowsOf(view).contains(text);
-        }, () -> page().findView(NeovimView.ID) instanceof NeovimView view ? "; it shows " + rowsOf(view) : "; no view");
-        return (NeovimView) page().findView(NeovimView.ID);
+            for (NeovimPageEditor page : pages()) {
+                if (rowsOf(page).contains(text)) {
+                    found[0] = page;
+                    return true;
+                }
+            }
+            return false;
+        }, () -> "; open: " + pages().stream().map(p -> p.getPartName() + " showing " + rowsOf(p)).toList());
+        return found[0];
     }
 
-    private static String rowsOf(NeovimView view) {
+    private static String rowsOf(NeovimPageEditor view) {
         GridSnapshot grid = view.canvasForTests().grid();
         if (grid == null) {
             return "";
@@ -105,16 +130,16 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
-    void messagesOpenTheViewAndCtrlWPGoesBackToTheEditor() {
+    void messagesOpenAnEditorAndCtrlWPGoesBackToTheEditor() {
         SessionProbe.lua(session, "vim.cmd.echomsg(\"'from the end-to-end test'\") return 0");
         colon("messages");
-        NeovimView view = viewShowing("from the end-to-end test");
+        NeovimPageEditor view = pageShowing("from the end-to-end test");
         assertEquals("Neovim: messages", view.getPartName());
         UiTestSupport.requireKeyboardFocus(view.canvasForTests(), TIMEOUT_MS);
 
-        // Ctrl+W as Eclipse's key dispatcher sees it: in the view's key context it is the plug-in's
-        // Ctrl-W command, not Close (which would close the editor behind the view), and that
-        // command sends <C-w> to the view's Neovim. (macOS: Close is Cmd+W, Ctrl+W free anyway.)
+        // Ctrl+W as Eclipse's key dispatcher sees it: in the page's key context it is the plug-in's
+        // Ctrl-W command, not Close (which would close the page editor), and that
+        // command sends <C-w> to the page's Neovim. (macOS: Close is Cmd+W, Ctrl+W free anyway.)
         if (!PlatformUtil.isMac()) {
             IBindingService bindings = PlatformUI.getWorkbench().getService(IBindingService.class);
             Binding binding;
@@ -132,15 +157,15 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
-    void qInTheViewClosesIt() {
+    void qClosesIt() {
         SessionProbe.lua(session, "vim.cmd.echomsg(\"'before q'\") return 0");
         colon("messages");
-        NeovimView view = viewShowing("before q");
+        NeovimPageEditor view = pageShowing("before q");
         UiTestSupport.requireKeyboardFocus(view.canvasForTests(), TIMEOUT_MS);
         key(view.canvasForTests(), 'q', 'q', 0);
-        waitUntil("the view closed", TIMEOUT_MS, () -> {
+        waitUntil("the editor closed", TIMEOUT_MS, () -> {
             settle();
-            return page().findView(NeovimView.ID) == null;
+            return pages().isEmpty();
         });
     }
 
@@ -155,25 +180,23 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Where it opens and how it looks: outside the editor area (with Problems where the perspective
-     * has it, plugin.xml's perspectiveExtensions, which PluginXmlConsistencyTest reads; the test
-     * Eclipse's Resource perspective has none, and Eclipse puts the view at the bottom), with the
-     * keyboard, an error in Neovim's error color, the cursor on the newest message, and the
-     * editor's background under the text.
+     * Where it opens and how it looks: in a stack of its own below the code, as Vim's
+     * {@code :help} splits the window, with the keyboard, an error in Neovim's error color, the
+     * cursor on the newest message, and the editor's background under the text.
      */
     @Test
-    void theViewOpensBesideTheEditorsAndShowsAnErrorInItsColor() {
+    void itOpensBelowTheCodeAndShowsAnErrorInItsColor() {
         SessionProbe.lua(session, "vim.cmd.echomsg(\"'a plain message'\")"
                 + " vim.api.nvim_echo({ { 'E486: Pattern not found: nothing-like-this' } }, true, { err = true }) return 0");
         colon("messages");
-        NeovimView view = viewShowing("E486: Pattern not found");
+        NeovimPageEditor view = pageShowing("E486: Pattern not found");
         UiTestSupport.requireKeyboardFocus(view.canvasForTests(), TIMEOUT_MS);
 
-        EModelService models = view.getSite().getService(EModelService.class);
         MPart part = view.getSite().getService(MPart.class);
-        MUIElement shown = part.getCurSharedRef() != null ? part.getCurSharedRef() : part;
-        assertEquals(0, models.getElementLocation(shown) & EModelService.IN_SHARED_AREA,
-                "not among the editors: in " + shown.getParent().getElementId());
+        MPart code = editor.getSite().getService(MPart.class);
+        assertNotEquals(EditorSplits.stackOf(code), EditorSplits.stackOf(part), "a stack of its own");
+        assertTrue(EditorSplits.onScreen(part).y() > EditorSplits.onScreen(code).y(),
+                "below the code: " + EditorSplits.onScreen(part) + " under " + EditorSplits.onScreen(code));
 
         GridSnapshot grid = view.canvasForTests().grid();
         int plain = rowWith(grid, "a plain message");
@@ -200,12 +223,12 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
         }
     }
 
-    /** {@code /} searches in the view, {@code yy} yanks, and {@code p} in the editor pastes the line. */
+    /** {@code /} searches in the page editor, {@code yy} yanks, and {@code p} in the editor pastes the line. */
     @Test
     void aLineYankedInTheViewPastesInTheEditor() {
         SessionProbe.lua(session, "vim.cmd.echomsg(\"'paste me here'\") vim.cmd.echomsg(\"'a later message'\") return 0");
         colon("messages");
-        NeovimView view = viewShowing("paste me here");
+        NeovimPageEditor view = pageShowing("paste me here");
         GridCanvas canvas = view.canvasForTests();
         UiTestSupport.requireKeyboardFocus(canvas, TIMEOUT_MS);
         for (char c : "gg/paste".toCharArray()) {
@@ -233,13 +256,13 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
 
     /**
      * A change of Eclipse's text font (Colors and Fonts) gives Neovim's screen the number of cells
-     * that fits the view in the new font, without the view being resized.
+     * that fits the editor in the new font, without the editor being resized.
      */
     @Test
     void aTextFontChangeResizesTheScreen() {
         SessionProbe.lua(session, "vim.cmd.echomsg(\"'before the font change'\") return 0");
         colon("messages");
-        NeovimView view = viewShowing("before the font change");
+        NeovimPageEditor view = pageShowing("before the font change");
         GridCanvas canvas = view.canvasForTests();
         int before = canvas.grid().width();
         FontRegistry fonts = JFaceResources.getFontRegistry();
@@ -261,12 +284,12 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
         }
     }
 
-    /** The wheel scrolls the view's text, and a click puts the view's cursor on the clicked line. */
+    /** The wheel scrolls the page's text, and a click puts its cursor on the clicked line. */
     @Test
     void theWheelScrollsAndAClickMovesTheCursor() {
         SessionProbe.lua(session, "for i = 1, 120 do vim.cmd.echomsg(string.format(\"'message %03d'\", i)) end return 0");
         colon("messages");
-        NeovimView view = viewShowing("message 120");
+        NeovimPageEditor view = pageShowing("message 120");
         GridCanvas canvas = view.canvasForTests();
         String top = canvas.grid().row(0);
         Event wheel = new Event();
@@ -291,14 +314,14 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * {@code :help} opens the page in the view, as Neovim's own help (the editing Neovim keeps no
-     * help window), and {@code :messages} afterwards replaces it with text, from a second Neovim of
-     * the text's kind (NeovimView, "One second Neovim per kind").
+     * {@code :help} opens the page in the help editor, as Neovim's own help (the editing Neovim
+     * keeps no help window), and {@code :messages} afterwards opens the messages editor, a tab in
+     * the help editor's stack, with a second Neovim of its own; the help editor stays.
      */
     @Test
-    void helpOpensInTheViewAndMessagesReplaceIt() {
+    void helpAndMessagesGetEditorsOfTheirOwnInOneStack() {
         colon("help help-context");
-        NeovimView view = viewShowing("help-context");
+        NeovimPageEditor view = pageShowing("help-context");
         assertEquals("Neovim: help", view.getPartName());
         assertTrue(rowsOf(view).contains("[Help]"), rowsOf(view));
         assertEquals(1L, ((Number) SessionProbe.lua(session, "return #vim.api.nvim_tabpage_list_wins(0)")).longValue(),
@@ -308,19 +331,23 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
         page().activate(editor);
         waitUntil("the editor has the keyboard", TIMEOUT_MS, widget::isFocusControl);
         colon("messages");
-        view = viewShowing("after help");
+        view = pageShowing("after help");
         assertEquals("Neovim: messages", view.getPartName());
         assertTrue(!rowsOf(view).contains("[Help]"), rowsOf(view));
+        IEditorPart help = page().findEditor(new NeovimPageInput(PageKind.HELP));
+        assertTrue(help != null, "the help editor stays open beside it");
+        assertEquals(EditorSplits.stackOf(help.getSite().getService(MPart.class)),
+                EditorSplits.stackOf(view.getSite().getService(MPart.class)), "a tab in the help editor's stack");
     }
 
-    /** {@code :checkhealth neovim4eclipse} opens the view titled for the report, with the plug-in's lines. */
+    /** {@code :checkhealth neovim4eclipse} opens its editor titled for the report, with the plug-in's lines. */
     @Test
-    void thePluginsHealthCheckInTheView() {
+    void thePluginsHealthCheckInItsEditor() {
         colon("checkhealth neovim4eclipse");
-        NeovimView view = viewShowing("Neovim for Eclipse ");
+        NeovimPageEditor view = pageShowing("Neovim for Eclipse ");
         assertEquals("Neovim: checkhealth", view.getPartName());
         String rows = rowsOf(view);
-        assertTrue(rows.contains("OK Neovim "), rows); // the first section; the rest lies below the view's last row
+        assertTrue(rows.contains("OK Neovim "), rows); // the first section; the rest lies below the editor's last row
     }
 
     /**
@@ -334,7 +361,7 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
     void aRealCtrlWPGoesBackToTheEditor() {
         SessionProbe.lua(session, "vim.cmd.echomsg(\"'before a real Ctrl-W'\") return 0");
         colon("messages");
-        NeovimView view = viewShowing("before a real Ctrl-W");
+        NeovimPageEditor view = pageShowing("before a real Ctrl-W");
         UiTestSupport.requireKeyboardFocus(view.canvasForTests(), TIMEOUT_MS);
         Display display = view.canvasForTests().getDisplay();
         post(display, SWT.KeyDown, SWT.CTRL);
@@ -348,8 +375,8 @@ class NeovimViewEndToEndTest extends EndToEndTestBase {
         assertTrue(page().isPartVisible(editor), "the editor is still open: Ctrl+W was not Eclipse's Close");
     }
 
-    /** Runs the plug-in's Ctrl-W command as Eclipse's key binding would, with the view active. */
-    private static void runCtrlW(NeovimView view) {
+    /** Runs the plug-in's Ctrl-W command as Eclipse's key binding would, with the page editor active. */
+    private static void runCtrlW(NeovimPageEditor view) {
         IHandlerService handlers = view.getSite().getService(IHandlerService.class);
         try {
             handlers.executeCommand(CTRL_W, null);

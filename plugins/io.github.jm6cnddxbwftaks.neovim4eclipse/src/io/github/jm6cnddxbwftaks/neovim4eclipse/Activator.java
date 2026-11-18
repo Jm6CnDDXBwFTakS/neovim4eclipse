@@ -25,7 +25,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.HealthCheck;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ClipboardBridge;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.EditorAttachManager;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimViewOpener;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimPageOpener;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolderExit;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolders;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.QuickfixLists;
@@ -230,8 +230,8 @@ public class Activator extends AbstractUIPlugin {
             session = NeovimSession.start(getNvimExecutable(), List.of(), ClipboardBridge.INSTANCE,
                     getBundle().getVersion().toString());
             session.setStatusItems(getStatusItems());
-            // :messages, :checkhealth and :help open the Neovim view (docs/ARCHITECTURE.md, decision 10).
-            session.addViewContentListener(NeovimViewOpener::show);
+            // :messages, :checkhealth and :help open a page editor (docs/ARCHITECTURE.md, decision 10).
+            session.addViewContentListener(NeovimPageOpener::show);
             installHealthCheck(session);
         }
         return session;

@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.GalleryCamera;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
 
 /**
  * The search highlighting pictures of the manual checks' gallery (card {@code sh-colors},
@@ -474,39 +475,48 @@ class SearchGalleryTest extends EndToEndTestBase {
                 + " vim.api.nvim_echo({ { 'E486: Pattern not found: wolf' } }, true, { err = true })"
                 + " vim.cmd.echomsg(\"'\\\"Foxes.java\\\" 16L, 371B written'\") return 0");
         session.inputAsync(":messages<CR>");
-        NeovimView view = viewShowing("E486: Pattern not found: wolf");
         try {
-            takeView(view, "view-messages");
+            takeView(viewShowing("E486: Pattern not found: wolf"), "view-messages");
+            page().activate(java);
+            settle();
             session.inputAsync(":checkhealth neovim4eclipse<CR>");
-            viewShowing("Neovim for Eclipse ");
-            takeView(view, "view-checkhealth");
+            takeView(viewShowing("Neovim for Eclipse "), "view-checkhealth");
         } finally {
-            page().hideView(view);
+            for (PageKind kind : PageKind.values()) {
+                IEditorPart shown = page().findEditor(new NeovimPageInput(kind));
+                if (shown != null) {
+                    page().closeEditor(shown, false);
+                }
+            }
             page().activate(java);
             settle();
         }
     }
 
-    /** Waits for the Neovim view to show a row holding {@code text}, and returns it. */
-    private NeovimView viewShowing(String text) {
-        waitUntil("the Neovim view showing " + text, TIMEOUT_MS, () -> {
+    /** Waits for a page editor to show a row holding {@code text}, and returns it. */
+    private NeovimPageEditor viewShowing(String text) {
+        NeovimPageEditor[] found = new NeovimPageEditor[1];
+        waitUntil("a page editor showing " + text, TIMEOUT_MS, () -> {
             settle();
-            if (!(page().findView(NeovimView.ID) instanceof NeovimView view) || view.canvasForTests().grid() == null) {
-                return false;
-            }
-            GridSnapshot grid = view.canvasForTests().grid();
-            for (int r = 0; r < grid.height(); r++) {
-                if (grid.row(r).contains(text)) {
-                    return true;
+            for (PageKind kind : PageKind.values()) {
+                if (page().findEditor(new NeovimPageInput(kind)) instanceof NeovimPageEditor shown
+                        && shown.canvasForTests().grid() != null) {
+                    GridSnapshot grid = shown.canvasForTests().grid();
+                    for (int r = 0; r < grid.height(); r++) {
+                        if (grid.row(r).contains(text)) {
+                            found[0] = shown;
+                            return true;
+                        }
+                    }
                 }
             }
             return false;
         });
-        return (NeovimView) page().findView(NeovimView.ID);
+        return found[0];
     }
 
-    /** Pictures the view's canvas: at most a page column wide, its first 14 rows. */
-    private void takeView(NeovimView view, String name) {
+    /** Pictures a page editor's canvas: at most a page column wide, its first 14 rows. */
+    private void takeView(NeovimPageEditor view, String name) {
         GridCanvas canvas = view.canvasForTests();
         GalleryCamera.drain(canvas.getDisplay());
         Rectangle area = canvas.getClientArea();
