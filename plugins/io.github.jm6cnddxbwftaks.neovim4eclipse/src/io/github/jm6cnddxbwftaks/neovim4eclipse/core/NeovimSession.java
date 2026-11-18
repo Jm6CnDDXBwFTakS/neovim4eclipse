@@ -278,6 +278,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * -1 while it is closed or not drawn yet. Written on the reader thread, with each drawn view.
      */
     private volatile int commandWindowGrid = -1;
+    /**
+     * The grid each drawn page window is drawn from, for its mouse events ({@link #pageMouseAsync}).
+     * Written on the reader thread with each page snapshot, read on the input thread.
+     */
+    private final Map<Integer, Integer> pageGrids = new ConcurrentHashMap<>();
 
     private NeovimSession(NeovimConnection connection, Handle homeBuffer, int homeWin, ClipboardPort clipboard) {
         this.connection = connection;
@@ -1026,6 +1031,49 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      *                 {@code "down"} for the wheel
      * @param modifier Neovim's modifier letters ({@code "S"}, {@code "C"}, {@code "A"}), or {@code ""}
      */
+    /**
+     * Draws page window {@code win} ({@link #openPageWindow}) from now on: its grid goes to the
+     * page grid listeners ({@link #addPageGridListener}) whenever it changes, which is while the
+     * page has the focus (a page in a tabpage that is not current gets no redraws, and keeps its
+     * last cells). Any thread.
+     */
+    public void drawPageWindow(int win) {
+        grids.drawPage(win);
+    }
+
+    /** Draws page window {@code win} no more (its editor closed). Any thread. */
+    public void stopDrawingPageWindow(int win) {
+        grids.stopDrawingPage(win);
+        pageGrids.remove(win);
+    }
+
+    /**
+     * Hears each drawn page window's grid when it changes ({@link #drawPageWindow}), on the RPC
+     * reader thread: the listener takes its own window's ({@link GridSnapshot#window()}) and hops
+     * to the UI thread itself.
+     */
+    public void addPageGridListener(Consumer<GridSnapshot> listener) {
+        events.addPageGridListener(listener);
+    }
+
+    public void removePageGridListener(Consumer<GridSnapshot> listener) {
+        events.removePageGridListener(listener);
+    }
+
+    /**
+     * A mouse event on page window {@code win}'s grid, at its {@code row} and {@code col}
+     * ({@code nvim_input_mouse} with that grid, as {@link #commandWindowMouseAsync}). Nothing until
+     * the page's grid has been drawn once. Queued.
+     */
+    public void pageMouseAsync(int win, String button, String action, String modifier, int row, int col) {
+        submit("page mouse " + button + " " + action, Level.FINE, () -> {
+            Integer grid = pageGrids.get(win);
+            if (grid != null) {
+                await(api.inputMouse(button, action, modifier, grid, row, col));
+            }
+        });
+    }
+
     public void commandWindowMouseAsync(String button, String action, String modifier, int row, int col) {
         submit("command-line window mouse " + button + " " + action, Level.FINE, () -> {
             int grid = commandWindowGrid;
@@ -2533,6 +2581,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 grids.apply(event);
                 if (event instanceof GridEvent.Flush) {
                     grids.snapshotIfChanged().ifPresent(this::commandWindowDrawn);
+                    for (GridSnapshot page : grids.pagesIfChanged()) {
+                        int grid = grids.pageGrid(page.window());
+                        if (grid != -1) {
+                            pageGrids.put(page.window(), grid);
+                        }
+                        events.pageGrid(page);
+                    }
                     grids.floatsIfChanged().ifPresent(floats -> {
                         floatingWindows = floats;
                         events.floatingWindows(floats);

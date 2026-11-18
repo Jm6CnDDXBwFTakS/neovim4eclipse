@@ -286,7 +286,13 @@ and one without an origin goes to the focus as before. So a `:q` typed in a page
 click back into the code is dropped instead of closing the code. What a page does with a command
 from its own window is `util/PageCommands`: `:q` closes the page, `:split` makes a second view of
 it, `:e file` opens the file in the code's tab group, `:wa` is done as from the code, `:wq` is
-refused with Vim's E382. ([GLOSSARY.md](GLOSSARY.md) has the words.)
+refused with Vim's E382. A page's window is drawn from its grid (`NeovimSession.drawPageWindow`,
+`util/Grids.pagesIfChanged`, one snapshot per page to the page grid listeners, its clicks through
+`pageMouseAsync` on that grid); a page in a tabpage that is not current gets no redraws from
+Neovim and keeps its last cells, so it changes only while it has the focus. The overlays a text
+editor shows (the `:` box, the message line, the output popup, floats, the `q:` panel) take any
+SWT `Canvas` as their host, sized by its line (`OverlayFrame.lineHeight`: a `StyledText` line or
+a page's grid row), so a page shows them over itself. ([GLOSSARY.md](GLOSSARY.md) has the words.)
 
 ### 7. Eclipse is Neovim's clipboard provider
 

@@ -12,6 +12,7 @@ import org.eclipse.swt.events.KeyEvent;
 import org.eclipse.swt.events.KeyListener;
 import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Listener;
 
 /**
@@ -41,7 +42,7 @@ final class OutputPopup {
     /** The popup never covers more than this share of the editor; longer output scrolls. */
     private static final double MAX_HEIGHT_FRACTION = 0.6;
 
-    private final StyledText host;
+    private final Canvas host;
     private final Runnable colonHandler;
     private OverlayFrame<StyledText> frame;
     /** The text inside {@link #frame}; {@code null} while closed. */
@@ -77,7 +78,7 @@ final class OutputPopup {
     };
 
     /** @param colonHandler opens the command line; called when {@code :} is typed in the popup */
-    OutputPopup(StyledText host, Runnable colonHandler) {
+    OutputPopup(Canvas host, Runnable colonHandler) {
         this.host = host;
         this.colonHandler = colonHandler;
     }

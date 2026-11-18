@@ -11,6 +11,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
@@ -38,6 +39,7 @@ final class SessionEvents implements StateSync.Listeners {
     private final ListenerList<Void> inputHandledListeners = new ListenerList<>("input handled", Level.WARNING);
     private final java.util.Map<Runnable, Consumer<Void>> inputHandledWrappers = new java.util.concurrent.ConcurrentHashMap<>();
     private final ListenerList<CmdlineState.View> cmdlineListeners = new ListenerList<>("command line", Level.WARNING);
+    private final ListenerList<GridSnapshot> pageGridListeners = new ListenerList<>("page grid", Level.WARNING);
     private final ListenerList<CommandWindowView> commandWindowListeners = new ListenerList<>("command-line window",
             Level.WARNING);
     private final ListenerList<List<FloatWindow>> floatingWindowListeners = new ListenerList<>("floating windows",
@@ -131,7 +133,20 @@ final class SessionEvents implements StateSync.Listeners {
         commandWindowListeners.fire(view);
     }
 
+    /** A page window's grid changed (one snapshot per page; each page editor takes its own window's). */
+    void pageGrid(GridSnapshot grid) {
+        pageGridListeners.fire(grid);
+    }
+
     // ---- registration ----
+
+    void addPageGridListener(Consumer<GridSnapshot> listener) {
+        pageGridListeners.add(listener);
+    }
+
+    void removePageGridListener(Consumer<GridSnapshot> listener) {
+        pageGridListeners.remove(listener);
+    }
 
     void addModeListener(Consumer<String> listener) {
         modeListeners.add(listener);

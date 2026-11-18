@@ -321,4 +321,74 @@ class GridsTest {
         assertEquals("a     ", window.row(0));
         assertTrue(grids.floatsIfChanged().isEmpty(), "no float anywhere: nothing to say");
     }
+
+    // ---- pages' windows (drawPage) ----
+
+    /** Page window 1005 on grid 5, 8x2, "msg 1" and "msg 2", with the cursor on it. */
+    private void pageDrawn() {
+        grids.drawPage(1005);
+        grids.apply(new GridEvent.Resize(5, 8, 2));
+        grids.apply(new GridEvent.Line(5, 0, 0, text("msg 1", 0)));
+        grids.apply(new GridEvent.Line(5, 1, 0, text("msg 2", 0)));
+        grids.apply(new GridEvent.CursorGoto(5, 1, 0));
+        grids.apply(new GridEvent.WinPos(5, 1005, false));
+        grids.apply(new GridEvent.Flush());
+    }
+
+    @Test
+    void aPagesGridComesOnceItsWindowIsKnownAndAgainOnlyWhenItChanges() {
+        pageDrawn();
+        List<GridSnapshot> pages = grids.pagesIfChanged();
+        assertEquals(1, pages.size());
+        assertEquals(1005, pages.get(0).window());
+        assertEquals("msg 2   ", pages.get(0).row(1));
+        assertEquals(5, grids.pageGrid(1005));
+        assertTrue(grids.pagesIfChanged().isEmpty(), "nothing changed since");
+        grids.apply(new GridEvent.Line(5, 0, 0, text("MSG", 0)));
+        assertEquals("MSG 1   ", grids.pagesIfChanged().get(0).row(0));
+    }
+
+    @Test
+    void aPagesLinesAreWantedAndAnEditorsStayUnread() {
+        grids.apply(new GridEvent.Resize(2, 6, 10));
+        grids.apply(new GridEvent.WinPos(2, 1000, false)); // an editor's window
+        pageDrawn();
+        assertTrue(grids.wantsLines(5));
+        assertTrue(!grids.wantsLines(2));
+        grids.apply(new GridEvent.Line(2, 0, 0, text("editor", 0)));
+        grids.pagesIfChanged();
+        assertTrue(grids.pagesIfChanged().isEmpty(), "the editor's lines changed no page");
+    }
+
+    /** A page in a tabpage that is not current keeps its last cells: hidden, nothing is sent again. */
+    @Test
+    void aHiddenPageKeepsItsLastSnapshot() {
+        pageDrawn();
+        grids.pagesIfChanged();
+        grids.apply(new GridEvent.WinGone(5)); // win_hide: an editor's tabpage became current
+        grids.apply(new GridEvent.CursorGoto(2, 0, 0));
+        grids.apply(new GridEvent.Flush());
+        assertTrue(grids.pagesIfChanged().isEmpty(), "the page editor keeps showing what it has");
+    }
+
+    @Test
+    void aPageNoLongerDrawnSendsNothing() {
+        pageDrawn();
+        grids.pagesIfChanged();
+        grids.stopDrawingPage(1005);
+        grids.apply(new GridEvent.Line(5, 0, 0, text("late", 0)));
+        assertTrue(grids.pagesIfChanged().isEmpty());
+        assertEquals(-1, grids.pageGrid(1005));
+    }
+
+    /** A page drawn from now on whose grid is there already goes out at the next flush. */
+    @Test
+    void aPageDrawnLateComesAtTheNextFlush() {
+        grids.apply(new GridEvent.Resize(5, 8, 2));
+        grids.apply(new GridEvent.Line(5, 0, 0, text("msg 1", 0)));
+        grids.apply(new GridEvent.WinPos(5, 1005, false));
+        grids.apply(new GridEvent.Flush());
+        grids.drawPage(1005);
+        assertEquals(1, grids.pagesIfChanged().size());
+    }
 }

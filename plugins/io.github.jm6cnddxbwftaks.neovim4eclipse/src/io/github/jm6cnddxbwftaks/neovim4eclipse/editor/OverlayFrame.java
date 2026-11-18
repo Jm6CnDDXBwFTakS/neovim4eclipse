@@ -8,8 +8,10 @@ import java.util.function.Function;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.layout.FillLayout;
+import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Listener;
@@ -28,7 +30,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
  * left by its {@link FillLayout}. The margin is the border.
  *
  * <pre>
- *   host (the editor's StyledText)
+ *   host (the editor's StyledText, or a page editor's GridCanvas)
  *   └── frame: Composite, background = border color, FillLayout margin 1px
  *       └── content: Text / StyledText, background = tinted editor background
  * </pre>
@@ -69,7 +71,7 @@ final class OverlayFrame<T extends Control> {
      */
     static final String BACKGROUND_UNDER_FLASH = OverlayFrame.class.getName() + ".backgroundUnderFlash";
 
-    private final StyledText host;
+    private final Canvas host;
     private final Composite frame;
     private final T content;
     /** The editor's colors the overlay's colors were last made from. UI thread. */
@@ -88,7 +90,7 @@ final class OverlayFrame<T extends Control> {
      * @param host    the editor's text widget, which the overlay floats over
      * @param factory creates the content control inside the given parent
      */
-    OverlayFrame(StyledText host, Function<Composite, T> factory) {
+    OverlayFrame(Canvas host, Function<Composite, T> factory) {
         this(host, factory, BORDER);
     }
 
@@ -97,7 +99,7 @@ final class OverlayFrame<T extends Control> {
      *               lies in the middle of the code and its background can be nearly the editor's
      *               ({@link CompletionMenuPopup}); the boxes at the editor's bottom edge take 1.
      */
-    OverlayFrame(StyledText host, Function<Composite, T> factory, int border) {
+    OverlayFrame(Canvas host, Function<Composite, T> factory, int border) {
         // NO_FOCUS: the frame is only a border. Composite.setFocus offers the focus to its children
         // first, so without it an editor getting the focus could hand it to the frame of an overlay
         // whose content refuses it (a message, an output popup shown without the focus).
@@ -123,7 +125,7 @@ final class OverlayFrame<T extends Control> {
      * The editor's background as its owner set it: during the error flash the one under the tint
      * ({@link #BACKGROUND_UNDER_FLASH}), otherwise the widget's.
      */
-    static Color intendedBackground(StyledText host) {
+    static Color intendedBackground(Canvas host) {
         return host.getData(BACKGROUND_UNDER_FLASH) instanceof Color own ? own : host.getBackground();
     }
 
@@ -195,8 +197,29 @@ final class OverlayFrame<T extends Control> {
      * Space left between the bottom edge of the editor and the lowest overlay: about half the height
      * of a one-line command line, so that the overlay stays clear of the horizontal scroll bar.
      */
-    static int bottomGap(StyledText host) {
-        return Math.max(SIDE_PADDING, outerHeight(host.getLineHeight()) / 2);
+    /**
+     * One line's height in {@code host}, which an overlay is sized by: a text editor's
+     * {@code StyledText} line (its font and line spacing), a page's grid cell, or else the font's
+     * height. Example: the {@code :} box over the messages page is one grid row high.
+     */
+    static int lineHeight(Canvas host) {
+        if (host instanceof StyledText text) {
+            return text.getLineHeight();
+        }
+        if (host instanceof GridCanvas grid) {
+            return grid.cellHeight();
+        }
+        GC gc = new GC(host);
+        try {
+            gc.setFont(host.getFont());
+            return gc.getFontMetrics().getHeight();
+        } finally {
+            gc.dispose();
+        }
+    }
+
+    static int bottomGap(Canvas host) {
+        return Math.max(SIDE_PADDING, outerHeight(OverlayFrame.lineHeight(host)) / 2);
     }
 
     boolean isDisposed() {

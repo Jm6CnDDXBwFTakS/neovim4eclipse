@@ -19,6 +19,7 @@ import org.eclipse.swt.events.TraverseEvent;
 import org.eclipse.swt.events.VerifyEvent;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
@@ -147,7 +148,7 @@ final class CommandLineBox {
     /** Whether Ctrl (not Cmd, as on macOS) is the platform's copy and paste modifier. */
     private static final boolean CTRL_IS_MOD1 = SWT.MOD1 == SWT.CTRL;
 
-    private final StyledText host;
+    private final Canvas host;
     /** The host's display, kept for removing the focus filter after the host is disposed. */
     private final Display display;
     private final Commands commands;
@@ -259,7 +260,7 @@ final class CommandLineBox {
      *                      {@link #isOpen}, {@link #hasFocus}); the controller switches the key
      *                      contexts and edit handlers there. UI thread.
      */
-    CommandLineBox(StyledText host, Commands commands, MessageLine messageLine, Runnable stateListener) {
+    CommandLineBox(Canvas host, Commands commands, MessageLine messageLine, Runnable stateListener) {
         this(host, commands, messageLine, stateListener, PressAndHoldSetting::known);
     }
 
@@ -267,7 +268,7 @@ final class CommandLineBox {
      * As above, with macOS's press-and-hold setting given: tests pass their own, so they do not
      * depend on how the developer's Mac is set.
      */
-    CommandLineBox(StyledText host, Commands commands, MessageLine messageLine, Runnable stateListener,
+    CommandLineBox(Canvas host, Commands commands, MessageLine messageLine, Runnable stateListener,
             BooleanSupplier pressAndHoldOn) {
         this.pressAndHoldOn = pressAndHoldOn;
         this.host = host;

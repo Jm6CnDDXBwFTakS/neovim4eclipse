@@ -4,13 +4,13 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.ControlListener;
 import org.eclipse.swt.events.KeyEvent;
 import org.eclipse.swt.events.KeyListener;
 import org.eclipse.swt.events.TraverseEvent;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
@@ -64,7 +64,7 @@ final class NeovimWindowPanel {
         void close();
     }
 
-    private final StyledText host;
+    private final Canvas host;
     private final Display display;
     private final Commands commands;
     private final Runnable stateListener;
@@ -85,7 +85,7 @@ final class NeovimWindowPanel {
      * @param stateListener told when the panel opens, closes, or gains or loses the focus: the Vim
      *                      Ctrl-key contexts follow ({@code EditorKeyContext})
      */
-    NeovimWindowPanel(StyledText host, Commands commands, Runnable stateListener) {
+    NeovimWindowPanel(Canvas host, Commands commands, Runnable stateListener) {
         this.host = host;
         this.display = host.getDisplay();
         this.commands = commands;
@@ -147,7 +147,7 @@ final class NeovimWindowPanel {
     }
 
     private void open() {
-        frame = new OverlayFrame<>(host, parent -> new GridCanvas(parent, host));
+        frame = new OverlayFrame<>(host, parent -> new GridCanvas(parent, GridCanvas.lookOf(host), SWT.NONE));
         canvas = frame.content();
         canvas.setInsertCursor(insert);
         canvas.addKeyListener(KeyListener.keyPressedAdapter(this::onKey));

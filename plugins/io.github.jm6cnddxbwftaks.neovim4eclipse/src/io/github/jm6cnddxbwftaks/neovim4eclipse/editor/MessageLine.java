@@ -9,12 +9,12 @@ import org.eclipse.jface.preference.JFacePreferences;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
-import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.ControlEvent;
 import org.eclipse.swt.events.ControlListener;
 import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Listener;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LabelText;
@@ -50,7 +50,7 @@ final class MessageLine {
     /** Share of the error color mixed into the editor background during the flash. */
     static final double FLASH_STRENGTH = 0.3;
 
-    private final StyledText host;
+    private final Canvas host;
     private final BooleanSupplier flashOnError;
     private OverlayFrame<CLabel> frame;
     private String text = "";
@@ -87,7 +87,7 @@ final class MessageLine {
      * @param host         the editor's text widget
      * @param flashOnError asked at each error whether to flash (the preference may change at any time)
      */
-    MessageLine(StyledText host, BooleanSupplier flashOnError) {
+    MessageLine(Canvas host, BooleanSupplier flashOnError) {
         this.host = host;
         this.flashOnError = flashOnError;
         host.addListener(SWT.KeyDown, hideOnInput);
@@ -196,7 +196,7 @@ final class MessageLine {
         Rectangle area = host.getClientArea();
         int width = Math.max(10, area.width - 2 * OverlayFrame.SIDE_PADDING);
         int height = OverlayFrame.outerHeight(
-                Math.max(host.getLineHeight(), frame.content().computeSize(SWT.DEFAULT, SWT.DEFAULT).y));
+                Math.max(OverlayFrame.lineHeight(host), frame.content().computeSize(SWT.DEFAULT, SWT.DEFAULT).y));
         int x = area.x + OverlayFrame.SIDE_PADDING;
         int y = area.y + area.height - height - OverlayFrame.bottomGap(host) - bottomInset;
         Rectangle current = frame.control().getBounds();

@@ -85,6 +85,20 @@ final class GridCanvas extends Canvas {
         };
     }
 
+    /**
+     * The look of whatever {@code host} an overlay is drawn over: a text editor's
+     * ({@link #of(StyledText)}), or a page's grid canvas, whose look a float over the page takes.
+     */
+    static Look lookOf(Canvas host) {
+        if (host instanceof GridCanvas grid) {
+            return grid.look;
+        }
+        if (host instanceof StyledText text) {
+            return of(text);
+        }
+        throw new IllegalArgumentException("no look for " + host);
+    }
+
     private final Look look;
     private GridSnapshot grid;
     private boolean insertCursor;

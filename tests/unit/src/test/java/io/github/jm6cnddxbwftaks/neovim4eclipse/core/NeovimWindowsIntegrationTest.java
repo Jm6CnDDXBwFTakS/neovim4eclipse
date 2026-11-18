@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
@@ -565,6 +566,30 @@ class NeovimWindowsIntegrationTest {
             assertEquals(List.of(other.bufnr()), followed);
             assertEquals(List.of(true), fromPage, "from a page: the editor takes its own window");
             assertEquals(pageBuf, number(s, "return vim.api.nvim_win_get_buf(" + page + ")"), "the page keeps its text");
+        }
+    }
+
+    /**
+     * A drawn page's grid reaches the page grid listeners once the page has the focus, with the
+     * page's text, and a click on that grid moves the page's cursor.
+     */
+    @Test
+    void aFocusedPagesGridIsDrawnAndTakesTheMouse() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer doc = new DocumentBuffer("");
+            EditorWindow a = new EditorWindow();
+            s.showWindow(doc, a, "");
+            int page = openPageWindow(s, "{'first page line', 'second page line', 'third'}");
+            List<GridSnapshot> drawn = new CopyOnWriteArrayList<>();
+            s.addPageGridListener(drawn::add);
+            s.drawPageWindow(page);
+            s.focusPageAsync(page);
+            waitFor(() -> drawn.stream().anyMatch(g -> g.window() == page && g.row(0).startsWith("first page line")),
+                    "the page's grid");
+            s.pageMouseAsync(page, "left", "press", "", 1, 3);
+            s.pageMouseAsync(page, "left", "release", "", 1, 3);
+            waitFor(() -> cursorLine(s) == 2, "the click on the page's second row");
+            assertEquals(page, currentWin(s));
         }
     }
 

@@ -9,10 +9,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.ControlListener;
 import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.widgets.Canvas;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatPlacement;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
@@ -44,7 +44,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
  */
 final class FloatingWindows {
 
-    private final StyledText host;
+    private final Canvas host;
     /** The canvas of each window drawn, by window ID. */
     private final Map<Integer, GridCanvas> canvases = new LinkedHashMap<>();
     /** The windows drawn, lowest in the stack first. */
@@ -53,7 +53,7 @@ final class FloatingWindows {
     private final PaintListener placeOnPaint = e -> place();
     private boolean listening;
 
-    FloatingWindows(StyledText host) {
+    FloatingWindows(Canvas host) {
         this.host = host;
     }
 
@@ -73,7 +73,7 @@ final class FloatingWindows {
             gone.remove(Integer.valueOf(id));
             GridCanvas canvas = canvases.get(id);
             if (canvas == null || canvas.isDisposed()) {
-                canvas = new GridCanvas(host, host, SWT.NO_FOCUS);
+                canvas = new GridCanvas(host, GridCanvas.lookOf(host), SWT.NO_FOCUS);
                 // The wheel over a float does nothing; without this, some platforms scroll the editor under it.
                 canvas.addListener(SWT.MouseVerticalWheel, e -> e.doit = false);
                 canvas.addListener(SWT.MouseHorizontalWheel, e -> e.doit = false);

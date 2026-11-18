@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
@@ -20,9 +21,10 @@ import java.util.logging.Logger;
  * ({@link GridSnapshot}, {@link FloatWindow}).
  *
  * <h2>Which grids</h2>
- * Each Neovim window has a grid. Eclipse draws the command-line window's ({@link #draw}) and, when
- * asked to ({@link #drawFloats}), those of the floating windows without the focus
- * ({@link #floatsIfChanged}); the editors' windows are shown by the editors themselves. Every
+ * Each Neovim window has a grid. Eclipse draws the command-line window's ({@link #draw}), the pages'
+ * windows ({@link #drawPage}, {@link #pagesIfChanged}: a page editor shown from this Neovim) and,
+ * when asked to ({@link #drawFloats}), those of the floating windows without the focus
+ * ({@link #floatsIfChanged}); the text editors' windows are shown by the editors themselves. Every
  * grid's size is kept, and the cells of the grids that may be drawn ({@link #wantsLines}): Neovim
  * says which window a grid shows ({@code win_pos}, {@code win_float_pos}) at the end of a redraw,
  * after that grid's lines, so a new grid's lines are kept until its window is known; then those of
@@ -82,6 +84,16 @@ public final class Grids {
     private List<FloatWindow> lastFloats = List.of();
     /** Whether a float left out for the limits was logged: once is enough to explain a missing window. */
     private boolean limitLogged;
+    /**
+     * The pages' windows drawn ({@link #drawPage}). Changed from any thread (a page editor opening
+     * or closing), read on the reader thread, so a concurrent set; everything else about the pages
+     * is the reader thread's.
+     */
+    private final Set<Integer> pages = ConcurrentHashMap.newKeySet();
+    /** The pages whose grid may have changed since their last snapshot; added to from any thread too. */
+    private final Set<Integer> pagesChanged = ConcurrentHashMap.newKeySet();
+    /** Each page's last snapshot, so that one that comes out the same is not sent again. Reader thread. */
+    private final Map<Integer, GridSnapshot> lastPage = new HashMap<>();
 
     /**
      * Draws window {@code win} from now on: {@link #snapshotIfChanged} gives its grid. Example: the
@@ -103,6 +115,23 @@ public final class Grids {
     }
 
     /**
+     * Draws page window {@code win} from now on: {@link #pagesIfChanged} gives its grid whenever it
+     * changes. A page in a tabpage that is not current gets no redraws from Neovim (its grid is kept,
+     * as it was last drawn), so its snapshot changes only while the page has the focus. Any thread.
+     * Example: the messages page's window 1004 when its editor opens.
+     */
+    public void drawPage(int win) {
+        pages.add(win);
+        pagesChanged.add(win); // its grid may be there already: the next flush sends it
+    }
+
+    /** Draws page window {@code win} no more (its editor closed). Any thread. */
+    public void stopDrawingPage(int win) {
+        pages.remove(win);
+        pagesChanged.remove(win);
+    }
+
+    /**
      * Whether {@code grid}'s lines are worth reading: those of the drawn window's grid, and of a
      * grid whose window is not known yet (it may turn out to be the drawn one). Not those of a grid
      * known to show another window, such as an editor's: its cells are never drawn, and stay as
@@ -110,7 +139,8 @@ public final class Grids {
      */
     public boolean wantsLines(int grid) {
         Integer win = windowOfGrid.get(grid);
-        return win == null || (drawnWindow != -1 && win == drawnWindow) || (drawFloats && isFloat(grid));
+        return win == null || (drawnWindow != -1 && win == drawnWindow) || pages.contains(win)
+                || (drawFloats && isFloat(grid));
     }
 
     /**
@@ -155,6 +185,8 @@ public final class Grids {
                 touched(e.grid());
             }
             case GridEvent.CursorGoto e -> {
+                pageTouched(cursorGrid); // the cursor left that page, or moved in it
+                pageTouched(e.grid());
                 boolean wasDrawn = isDrawn(cursorGrid);
                 floatsChanged |= cursorGrid != e.grid(); // the focus moved: into a float, out of one, to another window
                 cursorGrid = e.grid();
@@ -180,11 +212,13 @@ public final class Grids {
             }
             case GridEvent.HlAttr e -> {
                 attrs.put(e.id(), e);
+                pagesChanged.addAll(pages);
                 changed |= drawnWindow != -1;
                 floatsChanged |= !lastFloats.isEmpty();
             }
             case GridEvent.DefaultColors e -> {
                 defaultColors = e;
+                pagesChanged.addAll(pages);
                 changed |= drawnWindow != -1;
                 floatsChanged |= !lastFloats.isEmpty();
             }
@@ -216,6 +250,44 @@ public final class Grids {
         }
         last = snapshot;
         return Optional.of(snapshot);
+    }
+
+    /**
+     * The pages' grids that changed since their last snapshot, one snapshot each, with the cursor
+     * where it is in that grid (none in a page without the focus); empty when none did. Called at
+     * each {@code flush}. A page whose grid is not known yet (no {@code win_pos} for its window) is
+     * left for a later flush. Example: the messages page has the focus and scrolls: its snapshot.
+     */
+    public List<GridSnapshot> pagesIfChanged() {
+        if (pagesChanged.isEmpty()) {
+            return List.of();
+        }
+        List<GridSnapshot> changedPages = new ArrayList<>();
+        for (Integer win : List.copyOf(pagesChanged)) {
+            Integer gridId = pages.contains(win) ? gridOf(win) : null;
+            GridCells grid = gridId == null ? null : grids.get(gridId);
+            if (!pages.contains(win)) {
+                pagesChanged.remove(win);
+                lastPage.remove(win);
+                continue;
+            }
+            if (grid == null) {
+                continue; // its win_pos has not come yet: stays changed until it does
+            }
+            pagesChanged.remove(win);
+            GridSnapshot snapshot = snapshot(win, gridId, grid, true);
+            if (!snapshot.equals(lastPage.get(win))) {
+                lastPage.put(win, snapshot);
+                changedPages.add(snapshot);
+            }
+        }
+        return changedPages;
+    }
+
+    /** The grid number of page window {@code win}, for its mouse events, or -1 while it is not known. */
+    public int pageGrid(int win) {
+        Integer grid = pages.contains(win) ? gridOf(win) : null;
+        return grid == null ? -1 : grid;
     }
 
     /**
@@ -354,12 +426,26 @@ public final class Grids {
      * whose window is not known yet (a new grid's lines come before its {@code win_pos}).
      */
     private void touched(int grid) {
+        pageTouched(grid);
         boolean unknown = !windowOfGrid.containsKey(grid);
         if (drawnWindow != -1 && (isDrawn(grid) || unknown)) {
             changed = true;
         }
         if (drawFloats && (isFloat(grid) || unknown)) {
             floatsChanged = true; // a new float's lines come before its win_float_pos
+        }
+    }
+
+    /** Marks the page whose window {@code grid} shows, if any, as changed; a grid not known yet may be one. */
+    private void pageTouched(int grid) {
+        if (pages.isEmpty() || grid < 0) {
+            return;
+        }
+        Integer win = windowOfGrid.get(grid);
+        if (win == null) {
+            pagesChanged.addAll(pages); // a new grid's lines come before its win_pos
+        } else if (pages.contains(win)) {
+            pagesChanged.add(win);
         }
     }
 
