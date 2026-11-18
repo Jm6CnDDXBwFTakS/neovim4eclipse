@@ -13,7 +13,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * The second Neovim runs {@code :help help-context}, checks that it reached {@code helphelp.txt},
  * and puts the cursor on line 27, where the editing Neovim had it.
  *
- * @param tag         the help tag to open the page by: the nearest one at or above the cursor
+ * @param tag         the help tag to open the page by: the nearest one at or above the cursor that
+ *                    the help tags know in this file, else the file's own name
  * @param file        the help file's name, without its folder, such as {@code helphelp.txt}
  * @param line        the cursor's line in that file, 1-based
  * @param runtimepath the editing Neovim's {@code 'runtimepath'}, where the help files are

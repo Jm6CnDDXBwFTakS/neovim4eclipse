@@ -425,7 +425,9 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   file's name without its folder; the cursor's line; the editing Neovim's `'runtimepath'`), goes
   back to the window it came from, closes the help window and unloads its buffer
   (`util/HelpPage`). Unloaded, not wiped: a wiped buffer's quickfix entries lose their file, and
-  `:cnext` after `:helpgrep` stopped at the next match in the same file. Text between stars is not
+  `:cnext` after `:helpgrep` stopped at the next match in the same file. An editor opened later on
+  that file (a plug-in's repository) wipes the unloaded help buffer first
+  (`CREATE_DOCUMENT_BUFFER`), so the document gets the file's name. Text between stars is not
   always a tag (`*.c,*.txt` in an example), so each candidate is looked up in the help tags
   (`taglist()` in the help buffer), not taken by its looks. The help Neovim falls back to
   `:help <file>` if the tag is not found, and shows Neovim's error if neither is.

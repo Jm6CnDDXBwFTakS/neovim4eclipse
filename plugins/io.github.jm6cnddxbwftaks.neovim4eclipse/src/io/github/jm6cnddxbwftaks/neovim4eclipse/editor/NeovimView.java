@@ -309,7 +309,8 @@ public final class NeovimView extends ViewPart {
         screenForHelp = forHelp;
         events.session = session;
         if (events.endedEarly) {
-            onEnded(); // it ended while starting: the next content starts a new one
+            LOG.fine("The Neovim view's Neovim ended while it started");
+            onEnded(); // the next content starts a new one
             return;
         }
         columns = startColumns;

@@ -800,7 +800,7 @@ t.test(':vert help and :tab help are handed over too, back in the editor they ca
   end
 end)
 
-t.test('a line under a tag is reached by that tag; a page with no tag above the cursor by its first', function()
+t.test('line 1 of a page is reached by the file\'s own tag; a line under a tag by that tag', function()
   commands()
   t.forget()
   vim.cmd('help helphelp.txt')
@@ -808,6 +808,21 @@ t.test('a line under a tag is reached by that tag; a page with no tag above the 
   local tag, _, line = unpack(t.sent('eclipse_view_help')[1])
   t.eq('helphelp.txt', tag, 'line 1 holds the file tag')
   t.eq(1, line)
+  t.forget()
+  vim.cmd('help help-context')
+  t.wait_for('the second page', function() return #t.sent('eclipse_view_help') == 1 end)
+  t.eq('help-context', t.sent('eclipse_view_help')[1][1])
+end)
+
+t.test('an editor on a help file the view took gets the file\'s name, not an unnamed buffer', function()
+  commands()
+  t.forget()
+  vim.cmd('help helphelp.txt')
+  t.wait_for('the page', function() return #t.sent('eclipse_view_help') == 1 end)
+  local name = vim.fn.fnamemodify(vim.env.VIMRUNTIME .. '/doc/helphelp.txt', ':p')
+  local buf, named = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  t.eq(true, named)
+  t.eq(name, vim.api.nvim_buf_get_name(buf))
 end)
 
 t.test(':helpgrep and :cnext go on through the matches, one page each, even inside one file', function()

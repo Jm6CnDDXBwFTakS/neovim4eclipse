@@ -966,7 +966,11 @@ final class LuaScripts {
      * ({@code :b 1}, {@code Ctrl-^}); Eclipse's text replaces that. Only a buffer that is another
      * document's now ({@code acwrite}, see {@link #DOCUMENT_BUFFER}), or a special one (help, a
      * terminal), is not reused: a new buffer is made, left unnamed (the second result is
-     * {@code false}), since two documents must not share one. The third result says whether the
+     * {@code false}), since two documents must not share one. Except a help page the Neovim view
+     * took ({@link #WINDOWS}, {@code take_help}): unloaded and in no window, kept only for
+     * {@code :helpgrep}'s list. It is wiped, and the document gets its name, as if no help had
+     * been opened (example: {@code :help myplugin}, then {@code doc/myplugin.txt} opened in an
+     * editor from the plug-in's repository); that file's entries in the list are lost. The third result says whether the
      * buffer was reused: its first push then puts the cursor on {@code '"} ({@link #GO_TO_LAST_POSITION}).
      */
     static final String CREATE_DOCUMENT_BUFFER = """
@@ -975,7 +979,12 @@ final class LuaScripts {
             local reused = vim.fn.bufexists(name) == 1
             if reused then
               buf = vim.fn.bufadd(name) -- the existing one, by its exact name
-              if vim.bo[buf].buftype ~= '' then
+              if vim.bo[buf].buftype == 'help' and not vim.api.nvim_buf_is_loaded(buf)
+                  and #vim.fn.win_findbuf(buf) == 0 then
+                vim.api.nvim_buf_delete(buf, { force = true })
+                buf = vim.fn.bufadd(name)
+                reused = false
+              elseif vim.bo[buf].buftype ~= '' then
                 return { vim.api.nvim_create_buf(true, true), false, false }
               end
             else
@@ -1451,9 +1460,12 @@ final class LuaScripts {
             -- a tag (`*.c,*.txt` in an example, `a*b*`), so each candidate is checked where it ends,
             -- in the help tags (taglist() in a help buffer reads them), not by its looks. Example:
             -- on the line under "*help-context*", that tag; on line 1 of helphelp.txt, "helphelp.txt".
+            -- At most 200 candidates are looked up (each about 0.1 ms): a page whose folder has no
+            -- tags file, reached by :helpgrep, would otherwise pause Neovim on every star above.
             local function nearest_tag(buf, line, file)
               local lines = vim.api.nvim_buf_get_lines(buf, 0, line, false)
               local found
+              local left = 200
               vim.api.nvim_buf_call(buf, function()
                 for i = #lines, 1, -1 do
                   local candidates = {}
@@ -1461,6 +1473,10 @@ final class LuaScripts {
                     table.insert(candidates, 1, tag)
                   end
                   for _, tag in ipairs(candidates) do
+                    left = left - 1
+                    if left < 0 then
+                      return
+                    end
                     local ok, entries = pcall(vim.fn.taglist, '^' .. vim.fn.escape(tag, '\\\\.*[]~^$') .. '$')
                     for _, entry in ipairs(ok and entries or {}) do
                       if entry.name == tag and vim.fn.fnamemodify(entry.filename, ':t') == file then
@@ -1482,7 +1498,8 @@ final class LuaScripts {
             -- finds the same pages. Then, as for a report, back to the window it came from and the
             -- window closed; the help buffer is unloaded unless another window shows it. Unloaded,
             -- not wiped: a wiped buffer's quickfix entries lose their file, and :cnext after
-            -- :helpgrep would stop at the next file.
+            -- :helpgrep stopped at the next match in the same file. (CREATE_DOCUMENT_BUFFER wipes
+            -- it after all if an editor opens that file.)
             local function take_help(win)
               if not vim.api.nvim_win_is_valid(win) or vim.fn.win_gettype(win) ~= '' then
                 return false
