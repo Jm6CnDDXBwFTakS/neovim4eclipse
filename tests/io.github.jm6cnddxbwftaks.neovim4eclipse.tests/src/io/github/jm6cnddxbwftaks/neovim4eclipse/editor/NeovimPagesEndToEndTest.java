@@ -407,7 +407,7 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
      * Ctrl+W pressed for real, through the operating system and Eclipse's key dispatcher, then
      * {@code p}: the editor has the keyboard back and is still open (Eclipse's Close did not take
      * the key). Not on macOS: there Close is Cmd+W, and posting keys needs the Accessibility
-     * permission (docs/MANUAL_CHECKS.md, card nv-view, does it by hand).
+     * permission (docs/MANUAL_CHECKS.md, card pg-ctrlw-mac, does it by hand).
      */
     @Test
     @DisabledOnOs(OS.MAC)

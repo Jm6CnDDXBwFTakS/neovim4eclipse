@@ -260,7 +260,7 @@ picture is still to be judged.
    windows, the panel lies on the editor's bottom edge and the note above it, both readable in both
    themes, with the editor's text showing around them. In the picture of the completion list, the
    list hangs under the word being completed, every entry reads, and the selected one stands out
-   in both themes. In the two pictures of the Neovim view, the text reads on the editor's
+   in both themes. In the two pictures of the page editors, the text reads on the editor's
    background in both themes, the error of `:messages` in Neovim's error color and the WARNING of
    `:checkhealth` in its warning color. In the two pictures of which-key, its panel
    lies on the editor's bottom edge from the left edge on, its lines read in both themes, and no
@@ -330,48 +330,70 @@ too.
 
 **Expect:** each step's result, after its ⇒.
 
-## Neovim view
+## Page editors (`:help`, `:messages`, `:checkhealth`)
 
-### `nv-view` A real Ctrl-W in the Neovim view on macOS
+### `pg-ctrlw-mac` A real Ctrl-W in a page editor on macOS
 
 - **On:** macos
 - **Launch:** checks
 - **Areas:** editor/NeovimPage*.java, editor/ScreenPane.java, editor/SendKeyHandler.java, editor/GridMouse.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/plugin.xml
 
-Everything else about the view is tested (`NeovimViewEndToEndTest`: where it opens, the error
-color, the cursor, the background, search, yank and paste, the wheel and a click,
-`:checkhealth neovim4eclipse`, `q`; on Linux and Windows a real Ctrl+W posted through the system),
-and its look in both themes is in the gallery (card `sh-colors`). On macOS posting keys needs the
-Accessibility permission, so the real key is checked by hand.
+Everything else about the page editors is tested (`NeovimPagesEndToEndTest`: where they open, the
+error color, the cursor, the background, search, yank and paste, the wheel and a click,
+`:checkhealth neovim4eclipse`, `:help` and `:messages` side by side, `Ctrl-W` both ways,
+`Ctrl-O` passing over them, `q`; on Linux and Windows a real Ctrl+W posted through the system;
+`NeovimPageEditorEndToEndTest`), and their look in both themes is in the gallery (card
+`sh-colors`). On macOS posting keys needs the Accessibility permission, so the real key is checked
+by hand.
 
 1. Open `n4e-alpha`'s `notes.txt`, type `:checkhealth neovim4eclipse` and Enter.
-   ⇒ The view *Neovim: checkhealth* opens with the keyboard.
-2. Press Control and W together (not Command), then `p`.
-   ⇒ `notes.txt` has the keyboard back and is still open.
+   ⇒ The editor *Neovim: checkhealth* opens below `notes.txt`, with the keyboard.
+2. Press Control and W together (not Command), then `k`.
+   ⇒ `notes.txt` above has the keyboard back; the checkhealth editor is still open.
 
 **Expect:** each step's result, after its ⇒.
 
-### `nv-help` Your plug-ins' help in the Neovim view
+### `pg-help` Your plug-ins' help in the help editor
 
 - **On:** any
 - **Launch:** normal
 - **Areas:** core/HelpProfile.java, util/HelpPage.java
 
 The mechanism is tested with a plug-in of the tests' own (`ScreenSessionIntegrationTest`,
-`windows_spec.lua`, `NeovimViewEndToEndTest`); which pages a real setup has depends on its plug-in
+`windows_spec.lua`, `NeovimPagesEndToEndTest`); which pages a real setup has depends on its plug-in
 manager (one that loads plug-ins only when first used adds their folders to `'runtimepath'` only
 then), so it is checked with your own plug-ins.
 
 1. Open any text file, type `:help` and the name of a plug-in you installed (its help tag, as
    in a terminal Neovim: `:help lazy.nvim`, `:help telescope`), and Enter.
-   ⇒ The view *Neovim: help* opens on that plug-in's page, with its colors.
-2. In the view, `Ctrl-]` on a link, then `Ctrl-T`.
+   ⇒ The editor *Neovim: help* opens below, on that plug-in's page, with its colors.
+2. In it, `Ctrl-]` on a link, then `Ctrl-T`.
    ⇒ The link's page, then back.
 3. `q`.
-   ⇒ The view closes.
+   ⇒ The help editor closes.
 
 **Expect:** each step's result, after its ⇒; a tag a terminal Neovim with your config does not find
 either is not this card's failure.
+
+### `pg-restart` No page editor after a restart
+
+- **On:** any
+- **Launch:** checks
+- **Areas:** editor/NeovimPageEditor.java, editor/NeovimPageInput.java, editor/EditorAttachManager.java
+
+A page editor is never brought back: its second Neovim ended with Eclipse. Eclipse still keeps its
+tab in the saved layout, which the plug-in closes at the start (`NeovimPageEditor.closeLeftovers`).
+The tests' Eclipse saves its layout differently from yours, so only a real restart shows it.
+
+1. Open `n4e-alpha`'s `notes.txt`, type `:help`, Enter; then click `notes.txt` and type
+   `:messages`, Enter.
+   ⇒ *Neovim: help* and *Neovim: messages* below `notes.txt`, as two tabs.
+2. *File › Exit*, then start the same Eclipse again (run this card's `launch` again).
+   ⇒ `notes.txt` is back, attached to Neovim; no *Neovim: help* or *Neovim: messages* tab and no
+   empty tab, not even for a moment.
+
+**Expect:** each step's result, after its ⇒. If an empty tab shows for a moment at the start, note
+it: closing the page editors at Eclipse's exit as well would avoid it.
 
 ## Starting Neovim
 
