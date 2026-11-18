@@ -375,7 +375,9 @@ final class LuaScripts {
      * <h2>How</h2>
      * <ol>
      *   <li>{@code :Eclipse[!] {command} {args}} is a user command that sends {@code eclipse_command}
-     *       to Eclipse ({@code :Eclipse tabnext 3}). Anyone can use it, in a mapping too.</li>
+     *       to Eclipse ({@code :Eclipse tabnext 3}) with the name, the {@code !}, the arguments and
+     *       the window it ran in (the command's origin, {@code HostCommand.origin}: {@code :q}
+     *       typed in a page's window is the page's). Anyone can use it, in a mapping too.</li>
      *   <li>Just before a {@code :} line runs, {@code CmdlineLeavePre} parses it with
      *       {@code nvim_parse_cmd()}. If it is one of the commands, {@code setcmdline()} replaces it
      *       with the {@code :Eclipse} form, which Neovim then runs instead: {@code :tabn 3} becomes
@@ -569,7 +571,7 @@ final class LuaScripts {
                   end
                 end
               end
-              vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_command', name, o.bang, args)
+              vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_command', name, o.bang, args, vim.api.nvim_get_current_win())
               if command then
                 local file = args[#args]
                 if file and file:sub(1, 2) ~= '++' and canonical(file) ~= canonical(vim.api.nvim_buf_get_name(0)) then
@@ -1934,7 +1936,8 @@ final class LuaScripts {
             end
 
             local function send(words)
-              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_command', words[1], false, vim.list_slice(words, 2))
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_command', words[1], false, vim.list_slice(words, 2),
+                vim.api.nvim_get_current_win())
             end
 
             --- Toggle Split Editor in an editor Neovim drives (SPLIT_WINDOW): :split, or :vsplit

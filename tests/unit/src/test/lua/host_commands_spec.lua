@@ -3,7 +3,7 @@
 
 -- LuaScripts.HOST_COMMANDS: which : lines Eclipse carries out. Neovim parses the line
 -- (nvim_parse_cmd), CmdlineLeavePre swaps it for ":Eclipse <name> <args>", and that command sends
--- eclipse_command (name, bang, args) to Eclipse. What Eclipse then does with it is HostCommandTest
+-- eclipse_command (name, bang, args, the window it ran in) to Eclipse. What Eclipse then does with it is HostCommandTest
 -- and HostCommandRunnerTest (tests/unit, no Neovim). See harness.lua for how these tests run.
 
 local t = ...
@@ -27,7 +27,7 @@ t.test('a typed line, a mapping, a macro and @: all reach Eclipse, parsed by Neo
   vim.fn.setreg('a', ':tabn 3\r')
 
   t.type(':wa<CR>') -- an abbreviation: Neovim expands it to wall
-  t.eq({ { 'wall', false, {} } }, t.sent('eclipse_command'))
+  t.eq({ { 'wall', false, {} } }, t.commands())
   t.eq('wa', vim.fn.histget(':', -1), 'the history keeps the line as typed, not the :Eclipse one')
 
   t.type('<Space>q')
@@ -40,7 +40,19 @@ t.test('a typed line, a mapping, a macro and @: all reach Eclipse, parsed by Neo
     { 'tabnext', false, { '3' } },
     { 'wall', false, {} },
     { 'quit', true, {} },
-  }, t.sent('eclipse_command'))
+  }, t.commands())
+end)
+
+t.test('each command names the window it ran in, its origin', function()
+  start()
+  local first = vim.api.nvim_get_current_win()
+  t.type(':wa<CR>')
+  vim.cmd('noautocmd tabnew')
+  local second = vim.api.nvim_get_current_win()
+  t.type(':q<CR>')
+  local sent = t.sent('eclipse_command')
+  t.eq({ 'wall', first }, { sent[1][1], sent[1][4] })
+  t.eq({ 'quit', second }, { sent[2][1], sent[2][4] }, ':q typed in another window names that one')
 end)
 
 t.test('arguments are passed as typed, a count becomes the argument, and | goes on', function()
@@ -54,7 +66,7 @@ t.test('arguments are passed as typed, a count becomes the argument, and | goes 
     { 'edit', false, { sent_path(vim.fn.getcwd() .. '/my file.txt') } },
     { 'tabnext', false, { '2' } },
     { 'quit', true, {} },
-  }, t.sent('eclipse_command'))
+  }, t.commands())
   t.eq(1, vim.g.after, 'the command after | ran')
 end)
 
@@ -76,7 +88,7 @@ t.test('every command of a | chain is looked at: :w | q writes in Neovim, then E
   local buf = t.document('A.txt', { 'a' })
   t.type(':w | q<CR>')
   t.eq({ buf }, asked, 'Neovim wrote, through Eclipse')
-  t.eq({ { 'quit', false, {} } }, t.sent('eclipse_command'))
+  t.eq({ { 'quit', false, {} } }, t.commands())
   t.eq({}, t.sent('eclipse_buffer_closed'), 'no :quit reached Neovim')
   t.eq(2, #vim.api.nvim_list_wins(), 'nothing was closed')
   t.eq('w | q', vim.fn.histget(':', -1), 'the history keeps the line as typed')
@@ -91,7 +103,7 @@ t.test('after a failed save, :w | q still hands the quit to Eclipse, which asks 
   t.eq({ buf }, asked)
   t.eq(true, vim.bo[buf].modified, 'not saved')
   -- Eclipse closes a dirty editor only after asking, as for a plain :q (HostCommandRunner).
-  t.eq({ { 'quit', false, {} } }, t.sent('eclipse_command'))
+  t.eq({ { 'quit', false, {} } }, t.commands())
   t.eq({}, t.sent('eclipse_buffer_closed'), 'the safety net did not close the editor behind the prompt')
   t.eq(2, #vim.api.nvim_list_wins())
 end)
@@ -105,14 +117,14 @@ t.test('a host command anywhere in a chain goes to Eclipse; the others and refus
     { 'bdelete', false, {} },
     { 'tabnext', false, { '3' } },
     { 'wall', false, {} },
-  }, t.sent('eclipse_command'))
+  }, t.commands())
   t.eq(1, vim.g.a)
   t.eq(1, vim.g.after, 'the command after the host command ran')
   vim.cmd('vsplit')
   t.forget()
   t.type(':echo 1 | q foo<CR>') -- :q takes no argument: E488, from Neovim
   t.ok(vim.v.errmsg:find('E488', 1, true), vim.v.errmsg)
-  t.eq({}, t.sent('eclipse_command'))
+  t.eq({}, t.commands())
   t.eq(2, #vim.api.nvim_list_wins())
 end)
 
@@ -124,7 +136,7 @@ t.test('a line Eclipse would refuse stays Neovim\'s', function()
   t.type(':1,2tabn<CR>') -- a range where only a count fits
   t.type(':Eclipse nope<CR>')
   t.ok(vim.v.errmsg:find('E492: Not an Eclipse command: nope', 1, true), vim.v.errmsg)
-  t.eq({}, t.sent('eclipse_command'))
+  t.eq({}, t.commands())
   t.eq(2, #vim.api.nvim_list_wins(), 'nothing was closed')
 end)
 
@@ -140,14 +152,14 @@ t.test(':bd with a range or numbers names the listed buffers it covers', functio
     { 'bdelete', false, { tostring(one), tostring(vim.fn.bufnr('two')), tostring(three) } },
     { 'bdelete', false, { tostring(three) } },
     { 'bdelete', false, { 'two' } },
-  }, t.sent('eclipse_command'))
+  }, t.commands())
   t.eq(3, #vim.fn.getbufinfo({ buflisted = 1 }), 'Neovim deleted none of them: Eclipse closes the editors')
 end)
 
 t.test(':bd of a buffer number nobody has stays Neovim\'s, which says so', function()
   start()
   t.type(':99bd<CR>') -- a number after :bd is a range: no buffer in it
-  t.eq({}, t.sent('eclipse_command'))
+  t.eq({}, t.commands())
   t.ok(vim.v.errmsg:find('E16', 1, true), vim.v.errmsg) -- Invalid range
 end)
 
@@ -157,7 +169,7 @@ t.test('a :quit Neovim runs itself (<Cmd>q) tells Eclipse through the QuitPre sa
   local buf = vim.api.nvim_get_current_buf()
   vim.cmd('nnoremap <Space>q <Cmd>q<CR>')
   t.type('<Space>q')
-  t.eq({}, t.sent('eclipse_command'), '<Cmd> lines never reach CmdlineLeavePre')
+  t.eq({}, t.commands(), '<Cmd> lines never reach CmdlineLeavePre')
   t.eq({ { buf } }, t.sent('eclipse_buffer_closed'))
 end)
 
@@ -194,7 +206,7 @@ t.test(':e name, ./name and ../name are relative to the window\'s folder, as in 
     { 'edit', false, { sent_path(app .. '/notes.txt') } },
     { 'edit', false, { sent_path(app .. '/notes.txt') } }, -- ./ is the same folder, not the file's
     { 'edit', false, { sent_path(vim.fn.fnamemodify(app, ':h') .. '/other/x.txt') } },
-  }, t.sent('eclipse_command'))
+  }, t.commands())
 end)
 
 -- Completing a cloned repository's file named x|lua=... into :e escapes the | (x\|lua=...).
@@ -208,7 +220,7 @@ t.test('a | or " in a name reaches Eclipse as part of the name, and nothing afte
   t.eq({
     { 'edit', false, { sent_path(app .. '/x|lua=vim.fn.setreg(string.char(97),string.char(80))') } },
     { 'edit', false, { sent_path(app .. '/say"hi') } },
-  }, t.sent('eclipse_command'))
+  }, t.commands())
   t.eq('clean', vim.fn.getreg('a'), 'the Lua after the | did not run')
 end)
 
@@ -236,7 +248,7 @@ for _, cmd in ipairs({ 'e', 'wq', 'x' }) do
     end
     complete_into(cmd, 'notes\nlua=vim.g.ran=1', 'no')
     t.eq(nil, vim.g.ran, 'the Lua after the line break did not run')
-    t.eq({}, t.sent('eclipse_command'), 'nothing sent to Eclipse')
+    t.eq({}, t.commands(), 'nothing sent to Eclipse')
     t.ok(vim.fn.execute('messages'):find('line break is not supported', 1, true), 'the refusal is shown')
   end)
 end
@@ -251,7 +263,7 @@ t.test('a completed name with a backslash and backticks reaches Eclipse literall
   end
   local name = 'notes\\`touch MARK\\`.txt'
   local app = complete_into('x', name, 'no')
-  t.eq({ { 'xit', false, { sent_path(app .. '/' .. name) } } }, t.sent('eclipse_command'))
+  t.eq({ { 'xit', false, { sent_path(app .. '/' .. name) } } }, t.commands())
   t.eq(0, vim.fn.filereadable(app .. '/MARK'), 'the shell command did not run')
 end)
 
@@ -260,7 +272,7 @@ end)
 t.test('a completed name with backticks reaches Eclipse literally; no shell runs', function()
   local name = 'notes`mkdir MARK`.txt'
   local app = complete_into('x', name, 'no')
-  t.eq({ { 'xit', false, { sent_path(app .. '/' .. name) } } }, t.sent('eclipse_command'))
+  t.eq({ { 'xit', false, { sent_path(app .. '/' .. name) } } }, t.commands())
   t.eq(0, vim.fn.isdirectory(app .. '/MARK'), 'the shell command did not run')
 end)
 
@@ -272,14 +284,14 @@ for _, name in ipairs({ 'x$HOME', 'a%b', 'my file.txt' }) do
       t.skip('on Windows fnameescape() leaves $ as it is, and :e expands it, as in Neovim')
     end
     local app = complete_into('e', name, name:sub(1, 1))
-    t.eq({ { 'edit', false, { sent_path(app .. '/' .. name) } } }, t.sent('eclipse_command'))
+    t.eq({ { 'edit', false, { sent_path(app .. '/' .. name) } } }, t.commands())
   end)
 end
 
 t.test(':e a b is the one file "a b", as Neovim\'s :edit reads it', function()
   local app = editing_main_in_a_project()
   t.type(':e a b<CR>')
-  t.eq({ { 'edit', false, { sent_path(app .. '/a b') } } }, t.sent('eclipse_command'))
+  t.eq({ { 'edit', false, { sent_path(app .. '/a b') } } }, t.commands())
 end)
 
 t.test(':e +cmd name sends the file alone, and the +cmd runs once Eclipse shows it', function()
@@ -288,7 +300,7 @@ t.test(':e +cmd name sends the file alone, and the +cmd runs once Eclipse shows 
   t.document('b.txt', { 'x' })
   t.forget()
   t.type(':e +3 ' .. vim.fn.fnameescape(a_name) .. '<CR>')
-  t.eq({ { 'edit', false, { sent_path(a_name) } } }, t.sent('eclipse_command'), 'no +3 for Eclipse')
+  t.eq({ { 'edit', false, { sent_path(a_name) } } }, t.commands(), 'no +3 for Eclipse')
   -- Eclipse opens a.txt: its attach push enters the buffer, then places the cursor.
   vim.cmd.buffer(vim.fn.bufnr(a_name))
   t.eq(true, t.run('GO_TO_LAST_POSITION', 'false'), 'the +cmd ran')
@@ -297,7 +309,7 @@ t.test(':e +cmd name sends the file alone, and the +cmd runs once Eclipse shows 
 
   t.forget()
   t.type(':e ++ff=unix + ' .. vim.fn.fnameescape(a_name) .. '<CR>') -- + alone: the last line
-  t.eq({ 'edit' }, vim.tbl_map(function(c) return c[1] end, t.sent('eclipse_command')))
+  t.eq({ 'edit' }, vim.tbl_map(function(c) return c[1] end, t.commands()))
   t.eq(4, vim.fn.line('.'), 'the current file: run at once')
 end)
 
@@ -309,7 +321,7 @@ t.test('%, ~ and $HOME are expanded as Neovim\'s :edit expands them; # without o
   t.eq({
     { 'edit', false, { sent_path(app .. '/src/Util.java') } }, -- beside Main.java
     { 'edit', false, { sent_path(vim.fn.expand('~') .. '/a.txt') } },
-  }, t.sent('eclipse_command'), 'nothing is sent for #')
+  }, t.commands(), 'nothing is sent for #')
   t.ok(vim.fn.execute('messages'):find('E194', 1, true), 'the error is shown')
 end)
 
@@ -320,7 +332,7 @@ t.test(':wq name and :x name get the same full path as :w name; ++p stays', func
   t.eq({
     { 'wq', false, { sent_path(app .. '/copy.txt') } },
     { 'xit', false, { '++p', sent_path(app .. '/out/copy.txt') } },
-  }, t.sent('eclipse_command'))
+  }, t.commands())
 end)
 
 t.test(':wq, :x and :exit take no +cmd: a leading + is part of the file name, as in Vim', function()
@@ -336,7 +348,7 @@ t.test(':wq, :x and :exit take no +cmd: a leading + is part of the file name, as
     { 'wq', false, { '++p', sent_path(app .. '/+Ran') } },
     { 'exit', false, { sent_path(app .. '/+3 a.txt') } },
     { 'xit', false, { sent_path(app .. '/+Ran') } },
-  }, t.sent('eclipse_command'))
+  }, t.commands())
   t.eq(nil, vim.g.ran, ':Ran never ran')
 end)
 
@@ -344,7 +356,7 @@ end)
 local function sent_names()
   return vim.tbl_map(function(c)
     return c[1] .. (c[2] and '!' or '')
-  end, t.sent('eclipse_command'))
+  end, t.commands())
 end
 
 t.test(':e of a file another editor has open is Neovim\'s :edit, so :e # toggles as in one window', function()
@@ -354,7 +366,7 @@ t.test(':e of a file another editor has open is Neovim\'s :edit, so :e # toggles
   t.forget()
 
   t.type(':e ' .. vim.fn.fnameescape(a_name) .. '<CR>')
-  t.eq({}, t.sent('eclipse_command'), 'not sent to Eclipse')
+  t.eq({}, t.commands(), 'not sent to Eclipse')
   t.eq(a, vim.api.nvim_get_current_buf(), 'Neovim entered a.txt (Eclipse follows into its editor)')
   t.type(':e #<CR>')
   t.eq(b, vim.api.nvim_get_current_buf())
@@ -362,7 +374,7 @@ t.test(':e of a file another editor has open is Neovim\'s :edit, so :e # toggles
   t.eq(a, vim.api.nvim_get_current_buf(), ':e # toggles')
   t.type('<C-o>')
   t.eq(b, vim.api.nvim_get_current_buf(), 'each :e is a jump, as in Vim')
-  t.eq({}, t.sent('eclipse_command'))
+  t.eq({}, t.commands())
 end)
 
 t.test(':e of an open file in other case (where names ignore case) or through a link is that file', function()
@@ -372,7 +384,7 @@ t.test(':e of an open file in other case (where names ignore case) or through a 
   t.document('b.txt')
   t.forget()
   t.type(':e ' .. vim.fn.fnameescape(vim.fs.dirname(a_name) .. '/A.TXT') .. '<CR>')
-  t.eq({}, t.sent('eclipse_command'), 'other case: not sent to Eclipse')
+  t.eq({}, t.commands(), 'other case: not sent to Eclipse')
   t.eq(a, vim.api.nvim_get_current_buf())
   vim.o.fileignorecase = false
   local link = vim.fn.tempname()
@@ -380,7 +392,7 @@ t.test(':e of an open file in other case (where names ignore case) or through a 
     t.type(':e #<CR>')
     t.forget()
     t.type(':e ' .. vim.fn.fnameescape(link .. '/a.txt') .. '<CR>')
-    t.eq({}, t.sent('eclipse_command'), 'through a link (a junction on Windows): not sent to Eclipse')
+    t.eq({}, t.commands(), 'through a link (a junction on Windows): not sent to Eclipse')
     t.eq(a, vim.api.nvim_get_current_buf())
   end
 end)
@@ -417,5 +429,5 @@ t.test(':e alone and :e! are left as they are', function()
   editing_main_in_a_project()
   t.type(':e<CR>')
   t.type(':e!<CR>')
-  t.eq({ { 'edit', false, {} }, { 'edit', true, {} } }, t.sent('eclipse_command'))
+  t.eq({ { 'edit', false, {} }, { 'edit', true, {} } }, t.commands())
 end)

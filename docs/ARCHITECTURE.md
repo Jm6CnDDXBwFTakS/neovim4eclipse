@@ -276,7 +276,14 @@ editor, as before. A page's window can take the focus without the document
 `BufEnter` is known as the focus moving (not undone), its cursor reports are no caret's, and the
 caret's calls (`setCursor`, `getCursor`) name the attached window instead of Neovim's current one.
 `focusAttachedAsync`, an editor shown, or the page window's close give the focus back.
-([GLOSSARY.md](GLOSSARY.md) has the words.)
+A host command carries the window it ran in (`HostCommand.origin`, the fourth value of
+`eclipse_command`), and `util/CommandOrigin` is the one rule for whose it is: a page with the
+focus takes only its own window's commands, a text editor every command not from a page's window,
+and one without an origin goes to the focus as before. So a `:q` typed in a page and read after a
+click back into the code is dropped instead of closing the code. What a page does with a command
+from its own window is `util/PageCommands`: `:q` closes the page, `:split` makes a second view of
+it, `:e file` opens the file in the code's tab group, `:wa` is done as from the code, `:wq` is
+refused with Vim's E382. ([GLOSSARY.md](GLOSSARY.md) has the words.)
 
 ### 7. Eclipse is Neovim's clipboard provider
 

@@ -9,9 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
@@ -82,7 +84,10 @@ class FocusRouterTest {
                 }
             }
         });
-        router.mode.accept("n");
+        try (ExpectedLog log = ExpectedLog.of(FocusRouter.class)) {
+            router.mode.accept("n");
+            log.assertLogged(Level.WARNING, "The mode event failed");
+        }
         router.mode.accept("i");
         assertEquals(List.of("n", "i"), heard);
     }
@@ -102,5 +107,21 @@ class FocusRouterTest {
         router.floatingWindows.accept(List.of());
         router.mode.accept("n"); // not overridden: the empty default
         assertEquals(List.of("recording q", "command", "floats 0"), heard);
+    }
+
+    /** A command whose origin the rule says is another part's is dropped; one without is passed on. */
+    @Test
+    void aCommandFromAnotherPartsWindowIsDropped() {
+        FocusRouter router = new FocusRouter();
+        List<Integer> heard = new ArrayList<>();
+        router.focus(new FocusTarget() {
+            @Override public void onHostCommand(HostCommand command) { heard.add(command.origin()); }
+        });
+        router.setCommandRule(c -> c.origin() != 1004);
+        HostCommand quit = HostCommand.of("quit", false, List.of());
+        router.hostCommand.accept(quit.from(1004));
+        router.hostCommand.accept(quit.from(1001));
+        router.hostCommand.accept(quit);
+        assertEquals(List.of(1001, HostCommand.NO_WINDOW), heard);
     }
 }

@@ -92,7 +92,8 @@ class NotificationBridgeTest {
                         + (action.step() == 0 ? "" : ":step " + action.step()));
             }
             @Override public void onHostCommand(HostCommand command) {
-                events.add("command:" + command.kind() + (command.force() ? "!" : "") + ":" + command.args());
+                events.add("command:" + command.kind() + (command.force() ? "!" : "") + ":" + command.args()
+                        + (command.origin() == HostCommand.NO_WINDOW ? "" : " in " + command.origin()));
             }
             @Override public void onQuickfix(QuickfixEntries.Kind kind, String arg, boolean bang) {
                 events.add("quickfix:" + kind + (bang ? "!" : "") + ":" + arg);
@@ -159,6 +160,15 @@ class NotificationBridgeTest {
         }
         notify("eclipse_command", "quit");                          // malformed: dropped
         assertEquals(List.of("command:EDIT:[my file.txt]", "command:QUIT!:[]"), events);
+    }
+
+    /** The fourth value is the window the command ran in; without it, or not a number, the command has no origin. */
+    @Test
+    void hostCommandCarriesTheWindowItRanIn() {
+        notify("eclipse_command", "quit", false, List.of(), 1004);
+        notify("eclipse_command", "quit", false, List.of());
+        notify("eclipse_command", "quit", false, List.of(), "not a window");
+        assertEquals(List.of("command:QUIT:[] in 1004", "command:QUIT:[]", "command:QUIT:[]"), events);
     }
 
     /** {@code :Eproblems! warning}, {@code :Etasks}: the kind, the argument, the bang; and {@code :copen}'s view. */

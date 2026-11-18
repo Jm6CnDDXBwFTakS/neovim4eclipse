@@ -608,7 +608,10 @@ final class NotificationBridge implements Incoming {
             LOG.warning(() -> "Eclipse cannot carry out :" + name + (bang ? "!" : "") + " " + commandArgs);
             return;
         }
-        sink.onHostCommand(command);
+        // The fourth argument, the window the command ran in; a sender that names none (an older
+        // script, a test) leaves the command without an origin, which the attached editor takes.
+        Integer win = args.size() > 3 ? toInt(args.get(3)) : null;
+        sink.onHostCommand(win == null || win < 1 ? command : command.from(win));
     }
 
     /**

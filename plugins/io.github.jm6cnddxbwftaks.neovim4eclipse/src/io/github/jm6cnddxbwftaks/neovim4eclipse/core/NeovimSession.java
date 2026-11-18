@@ -33,6 +33,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandOrigin;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
@@ -288,6 +289,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 this::modeChanged);
         this.keyInput = new KeyInput(new KeyInputNeovim(), state, status, () -> leaveInsertPush);
         this.clipboard = new ClipboardRegisters(clipboard, System.lineSeparator());
+        focus.setCommandRule(c -> CommandOrigin.belongsToFocus(c.origin(), buffers.focusedPage(),
+                buffers.isPageWindow(c.origin())));
         listenForFocus();
     }
 

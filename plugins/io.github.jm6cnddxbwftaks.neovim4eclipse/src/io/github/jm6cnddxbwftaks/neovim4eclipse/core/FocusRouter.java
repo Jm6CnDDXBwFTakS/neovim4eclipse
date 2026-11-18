@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -32,6 +33,11 @@ public final class FocusRouter {
     private static final Logger LOG = Logger.getLogger(FocusRouter.class.getName());
 
     private volatile FocusTarget current;
+    /**
+     * Whether a host command belongs to the part with the focus, by the window it ran in
+     * ({@code util/CommandOrigin}); the session sets it. One that does not is dropped.
+     */
+    private volatile Predicate<HostCommand> ownCommand = c -> true;
 
     /** Gives the focus to {@code target}; the part that had it hears nothing more. */
     public void focus(FocusTarget target) {
@@ -51,6 +57,11 @@ public final class FocusRouter {
         }
     }
 
+    /** Sets the rule that keeps a command from another part's window from the focus ({@link #hostCommand}). */
+    void setCommandRule(Predicate<HostCommand> rule) {
+        ownCommand = rule;
+    }
+
     /** The part with the focus, or {@code null}. */
     public FocusTarget current() {
         return current;
@@ -61,7 +72,13 @@ public final class FocusRouter {
     final Consumer<StatusInfo> status = s -> pass("status", t -> t.onStatus(s));
     final Consumer<CommandOutput> output = o -> pass("output", t -> t.onOutput(o));
     final Consumer<IdeAction> ideAction = a -> pass("IDE action", t -> t.onIdeAction(a));
-    final Consumer<HostCommand> hostCommand = c -> pass("host command", t -> t.onHostCommand(c));
+    final Consumer<HostCommand> hostCommand = c -> {
+        if (!ownCommand.test(c)) {
+            LOG.fine(() -> "Dropped " + c + ": it ran in a window of a part without the focus");
+            return;
+        }
+        pass("host command", t -> t.onHostCommand(c));
+    };
     final Consumer<CmdlineState.View> cmdline = v -> pass("command line", t -> t.onCmdline(v));
     final Consumer<CommandWindowView> commandWindow = v -> pass("command-line window", t -> t.onCommandWindow(v));
     final Consumer<List<FloatWindow>> floatingWindows = w -> pass("floating windows", t -> t.onFloatingWindows(w));

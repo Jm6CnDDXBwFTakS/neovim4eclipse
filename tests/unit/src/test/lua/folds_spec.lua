@@ -306,7 +306,7 @@ t.test(':fold is refused there, with a range and abbreviated', function()
     t.eq({ '3-8' }, shown_closed(), line)
     t.eq(0, vim.fn.foldlevel(11), line .. ' made no fold')
   end
-  t.eq({}, t.sent('eclipse_command'), 'nothing reaches Eclipse')
+  t.eq({}, t.commands(), 'nothing reaches Eclipse')
 end)
 
 t.test(':fold after a | is refused too, and an error stops the rest of the line, as in Vim', function()

@@ -8,6 +8,7 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.core.Rpc.await;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -125,6 +126,12 @@ final class DocumentBuffers {
      * Written on the input and RPC threads, read from any thread.
      */
     private volatile int focusedPage = EditorWindow.UNKNOWN;
+    /**
+     * The windows that have been pages' ({@link #focusPage}) and are still open: a command from one
+     * of them is no text editor's ({@code util/CommandOrigin}). Example: {@code :q} typed in the
+     * messages page just before the code took the focus back is dropped, not run on the code.
+     */
+    private final Set<Integer> pageWindows = ConcurrentHashMap.newKeySet();
 
     /**
      * @param home    the home buffer, shown in the home window
@@ -177,12 +184,19 @@ final class DocumentBuffers {
     boolean focusPage(int win) throws Exception {
         int before = focusedPage;
         focusedPage = win;
+        pageWindows.add(win);
         Object answer = await(api.execLua(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(win))));
         if (answer instanceof Number n && n.intValue() == win) {
             return true;
         }
         focusedPage = before;
+        pageWindows.remove(win);
         return false;
+    }
+
+    /** Whether {@code win} is a page's window (one {@link #focusPage} entered, still open). */
+    boolean isPageWindow(int win) {
+        return pageWindows.contains(win);
     }
 
     /** Gives the focus back to the attached window ({@link #returnToAttached}); a page loses it. */
@@ -500,6 +514,7 @@ final class DocumentBuffers {
         if (winid == focusedPage) {
             focusedPage = EditorWindow.UNKNOWN; // Neovim enters another window, whose BufEnter decides
         }
+        pageWindows.remove(winid);
     }
 
     /**

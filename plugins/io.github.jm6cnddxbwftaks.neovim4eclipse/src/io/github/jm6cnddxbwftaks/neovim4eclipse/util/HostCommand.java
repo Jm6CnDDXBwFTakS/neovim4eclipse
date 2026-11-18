@@ -59,8 +59,15 @@ import java.util.TreeMap;
  * @param writesUnchanged whether the command writes even when nothing changed, as Vim's
  *                        {@code :wq} does; {@code :x} and {@code :exit} write only changes. Only a new file's editor uses it (an untouched one still creates
  *                        the empty file), since Eclipse saves only modified editors
+ * @param origin          the Neovim window the command ran in ({@link #from});
+ *                        {@link #NO_WINDOW} when Neovim did not say. A command belongs to the part
+ *                        shown from that window: {@code :q} typed in a page closes the page, not
+ *                        the code editor behind it ({@code core/FocusRouter})
  */
-public record HostCommand(Kind kind, boolean force, List<String> args, boolean writesUnchanged) {
+public record HostCommand(Kind kind, boolean force, List<String> args, boolean writesUnchanged, int origin) {
+
+    /** {@link #origin()} when Neovim did not say where the command ran. Window ids are 1000 and up. */
+    public static final int NO_WINDOW = -1;
 
     public enum Kind {
         /** {@code :wa}: save every modified editor. */
@@ -185,7 +192,16 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         if (kind == Kind.WINDOW && WindowCommand.parse(list) == null) {
             return null; // :Eclipse window typed by hand, with words Eclipse does not know
         }
-        return new HostCommand(kind, bang, list, entry.writesUnchanged());
+        return new HostCommand(kind, bang, list, entry.writesUnchanged(), NO_WINDOW);
+    }
+
+    /**
+     * This command as run in Neovim window {@code win} (its id, from {@code eclipse_command}).
+     * Example: {@code HostCommand.of("quit", false, List.of()).from(1003)} is {@code :q} typed in
+     * window 1003.
+     */
+    public HostCommand from(int win) {
+        return new HostCommand(kind, force, args, writesUnchanged, win);
     }
 
     /**

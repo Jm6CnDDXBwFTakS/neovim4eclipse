@@ -69,7 +69,7 @@ A spec file gets the harness as its argument:
   t.test(':wa goes to Eclipse', function()
     t.run('HOST_COMMANDS', t.host_rules)
     t.type(':wa<CR>')
-    t.eq({ { 'wall', false, {} } }, t.sent('eclipse_command'))
+    t.eq({ { 'wall', false, {} } }, t.commands())
   end)
 ]]
 
@@ -191,6 +191,18 @@ function t.sent(name)
     if n[1] == name then
       found[#found + 1] = vim.list_slice(n, 2)
     end
+  end
+  return found
+end
+
+--- The commands sent to Eclipse (eclipse_command) so far, each as { name, bang, args }: what
+--- t.sent('eclipse_command') gives without the fourth value, the window the command ran in
+--- (HostCommand.origin), which most tests do not look at. Example: after :wa,
+--- t.commands() is { { 'wall', false, {} } }.
+function t.commands()
+  local found = {}
+  for _, c in ipairs(t.sent('eclipse_command')) do
+    found[#found + 1] = { c[1], c[2], c[3] }
   end
   return found
 end

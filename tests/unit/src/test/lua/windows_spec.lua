@@ -382,7 +382,7 @@ end
 --- The words of each window command sent since the last t.forget(), as { name, args... }.
 local function sent_windows()
   local found = {}
-  for _, c in ipairs(t.sent('eclipse_command')) do
+  for _, c in ipairs(t.commands()) do
     found[#found + 1] = vim.list_extend({ c[1] }, c[3])
   end
   return found
@@ -526,6 +526,13 @@ t.test('a split of a name with a line break is refused, and nothing of it runs',
   t.eq({}, sent_windows())
 end)
 
+t.test('a Ctrl-W key names the window it was typed in', function()
+  commands()
+  t.type('<C-w>l')
+  local sent = t.sent('eclipse_command')
+  t.eq({ 'window', vim.api.nvim_get_current_win() }, { sent[1][1], sent[1][4] })
+end)
+
 t.test('the Ctrl-W keys send their window command, with the count', function()
   commands()
   vim.o.splitbelow, vim.o.splitright = false, false
@@ -563,7 +570,7 @@ t.test('the Ctrl-W keys send their window command, with the count', function()
   t.forget()
   t.type('<C-w>q')
   t.type('<C-w>c')
-  t.eq({ { 'quit', false, {} }, { 'quit', false, {} } }, t.sent('eclipse_command'))
+  t.eq({ { 'quit', false, {} }, { 'quit', false, {} } }, t.commands())
 end)
 
 t.test('Ctrl-W ^ splits onto the alternate file, Ctrl-W f onto the file under the cursor', function()
@@ -610,7 +617,7 @@ t.test(':wincmd, :only and :resize send the same as the keys', function()
   }, sent_windows())
   t.forget()
   t.type(':wincmd q<CR>')
-  t.eq({ { 'quit', false, {} } }, t.sent('eclipse_command'))
+  t.eq({ { 'quit', false, {} } }, t.commands())
 end)
 
 -- Vim's tab pages are Eclipse's editor tabs: a new editor tab of this stack, with the same rules
@@ -663,7 +670,7 @@ t.test(':tabonly closes the other editor tabs; :tabonly! and a count in front ar
   t.type(':2tabonly<CR>')
   t.ok(vim.v.errmsg:find('write the tab after', 1, true), vim.v.errmsg)
   t.eq(tabs, #vim.api.nvim_list_tabpages(), 'Neovim closed no tab page')
-  t.eq({}, t.sent('eclipse_command'))
+  t.eq({}, t.commands())
 end)
 
 t.test('splits that jump to a tag are refused, with why', function()
@@ -674,14 +681,14 @@ t.test('splits that jump to a tag are refused, with why', function()
     t.ok(vim.v.errmsg:find('jumps to a tag', 1, true), keys .. ': ' .. vim.v.errmsg)
   end
   t.eq(1, windows_in_tab(), 'no second window')
-  t.eq({}, t.sent('eclipse_command'))
+  t.eq({}, t.commands())
 end)
 
 t.test(':close and :tabclose go to Eclipse, which closes the editor', function()
   commands()
   t.type(':close<CR>')
   t.type(':tabc!<CR>')
-  t.eq({ { 'close', false, {} }, { 'tabclose', true, {} } }, t.sent('eclipse_command'))
+  t.eq({ { 'close', false, {} }, { 'tabclose', true, {} } }, t.commands())
   t.eq(2, #vim.api.nvim_list_tabpages(), 'Neovim closed nothing itself')
 end)
 
@@ -971,10 +978,10 @@ t.test(':q, :close, Ctrl-W q and Ctrl-W c in a floating window close it, not the
     t.ok(not vim.api.nvim_win_is_valid(float), keys .. ' closed the float')
     t.eq(win, vim.api.nvim_get_current_win(), keys .. ': back in the editor\'s window')
   end
-  t.eq({}, t.sent('eclipse_command'))
+  t.eq({}, t.commands())
   t.eq({}, t.sent('eclipse_buffer_closed'), 'no QuitPre report either')
   t.type(':q<CR>') -- in the editor's window again: Eclipse's
-  t.eq({ { 'quit', false, {} } }, t.sent('eclipse_command'))
+  t.eq({ { 'quit', false, {} } }, t.commands())
 end)
 
 -- A count in front reaches Eclipse already turned into one of Neovim's hidden tab pages, which says
@@ -998,9 +1005,9 @@ t.test(':tabclose 2 names an editor tab; a count in front is refused; :tabclose 
     t.ok(vim.v.errmsg:find('tabclose', 1, true), line .. ': ' .. vim.v.errmsg)
   end
   t.eq(tabs, #vim.api.nvim_list_tabpages(), 'Neovim closed no tab')
-  t.eq({}, t.sent('eclipse_command'))
+  t.eq({}, t.commands())
   t.type(':tabclose<CR>')
-  t.eq({ { 'tabclose', false, {} } }, t.sent('eclipse_command'), 'the refusal of the earlier line is not left over')
+  t.eq({ { 'tabclose', false, {} } }, t.commands(), 'the refusal of the earlier line is not left over')
 end)
 
 t.test("the plug-in's own closes forget the window, though they fire no WinClosed", function()

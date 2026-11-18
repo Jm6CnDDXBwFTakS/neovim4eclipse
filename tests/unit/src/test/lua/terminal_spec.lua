@@ -46,7 +46,7 @@ t.test('a typed :terminal starts nothing in Neovim and reaches Eclipse, in every
     { 'terminal', false, { 'make', '|', 'tee', 'log' } },
     { 'terminal', false, {} },
     { 'terminal', false, { 'ls' } },
-  }, t.sent('eclipse_command'))
+  }, t.commands())
   t.eq({}, terminals(), 'no terminal was started')
   t.eq(nil, vim.uv.fs_stat(marker), 'its command did not run')
   local kept = false
@@ -66,7 +66,7 @@ t.test('a terminal started another way runs on, and the message names it', funct
   t.wait_for('the program to finish its work', function()
     return vim.uv.fs_stat(marker) ~= nil
   end)
-  t.eq({}, t.sent('eclipse_command'), 'not handed to Eclipse')
+  t.eq({}, t.commands(), 'not handed to Eclipse')
   t.ok(messages():find('is running hidden: Eclipse cannot show a Neovim terminal. It stops when it exits or Neovim does.', 1, true),
     'the message: ' .. messages())
   -- A list is named by its program alone, as a full path (its form is the system's: check the name only).
@@ -86,6 +86,6 @@ t.test('a <Cmd> mapping is not a : line: its terminal starts, with the message',
   vim.keymap.set('n', '<Space>t', '<Cmd>terminal ' .. vim.fn.shellescape(vim.v.progpath) .. ' --version<CR>')
   t.type('<Space>t')
   t.eq(1, #terminals(), 'Neovim started it')
-  t.eq({}, t.sent('eclipse_command'))
+  t.eq({}, t.commands())
   t.ok(messages():find('--version" is running hidden', 1, true), 'named with its command: ' .. messages())
 end)
