@@ -1030,3 +1030,68 @@ t.test("a :helpgrep title's pattern is taken as typed, after the command's name"
   t.eq('', m.helpgrep_pattern(':vimgrep /helpgrep/ %'), 'another command: none')
   t.eq('', m.helpgrep_pattern(nil))
 end)
+
+-- Pages' windows (open_page): a page editor shown from this Neovim, as the messages page will be.
+
+local function open_page(buf)
+  return t.run('OPEN_PAGE_WINDOW', tostring(buf))
+end
+
+t.test('a page window opens quietly in a tab of its own, with a page\'s options', function()
+  local home = start()
+  vim.wo.number, vim.wo.signcolumn, vim.wo.list, vim.wo.wrap = true, 'yes', true, false
+  local fired = {}
+  vim.api.nvim_create_autocmd({ 'WinNew', 'BufWinEnter', 'TabNew' }, {
+    callback = function(ev) fired[#fired + 1] = ev.event end,
+  })
+  local page = buffer(3)
+  local win = open_page(page)
+  t.eq(home, vim.api.nvim_get_current_win(), 'not entered')
+  t.eq({}, fired, "no autocommand: the user's would run with the editor's window current")
+  t.ok(vim.api.nvim_win_get_tabpage(win) ~= vim.api.nvim_win_get_tabpage(home), 'a tab of its own')
+  t.eq({ false, 'no', false, true }, { vim.wo[win].number, vim.wo[win].signcolumn, vim.wo[win].list, vim.wo[win].wrap },
+    "a page's options, not the copied ones")
+  t.eq({ true, 'yes' }, { vim.wo[home].number, vim.wo[home].signcolumn }, "the editor's stay")
+  t.eq(true, require('neovim4eclipse.windows').is_page(win))
+  t.eq(false, require('neovim4eclipse.windows').is_page(home))
+  t.eq(-2, open_page(99999), 'a buffer that is gone')
+end)
+
+t.test('the WinNew net leaves a page window, and :q in it is no side window\'s', function()
+  start()
+  local win = open_page(buffer(3))
+  vim.api.nvim_set_current_win(win) -- with autocommands, as the focus moving there does
+  vim.cmd('doautocmd WinNew') -- the net looks at every window it has not seen
+  vim.wait(50)
+  t.ok(vim.api.nvim_win_is_valid(win), 'still open')
+  t.eq(false, require('neovim4eclipse.windows').is_side_window(win), ':q is the page\'s host command')
+end)
+
+t.test('restore_page puts the page back after Neovim put another buffer in its window', function()
+  start()
+  local page = buffer(3)
+  local win = open_page(page)
+  local other = buffer(5)
+  vim.api.nvim_win_set_buf(win, other)
+  t.eq(page, t.run('RESTORE_PAGE_WINDOW', tostring(win)))
+  t.eq(page, vim.api.nvim_win_get_buf(win))
+  t.eq(-1, t.run('RESTORE_PAGE_WINDOW', tostring(vim.api.nvim_get_current_win())), 'no page window')
+end)
+
+t.test("in a page's buffer the IDE keys are Neovim's, but gt stays Eclipse's", function()
+  start()
+  local page = buffer(3)
+  vim.api.nvim_buf_set_lines(page, 0, -1, false, { 'local foo = 1', '', 'print(foo)' })
+  local win = open_page(page)
+  vim.api.nvim_set_current_win(win)
+  vim.api.nvim_win_set_cursor(win, { 3, 7 })
+  t.forget()
+  t.type('gd')
+  t.eq({ 1, 6 }, vim.api.nvim_win_get_cursor(win), "Neovim's gd: to the first foo")
+  t.eq({}, t.sent('eclipse_action'), 'not Eclipse\'s definition')
+  local grn = vim.fn.maparg('grn', 'n', false, true)
+  t.eq(1, grn.buffer, 'grn is mapped for the page buffer')
+  t.ok(grn.desc ~= nil and not grn.desc:find('Eclipse', 1, true), "and it is Neovim's own default again: " .. tostring(grn.desc))
+  t.type('gt')
+  t.eq({ { 'next_tab', 0 } }, t.sent('eclipse_action'), 'gt moves among the editor tabs')
+end)

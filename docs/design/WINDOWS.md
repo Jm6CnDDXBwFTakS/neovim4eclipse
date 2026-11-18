@@ -330,6 +330,30 @@ VIEWPORT.md was built for one window; with a window per editor:
 - **Events by window:** `eclipse_cursor`, `eclipse_topline` and `eclipse_wrap` send the window id,
   and the session filters by the attached window, so two editors on one file are told apart.
 
+## 4a. Pages' windows
+
+A page editor shown from this Neovim (not from a second Neovim of its own) has a window of its
+own too, alone in a hidden tabpage: the one-to-one rule, one Eclipse editor, one Neovim window,
+holds for pages as for text editors. `open_page` (`LuaScripts.OPEN_PAGE_WINDOW`) opens it:
+
+- **Quietly** (`'eventignore'` all): its options are a page's, set here, not the code look a
+  user's `BufWinEnter` gives an editor's window (`'colorcolumn'`, `'relativenumber'`). Entering
+  the page later (`DocumentBuffers.focusPage`) fires `WinEnter` and `BufEnter` as for any
+  window. (An editor's window opens with autocommands on, and a `BufWinEnter` there runs with the
+  new window current, probed on 0.12.6: its options land on the new editor, not the one before.)
+- **With a page's options**, set on its window: a new window copies the current one's
+  `'number'`, sign and fold columns, `'list'`, `'nowrap'` and the like, and a buffer shown again
+  gets the options of the window it was last shown in.
+- **Marked as the plug-in's** (`own[win] = 'page'`): the WinNew net leaves it, and `:q` in it is a
+  host command (`is_side_window` is false), which goes to the page by its origin
+  (`util/CommandOrigin`).
+- **Its IDE keys are Neovim's**: `gd`, `K`, `gr*`, `gO` and `Ctrl-]` get, buffer-locally, the
+  mapping they had before `IDE_KEYS` mapped them (Neovim's default for `gr*`, through `mapset()`),
+  or the key itself without mappings; `gt` and `gT` stay Eclipse's editor tabs.
+- **It keeps its buffer**: when Neovim puts another buffer in it (`gf` on a path, `:b 3`),
+  `util/EnterDecision` gives the page its buffer back (`restore_page`) and opens the file's editor,
+  which shows it in its own window: a page's window never travels (`wasEnteredFromPage`).
+
 ## 5. Tests
 
 - `tests/unit`: `EditorWindowsTest` (the bookkeeping, the swap, the transfer, a restarted session);
@@ -340,7 +364,8 @@ VIEWPORT.md was built for one window; with a window per editor:
   `NeovimWindowsIntegrationTest` (through the session: independent cursors and shared undo on one
   file, cursor reports from another editor's window dropped, a typed `:lcd` surviving a switch, the
   travel and its jump history, an editor without a window taking the travelling one, the untitled
-  folder rule, the safety net, a wipe closing the windows, a restart).
+  folder rule, the safety net, a wipe closing the windows, a restart, a page's window taking the
+  focus and keeping its buffer); `EnterDecisionTest` (every `BufEnter` case, pages' too).
 - UI tests: `TwoEditorsEndToEndTest.eachEditorOnOneFileHasItsOwnNeovimWindow`,
   `EditorEndToEndTest.ctrlOAcrossFilesGoesBackThroughTheWholeJumpHistory`,
   `ViewportEndToEndTest.anEditorSwitchKeepsEachEditorsView`,

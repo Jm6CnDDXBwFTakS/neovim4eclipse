@@ -456,16 +456,13 @@ class NeovimWindowsIntegrationTest {
     }
 
     /**
-     * A scratch window with {@code lines} (a Lua list) in a tabpage of its own, opened as the
-     * editors' windows are, with autocommands off: otherwise the WINDOWS net closes a plain window
-     * the plug-in did not open, as it should for any other.
+     * A page's window ({@code NeovimSession.openPageWindow}) on a new scratch buffer holding
+     * {@code lines} (a Lua list), as a page editor would open one.
      */
     private static int openPageWindow(NeovimSession s, String lines) throws Exception {
-        return number(s, "local b = vim.api.nvim_create_buf(false, true)"
-                + " vim.api.nvim_buf_set_lines(b, 0, -1, false, " + lines + ")"
-                + " local ei = vim.o.eventignore vim.o.eventignore = 'all'"
-                + " local w = vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(b, false, {}))"
-                + " vim.o.eventignore = ei return w");
+        int buf = number(s, "local b = vim.api.nvim_create_buf(false, true)"
+                + " vim.api.nvim_buf_set_lines(b, 0, -1, false, " + lines + ") return b");
+        return s.openPageWindow(buf);
     }
 
     /**
@@ -473,8 +470,7 @@ class NeovimWindowsIntegrationTest {
      * window beside the attached document"): Neovim enters the page's window and is not sent back,
      * the page's cursor is no caret of the document's, the caret's calls still move the attached
      * window's cursor, the focus events reach the target that has the focus, and the focus comes
-     * back to the attached window. The page here is a scratch window in a tabpage of its own, as
-     * the editors' windows are.
+     * back to the attached window.
      */
     @Test
     void aPageWindowTakesTheFocusAndTheAttachedDocumentStaysAttached() throws Exception {
@@ -537,6 +533,54 @@ class NeovimWindowsIntegrationTest {
             s.lua("vim.api.nvim_win_close(" + page + ", true)");
             waitFor(() -> s.focusedPage() == EditorWindow.UNKNOWN, "the page's focus to end");
             waitFor(() -> currentWin(s) == a.winid(), "Neovim back in the attached window");
+        }
+    }
+
+    /**
+     * In a page's window, Neovim entering an open document's buffer ({@code :b}, {@code gf}) gives
+     * the page its buffer back, and the document's editor is followed from the page (no travel).
+     */
+    @Test
+    void aDocumentEnteredInAPageWindowGoesToItsEditorAndThePageKeepsItsText() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer doc = new DocumentBuffer("");
+            DocumentBuffer other = new DocumentBuffer("");
+            EditorWindow a = new EditorWindow();
+            EditorWindow b = new EditorWindow();
+            s.showWindow(other, b, "");
+            s.showWindow(doc, a, "");
+            int page = openPageWindow(s, "{'p1'}");
+            int pageBuf = number(s, "return vim.api.nvim_win_get_buf(" + page + ")");
+            List<Integer> followed = new CopyOnWriteArrayList<>();
+            List<Boolean> fromPage = new CopyOnWriteArrayList<>();
+            s.setBufferEnterHandler(bufnr -> {
+                followed.add(bufnr);
+                fromPage.add(s.wasEnteredFromPage());
+            });
+            s.focusPageAsync(page);
+            NeovimBarrier.pass(s);
+            s.inputAsync(":b " + other.bufnr() + "<CR>");
+            waitFor(() -> !followed.isEmpty(), "the document followed");
+            NeovimBarrier.pass(s);
+            assertEquals(List.of(other.bufnr()), followed);
+            assertEquals(List.of(true), fromPage, "from a page: the editor takes its own window");
+            assertEquals(pageBuf, number(s, "return vim.api.nvim_win_get_buf(" + page + ")"), "the page keeps its text");
+        }
+    }
+
+    /** A window opened as no page's cannot take a page's focus. */
+    @Test
+    void onlyAPagesWindowTakesAPagesFocus() throws Exception {
+        try (NeovimSession s = start()) {
+            DocumentBuffer doc = new DocumentBuffer("");
+            EditorWindow a = new EditorWindow();
+            EditorWindow b = new EditorWindow();
+            s.showWindow(doc, b, "");
+            s.showWindow(doc, a, "");
+            s.focusPageAsync(b.winid());
+            NeovimBarrier.pass(s);
+            assertEquals(EditorWindow.UNKNOWN, s.focusedPage());
+            assertEquals(a.winid(), currentWin(s));
         }
     }
 

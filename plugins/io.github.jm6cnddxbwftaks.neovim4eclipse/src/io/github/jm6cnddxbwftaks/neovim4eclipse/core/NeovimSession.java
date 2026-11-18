@@ -342,6 +342,28 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit("focus attached window", Level.FINE, buffers::focusAttached);
     }
 
+    /**
+     * Opens a page's window on buffer {@code bufnr} ({@link DocumentBuffers#openPage}) and returns its
+     * id, or {@link EditorWindow#UNKNOWN} when the buffer is gone. Blocking: input thread only.
+     */
+    public int openPageWindow(int bufnr) throws Exception {
+        return buffers.openPage(bufnr);
+    }
+
+    /** Puts a page window's own buffer back into it ({@link DocumentBuffers#restorePage}). Queued. */
+    public void restorePageAsync(int win) {
+        submit("restore page window " + win, Level.FINE, () -> buffers.restorePage(win));
+    }
+
+    /**
+     * Whether Neovim's last move into another buffer was in a page's window ({@code gf} on a path in
+     * the messages page): the editor followed into takes its own window, and the page's does not
+     * travel. Read by the enter handlers, as {@link #wasEnteredByJump()}.
+     */
+    public boolean wasEnteredFromPage() {
+        return buffers.enteredFromPage();
+    }
+
     /** The focused page's window, or {@link EditorWindow#UNKNOWN} while the attached window has the focus. */
     public int focusedPage() {
         return buffers.focusedPage();
@@ -2251,7 +2273,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         @Override
         public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile) {
-            buffers.onEntered(bufnr, winid, jumped, projectFile, NeovimSession.this::returnToAttachedBufferAsync);
+            buffers.onEntered(bufnr, winid, jumped, projectFile, NeovimSession.this::returnToAttachedBufferAsync,
+                    () -> restorePageAsync(winid));
         }
 
         @Override

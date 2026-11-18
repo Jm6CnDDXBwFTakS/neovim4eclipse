@@ -636,14 +636,22 @@ public final class EditorAttachManager {
         EditorWindow mover;
         DocumentBuffer leftBehind;
         boolean jumped;
+        boolean fromPage;
         synchronized (this) {
-            mover = attachedPart == null ? null : windows.get(attachedPart);
             leftBehind = attachedBuffer;
             session = followedSession;
             if (session == null) {
                 return;
             }
+            // Entered in a page's window (gf on a path in the page): the page's window keeps the
+            // page (DocumentBuffers.onEntered put it back), and the editor followed into shows the
+            // file in its own window. Nothing travels: a page's window never swaps with an editor's.
+            fromPage = session.wasEnteredFromPage();
+            mover = fromPage || attachedPart == null ? null : windows.get(attachedPart);
             if (bufnr == session.getAttachedBufnr()) {
+                if (fromPage) {
+                    session.focusAttachedAsync(); // the attached document's own file: back to it
+                }
                 return; // Eclipse switched there itself in the meantime
             }
             jumped = session.wasEnteredByJump();
@@ -740,7 +748,8 @@ public final class EditorAttachManager {
                 return; // Neovim has moved on since (:cdo walks every entry): only the last is followed
             }
             jumped = session.wasEnteredByJump();
-            mover = attachedPart == null ? null : windows.get(attachedPart);
+            // From a page's window: no travel, as in followNeovimInto.
+            mover = session.wasEnteredFromPage() || attachedPart == null ? null : windows.get(attachedPart);
             leftBehind = attachedBuffer;
             page = attachedPart == null ? null : attachedPart.getSite().getPage();
         }

@@ -271,9 +271,12 @@ the one `core/FocusTarget` that has the focus (`NeovimSession.focus`); a text ed
 takes it when it attaches and gives it up when it closes. The document's own events (cursor,
 selection, folds, wrap, top line, search, highlights, buffer lines) stay with the attached editor,
 filtered by window and buffer as above. While a text editor has the focus the two are the same
-editor, as before. A page's window can take the focus without the document
-(`NeovimSession.focusPageAsync`, `DocumentBuffers.focusPage`): Neovim enters that window, its
-`BufEnter` is known as the focus moving (not undone), its cursor reports are no caret's, and the
+editor, as before. A page's window (opened by `NeovimSession.openPageWindow`, quietly, with a page's options and
+Neovim's own IDE keys: design/WINDOWS.md, "Pages' windows") can take the focus without the
+document (`NeovimSession.focusPageAsync`, `DocumentBuffers.focusPage`): Neovim enters that
+window, its `BufEnter` is known as the focus moving (not undone; every `BufEnter` case is
+`util/EnterDecision`, and a file Neovim puts in a page's window goes to its own editor while the
+page gets its buffer back), its cursor reports are no caret's, and the
 caret's calls (`setCursor`, `getCursor`) name the attached window instead of Neovim's current one.
 `focusAttachedAsync`, an editor shown, or the page window's close give the focus back.
 A host command carries the window it ran in (`HostCommand.origin`, the fourth value of

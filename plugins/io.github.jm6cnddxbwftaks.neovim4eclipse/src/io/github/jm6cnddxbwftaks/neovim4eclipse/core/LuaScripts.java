@@ -1186,10 +1186,12 @@ final class LuaScripts {
               return "Closed the floating window of " .. name .. ": Eclipse cannot show Neovim's floating"
                 .. " windows, and it would take the keys (README, Known limitations: Neovim plug-ins that draw)"
             end
-            -- The windows the plug-in opened and has not closed (the home window and the editors'):
-            -- any other plain window is a stray one (the WinNew safety net below), and a floating
-            -- or special one is a side window (M.is_side_window).
+            -- The windows the plug-in opened and has not closed (the home window, the editors' and
+            -- the pages', these marked 'page'): any other plain window is a stray one (the WinNew
+            -- safety net below), and a floating or special one is a side window (M.is_side_window).
             local own = { [home] = true }
+            -- Each page window's own buffer (M.open_page), which it keeps (M.restore_page).
+            local page_buf = {}
             -- The windows the safety net has looked at, so that it knows a new one: a floating window
             -- is closed only when it opened with the focus, never when the user entered one that
             -- was there already (Ctrl-W w into hover documentation), where :q stays Neovim's.
@@ -1312,6 +1314,94 @@ final class LuaScripts {
               return win
             end
 
+            -- A page window's options, set when it opens: a new window copies the current window's
+            -- (an editor's number and sign columns, its 'list', its 'nowrap'), and a buffer shown
+            -- again takes those of the window it was last shown in; a page of text that no file has
+            -- wants neither. Set quietly, on the page's window only.
+            local PAGE_OPTIONS = {
+              number = false, relativenumber = false, signcolumn = 'no', foldcolumn = '0',
+              statuscolumn = '', list = false, wrap = true, spell = false, colorcolumn = '',
+              foldenable = false,
+            }
+            -- The IDE keys a page gives back to Neovim (IDE_KEYS keeps what they were): gd, K, the
+            -- gr* keys and the like are about code, which a page is not. gt and gT stay Eclipse's:
+            -- they move among the editor tabs, the page's too.
+            local KEEP_IN_PAGES = { next_tab = true, previous_tab = true }
+
+            --- Gives the IDE keys of IDE_KEYS back to Neovim in buf, buffer-locally: the mapping each
+            --- had before the plug-in's (Neovim's own default for gr*), or the key itself without
+            --- mappings when it had none (gd, K). Example: gd in the messages page is Neovim's gd.
+            local function give_ide_keys_back(buf)
+              local ide = package.loaded['neovim4eclipse.ide_keys']
+              if not ide then
+                return -- the IDE keys are off (vim.g.neovim4eclipse_ide_keys = 0), or not mapped yet
+              end
+              for _, key in ipairs(ide.keys) do
+                if not KEEP_IN_PAGES[key.action] then
+                  for _, mode in ipairs(key.modes) do
+                    local before = ide.before[mode .. ' ' .. key.lhs]
+                    vim.api.nvim_buf_call(buf, function()
+                      if before then
+                        local local_map = vim.deepcopy(before)
+                        local_map.buffer = 1
+                        vim.fn.mapset(local_map)
+                      else
+                        vim.keymap.set(mode, key.lhs, key.lhs, { buffer = buf, remap = false, desc = 'Neovim (a page)' })
+                      end
+                    end)
+                  end
+                end
+              end
+            end
+
+            --- Opens a window for a page (a page editor shown from this Neovim, not a file's) on buf,
+            --- alone in a tabpage of its own as an editor's is, and returns its id; -2 for a buffer
+            --- no longer there. Quietly: its options are a page's, set here, not the look a user's
+            --- BufWinEnter gives a code editor's window ('colorcolumn', 'relativenumber'); the
+            --- user's WinEnter and BufEnter still run when the page takes the focus, as for any
+            --- window. Marked as the plug-in's, so the WinNew net leaves it, and :q in it is a host
+            --- command.
+            function M.open_page(buf)
+              if not vim.api.nvim_buf_is_valid(buf) then
+                return -2
+              end
+              local win = quietly(function()
+                local w = vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(buf, false, {}))
+                vim.api.nvim_win_call(w, function()
+                  vim.cmd('clearjumps') -- the current window's jumps are another editor's
+                end)
+                for name, value in pairs(PAGE_OPTIONS) do
+                  vim.wo[w][name] = value
+                end
+                give_ide_keys_back(buf)
+                return w
+              end)
+              own[win] = 'page'
+              seen[win] = true
+              page_buf[win] = buf
+              return win
+            end
+
+            --- Whether win is a page's window (M.open_page).
+            function M.is_page(win)
+              return own[win] == 'page'
+            end
+
+            --- Puts a page window's own buffer back into it, quietly and without a jump, after Neovim
+            --- put another one there (gf on a path in the page, :b 3): a page shows only its text,
+            --- and Eclipse opens the other buffer's file in an editor of its own. Returns the page's
+            --- buffer, or -1 when win is no open page window (or its buffer is gone).
+            function M.restore_page(win)
+              local buf = page_buf[win]
+              if not buf or not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then
+                return -1
+              end
+              if vim.api.nvim_win_get_buf(win) ~= buf then
+                quietly(put_buf, win, buf)
+              end
+              return buf
+            end
+
             function M.show(win, buf)
               if not vim.api.nvim_buf_is_valid(buf) then
                 return -2 -- wiped in Neovim (a plug-in's :bwipeout): Eclipse shows the home buffer
@@ -1363,6 +1453,7 @@ final class LuaScripts {
             local function close_quietly(win)
               quietly(vim.api.nvim_win_close, win, true)
               own[win] = nil
+              page_buf[win] = nil
               seen[win] = nil -- no WinClosed while quiet
             end
 
@@ -1415,6 +1506,7 @@ final class LuaScripts {
               group = group,
               callback = function(ev)
                 own[tonumber(ev.match)] = nil
+                page_buf[tonumber(ev.match)] = nil
                 seen[tonumber(ev.match)] = nil
                 opened_from[tonumber(ev.match)] = nil
                 vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_window_closed', tonumber(ev.match))
@@ -2032,6 +2124,24 @@ final class LuaScripts {
      */
     static final String HOME_BUFFER = """
             return require('neovim4eclipse.windows').home_buffer()
+            """;
+
+    /**
+     * Opens a page's window on a buffer (argument: its number) in a new tabpage, quietly, without
+     * entering it, and returns its id; -2 when the buffer is gone. Its options are a page's, and
+     * the IDE keys are Neovim's in that buffer. See {@link #WINDOWS} ({@code open_page}).
+     */
+    static final String OPEN_PAGE_WINDOW = """
+            return require('neovim4eclipse.windows').open_page(tonumber((select(1, ...))))
+            """;
+
+    /**
+     * Puts a page window's own buffer back into it (argument: the window id), after Neovim put
+     * another there; returns the page's buffer, or -1 when it is no open page window. See
+     * {@link #WINDOWS} ({@code restore_page}).
+     */
+    static final String RESTORE_PAGE_WINDOW = """
+            return require('neovim4eclipse.windows').restore_page(tonumber((select(1, ...))))
             """;
 
     /**
@@ -2890,8 +3000,19 @@ final class LuaScripts {
               return
             end
             local args = { ... }
+            -- The keys, and the global mapping each had before (Neovim's own default for gr*), by
+            -- "mode lhs": a page gives them back (WINDOWS.open_page).
+            local ide = { keys = {}, before = {} }
+            package.loaded['neovim4eclipse.ide_keys'] = ide
             for i = 1, #args - 3, 4 do
               local lhs, modes, action, desc = args[i], args[i + 1], args[i + 2], args[i + 3]
+              ide.keys[#ide.keys + 1] = { lhs = lhs, modes = vim.split(modes, ''), action = action }
+              for _, mode in ipairs(vim.split(modes, '')) do
+                local before = vim.fn.maparg(lhs, mode, false, true)
+                if before.lhs and before.buffer == 0 then
+                  ide.before[mode .. ' ' .. lhs] = before
+                end
+              end
               vim.keymap.set(vim.split(modes, ''), lhs, function()
                 vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_action', action, vim.v.count)
               end, { desc = 'Eclipse: ' .. desc })

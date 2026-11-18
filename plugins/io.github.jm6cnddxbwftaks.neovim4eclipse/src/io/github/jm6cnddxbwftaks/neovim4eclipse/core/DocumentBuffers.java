@@ -8,7 +8,6 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.core.Rpc.await;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -18,6 +17,7 @@ import java.util.logging.Logger;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimConnectionClosedException;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EnterDecision;
 
 /**
  * The Neovim buffers that mirror Eclipse documents, the windows of the editors that show them, and
@@ -127,11 +127,18 @@ final class DocumentBuffers {
      */
     private volatile int focusedPage = EditorWindow.UNKNOWN;
     /**
-     * The windows that have been pages' ({@link #focusPage}) and are still open: a command from one
-     * of them is no text editor's ({@code util/CommandOrigin}). Example: {@code :q} typed in the
+     * The pages' windows ({@link #openPage}) that are still open, each with its page's buffer: a
+     * command from one of them is no text editor's ({@code util/CommandOrigin}), and the window
+     * never shows another buffer ({@code util/EnterDecision}). Example: {@code :q} typed in the
      * messages page just before the code took the focus back is dropped, not run on the code.
      */
-    private final Set<Integer> pageWindows = ConcurrentHashMap.newKeySet();
+    private final Map<Integer, Integer> pageWindows = new ConcurrentHashMap<>();
+    /**
+     * Whether Neovim's move into {@link #enteredBufnr} happened in a page's window ({@code gf} on a
+     * path in the page): the editor it opens then takes its own window, and the page's window does
+     * not travel. Written before {@link #enteredBufnr}'s handlers run, on the same thread.
+     */
+    private volatile boolean enteredFromPage;
 
     /**
      * @param home    the home buffer, shown in the home window
@@ -182,21 +189,47 @@ final class DocumentBuffers {
      * @return whether Neovim entered it
      */
     boolean focusPage(int win) throws Exception {
+        if (!pageWindows.containsKey(win)) {
+            LOG.fine(() -> "Window " + win + " is no page's: not focused as one");
+            return false;
+        }
         int before = focusedPage;
         focusedPage = win;
-        pageWindows.add(win);
         Object answer = await(api.execLua(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(win))));
         if (answer instanceof Number n && n.intValue() == win) {
             return true;
         }
         focusedPage = before;
-        pageWindows.remove(win);
         return false;
     }
 
-    /** Whether {@code win} is a page's window (one {@link #focusPage} entered, still open). */
+    /**
+     * Opens a page's window on buffer {@code bufnr} ({@link LuaScripts#OPEN_PAGE_WINDOW}): alone in
+     * a tabpage, not entered, quietly, with a page's options. Returns its id, or
+     * {@link EditorWindow#UNKNOWN} when the buffer is gone. Give it the focus with {@link #focusPage}.
+     */
+    int openPage(int bufnr) throws Exception {
+        Object answer = await(api.execLua(LuaScripts.OPEN_PAGE_WINDOW, List.of(String.valueOf(bufnr))));
+        if (!(answer instanceof Number n) || n.intValue() < 1) {
+            return EditorWindow.UNKNOWN;
+        }
+        pageWindows.put(n.intValue(), bufnr);
+        return n.intValue();
+    }
+
+    /** Puts the page's own buffer back into its window {@code win} ({@link LuaScripts#RESTORE_PAGE_WINDOW}). */
+    void restorePage(int win) throws Exception {
+        await(api.execLua(LuaScripts.RESTORE_PAGE_WINDOW, List.of(String.valueOf(win))));
+    }
+
+    /** Whether {@code win} is a page's window ({@link #openPage}, still open). */
     boolean isPageWindow(int win) {
-        return pageWindows.contains(win);
+        return pageWindows.containsKey(win);
+    }
+
+    /** Whether Neovim's last move into another buffer was in a page's window. */
+    boolean enteredFromPage() {
+        return enteredFromPage;
     }
 
     /** Gives the focus back to the attached window ({@link #returnToAttached}); a page loses it. */
@@ -934,37 +967,44 @@ final class DocumentBuffers {
      * {@code :tabnext} the user typed, the window it entered after a {@code :tabclose}).
      *
      * A project's file without an editor ({@code projectFile} not empty) goes to the project file
-     * handler, whose editor Eclipse then opens (docs/design/BUFFER_NUMBERS.md, 2.3).
+     * handler, whose editor Eclipse then opens (docs/design/BUFFER_NUMBERS.md, 2.3). In a page's
+     * window, anything but the page is put back with {@code restorePage}, and a document or file
+     * goes to its handler as well, which opens its editor in a window of its own
+     * ({@link #enteredFromPage}). The whole decision is {@link EnterDecision}.
      *
      * @param jumped      whether the move is in the window's jump history ({@code :b}, {@code Ctrl-O};
      *                    not {@code :keepjumps})
      * @param projectFile the buffer's file when it is a project's and no document's, else {@code ""}
+     * @param restorePage puts the page's own buffer back into {@code winid}, a page's window
      */
-    void onEntered(int bufnr, int winid, boolean jumped, String projectFile, Runnable returnBack) {
+    void onEntered(int bufnr, int winid, boolean jumped, String projectFile, Runnable returnBack,
+            Runnable restorePage) {
+        Integer pageBuffer = winid == EditorWindow.UNKNOWN ? null : pageWindows.get(winid);
         enteredByJump = jumped;
-        enteredBufnr = bufnr; // first: a follow-up queued for an earlier buffer must see it
-        if (winid != EditorWindow.UNKNOWN && winid == focusedPage) {
-            return; // the focus moved to a page's window (focusPage)
-        }
-        boolean attachedWindow = winid == EditorWindow.UNKNOWN || winid == attachedWin;
-        if (attachedWindow && bufnr == attachedBufnr) {
-            // Eclipse's own switch, or Neovim came back. Not a reason to take the focus from a
-            // page: this notice can be older than the page's focusPage (read on another thread),
-            // and only show, focusAttached and the page window's close end the page's focus.
-            return;
-        }
-        if (!attachedWindow) {
-            returnBack.run();
-            return;
-        }
+        enteredFromPage = pageBuffer != null;
+        enteredBufnr = bufnr; // after the two above: a follow-up queued for an earlier buffer must see it
         Consumer<Integer> handler = enterHandler;
         BiConsumer<Integer, String> fileHandler = projectFileHandler;
-        if (handler != null && created.containsKey(bufnr)) {
-            handler.accept(bufnr);
-        } else if (fileHandler != null && !projectFile.isEmpty()) {
-            fileHandler.accept(bufnr, projectFile);
-        } else {
-            returnBack.run(); // help, a scratch buffer, a plug-in's buffer, ...
+        EnterDecision.Action action = EnterDecision.decide(new EnterDecision.Enter(winid, bufnr, attachedWin,
+                attachedBufnr, focusedPage, pageBuffer == null ? EnterDecision.NONE : pageBuffer,
+                handler != null && created.containsKey(bufnr), fileHandler != null && !projectFile.isEmpty()));
+        switch (action) {
+            // Eclipse's own switch, Neovim came back, or the focus moved to a page. Never a reason
+            // to take the focus from a page: this notice can be older than the page's focusPage
+            // (read on another thread); only show, focusAttached and the page window's close end it.
+            case ACCEPT -> { }
+            case FOLLOW -> handler.accept(bufnr);
+            case OPEN_FILE -> fileHandler.accept(bufnr, projectFile);
+            case RETURN_BACK -> returnBack.run(); // help, a scratch buffer, a plug-in's buffer, ...
+            case PAGE_BACK -> restorePage.run();
+            case PAGE_BACK_THEN_FOLLOW -> {
+                restorePage.run();
+                handler.accept(bufnr);
+            }
+            case PAGE_BACK_THEN_OPEN_FILE -> {
+                restorePage.run();
+                fileHandler.accept(bufnr, projectFile);
+            }
         }
     }
 }
