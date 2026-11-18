@@ -1489,6 +1489,24 @@ final class LuaScripts {
               end)
               return found or file
             end
+            -- Whether this help window is the current entry of a :helpgrep list (:helpgrep itself, or
+            -- :cnext through it): its pattern and the entry's number, so that the view runs the same
+            -- :helpgrep and goes on through it there (]q, :cnext typed in the view). The pattern is
+            -- read from the list's title, the command line Neovim keeps there (":silent helpgrep
+            -- runtimepath"), parsed by Neovim itself (nvim_parse_cmd), not by matching its text. Else
+            -- ("", 0): the page goes over by its tag.
+            local function helpgrep_at(buf, line)
+              local list = vim.fn.getqflist({ title = 0, idx = 0 })
+              local ok, parsed = pcall(vim.api.nvim_parse_cmd, (list.title or ''):sub(2), {})
+              if not ok or parsed.cmd ~= 'helpgrep' or #parsed.args ~= 1 or (list.idx or 0) < 1 then
+                return '', 0
+              end
+              local entry = vim.fn.getqflist({ idx = list.idx, items = 0 }).items[1]
+              if not entry or entry.bufnr ~= buf or entry.lnum ~= line then
+                return '', 0
+              end
+              return parsed.args[1], list.idx
+            end
             -- A help window (:help, :helpgrep, a plug-in's vim.cmd.help, in a split, a tab or with
             -- :vert): Eclipse shows help in the Neovim view instead, with the user's own help pages
             -- and plug-ins (docs/ARCHITECTURE.md, decision 10). By the time this net runs, :help has
@@ -1511,6 +1529,7 @@ final class LuaScripts {
               local line = vim.api.nvim_win_get_cursor(win)[1]
               local file = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':t')
               local tag = nearest_tag(buf, line, file)
+              local grep, index = helpgrep_at(buf, line)
               local before = opened_from[win]
               if before and own[before] and vim.api.nvim_win_is_valid(before) then
                 pcall(vim.api.nvim_set_current_win, before)
@@ -1519,7 +1538,8 @@ final class LuaScripts {
               if vim.api.nvim_buf_is_valid(buf) and #vim.fn.win_findbuf(buf) == 0 then
                 pcall(vim.api.nvim_buf_delete, buf, { force = true, unload = true })
               end
-              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_help', tag, file, line, vim.o.runtimepath)
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_help', tag, file, line, vim.o.runtimepath,
+                grep, index)
               return true
             end
             -- The window last left: when a command opens a window and enters it (:checkhealth's
@@ -5911,9 +5931,16 @@ final class LuaScripts {
     /**
      * The help profile of the Neovim view ({@code :help}, {@link HelpProfile}): opens a help page in
      * the second Neovim, as the editing Neovim had it. Arguments: the tag, the help file's name
-     * without its folder, the line, the editing Neovim's {@code 'runtimepath'} and
-     * {@code 'background'} ({@code "light"} or {@code "dark"}). Example:
-     * {@code ("help-context", "helphelp.txt", 27, rtp, "dark")}.
+     * without its folder, the line, the editing Neovim's {@code 'runtimepath'},
+     * {@code 'background'} ({@code "light"} or {@code "dark"}), and for a {@code :helpgrep} entry
+     * its pattern and number ({@code ""} and 0 otherwise). Example:
+     * {@code ("help-context", "helphelp.txt", 27, rtp, "dark", "", 0)}.
+     *
+     * <p><b>{@code :helpgrep}.</b> With a pattern, the same {@code :helpgrep} runs here (unless this
+     * Neovim's list is that one already) and {@code :cc} goes to the entry, so {@code ]q},
+     * {@code [q}, {@code :cnext} and {@code :copen} typed in the view go on through the matches
+     * without a trip to the editor. If the entry is not that file (the path differs), the tag is
+     * used instead.
      *
      * <ol>
      *   <li>{@code 'runtimepath'} becomes the editing Neovim's, so the user's plug-ins' help pages
@@ -5922,8 +5949,9 @@ final class LuaScripts {
      *       {@code plugin/} folders do not run: only what Neovim loads for a help page.</li>
      *   <li>{@code :help tag}, Neovim's own: the page opens as a help buffer (tags concealed,
      *       {@code Ctrl-]} follows them, {@code :help} again replaces it); if the tag is not found,
-     *       {@code :help file} (every help file starts with its own name as a tag). Then
-     *       {@code :only}: the page is the whole screen. At the first page, {@code :clearjumps}, so
+     *       {@code :help file} (every help file starts with its own name as a tag). Then the page is
+     *       the whole screen, but for help windows the user split there and the quickfix window.
+     *       At the first page, {@code :clearjumps}, so
      *       that {@code Ctrl-O} does not end on the empty buffer Neovim started with.</li>
      *   <li>If the page is the file the editing Neovim had, the cursor goes to its line, at the top
      *       of the window, as {@code :help} puts a topic; otherwise it stays on the tag (two files
@@ -5932,15 +5960,15 @@ final class LuaScripts {
      *
      * <p>The view shows help only: a buffer that is no help page, in a window of the screen
      * ({@code gf} on a path, {@code :edit}), in any window that shows it, is swapped back for the
-     * page it replaced, with a message; floating windows ({@code ui2}'s pager) and the command-line
-     * window are left alone. The file has been read by then, with its filetype's scripts: the rule
+     * page it replaced, with a message; floating windows ({@code ui2}'s pager), the command-line
+     * window and the quickfix window are left alone. The file has been read by then, with its filetype's scripts: the rule
      * keeps the view on help, it does not stop a read the user asked for. {@code q} quits the
      * window, as in the text profile: the last one ends the second Neovim and closes the view.
      * Returns {@code ""}, or Neovim's error if neither the tag nor the file is found; the second
      * Neovim then shows it on its message line, and {@code q} still closes the view.
      */
     static final String SCREEN_SHOW_HELP = """
-            local tag, file, line, runtimepath, background = ...
+            local tag, file, line, runtimepath, background, grep, index = ...
             if background == 'light' or background == 'dark' then
               vim.o.background = background
             end
@@ -5962,6 +5990,9 @@ final class LuaScripts {
                     quit_with_q(ev.buf)
                     return
                   end
+                  if vim.bo[ev.buf].buftype == 'quickfix' then
+                    return -- :copen after :helpgrep: the list of pages, which Enter opens
+                  end
                   local swapped = false
                   for _, win in ipairs(vim.fn.win_findbuf(ev.buf)) do
                     if vim.fn.win_gettype(win) == '' then
@@ -5981,7 +6012,21 @@ final class LuaScripts {
               end,
             })
             local first = vim.bo.buftype ~= 'help'
-            local ok, err = pcall(vim.cmd.help, tag)
+            local ok, err = false, nil
+            if grep and grep ~= '' then
+              -- The same :helpgrep, run here unless this list is it already, then its entry.
+              local title = vim.fn.getqflist({ title = 0 }).title or ''
+              local same, parsed = pcall(vim.api.nvim_parse_cmd, title:sub(2), {})
+              ok = same and parsed.cmd == 'helpgrep' and parsed.args[1] == grep
+              if not ok then
+                ok = pcall(vim.cmd.helpgrep, { args = { grep }, mods = { silent = true } })
+              end
+              ok = ok and pcall(vim.cmd, 'silent cc ' .. math.floor(tonumber(index) or 1))
+              ok = ok and vim.bo.buftype == 'help' and vim.fn.expand('%:t') == file
+            end
+            if not ok then
+              ok, err = pcall(vim.cmd.help, tag)
+            end
             if not ok and tag ~= file then
               ok = pcall(vim.cmd.help, file)
             end
@@ -5991,7 +6036,15 @@ final class LuaScripts {
               vim.api.nvim_echo({ { tostring(err) } }, true, { err = true })
               return tostring(err)
             end
-            pcall(vim.cmd.only)
+            -- The page is the whole screen but for the user's own help windows and the list's: the
+            -- empty window Neovim started with, or a window a :helpgrep left, closes.
+            for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+              local buf = vim.api.nvim_win_get_buf(win)
+              if win ~= vim.api.nvim_get_current_win() and vim.fn.win_gettype(win) == ''
+                  and vim.bo[buf].buftype ~= 'help' then
+                pcall(vim.api.nvim_win_close, win, true)
+              end
+            end
             if first then
               -- The empty buffer the second Neovim started with would be Ctrl-O's last stop.
               vim.cmd.clearjumps()

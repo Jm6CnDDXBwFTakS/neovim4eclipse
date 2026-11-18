@@ -48,6 +48,7 @@ public final class HelpProfile {
      */
     public static CompletableFuture<Object> show(ScreenSession session, HelpPage page, boolean dark) {
         return session.execLuaAsync(LuaScripts.SCREEN_SHOW_HELP,
-                List.of(page.tag(), page.file(), page.line(), page.runtimepath(), dark ? "dark" : "light"));
+                List.of(page.tag(), page.file(), page.line(), page.runtimepath(), dark ? "dark" : "light",
+                        page.helpgrep(), page.index()));
     }
 }

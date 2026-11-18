@@ -543,6 +543,10 @@ class NotificationBridgeTest {
         notify("eclipse_view_help", "help-context", "", 27, "/rt");
         notify("eclipse_view_help", "help-context", "helphelp.txt", "27", "/rt");
         notify("eclipse_view_help", "help-context", "helphelp.txt", 27);
-        assertEquals(List.of("help:" + new HelpPage("help-context", "helphelp.txt", 27, "/rt")), events);
+        notify("eclipse_view_help", "help-context", "helphelp.txt", 27, "/rt", "runtimepath", 3);
+        notify("eclipse_view_help", "help-context", "helphelp.txt", 27, "/rt", "runtimepath", "3");
+        assertEquals(List.of("help:" + new HelpPage("help-context", "helphelp.txt", 27, "/rt"),
+                "help:" + new HelpPage("help-context", "helphelp.txt", 27, "/rt", "runtimepath", 3),
+                "help:" + new HelpPage("help-context", "helphelp.txt", 27, "/rt")), events);
     }
 }

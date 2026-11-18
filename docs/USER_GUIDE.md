@@ -631,8 +631,8 @@ again, since it would be empty; the next `:messages` or `:checkhealth` opens it.
 ### Help in the view (`:help`)
 
 `:help` opens the page in the same view, titled *Neovim: help*: Neovim's own help, with the pages
-of your plug-ins, as in a terminal Neovim. So do `:helpgrep` (and `:cnext` through its matches,
-from the editor), `:vert help`, `:tab help` and a plug-in's `vim.cmd.help()`. The editor keeps no
+of your plug-ins, as in a terminal Neovim. So do `:helpgrep`, `:vert help`, `:tab help` and a
+plug-in's `vim.cmd.help()`. The editor keeps no
 help window: Eclipse shows each Neovim window as an editor, and a help page is no file of yours.
 
 - **It is Neovim's help:** `Ctrl-]` (or a double click) follows a link, `Ctrl-T` and `Ctrl-O` go
@@ -643,6 +643,10 @@ help window: Eclipse shows each Neovim window as an editor, and a help page is n
   (`ftplugin/help.lua`, `after/ftplugin/help.lua`, a parser for a code block's language), as your
   editor's Neovim does on a help page. Your `init.lua` and the plug-ins' start-up scripts
   (`plugin/`) do not run there. Writing stays off: no help page can be changed or written.
+- **`:helpgrep`** goes on in the view: typed in the editor, the view runs the same search, so
+  `]q`, `[q`, `:cnext` and `:cprevious` in the view step through the matches there, and `:copen`
+  shows the list beside the page (Enter opens a match). Typed in the view, it stays there. From the
+  editor, `:cnext` still works too.
 - **Help only:** a file opened from a page (`gf` on a path, `:edit`) is swapped back for the page,
   with the message "The Neovim view shows help only". Open files in an editor.
 - `:messages` or `:checkhealth` afterwards replaces the page with text, shown by a second Neovim

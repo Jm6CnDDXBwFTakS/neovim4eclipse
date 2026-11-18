@@ -430,7 +430,12 @@ second Neovim ── TextYankPost ──▶ eclipse_screen_yank ──▶ the ed
   (`CREATE_DOCUMENT_BUFFER`), so the document gets the file's name. Text between stars is not
   always a tag (`*.c,*.txt` in an example), so each candidate is looked up in the help tags
   (`taglist()` in the help buffer), not taken by its looks. The help Neovim falls back to
-  `:help <file>` if the tag is not found, and shows Neovim's error if neither is.
+  `:help <file>` if the tag is not found, and shows Neovim's error if neither is. A page that is
+  the current entry of a `:helpgrep` list also carries its pattern and entry number: the net reads
+  the pattern from the list's title, the command line Neovim keeps there, parsed by Neovim
+  (`nvim_parse_cmd`), and the help Neovim runs the same `:helpgrep` (unless its list is that one
+  already) and `:cc N`. So `]q` and `:cnext` in the view go on without the editor, and `:copen`
+  there is allowed beside the page.
 - **Two profiles, one second Neovim per kind.** Text gets the output profile; a help page the help
   profile (`core/HelpProfile`: `-M`; `LuaScripts.SCREEN_SHOW_HELP` sets the editing Neovim's
   `'runtimepath'`, runs `:help tag` and `:only`, and puts the cursor on the line if the file is the

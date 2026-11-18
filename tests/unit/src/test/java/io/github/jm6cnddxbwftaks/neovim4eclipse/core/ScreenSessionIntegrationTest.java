@@ -331,4 +331,41 @@ class ScreenSessionIntegrationTest {
             waitFor(() -> recorder.ends.get() == 1, "q closing it");
         }
     }
+
+    /**
+     * A {@code :helpgrep} entry: the view runs the same {@code :helpgrep} and goes to the entry, so
+     * {@code ]q} goes on through the matches there, and {@code :copen} shows the list beside the
+     * page. The next entry handed over reuses that list rather than searching again.
+     */
+    @Test
+    void aHelpgrepEntryRunsTheSameHelpgrepThere() throws Exception {
+        try (ScreenSession s = start(HelpProfile.ARGS)) {
+            String runtimepath = String.valueOf(lua(s, "return vim.o.runtimepath"));
+            // Where the editing Neovim's third match would be: the same help files, the same order.
+            String third = String.valueOf(lua(s, "vim.cmd('silent helpgrep runtimepath') "
+                    + "local e = vim.fn.getqflist()[3] local f = vim.fn.fnamemodify(vim.fn.bufname(e.bufnr), ':t') "
+                    + "vim.fn.setqflist({}, 'f') return f .. ':' .. e.lnum"));
+            String file = third.substring(0, third.indexOf(':'));
+            int line = Integer.parseInt(third.substring(third.indexOf(':') + 1));
+            assertEquals("", HelpProfile.show(s, new HelpPage(file, file, line, runtimepath, "runtimepath", 3), false)
+                    .get(TestWait.millis(), TimeUnit.MILLISECONDS));
+            assertEquals(3L, ((Number) lua(s, "return vim.fn.getqflist({ idx = 0 }).idx")).longValue());
+            assertEquals((long) line, ((Number) lua(s, "return vim.fn.line('.')")).longValue());
+            lua(s, "vim.g.probe_list = vim.fn.getqflist({ id = 0 }).id return 0");
+
+            s.inputAsync("]q");
+            pass(s);
+            assertEquals(4L, ((Number) lua(s, "return vim.fn.getqflist({ idx = 0 }).idx")).longValue(), "]q went on");
+            assertEquals("help", lua(s, "return vim.bo.buftype"));
+
+            HelpProfile.show(s, new HelpPage(file, file, line, runtimepath, "runtimepath", 3), false)
+                    .get(TestWait.millis(), TimeUnit.MILLISECONDS);
+            assertEquals(true, lua(s, "return vim.fn.getqflist({ id = 0 }).id == vim.g.probe_list"), "the same list, not a new search");
+
+            s.inputAsync(":copen<CR>");
+            pass(s);
+            assertEquals(true, lua(s, "for _, w in ipairs(vim.api.nvim_list_wins()) do "
+                    + "if vim.fn.win_gettype(w) == 'quickfix' then return true end end return false"), "the list stays open");
+        }
+    }
 }

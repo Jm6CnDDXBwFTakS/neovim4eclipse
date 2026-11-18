@@ -397,9 +397,10 @@ final class NotificationBridge implements Incoming {
     }
 
     /**
-     * Payload: {@code [tag, file, line, runtimepath]}, from the {@code WinNew} net of
-     * {@link LuaScripts#WINDOWS}: a help window it took ({@code util/HelpPage}). Ignored unless
-     * each part has its type and the tag and file are not empty.
+     * Payload: {@code [tag, file, line, runtimepath, helpgrep, index]}, from the {@code WinNew} net
+     * of {@link LuaScripts#WINDOWS}: a help window it took ({@code util/HelpPage}). Ignored unless
+     * each of the first four parts has its type and the tag and file are not empty; the last two
+     * count only together, as a string and a number, else the page goes by its tag.
      */
     private void onViewHelp(List<?> args) {
         if (args.size() < 4 || !(args.get(0) instanceof String tag) || !(args.get(1) instanceof String file)
@@ -407,7 +408,14 @@ final class NotificationBridge implements Incoming {
                 || tag.isEmpty() || file.isEmpty()) {
             return;
         }
-        sink.onViewContent(new HelpPage(tag, file, line.intValue(), runtimepath));
+        String grep = "";
+        int index = 0;
+        if (args.size() >= 6 && args.get(4) instanceof String pattern && args.get(5) instanceof Number n
+                && !pattern.isEmpty() && n.intValue() > 0) {
+            grep = pattern;
+            index = n.intValue();
+        }
+        sink.onViewContent(new HelpPage(tag, file, line.intValue(), runtimepath, grep, index));
     }
 
     private void onWindowClosed(List<?> args) {

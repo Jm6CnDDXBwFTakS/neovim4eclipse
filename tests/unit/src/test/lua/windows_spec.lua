@@ -776,7 +776,8 @@ t.test(':help hands the page to the Neovim view and leaves no window, loaded buf
   t.forget()
   vim.cmd('help help-context')
   t.wait_for('the page', function() return #t.sent('eclipse_view_help') == 1 end)
-  local tag, file, line, runtimepath = unpack(t.sent('eclipse_view_help')[1])
+  local tag, file, line, runtimepath, grep, index = unpack(t.sent('eclipse_view_help')[1])
+  t.eq({ '', 0 }, { grep, index }, 'no :helpgrep: the page goes by its tag')
   t.eq('help-context', tag, 'the tag the cursor is on')
   t.eq('helphelp.txt', file, 'the name only, no folder')
   t.ok(line > 1, 'the line :help put the cursor on: ' .. tostring(line))
@@ -830,6 +831,8 @@ t.test(':helpgrep and :cnext go on through the matches, one page each, even insi
   t.forget()
   vim.cmd('silent helpgrep runtimepath')
   t.wait_for('the first match', function() return #t.sent('eclipse_view_help') == 1 end)
+  t.eq({ 'runtimepath', 1 }, { t.sent('eclipse_view_help')[1][5], t.sent('eclipse_view_help')[1][6] },
+    "the pattern and the entry, for the view's own :helpgrep")
   local list = vim.fn.getqflist()
   t.ok(#list > 3, 'matches to go through')
   for n = 2, 4 do
@@ -837,6 +840,7 @@ t.test(':helpgrep and :cnext go on through the matches, one page each, even insi
     t.wait_for('match ' .. n, function() return #t.sent('eclipse_view_help') == n end)
     t.eq(n, vim.fn.getqflist({ idx = 0 }).idx, 'the list moved on')
     t.eq(list[n].lnum, t.sent('eclipse_view_help')[n][3], 'the line of match ' .. n)
+    t.eq(n, t.sent('eclipse_view_help')[n][6], 'the entry sent')
   end
   vim.cmd('silent cprevious')
   t.wait_for('back one', function() return #t.sent('eclipse_view_help') == 5 end)
