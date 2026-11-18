@@ -14,6 +14,7 @@ import java.util.logging.Level;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandOrigin;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
@@ -117,11 +118,35 @@ class FocusRouterTest {
         router.focus(new FocusTarget() {
             @Override public void onHostCommand(HostCommand command) { heard.add(command.origin()); }
         });
-        router.setCommandRule(c -> c.origin() != 1004);
+        router.setCommandRule((c, target) -> c.origin() != 1004);
         HostCommand quit = HostCommand.of("quit", false, List.of());
         router.hostCommand.accept(quit.from(1004));
         router.hostCommand.accept(quit.from(1001));
         router.hostCommand.accept(quit);
         assertEquals(List.of(1001, HostCommand.NO_WINDOW), heard);
+    }
+
+    /**
+     * A page's command that arrives after the code took the focus back is judged against the code,
+     * the target that would get it, and dropped: the rule and the delivery read the target once.
+     */
+    @Test
+    void aPagesCommandAfterTheCodeTookTheFocusBackIsDropped() {
+        FocusRouter router = new FocusRouter();
+        List<String> heard = new ArrayList<>();
+        FocusTarget page = new FocusTarget() {
+            @Override public void onHostCommand(HostCommand command) { heard.add("page"); }
+            @Override public int pageWindow() { return 1004; }
+        };
+        FocusTarget code = new FocusTarget() {
+            @Override public void onHostCommand(HostCommand command) { heard.add("code"); }
+        };
+        router.setCommandRule((c, target) -> CommandOrigin.belongsToFocus(c.origin(), target.pageWindow(), c.origin() == 1004));
+        HostCommand quitInPage = HostCommand.of("quit", false, List.of()).from(1004);
+        router.focus(page);
+        router.hostCommand.accept(quitInPage);
+        router.focus(code); // the click back into the code, before the next :q from the page is read
+        router.hostCommand.accept(quitInPage);
+        assertEquals(List.of("page"), heard, "the second :q does not close the code");
     }
 }

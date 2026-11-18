@@ -194,10 +194,6 @@ final class OverlayFrame<T extends Control> {
     }
 
     /**
-     * Space left between the bottom edge of the editor and the lowest overlay: about half the height
-     * of a one-line command line, so that the overlay stays clear of the horizontal scroll bar.
-     */
-    /**
      * One line's height in {@code host}, which an overlay is sized by: a text editor's
      * {@code StyledText} line (its font and line spacing), a page's grid cell, or else the font's
      * height. Example: the {@code :} box over the messages page is one grid row high.
@@ -218,8 +214,30 @@ final class OverlayFrame<T extends Control> {
         }
     }
 
+    /**
+     * Space left between the bottom edge of the editor and the lowest overlay: about half the height
+     * of a one-line command line, so that the overlay stays clear of the horizontal scroll bar.
+     */
     static int bottomGap(Canvas host) {
         return Math.max(SIDE_PADDING, outerHeight(OverlayFrame.lineHeight(host)) / 2);
+    }
+
+    /**
+     * One character's width in {@code host}, as {@link #lineHeight} a line's: a page's grid cell, or
+     * the average character of the host's font (a text editor's text font). Example: {@code 5 Ctrl-W >}
+     * from the messages page widens its tab group by five of its grid columns.
+     */
+    static int charWidth(Canvas host) {
+        if (host instanceof GridCanvas grid) {
+            return Math.max(1, grid.cellWidth());
+        }
+        GC gc = new GC(host);
+        try {
+            gc.setFont(host.getFont());
+            return Math.max(1, (int) Math.round(gc.getFontMetrics().getAverageCharacterWidth()));
+        } finally {
+            gc.dispose();
+        }
     }
 
     boolean isDisposed() {

@@ -26,7 +26,6 @@ import org.eclipse.e4.ui.workbench.IPresentationEngine;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.e4.ui.workbench.modeling.EPartService;
 import org.eclipse.swt.custom.StyledText;
-import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Canvas;
@@ -676,13 +675,7 @@ final class EditorSplits {
             return;
         }
         Rectangle area = text.getClientArea();
-        int charWidth;
-        GC gc = new GC(text);
-        try {
-            charWidth = Math.max(1, (int) Math.round(gc.getFontMetrics().getAverageCharacterWidth()));
-        } finally {
-            gc.dispose();
-        }
+        int charWidth = OverlayFrame.charWidth(text); // a page's grid cell, not its canvas's own font
         WindowLayout.Metrics metrics = new WindowLayout.Metrics(OverlayFrame.lineHeight(text), charWidth, area.height, area.width);
         boolean heights = "+-_".indexOf(command.key()) >= 0;
         // A window keeps one line (or character) of text, with its tab row and rulers around it.

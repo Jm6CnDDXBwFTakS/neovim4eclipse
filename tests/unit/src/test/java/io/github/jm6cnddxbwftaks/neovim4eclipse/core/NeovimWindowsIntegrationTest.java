@@ -467,7 +467,7 @@ class NeovimWindowsIntegrationTest {
     }
 
     /**
-     * A page's window takes the focus while the text editor stays attached (the plan's "focused
+     * A page's window takes the focus while the text editor stays attached ("focused
      * window beside the attached document"): Neovim enters the page's window and is not sent back,
      * the page's cursor is no caret of the document's, the caret's calls still move the attached
      * window's cursor, the focus events reach the target that has the focus, and the focus comes

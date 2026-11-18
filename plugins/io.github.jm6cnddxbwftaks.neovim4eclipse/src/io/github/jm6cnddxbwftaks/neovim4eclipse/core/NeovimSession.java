@@ -298,7 +298,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 this::modeChanged);
         this.keyInput = new KeyInput(new KeyInputNeovim(), state, status, () -> leaveInsertPush);
         this.clipboard = new ClipboardRegisters(clipboard, System.lineSeparator());
-        focus.setCommandRule(c -> CommandOrigin.belongsToFocus(c.origin(), buffers.focusedPage(),
+        focus.setCommandRule((c, target) -> CommandOrigin.belongsToFocus(c.origin(), target.pageWindow(),
                 buffers.isPageWindow(c.origin())));
         buffers.setPageClosedHandler(win -> {
             grids.stopDrawingPage(win);

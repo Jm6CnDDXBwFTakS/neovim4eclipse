@@ -77,7 +77,7 @@ final class WindowPane implements PagePane {
     private final GridCanvas canvas;
     private final NeovimSession session;
     /** The page's Neovim window; {@link EditorWindow#UNKNOWN} until the first page was shown. */
-    private int window = EditorWindow.UNKNOWN;
+    private volatile int window = EditorWindow.UNKNOWN;
     /** The colors of the editor the page came from, until Neovim's own come with the grid. */
     private int foreground = 0x000000;
     private int background = 0xFFFFFF;
@@ -155,6 +155,11 @@ final class WindowPane implements PagePane {
         @Override
         public void onIdeAction(IdeAction action) {
             onUi(() -> host.action(action));
+        }
+
+        @Override
+        public int pageWindow() {
+            return window; // read on the RPC thread for a host command: hence volatile, written on the UI thread only
         }
 
         @Override
@@ -308,7 +313,7 @@ final class WindowPane implements PagePane {
      * ({@link #focusLost}).
      */
     private void takeFocus() {
-        if (disposed || window == EditorWindow.UNKNOWN || (focused && session.focusedPage() == window)) {
+        if (disposed || window == EditorWindow.UNKNOWN || (focused && session.hasFocus(target))) {
             return;
         }
         focused = true;
@@ -364,9 +369,11 @@ final class WindowPane implements PagePane {
     }
 
     private void onGrid(GridSnapshot grid) {
-        if (grid.window() == window) {
-            onUi(() -> canvas.show(grid));
-        }
+        onUi(() -> {
+            if (grid.window() == window) { // compared on the UI thread, which writes window
+                canvas.show(grid);
+            }
+        });
     }
 
     private void onKey(KeyEvent e) {

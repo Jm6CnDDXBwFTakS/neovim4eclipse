@@ -76,7 +76,9 @@ What stays as in Vim, because it takes a key you press on purpose or your own se
   editor is a read-only window of your own Neovim (a `nofile` buffer that no file has), so your
   config and plug-ins act there as in any of your windows, with the same switches as above: the
   readers and modelines stay off, and a file you open from it (`gf`, `:e`) opens in an editor of
-  its own, never in that window.
+  its own, never in that window. Its text can quote a file's name or lines (an error naming a
+  file), so `K` (your `'keywordprg'`, `:Man` by default) and `gx` (the system's opener) act on that
+  text there as in any of your windows: each only on a key you press.
 
 A way around the first list is a vulnerability: please report it as described above.
 

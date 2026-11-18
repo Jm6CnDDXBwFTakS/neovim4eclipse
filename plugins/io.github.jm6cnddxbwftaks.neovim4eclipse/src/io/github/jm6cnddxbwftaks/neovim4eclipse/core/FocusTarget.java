@@ -77,4 +77,13 @@ public interface FocusTarget {
     /** The insert-mode completion list showed, changed or closed. */
     default void onCompletionMenu(CompletionMenu.View view) {
     }
+
+    /**
+     * The page window this target shows, or {@link HostCommand#NO_WINDOW} for a text editor: a host
+     * command is judged against the target that gets it ({@code util/CommandOrigin}), read once with
+     * it, so the decision and the delivery cannot see two different targets. Any thread.
+     */
+    default int pageWindow() {
+        return HostCommand.NO_WINDOW;
+    }
 }

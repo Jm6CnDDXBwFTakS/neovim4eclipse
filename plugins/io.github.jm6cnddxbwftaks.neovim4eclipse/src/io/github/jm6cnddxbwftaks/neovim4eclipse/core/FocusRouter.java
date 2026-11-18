@@ -5,7 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
+import java.util.function.BiPredicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -37,7 +37,7 @@ public final class FocusRouter {
      * Whether a host command belongs to the part with the focus, by the window it ran in
      * ({@code util/CommandOrigin}); the session sets it. One that does not is dropped.
      */
-    private volatile Predicate<HostCommand> ownCommand = c -> true;
+    private volatile BiPredicate<HostCommand, FocusTarget> ownCommand = (c, t) -> true;
 
     /** Gives the focus to {@code target}; the part that had it hears nothing more. */
     public synchronized void focus(FocusTarget target) {
@@ -61,7 +61,7 @@ public final class FocusRouter {
     }
 
     /** Sets the rule that keeps a command from another part's window from the focus ({@link #hostCommand}). */
-    void setCommandRule(Predicate<HostCommand> rule) {
+    void setCommandRule(BiPredicate<HostCommand, FocusTarget> rule) {
         ownCommand = rule;
     }
 
@@ -75,12 +75,26 @@ public final class FocusRouter {
     final Consumer<StatusInfo> status = s -> pass("status", t -> t.onStatus(s));
     final Consumer<CommandOutput> output = o -> pass("output", t -> t.onOutput(o));
     final Consumer<IdeAction> ideAction = a -> pass("IDE action", t -> t.onIdeAction(a));
+    /**
+     * A host command goes to the target with the focus only if it belongs to that very target,
+     * judged with the target read once: a click back into the code between the command's run and
+     * its arrival changes the target, and the command from the page is then judged against the code
+     * (and dropped), not against the page it was typed in.
+     */
     final Consumer<HostCommand> hostCommand = c -> {
-        if (!ownCommand.test(c)) {
+        FocusTarget target = current;
+        if (target == null) {
+            return;
+        }
+        if (!ownCommand.test(c, target)) {
             LOG.fine(() -> "Dropped " + c + ": it ran in a window of a part without the focus");
             return;
         }
-        pass("host command", t -> t.onHostCommand(c));
+        try {
+            target.onHostCommand(c);
+        } catch (RuntimeException e) {
+            LOG.log(Level.WARNING, "The host command event failed in " + target, e);
+        }
     };
     final Consumer<CmdlineState.View> cmdline = v -> pass("command line", t -> t.onCmdline(v));
     final Consumer<CommandWindowView> commandWindow = v -> pass("command-line window", t -> t.onCommandWindow(v));
