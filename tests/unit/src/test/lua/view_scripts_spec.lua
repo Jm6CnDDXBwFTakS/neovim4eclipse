@@ -113,3 +113,37 @@ t.test('a yank from the view fills the register of its name; the unnamed one fol
   t.eq(false, t.run('SET_REGISTER_FROM_VIEW', '=', 'v', { '1+1' }), 'no yank fills the expression register')
   t.eq(false, t.run('SET_REGISTER_FROM_VIEW', 'ab', 'v', { 'x' }), 'a register is one character')
 end)
+
+-- SCREEN_SHOW_HELP with a real plug-in's help, as a user's help editor would find it: the pinned
+-- flash (t.pinned_plugin), its doc folder copied with a tags file made there, as a plug-in manager
+-- makes one with :helptags. How a user's own plug-in manager puts plug-ins on 'runtimepath' is
+-- their config's, and not tested.
+t.test("a real plug-in's help page opens as Neovim's help, and its links lead on", function()
+  local plugin = t.pinned_plugin('flash')
+  local copy = vim.fn.tempname()
+  vim.fn.mkdir(copy .. '/doc', 'p')
+  for _, file in ipairs(vim.fn.glob(plugin .. '/doc/*.txt', false, true)) do
+    vim.fn.writefile(vim.fn.readfile(file, 'b'), copy .. '/doc/' .. vim.fn.fnamemodify(file, ':t'), 'b')
+  end
+  vim.cmd.helptags(copy .. '/doc')
+  local before = vim.o.runtimepath
+  t.eq('', t.run('SCREEN_SHOW_HELP', 'flash.nvim.txt', 'flash.nvim.txt', 1, before .. ',' .. copy, 'light', '', 0))
+  t.eq('help', vim.bo.buftype)
+  t.eq('help', vim.bo.filetype)
+  t.eq('flash.nvim.txt', vim.fn.expand('%:t'))
+  t.eq(1, #vim.api.nvim_tabpage_list_wins(0), 'the page is the whole screen')
+
+  local link = vim.fn.search('|flash.nvim-flash.nvim-api|')
+  t.ok(link > 0, 'a link in the table of contents')
+  local column = vim.fn.getline(link):find('flash.nvim-flash.nvim-api', 1, true)
+  vim.api.nvim_win_set_cursor(0, { link, column })
+  t.type('<C-]>')
+  t.ok(vim.fn.getline('.'):find('*flash.nvim-flash.nvim-api*', 1, true) ~= nil, 'Ctrl-] went to the tag: ' .. vim.fn.getline('.'))
+  t.type('<C-t>')
+  t.eq(link, vim.fn.line('.'), 'Ctrl-T came back to the link')
+
+  vim.cmd('silent! only')
+  vim.cmd('enew!')
+  vim.o.runtimepath = before
+  vim.fn.delete(copy, 'rf')
+end)

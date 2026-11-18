@@ -17,43 +17,7 @@
 
 local t = ...
 
-local root = vim.fs.normalize(t.spec_dir .. '/../../../../..')
-
--- Where the tool unpacks the plug-ins, from the root: a copy of common.ToolCache.TEST_PLUGINS
--- (ToolCacheTest checks it). Not under target/, so ./mvnw clean leaves them in place.
-local folder = '.tool-cache/test-plugins'
-
---- The marker the tool writes for the pinned plug-in, "<commit> <sha256>", read from the one
---- file that holds the pins (lines are name.field=value with no spaces; Pins.java refuses others).
-local function pinned(name)
-  local commit, sha
-  for line in io.lines(root .. '/releng/test-plugins.properties') do
-    commit = commit or line:match('^' .. vim.pesc(name) .. '%.commit=(%x+)%s*$')
-    sha = sha or line:match('^' .. vim.pesc(name) .. '%.sha256=(%x+)%s*$')
-  end
-  if not commit or not sha then
-    error('no pin named ' .. name)
-  end
-  return commit .. ' ' .. sha
-end
-
---- The plug-in's folder, or a skip: not fetched (no network when the tool ran), or another commit or archive.
-local function plugin(name)
-  local dir = root .. '/' .. folder .. '/' .. name
-  local marker = io.open(dir .. '.pin')
-  if not marker or vim.fn.isdirectory(dir) == 0 then
-    if marker then
-      marker:close()
-    end
-    t.skip(name .. ' is not fetched: java releng/tools/plugins/TestPlugins.java fetch')
-  end
-  local there = marker:read('*l') or ''
-  marker:close()
-  if vim.trim(there) ~= pinned(name) then
-    t.skip(name .. ' is fetched at another commit or archive than the pin: java releng/tools/plugins/TestPlugins.java fetch')
-  end
-  return dir
-end
+local plugin = t.pinned_plugin
 
 --- Starts HIGHLIGHTS as the session does, loads the plug-in from dir, and fills a buffer.
 local function start(dir)

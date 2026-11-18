@@ -221,6 +221,38 @@ function t.document(name, lines)
 end
 
 --- Fails unless `expected` and `actual` are equal (deeply, for tables).
+--- The folder of the Neovim plug-in pinned as `name` (releng/test-plugins.properties), or a skip:
+--- not fetched (no network when the tool ran), or another commit or archive than the pin. The
+--- plug-ins are not in the repository: `java releng/tools/plugins/TestPlugins.java fetch` unpacks
+--- them into .tool-cache/test-plugins/ (a copy of common.ToolCache.TEST_PLUGINS, which
+--- ToolCacheTest checks; not under target/, so ./mvnw clean leaves them in place). The marker it
+--- writes beside each, "<commit> <sha256>", must be the pin's. Example: t.pinned_plugin('flash').
+function t.pinned_plugin(name)
+  local root = vim.fs.normalize(t.spec_dir .. '/../../../../..')
+  local commit, sha
+  for line in io.lines(root .. '/releng/test-plugins.properties') do
+    commit = commit or line:match('^' .. vim.pesc(name) .. '%.commit=(%x+)%s*$')
+    sha = sha or line:match('^' .. vim.pesc(name) .. '%.sha256=(%x+)%s*$')
+  end
+  if not commit or not sha then
+    error('no pin named ' .. name)
+  end
+  local dir = root .. '/.tool-cache/test-plugins/' .. name
+  local marker = io.open(dir .. '.pin')
+  if not marker or vim.fn.isdirectory(dir) == 0 then
+    if marker then
+      marker:close()
+    end
+    t.skip(name .. ' is not fetched: java releng/tools/plugins/TestPlugins.java fetch')
+  end
+  local there = marker:read('*l') or ''
+  marker:close()
+  if vim.trim(there) ~= commit .. ' ' .. sha then
+    t.skip(name .. ' is fetched at another commit or archive than the pin: java releng/tools/plugins/TestPlugins.java fetch')
+  end
+  return dir
+end
+
 function t.eq(expected, actual, what)
   if not vim.deep_equal(expected, actual) then
     error(('%s\n  expected: %s\n  actual:   %s'):format(what or 'not equal', vim.inspect(expected),

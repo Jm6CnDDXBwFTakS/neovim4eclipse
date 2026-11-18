@@ -303,7 +303,8 @@ and actions* above); the bullets say what each needs besides, and how to move it
 ## The plug-ins the tests run
 
 The tests of the jump labels run four real Neovim plug-ins (flash, leap, hop, mini.jump2d), and
-the gallery's pictures a fifth, which-key. They are third-party
+the gallery's pictures a fifth, which-key. flash's help page also stands for a user's plug-in in
+the help editor's test (`view_scripts_spec.lua`). They are third-party
 code that runs in the test Neovim, on your machine and wherever `LikeCi`
 or the gallery runs, so each is pinned: `releng/test-plugins.properties` holds, per plug-in, its repository, one commit,
 the SHA-256 of that commit's archive and its license. That file is the only place a commit or a
