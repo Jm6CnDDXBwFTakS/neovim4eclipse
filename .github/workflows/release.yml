@@ -112,6 +112,12 @@ jobs:
       # Anything else (none yet, still running, failed, or an error from the API) answers false,
       # and the release runs the Linux tests, as before this check existed.
       #
+      # A run counts by its jobs' latest attempt, not by the run list's status: GitHub's list
+      # filtered on status=success leaves out a run that passed only on a rerun ("Re-run failed
+      # jobs" after a runner hiccup), so v0.2.30's Release found no Build and ran the tests itself.
+      # The jobs endpoint answers for the latest attempt by default, where the rerun's jobs and
+      # the ones that had passed before both show as success.
+      #
       # Only push and Run workflow (workflow_dispatch) runs of this repository count. A run's
       # "branch" is its head branch, and a pull request from a fork's own main has head branch main
       # too, but its run tests the pull request merged into main, and the fork's copy of build.yml.
@@ -122,7 +128,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$GITHUB_SHA&branch=main&status=success&per_page=100" \
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$GITHUB_SHA&branch=main&per_page=100" \
                   --jq '.workflow_runs[] | select((.event == "push" or .event == "workflow_dispatch")
                           and .head_repository.full_name == $ENV.GITHUB_REPOSITORY) | "\(.id) \(.html_url)"') || runs=''
           run=''
