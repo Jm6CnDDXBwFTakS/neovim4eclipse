@@ -373,7 +373,11 @@ class ReleaseToolTest {
                 <version>0.2.11-SNAPSHOT</version>
                 """));
         assertThrows(ToolFailure.class, () -> Version.inPom("<project/>"));
-        Version.ofSnapshot(Version.inPom(Files.readString(Path.of("../../pom.xml")))); // the repository's own, a -SNAPSHOT
+        // The repository's own: a -SNAPSHOT on a release branch, the plain version on the release
+        // commit (prepare sets it, and the Release workflow builds and may test the tag). Example:
+        // 0.2.30-SNAPSHOT while 0.2.30 is made, 0.2.30 on v0.2.30.
+        String own = Version.inPom(Files.readString(Path.of("../../pom.xml")));
+        assertTrue(own.matches("\\d+\\.\\d+\\.\\d+(-SNAPSHOT)?"), own);
     }
 
     @Test
