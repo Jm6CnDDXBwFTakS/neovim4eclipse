@@ -66,7 +66,7 @@
     <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
     <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
     <maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
-    <build-helper-maven-plugin.version>3.6.2</build-helper-maven-plugin.version>
+    <build-helper-maven-plugin.version>3.8.0</build-helper-maven-plugin.version>
     <maven-antrun-plugin.version>3.2.0</maven-antrun-plugin.version>
     <maven-enforcer-plugin.version>3.7.0</maven-enforcer-plugin.version>
     <!-- Code coverage (see CONTRIBUTING.md, "Code coverage"). 0.8.14 or newer is needed to run on a
