@@ -201,13 +201,13 @@ public final class LikeCi {
     private static boolean onPath(String program) {
         List<String> names = new ArrayList<>(List.of(program));
         if (WINDOWS) {
-            for (String ext : System.getenv().getOrDefault("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")) {
+            for (String ext : env("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")) {
                 if (!ext.isBlank()) {
                     names.add(program + ext.toLowerCase(Locale.ROOT));
                 }
             }
         }
-        for (String dir : System.getenv().getOrDefault("PATH", "").split(File.pathSeparator)) {
+        for (String dir : env("PATH", "").split(File.pathSeparator)) {
             for (String name : names) {
                 if (!dir.isEmpty() && Files.isRegularFile(Path.of(dir, name)) && Files.isExecutable(Path.of(dir, name))) {
                     return true;
@@ -217,7 +217,18 @@ public final class LikeCi {
         return false;
     }
 
-    private static final Pattern SUITE = Pattern.compile("<testsuite\\b[^>]*\\btests=\"(\\d+)\"[^>]*\\bskipped=\"(\\d+)\"");
+    /**
+     * The environment variable {@code name}, or {@code orElse} when it is not set; a copy of
+     * {@code Shell.env}. By name, never from the map {@code System.getenv()} returns: Windows
+     * usually spells the search path {@code Path}, which {@code System.getenv("PATH")} finds and
+     * the map's {@code get("PATH")} does not.
+     */
+    private static String env(String name, String orElse) {
+        String value = System.getenv(name);
+        return value == null ? orElse : value;
+    }
+
+    private static final Pattern SUITE =Pattern.compile("<testsuite\\b[^>]*\\btests=\"(\\d+)\"[^>]*\\bskipped=\"(\\d+)\"");
     private static final Pattern SKIPPED = Pattern.compile("<testcase\\b[^>]*\\bname=\"([^\"]*)\"[^>]*\\bclassname=\"([^\"]*)\"[^>]*>\\s*<skipped");
 
     /**

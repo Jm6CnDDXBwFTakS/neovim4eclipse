@@ -204,13 +204,13 @@ public final class Shell {
     public static Optional<Path> which(String program) {
         List<String> names = new ArrayList<>(List.of(program));
         if (WINDOWS) {
-            for (String ext : System.getenv().getOrDefault("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")) {
+            for (String ext : env("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")) {
                 if (!ext.isBlank()) {
                     names.add(program + ext.toLowerCase(Locale.ROOT));
                 }
             }
         }
-        for (String dir : System.getenv().getOrDefault("PATH", "").split(File.pathSeparator)) {
+        for (String dir : env("PATH", "").split(File.pathSeparator)) {
             for (String name : names) {
                 if (!dir.isEmpty() && Files.isRegularFile(Path.of(dir, name)) && Files.isExecutable(Path.of(dir, name))) {
                     return Optional.of(Path.of(dir, name).toAbsolutePath());
@@ -218,6 +218,20 @@ public final class Shell {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * The environment variable {@code name}, or {@code orElse} when it is not set. The tools read
+     * every variable through this (or {@code System.getenv(name)}), never from the map
+     * {@code System.getenv()} returns: Windows ignores the case of a variable's name and usually
+     * spells the search path {@code Path}, {@code System.getenv("PATH")} finds it, and the map's
+     * {@code get("PATH")} does not (its keys are compared exactly). Example: in a console opened
+     * from the Start menu, {@code System.getenv().getOrDefault("PATH", "")} is empty, and no
+     * program is "on PATH". {@code ToolEnvironmentTest} keeps the map out of the tools.
+     */
+    public static String env(String name, String orElse) {
+        String value = System.getenv(name);
+        return value == null ? orElse : value;
     }
 
     /**

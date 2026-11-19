@@ -528,7 +528,7 @@ public final class EclipseUpgradeTool {
     }
 
     private static Path javaHome(String given) {
-        String home = !given.isBlank() ? given : System.getenv().getOrDefault("JAVA_HOME", "");
+        String home = !given.isBlank() ? given : Shell.env("JAVA_HOME", "");
         Path path = Path.of(home.isBlank() ? System.getProperty("java.home") : home).toAbsolutePath();
         if (!Files.isRegularFile(path.resolve("release"))) {
             throw new ToolFailure(path + " is not a Java home (it has no release file); name one with --java");

@@ -23,6 +23,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   origin, while that branch holds only the commit that sets its version. A branch with any other
   work on it is kept, and the tool says so.
 
+### Fixed
+
+- For contributors: on Windows the tools find the programs on the search path (`gh`, `gpg`, an
+  `eclipse` named without its folder) in a console that spells the variable `Path`, as cmd and
+  PowerShell opened from the Start menu do. They looked the variable up by the exact name `PATH`,
+  which Git Bash has, and so found no program anywhere else.
+
 ## [0.2.30] - 2026-11-19
 
 ### Changed

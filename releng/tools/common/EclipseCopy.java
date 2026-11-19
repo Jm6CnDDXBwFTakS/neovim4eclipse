@@ -66,7 +66,7 @@ public final class EclipseCopy {
             }
             return given.toAbsolutePath();
         }
-        for (String folder : System.getenv().getOrDefault("PATH", "").split(java.io.File.pathSeparator)) {
+        for (String folder : Shell.env("PATH", "").split(java.io.File.pathSeparator)) {
             if (!folder.isEmpty() && Files.isExecutable(Path.of(folder, name))) {
                 return Path.of(folder, name);
             }
