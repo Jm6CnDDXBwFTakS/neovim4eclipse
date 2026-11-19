@@ -12,6 +12,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- For contributors: the Release tool's `next --next 0.3.0` also deletes, after asking, the
+  `release/0.2.31` an earlier run cut by default (a `go --yes` that ran to its end), here and on
+  origin, while that branch holds only the commit that sets its version. A branch with any other
+  work on it is kept, and the tool says so.
+
 ## [0.2.30] - 2026-11-19
 
 ### Changed

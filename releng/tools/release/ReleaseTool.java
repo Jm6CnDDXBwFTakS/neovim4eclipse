@@ -80,6 +80,8 @@ import maven.MavenFiles;
  *   <li><b>next</b>: cuts {@code release/0.2.4} from {@code main}, sets its version
  *       ({@code 0.2.4-SNAPSHOT}), commits and pushes it; deletes {@code release/0.2.3} and the
  *       {@code fix/}, {@code feature/} and {@code rehearse/} branches already in {@code main}.
+ *       With {@code --next 0.3.0}, it also deletes a {@code release/0.2.4} an earlier run cut, while
+ *       that holds only its version commit ({@link #deleteReplacedNextBranch}).
  *       Last of all, it offers {@code InstallCheck} for 0.2.3 ({@link #offerInstallCheck}).</li>
  * </ol>
  *
@@ -828,8 +830,8 @@ public final class ReleaseTool {
     // ---------------------------------------------------------------- next
 
     private void next() {
-        Version v = pomVersion();
         git.fetch();
+        Version v = releaseBeforeNext(pomVersion());
         if (remoteTagCommit(v.tag()) == null) {
             throw new ToolFailure(v.tag() + " is not on origin: release " + v + " first (tag)");
         }
@@ -841,6 +843,34 @@ public final class ReleaseTool {
             throw installChecked(v) || !siteServes(v) ? f
                     : new ToolFailure(f.getMessage() + " Then, recommended: " + installCheckCommand(v) + " (InstallCheck).");
         }
+    }
+
+    /**
+     * The release {@code next} follows: {@code pom}, the checkout's version, on a release branch;
+     * or, on the branch an earlier {@code next} cut, the release before it. After 0.2.30, a
+     * {@code go --yes} without {@code --next} ends on {@code release/0.2.31} (POM
+     * {@code 0.2.31-SNAPSHOT}), and {@code next --next 0.3.0} must still mean "after 0.2.30".
+     * That is the case when 0.2.31 has no tag on origin, while {@code origin/main} is the commit
+     * its own version's tag names (POM 0.2.30-SNAPSHOT, tag v0.2.30 on it) and 0.2.31 is that release's next patch.
+     * Otherwise {@code pom} is the answer, and {@code next} says it is not released yet.
+     */
+    private Version releaseBeforeNext(Version pom) {
+        if (remoteTagCommit(pom.tag()) != null) {
+            return pom;
+        }
+        String main = git.commitOf("refs/remotes/origin/main");
+        if (main == null) {
+            return pom;
+        }
+        Version released;
+        try {
+            // 0.2.30-SNAPSHOT: main keeps the branch's version; the Release workflow builds at 0.2.30.
+            released = Version.ofSnapshot(Version.inPom(git.out("show", main + ":pom.xml")));
+        } catch (ToolFailure e) {
+            return pom; // a POM without the project's version
+        }
+        boolean mainIsReleased = main.equals(remoteTagCommit(released.tag()));
+        return mainIsReleased && pom.equals(released.nextPatch()) ? released : pom;
     }
 
     /** {@link #next} once {@code v} is tagged: cuts the next release's branch and deletes the finished ones. */
@@ -865,6 +895,7 @@ public final class ReleaseTool {
             }
             git.push(ask, "Push " + branch + " to origin", "--set-upstream", branch);
         }
+        deleteReplacedNextBranch(v, next, main);
         deleteFinishedBranches(v, main);
         System.out.println();
         System.out.println(branch + " is the branch for " + next + ".");
@@ -915,6 +946,53 @@ public final class ReleaseTool {
         } catch (ToolFailure e) {
             return ""; // a POM without the project's version: not the branch next sets up
         }
+    }
+
+    /**
+     * Deletes, each after asking, the default next branch ({@code release/0.2.31} after 0.2.30)
+     * when {@code --next} starts another version ({@code release/0.3.0}): an earlier {@code next}
+     * (a {@code go --yes} that ran to its end, say) may have cut and pushed it. Only that one name,
+     * and only while it is the commit {@code next} makes and nothing more: one commit on top of
+     * {@code main} that only sets the version ({@link ReleaseFiles#onlySetsTheVersion}). A branch
+     * with any other work is kept, with a line saying so; it is not finished with.
+     */
+    private void deleteReplacedNextBranch(Version v, Version next, String main) {
+        Version patch = v.nextPatch();
+        if (next.equals(patch)) {
+            return;
+        }
+        String stray = patch.branch();
+        String why = "it only sets the version " + patch.snapshot() + "; " + next.branch() + " replaces it";
+        if (git.commitOf("refs/remotes/origin/" + stray) != null) {
+            if (onlySetsTheVersion("refs/remotes/origin/" + stray, main, v, patch)) {
+                git.push(ask, "Delete " + stray + " on origin (" + why + ")", "--delete", stray);
+            } else {
+                System.out.println("kept " + stray + " on origin: it holds more than the commit that sets its version");
+            }
+        }
+        if (git.commitOf("refs/heads/" + stray) != null) {
+            if (git.branch().equals(stray)) {
+                // Only when origin had next's branch already, so that next did not switch to it.
+                System.out.println("kept the local " + stray + ": it is checked out. To delete it: git switch " + next.branch()
+                        + " (or git switch -c " + next.branch() + " origin/" + next.branch() + "), then git branch -D " + stray);
+            } else if (onlySetsTheVersion("refs/heads/" + stray, main, v, patch)) {
+                List<String> delete = List.of("git", "branch", "-D", stray); // -D: main does not have its commit
+                if (ask.confirm("Delete the local branch " + stray + " (" + why + ")", List.of(Shell.display(delete)))) {
+                    shell.out(delete);
+                }
+            } else {
+                System.out.println("kept the local " + stray + ": it holds more than the commit that sets its version");
+            }
+        }
+    }
+
+    /** Whether {@code ref} is one commit on top of {@code main} that only moves the version from {@code v} to {@code patch}. */
+    private boolean onlySetsTheVersion(String ref, String main, Version v, Version patch) {
+        String parent = git.commitOf(ref + "^1");
+        if (parent == null || !parent.equals(main) || !git.out("rev-list", "--count", main + ".." + ref).equals("1")) {
+            return false;
+        }
+        return ReleaseFiles.onlySetsTheVersion(git.out("diff", "-U0", "--no-color", "--no-ext-diff", "--no-textconv", "--no-relative", main, ref), v, patch);
     }
 
     /** Deletes, each after asking, the old release branch and the branches {@code main} already has. */

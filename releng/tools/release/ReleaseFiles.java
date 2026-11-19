@@ -4,6 +4,7 @@
 package release;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,6 +33,11 @@ import common.Version;
  *
  * <h2>The README</h2>
  * Its status line names the version: {@code **Status: 0.2.3, an early release.**}.
+ *
+ * <h2>A next branch that only sets its version</h2>
+ * {@code next} cuts the next release's branch with one commit, the version set by Tycho. When a
+ * later {@code next --next 0.3.0} replaces the default {@code release/0.2.31}, that branch may go
+ * only if its one commit changes nothing else ({@link #onlySetsTheVersion}).
  */
 public final class ReleaseFiles {
 
@@ -129,5 +135,73 @@ public final class ReleaseFiles {
             return false;
         }
         return tested.equals(head) || testedIsAncestor && RELEASE_NOTES_FILES.containsAll(changed);
+    }
+
+    /** Lines a diff's header gives for a change that is not an edit of lines: a new, deleted, renamed or binary file, a mode. */
+    private static final List<String> NOT_A_LINE_EDIT = List.of("new file", "deleted file", "rename ", "copy ", "similarity ",
+            "dissimilarity ", "old mode", "new mode", "Binary files", "GIT binary patch", "Submodule ");
+
+    /**
+     * Whether {@code diff} ({@code git diff -U0 <main> <branch>}) only moves the version from
+     * {@code from} (the release on {@code main}) to {@code to} (the branch's version, as
+     * {@code -SNAPSHOT} or {@code .qualifier}). Tycho's {@code set-version} changes one line for one
+     * line, so every hunk must remove as many lines as it adds, and its n-th removed line, with
+     * {@code from} taken out, must equal its n-th added line with {@code to} taken out. Nothing
+     * else may change: no other line, no file added, deleted, renamed or made binary, no mode, no
+     * final newline. The check reads the commit's content, not its message, so a branch that holds
+     * any other work is kept.
+     *
+     * <p>Example: {@code -  <version>0.2.30-SNAPSHOT</version>} and
+     * {@code +  <version>0.2.31-SNAPSHOT</version>} in one hunk pass; a changed dependency version
+     * ({@code 3.7.0} to {@code 3.8.0}), a removed {@code -- comment} line (in the diff:
+     * {@code --- comment}), or a line moved to another place does not. An empty diff is not a
+     * version commit either.
+     */
+    public static boolean onlySetsTheVersion(String diff, Version from, Version to) {
+        Pattern fromText = versionText(from);
+        Pattern toText = versionText(to);
+        List<String> removed = new ArrayList<>();
+        List<String> added = new ArrayList<>();
+        boolean inHeader = false; // between "diff --git" and a file's first "@@": "---"/"+++" name the files there
+        int edits = 0;
+        for (String line : diff.lines().toList()) {
+            if (line.startsWith("diff --git ")) {
+                if (!samePairs(removed, added)) {
+                    return false;
+                }
+                inHeader = true;
+            } else if (line.startsWith("@@")) {
+                if (!samePairs(removed, added)) {
+                    return false;
+                }
+                inHeader = false;
+            } else if (inHeader) {
+                if (NOT_A_LINE_EDIT.stream().anyMatch(line::startsWith)) {
+                    return false;
+                }
+                // index, --- a/…, +++ b/…: the file's names and blobs
+            } else if (line.startsWith("-")) {
+                removed.add(fromText.matcher(line.substring(1)).replaceAll("<version>"));
+                edits++;
+            } else if (line.startsWith("+")) {
+                added.add(toText.matcher(line.substring(1)).replaceAll("<version>"));
+            } else {
+                return false; // "\ No newline at end of file", or anything else -U0 does not print for a line edit
+            }
+        }
+        return edits > 0 && samePairs(removed, added);
+    }
+
+    /** Whether one hunk's removed and added lines pair up in order; empties both for the next hunk. */
+    private static boolean samePairs(List<String> removed, List<String> added) {
+        boolean same = removed.equals(added);
+        removed.clear();
+        added.clear();
+        return same;
+    }
+
+    /** {@code version} as Maven or OSGi writes it, not inside a longer number: 0.2.3 is not part of 0.2.30. */
+    private static Pattern versionText(Version version) {
+        return Pattern.compile("(?<![\\d.])" + Pattern.quote(version.toString()) + "(?:-SNAPSHOT|\\.qualifier)?(?![\\d.])");
     }
 }

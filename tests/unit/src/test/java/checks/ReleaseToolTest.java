@@ -300,6 +300,66 @@ class ReleaseToolTest {
     }
 
     @Test
+    void aReplacedNextBranchGoesOnlyWhileItOnlySetsTheVersion() {
+        Version release = Version.parse("0.2.30");
+        Version patch = Version.parse("0.2.31");
+        String versionCommit = """
+                diff --git a/pom.xml b/pom.xml
+                index 1111111..2222222 100644
+                --- a/pom.xml
+                +++ b/pom.xml
+                @@ -9 +9 @@
+                -  <version>0.2.30-SNAPSHOT</version>
+                +  <version>0.2.31-SNAPSHOT</version>
+                diff --git a/plugin/META-INF/MANIFEST.MF b/plugin/META-INF/MANIFEST.MF
+                --- a/plugin/META-INF/MANIFEST.MF
+                +++ b/plugin/META-INF/MANIFEST.MF
+                @@ -5 +5 @@
+                -Bundle-Version: 0.2.30.qualifier
+                +Bundle-Version: 0.2.31.qualifier
+                """;
+        assertTrue(ReleaseFiles.onlySetsTheVersion(versionCommit, release, patch));
+        assertFalse(ReleaseFiles.onlySetsTheVersion(versionCommit, release, Version.parse("0.3.0")), "another version than the branch's");
+        assertFalse(ReleaseFiles.onlySetsTheVersion(versionCommit + "@@ -20 +20 @@\n-  <x>3.7.0</x>\n+  <x>3.8.0</x>\n", release, patch),
+                "a dependency moved too");
+        assertFalse(ReleaseFiles.onlySetsTheVersion(versionCommit + "@@ -30,0 +31 @@\n+  <!-- more work -->\n", release, patch),
+                "a line added");
+        assertFalse(ReleaseFiles.onlySetsTheVersion(versionCommit + "diff --git a/b.png b/b.png\nnew file mode 100644\nBinary files /dev/null and b/b.png differ\n",
+                release, patch), "a new file");
+        assertFalse(ReleaseFiles.onlySetsTheVersion("-  <version>0.2.300</version>\n+  <version>0.2.31-SNAPSHOT</version>\n", release, patch),
+                "0.2.30 inside a longer number");
+        assertFalse(ReleaseFiles.onlySetsTheVersion(versionCommit + "@@ -40 +39,0 @@\n--- a Lua comment\n", release, patch),
+                "a removed -- comment, which the diff writes as --- like a file name");
+        assertFalse(ReleaseFiles.onlySetsTheVersion(versionCommit.replace("-Bundle-Version: 0.2.30.qualifier\n", "")
+                + "@@ -7 +7 @@\n-Bundle-Version: 0.2.30.qualifier\n+Other: x\n", release, patch), "a line moved to another hunk");
+        assertFalse(ReleaseFiles.onlySetsTheVersion(versionCommit + "\\ No newline at end of file\n", release, patch), "the final newline");
+        assertFalse(ReleaseFiles.onlySetsTheVersion("", release, patch), "an empty commit is not the version commit");
+    }
+
+    @Test
+    void gitsDiffOfAVersionCommitPassesTheCheck(@TempDir Path dir) throws Exception {
+        assumeTrue(repository(dir), "git is not installed");
+        Shell shell = new Shell(dir);
+        Git git = new Git(shell);
+        Files.writeString(dir.resolve("pom.xml"), "<project>\n  <version>0.2.30</version>\n  <x>3.7.0</x>\n</project>\n");
+        git.out("add", "pom.xml");
+        git.out("commit", "-q", "-m", "release");
+        String main = git.head();
+        Files.writeString(dir.resolve("pom.xml"), "<project>\n  <version>0.2.31-SNAPSHOT</version>\n  <x>3.7.0</x>\n</project>\n");
+        git.out("commit", "-q", "-a", "-m", "Start 0.2.31");
+        Version release = Version.parse("0.2.30");
+        Version patch = Version.parse("0.2.31");
+        assertTrue(ReleaseFiles.onlySetsTheVersion(git.out("diff", "-U0", "--no-color", "--no-ext-diff", main, "HEAD"), release, patch));
+        git.out("mv", "a.txt", "b.txt");
+        git.out("commit", "-q", "-m", "a rename");
+        assertFalse(ReleaseFiles.onlySetsTheVersion(git.out("diff", "-U0", "--no-color", "--no-ext-diff", main, "HEAD"), release, patch),
+                "a renamed file");
+        Files.writeString(dir.resolve("pom.xml"), "<project>\n  <version>0.2.31-SNAPSHOT</version>\n  <x>3.8.0</x>\n</project>\n");
+        git.out("commit", "-q", "-a", "-m", "work");
+        assertFalse(ReleaseFiles.onlySetsTheVersion(git.out("diff", "-U0", "--no-color", "--no-ext-diff", main, "HEAD"), release, patch));
+    }
+
+    @Test
     void anEditThatFailsLeavesTheTreeAsItWas(@TempDir Path dir) throws Exception {
         assumeTrue(repository(dir), "git is not installed");
         Git git = new Git(new Shell(dir));

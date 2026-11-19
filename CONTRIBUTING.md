@@ -777,6 +777,15 @@ release 0.2.3, on `release/0.2.3`:
    `main` already has (`--next 0.3.0` starts another version). Last of all, it offers
    `InstallCheck` (below) for 0.2.3: recommended, not required.
 
+   When the next release is not a patch, give `--next` to `go` itself (`go --yes --next 0.3.0`),
+   or `go` cuts `release/0.2.4`. If it did, run `next --next 0.3.0` afterwards, still on
+   `release/0.2.4` (an untagged branch one patch after the release `main` is tagged with counts as
+   that release's next branch): it cuts `release/0.3.0` from `main` and offers to delete `release/0.2.4`, here and on origin, while that branch
+   is still one commit on top of `main` that only sets its version (each removed line matches an
+   added one once 0.2.3 and `0.2.4-SNAPSHOT` or `0.2.4.qualifier` are taken out). Any other work
+   on it keeps it, and the tool prints why. Only that one name is looked at: an older stray branch
+   is yours to delete (`git push origin --delete release/<version>`, then `git branch -D`).
+
 The offer is the very end of a release run, after the questions of `next`, because it ends in an
 Eclipse you try by hand and close. It installs the release just made (0.2.3) from the update site,
 although the checkout is on `release/0.2.4` by then. If `next` stops before the end, its message
