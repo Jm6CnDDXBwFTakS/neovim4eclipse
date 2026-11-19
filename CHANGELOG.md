@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.29] - 2026-11-19
+
 ### Fixed
 
 - With noice.nvim in your config (LazyVim turns it on), Eclipse no longer shows a "Neovim
