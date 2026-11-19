@@ -1157,10 +1157,12 @@ t.test("entering a page gives its window the attached editor's folder", function
   local code = open(buffer(3), vim.fn.fnamemodify(vim.fn.tempname(), ':h'))
   local folder = folder_of(code)
   local page = open_page(page_text({ 'one' }))
+  -- The page starts in the root folder: '/' on Linux and macOS, the drive's root (C:\) on Windows,
+  -- so the setup only checks that it differs from the code's folder, by the one rule for paths.
   vim.api.nvim_win_call(page, function() vim.fn.chdir('/', 'window') end)
-  t.eq('/', folder_of(page))
+  t.ok(not require('neovim4eclipse.paths').same(folder, folder_of(page)), 'the page starts elsewhere')
   t.eq(page, t.run('FOCUS_WINDOW', tostring(page), tostring(code)))
-  t.eq(folder, folder_of(page), ":e b.txt in the page means the code's b.txt")
+  t.same_file(folder, folder_of(page), ":e b.txt in the page means the code's b.txt")
   t.eq(-1, t.run('FOCUS_WINDOW', '99999', tostring(code)), 'a window that is gone')
 end)
 
