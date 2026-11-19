@@ -4,7 +4,9 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.lang.ref.WeakReference;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -13,7 +15,6 @@ import org.eclipse.e4.ui.model.application.ui.basic.MWindow;
 import org.eclipse.e4.ui.workbench.modeling.EModelService;
 import org.eclipse.e4.ui.workbench.modeling.EPartService;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.ui.IEditorInput;
@@ -37,26 +38,25 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 
 /**
  * A page editor: {@code :help}, {@code :messages} or {@code :checkhealth} in an editor of the
- * editor area, beside the code, as Vim shows them in a window of their own. Help and checkhealth
- * have one editor each ({@link NeovimPageInput}, {@link PageKind}), holding a {@link ScreenPane}
- * with a second Neovim of that kind. Messages are a window of the editing Neovim, the one behind
- * the code ({@link WindowPane}): one buffer, and any number of editors, each its own window on it
- * ({@code :split} in the page makes a second). It is an editor of Eclipse's like any other (a tab, a stack, a split,
- * dragged anywhere in the editor area), but no text editor: the plug-in attaches no Neovim to it
- * ({@code EditorAttachManager.textEditorOf} is {@code null}), and there is nothing to save.
+ * editor area, beside the code, as Vim shows them in a window of their own. Each is a window of the
+ * editing Neovim, the one behind the code ({@link WindowPane}), on a buffer of its kind
+ * ({@link PageKind}): the messages buffer the plug-in fills, a help buffer, a report. Any number of
+ * editors of a kind may be open, each its own window ({@code :split} in the page makes a second);
+ * the next command of the kind shows in the one used last. It is an editor of Eclipse's like any
+ * other (a tab, a stack, a split, dragged anywhere in the editor area), but no text editor: the
+ * plug-in attaches no Neovim to it ({@code EditorAttachManager.textEditorOf} is {@code null}), and
+ * there is nothing to save.
  *
  * <ul>
  *   <li>The title is the kind's, "Neovim: help" ({@link NeovimPageInput#getName}).</li>
- *   <li>Every key goes to the page's Neovim, except the shortcuts Eclipse binds; Ctrl+W is
- *       Neovim's through a key context of the page editors' own ({@link #KEY_CONTEXT_ID}), turned
- *       on while the screen has the keyboard.</li>
- *   <li>When the second Neovim ends ({@code q}, {@code :q}, a crash), the editor closes; the next
- *       command of its kind opens a new one. In the messages page {@code q} and {@code :q} are
- *       commands from its window ({@link PageCommandsRun}), which close it.</li>
+ *   <li>Every key goes to the editing Neovim, in the page's window, except the shortcuts Eclipse
+ *       binds; Ctrl+W is Neovim's through a key context of the page editors' own
+ *       ({@link #KEY_CONTEXT_ID}), turned on while the screen has the keyboard.</li>
+ *   <li>{@code q} and {@code :q} are commands from its window ({@link PageCommandsRun}), which close
+ *       it; so does Neovim closing the window, or Restart Neovim ({@link #closeEditingPages}).</li>
  *   <li>Opened on anything but a {@link NeovimPageInput} (a file through Open With), it refuses.</li>
  * </ul>
  *
@@ -78,9 +78,9 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
      */
     static final String KEY_CONTEXT_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.context.page";
 
-    private PagePane pane;
-    /** The messages editor used last ({@link #lastUsed}): {@code :messages} again shows there. UI thread. */
-    private static WeakReference<NeovimPageEditor> lastMessages = new WeakReference<>(null);
+    private WindowPane pane;
+    /** The editor of each kind used last ({@link #lastUsed}): the kind's next command shows there. UI thread. */
+    private static final Map<PageKind, WeakReference<NeovimPageEditor>> LAST_USED = new EnumMap<>(PageKind.class);
     /** The key context while the screen has the keyboard; {@code null} otherwise. */
     private IContextActivation keyContext;
 
@@ -103,33 +103,35 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
     public void createPartControl(Composite parent) {
         parent.setLayout(new FillLayout());
         NeovimSession editing = Activator.getDefault().currentSession();
-        if (kind() == PageKind.MESSAGES && editing != null) {
-            pane = new WindowPane(parent, new WindowPane.Host() {
-                @Override
-                public IEditorSite site() {
-                    return getEditorSite();
-                }
-
-                @Override
-                public void command(HostCommand command) {
-                    PageCommandsRun.run(NeovimPageEditor.this, command);
-                }
-
-                @Override
-                public void action(IdeAction action) {
-                    PageCommandsRun.action(NeovimPageEditor.this, action);
-                }
-
-                @Override
-                public void close() {
-                    getSite().getPage().closeEditor(NeovimPageEditor.this, false);
-                }
-            }, editing);
-            pane.canvas().addListener(SWT.FocusIn, e -> lastMessages = new WeakReference<>(this));
-            pane.canvas().addListener(SWT.FocusOut, e -> ((WindowPane) pane).focusOut());
-        } else {
-            pane = screenPane(parent);
+        if (editing == null) {
+            // No editing Neovim (it ended between the command and this editor): nothing to show,
+            // and nothing would draw here; the next command of the kind opens a new editor.
+            getSite().getShell().getDisplay().asyncExec(() -> getSite().getPage().closeEditor(this, false));
+            return;
         }
+        pane = new WindowPane(parent, new WindowPane.Host() {
+            @Override
+            public IEditorSite site() {
+                return getEditorSite();
+            }
+
+            @Override
+            public void command(HostCommand command) {
+                PageCommandsRun.run(NeovimPageEditor.this, command);
+            }
+
+            @Override
+            public void action(IdeAction action) {
+                PageCommandsRun.action(NeovimPageEditor.this, action);
+            }
+
+            @Override
+            public void close() {
+                getSite().getPage().closeEditor(NeovimPageEditor.this, false);
+            }
+        }, editing);
+        pane.canvas().addListener(SWT.FocusIn, e -> LAST_USED.put(kind(), new WeakReference<>(this)));
+        pane.canvas().addListener(SWT.FocusOut, e -> pane.focusOut());
         // Bound to the editor's site: Eclipse also ends the activation when the editor stops being
         // the active part, so the context never outlives the focus.
         IContextService contexts = getSite().getService(IContextService.class);
@@ -153,41 +155,10 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
         }
     }
 
-    /** A pane of a second Neovim of its own, for help and checkhealth ({@link ScreenPane}). */
-    private ScreenPane screenPane(Composite parent) {
-        return new ScreenPane(parent, new ScreenPane.Host() {
-            @Override
-            public void titleChanged(String title) {
-                setPartName(title);
-            }
-
-            @Override
-            public void window(char key, int count, Point cursor) {
-                EditorSplits.focusFrom(NeovimPageEditor.this, key, count, cursor);
-            }
-
-            @Override
-            public void help(String topic) {
-                // :help in the checkhealth editor: run where the user's help pages are, in the
-                // editing Neovim, whose help window then goes to the help editor.
-                NeovimSession editing = Activator.getDefault().currentSession();
-                if (editing != null) {
-                    editing.helpAsync(topic);
-                }
-            }
-
-            @Override
-            public void ended() {
-                getSite().getPage().closeEditor(NeovimPageEditor.this, false);
-            }
-        });
-    }
-
     /**
-     * Closes every page editor shown from a window of the editing Neovim (the messages pages), in
-     * each window: Restart Neovim ends that Neovim, and their windows with it. The next
-     * {@code :messages} opens a new one on the new Neovim. Help and checkhealth keep their own
-     * Neovims. UI thread.
+     * Closes every page editor, in each workbench window: each is a window of the editing Neovim, and
+     * Restart Neovim ends that Neovim, and their windows with it. The next {@code :help},
+     * {@code :messages} or {@code :checkhealth} opens a new one on the new Neovim. UI thread.
      */
     public static void closeEditingPages(IWorkbench workbench) {
         for (IWorkbenchWindow window : workbench.getWorkbenchWindows()) {
@@ -202,15 +173,16 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
         }
     }
 
-    /** The messages editor used last, if it is still open, or {@code null}. UI thread. */
+    /** The editor of {@code kind} used last, if it is still open, or {@code null}. UI thread. */
     static NeovimPageEditor lastUsed(PageKind kind) {
-        NeovimPageEditor last = kind == PageKind.MESSAGES ? lastMessages.get() : null;
+        WeakReference<NeovimPageEditor> ref = LAST_USED.get(kind);
+        NeovimPageEditor last = ref == null ? null : ref.get();
         return last != null && last.pane != null && !last.pane.canvas().isDisposed() ? last : null;
     }
 
-    /** The pane, when the page is a window of the editing Neovim ({@link WindowPane}); else {@code null}. */
+    /** The pane, a window of the editing Neovim; {@code null} when the editor closes for want of one. */
     WindowPane windowPane() {
-        return pane instanceof WindowPane window ? window : null;
+        return pane;
     }
 
     @Override
@@ -222,7 +194,7 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
 
     /**
      * Shows {@code content}, which must be of this editor's kind, replacing what it held
-     * ({@link ScreenPane#show}), in the colors of the editor it came from. UI thread.
+     * ({@link WindowPane#show}), in the colors of the editor it came from. UI thread.
      *
      * @param fg that editor's text color, {@code 0xRRGGBB}
      * @param bg its background
@@ -231,10 +203,8 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
         if (PageKind.of(content) != kind()) {
             throw new IllegalArgumentException(content.title() + " is not shown in the " + getPartName() + " editor");
         }
-        if (pane instanceof WindowPane window && content instanceof ViewText text) {
-            window.show(text, fg, bg);
-        } else if (pane instanceof ScreenPane screen) {
-            screen.show(content, fg, bg);
+        if (pane != null) {
+            pane.show(content, fg, bg);
         }
     }
 
@@ -244,14 +214,16 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
      */
     void showSameAs(NeovimPageEditor other, int fg, int bg) {
         WindowPane from = other.windowPane();
-        if (pane instanceof WindowPane window && from != null && from.window() != EditorWindow.UNKNOWN) {
-            window.showSameAs(from.window(), fg, bg);
+        if (pane != null && from != null && from.window() != EditorWindow.UNKNOWN) {
+            pane.showSameAs(from.window(), fg, bg);
         }
     }
 
     /** {@code <C-w>} from the plug-in's key binding ({@link SendKeyHandler}), typed here. UI thread. */
     void sendKey(String key) {
-        pane.sendKey(key);
+        if (pane != null) {
+            pane.sendKey(key);
+        }
     }
 
     /** The canvas the screen is drawn on, for tests. UI thread. */
@@ -293,8 +265,8 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
     }
 
     /**
-     * This editor's place in Eclipse's history: the editor and nothing more, since the page is the
-     * second Neovim's to keep. Two entries of the same editor merge into one, as Eclipse merges a
+     * This editor's place in Eclipse's history: the editor and nothing more, since the page's place
+     * is its Neovim window's to keep. Two entries of the same editor merge into one, as Eclipse merges a
      * text editor's entries at one place. Its input is the editor's ({@link NeovimPageInput}).
      */
     static final class PageLocation extends NavigationLocation {

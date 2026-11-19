@@ -72,22 +72,6 @@ class ClipboardIntegrationTest {
         }
     }
 
-    /**
-     * A plain yank in a page editor, with {@code 'clipboard'} set to {@code unnamedplus}: the
-     * editing Neovim's unnamed register and the clipboard get it, and the clipboard once, not
-     * twice ({@code LuaScripts.SET_REGISTER_FROM_VIEW}).
-     */
-    @Test
-    void aPlainYankFromTheViewIsCopiedOnceWithUnnamedplus() throws Exception {
-        try (NeovimSession s = start("--cmd", "set clipboard=unnamedplus")) {
-            s.setRegisterFromViewAsync("", "V", List.of("from the view"));
-            waitFor(() -> !system.copies.isEmpty(), "the copy");
-            NeovimBarrier.pass(s);
-            assertEquals(List.of("CLIPBOARD:from the view" + NL), system.copies);
-            assertEquals("from the view\n", s.lua("return vim.fn.getreg('\"')"));
-        }
-    }
-
     @Test
     void plusPPastesLinesCopiedInAnotherProgram() throws Exception {
         try (NeovimSession s = start()) {

@@ -18,7 +18,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,9 +50,10 @@ class NotificationBridgeTest {
             @Override public void onBufferLines(int bufnr, int first, int last, List<String> lines) {
                 events.add("lines@" + bufnr + ":" + first + ":" + last + ":" + lines);
             }
-            @Override public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile) {
+            @Override public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile,
+                    boolean pageFollows) {
                 events.add("enter:" + bufnr + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid) + (jumped ? " jump" : "")
-                        + (projectFile.isEmpty() ? "" : " file " + projectFile));
+                        + (projectFile.isEmpty() ? "" : " file " + projectFile) + (pageFollows ? " follows" : ""));
             }
             @Override public void onBufferReload(int bufnr, boolean kept) { events.add("reload:" + bufnr + (kept ? " kept" : "")); }
             @Override public void onWindowClosed(int winid) { events.add("winclosed:" + winid); }
@@ -113,7 +114,7 @@ class NotificationBridgeTest {
             @Override public void onViewContent(ViewContent content) {
                 events.add(switch (content) {
                     case ViewText text -> "view:" + text.title() + ":" + text.lines();
-                    case HelpPage page -> "help:" + page;
+                    case PageBuffer page -> "page:" + page.title() + ":" + page.buffer() + ":" + page.line();
                 });
             }
             @Override public void onGridEvents(List<GridEvent> grid) { events.add("grid:" + grid); }
@@ -207,12 +208,14 @@ class NotificationBridgeTest {
         notify("eclipse_buf_enter", 5, 1002L, true, "/ws/app/B.java");
         notify("eclipse_buf_enter", 6, 1002L, false, "");
         notify("eclipse_buf_enter", 7, 1002L, false, 3L); // not a name: none
+        // A help page that took the help buffer as its page (Ctrl-] in the help editor).
+        notify("eclipse_buf_enter", 8, 1003L, false, "", true);
         notify("eclipse_reload", 4, true);
         notify("eclipse_reload", 3, false);
         notify("eclipse_reload", 2); // no flag: not kept
         notify("eclipse_reload");
         assertEquals(List.of("enter:5#1002 jump file /ws/app/B.java", "enter:6#1002", "enter:7#1002",
-                "reload:4 kept", "reload:3", "reload:2"), events);
+                "enter:8#1003 follows", "reload:4 kept", "reload:3", "reload:2"), events);
     }
 
     /** {@code :set wrap} in Neovim (LuaScripts.VIEWPORT); a payload without a boolean is ignored. */
@@ -530,33 +533,20 @@ class NotificationBridgeTest {
     }
 
     /**
-     * {@code eclipse_view_text}: a {@code :checkhealth} report for a page editor. Only that kind
-     * is known; any other, or a malformed payload, reaches nobody.
+     * {@code eclipse_view_page}: a buffer of Neovim's own for a page editor, a help page or a
+     * {@code :checkhealth} report. Only those two kinds are known, and only with a buffer and a line
+     * of 1 or more; anything else reaches nobody.
      */
     @Test
-    void viewTextOfTheKnownKindOnly() {
-        notify("eclipse_view_text", "checkhealth", List.of("vim.health: OK", "- OK fine"));
-        notify("eclipse_view_text", "help", List.of("a"));
-        notify("eclipse_view_text", "checkhealth", "not a list");
-        notify("eclipse_view_text");
-        assertEquals(List.of("view:checkhealth:[vim.health: OK, - OK fine]"), events);
-    }
-
-    /**
-     * {@code eclipse_view_help}: a help page for a page editor. A payload whose parts lack their
-     * types, or whose tag or file is empty, reaches nobody.
-     */
-    @Test
-    void aHelpPageWithEveryPartOnly() {
-        notify("eclipse_view_help", "help-context", "helphelp.txt", 27, "/rt");
-        notify("eclipse_view_help", "", "helphelp.txt", 27, "/rt");
-        notify("eclipse_view_help", "help-context", "", 27, "/rt");
-        notify("eclipse_view_help", "help-context", "helphelp.txt", "27", "/rt");
-        notify("eclipse_view_help", "help-context", "helphelp.txt", 27);
-        notify("eclipse_view_help", "help-context", "helphelp.txt", 27, "/rt", "runtimepath", 3);
-        notify("eclipse_view_help", "help-context", "helphelp.txt", 27, "/rt", "runtimepath", "3");
-        assertEquals(List.of("help:" + new HelpPage("help-context", "helphelp.txt", 27, "/rt"),
-                "help:" + new HelpPage("help-context", "helphelp.txt", 27, "/rt", "runtimepath", 3),
-                "help:" + new HelpPage("help-context", "helphelp.txt", 27, "/rt")), events);
+    void aPageBufferOfAKnownKindOnly() {
+        notify("eclipse_view_page", "help", 7, 27);
+        notify("eclipse_view_page", "checkhealth", 9L, 1);
+        notify("eclipse_view_page", "messages", 3, 1); // not a kind the net hands over
+        notify("eclipse_view_page", "help", List.of(7), 27); // no number
+        notify("eclipse_view_page", "help", 7, 0);
+        notify("eclipse_view_page", "help", -1, 1);
+        notify("eclipse_view_page", "help", 7);
+        notify("eclipse_view_page");
+        assertEquals(List.of("page:help:7:27", "page:checkhealth:9:1"), events);
     }
 }

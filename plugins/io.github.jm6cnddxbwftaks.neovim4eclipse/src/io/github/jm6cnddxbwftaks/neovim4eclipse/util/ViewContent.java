@@ -4,18 +4,15 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 /**
- * What a page editor shows, as the editing Neovim hands it over: text ({@link ViewText}:
- * {@code :messages}, {@code :checkhealth}) or a help page ({@link HelpPage}: {@code :help}). Each
- * kind has its own page editor and second Neovim ({@code editor/NeovimPageEditor}): text is
- * shown by one that loads none of the user's plug-ins, help by one with the user's
- * {@code 'runtimepath'}, so that the user's own help pages and help plug-ins work as in their
- * editor. Sealed, so a {@code switch} over it names
- * every kind.
+ * What a page editor shows, as the editing Neovim hands it over: text the plug-in puts into a
+ * page buffer of its own ({@link ViewText}: {@code :messages}), or a buffer Neovim made itself
+ * ({@link PageBuffer}: {@code :help}, {@code :checkhealth}). Either way the page editor shows a
+ * window of the editing Neovim ({@code editor/WindowPane}). Sealed, so a {@code switch} over it
+ * names every kind.
  *
- * <p>Example: {@code :help help-context} becomes {@code HelpPage("help-context", "helphelp.txt", 27,
- * "/home/you/.config/nvim,...")}, titled "help".
+ * <p>Example: {@code :help help-context} becomes {@code PageBuffer("help", 7, 27)}, titled "help".
  */
-public sealed interface ViewContent permits ViewText, HelpPage {
+public sealed interface ViewContent permits ViewText, PageBuffer {
 
     /** What the page editor's title says after "Neovim: ", such as {@code messages} or {@code help}. */
     String title();

@@ -19,8 +19,7 @@ import java.nio.file.Path;
  * appends a folder of its own, {@code <plug-in folder>/runtime}, for {@code :checkhealth}
  * ({@link HealthCheck}); the help file and its tags go into that folder's {@code doc/}, written
  * again at every start ({@link #write}). The tags file is written here rather than by
- * {@code :helptags}: two fixed lines, no command to run in Neovim, and the help editor, which gets
- * the editing Neovim's {@code 'runtimepath'} ({@code HelpProfile}), finds the page too. A
+ * {@code :helptags}: two fixed lines, no command to run in Neovim. A
  * {@code doc/} folder holds no script, so the runtimepath still gains nothing that runs by itself.
  *
  * <p>Example: {@code :help neovim4eclipse} in an editor opens this page in the help editor.

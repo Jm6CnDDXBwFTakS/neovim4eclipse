@@ -193,7 +193,7 @@ t.test('showing a window enters it, and BufEnter says which window', function()
   local win = open(a)
   t.eq(win, show(win, a))
   t.eq(win, vim.api.nvim_get_current_win())
-  t.eq({ { a, win, false, '' } }, t.sent('eclipse_buf_enter'))
+  t.eq({ { a, win, false, '', false } }, t.sent('eclipse_buf_enter'))
   t.forget()
   t.eq(home, show(-1, a), '-1 is the home window')
   t.eq(a, vim.api.nvim_win_get_buf(home), 'the home window shows the buffer asked for')
@@ -205,7 +205,7 @@ t.test('a window showing another buffer gets the right one quietly before it is 
   local win = open(b)
   show(win, a)
   t.eq(a, vim.api.nvim_win_get_buf(win))
-  t.eq({ { a, win, false, '' } }, t.sent('eclipse_buf_enter'), 'one BufEnter, with the buffer Eclipse expects')
+  t.eq({ { a, win, false, '', false } }, t.sent('eclipse_buf_enter'), 'one BufEnter, with the buffer Eclipse expects')
 end)
 
 t.test('a window closed in Neovim is not shown: -1, and nothing changes', function()
@@ -721,16 +721,19 @@ t.test('a split a plug-in opens in an editor\'s tab is closed again: the safety 
   t.ok(vim.v.errmsg:find('Window closed', 1, true), vim.v.errmsg)
 end)
 
-t.test(':checkhealth hands its report to a page editor and leaves no window, buffer or message', function()
+t.test(':checkhealth hands its report buffer to a page editor and leaves no window or message', function()
   local win = commands()
   vim.v.errmsg = ''
   t.forget()
   vim.cmd('checkhealth vim.health') -- opens in a new tab: the editor's buffer is not empty
-  t.wait_for('the report', function() return #t.sent('eclipse_view_text') == 1 end)
-  local sent = t.sent('eclipse_view_text')[1]
-  t.eq('checkhealth', sent[1])
-  t.ok(table.concat(sent[2], '\n'):find('vim.health', 1, true), vim.inspect(sent[2]))
-  t.eq(-1, vim.fn.bufnr('health://'), 'wiped, so :ls and :bnext never meet it')
+  t.wait_for('the report', function() return #t.sent('eclipse_view_page') == 1 end)
+  local kind, buf, line = unpack(t.sent('eclipse_view_page')[1])
+  t.eq({ 'checkhealth', 1 }, { kind, line })
+  t.ok(vim.api.nvim_buf_is_valid(buf), 'the report is kept, for the page window')
+  t.eq({ 'checkhealth', 'hide', false }, { vim.bo[buf].filetype, vim.bo[buf].bufhidden, vim.bo[buf].buflisted },
+    'unlisted, so :ls and :bnext never meet it')
+  t.ok(table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), '\n'):find('vim.health', 1, true))
+  t.eq({}, vim.fn.win_findbuf(buf), 'no window shows it until Eclipse opens the page')
   t.eq(win, vim.api.nvim_get_current_win(), "back in the editor's window")
   t.eq('', vim.v.errmsg, 'no "Window closed" message: the report went somewhere')
 end)
@@ -752,52 +755,50 @@ t.test(':checkhealth from an editor whose tab is not the last comes back to it, 
   t.wait_for('the earlier checks', function() return settled end)
   t.forget()
   vim.cmd('checkhealth vim.health')
-  t.wait_for('the report', function() return #t.sent('eclipse_view_text') == 1 end)
+  t.wait_for('the report', function() return #t.sent('eclipse_view_page') == 1 end)
   t.eq(wb, vim.api.nvim_get_current_win(), "back in the editor the command ran in")
   for _, enter in ipairs(t.sent('eclipse_buf_enter')) do
     t.ok(enter[2] ~= wa, 'never in the other editor: ' .. vim.inspect(t.sent('eclipse_buf_enter')))
   end
 end)
 
-t.test('a buffer the user set to the checkhealth filetype is no report: not taken, not wiped', function()
+t.test('a buffer the user set to the checkhealth filetype is no report: not taken', function()
   commands()
   local mine = buffer(2)
   vim.bo[mine].filetype = 'checkhealth'
   vim.cmd('split')
   vim.api.nvim_win_set_buf(0, mine)
   t.wait_for('the stray split to close', function() return windows_in_tab() == 1 end)
-  t.eq({}, t.sent('eclipse_view_text'))
+  t.eq({}, t.sent('eclipse_view_page'))
   t.ok(vim.api.nvim_buf_is_valid(mine), 'the buffer stays')
 end)
 
-t.test(':checkhealth as a float (vim.g.health style) is read before closing wipes it', function()
+t.test(':checkhealth as a float (vim.g.health style) keeps its buffer when the float closes', function()
   commands()
   vim.g.health = { style = 'float' }
   t.forget()
   vim.cmd('checkhealth vim.health')
-  t.wait_for('the report', function() return #t.sent('eclipse_view_text') == 1 end)
-  t.ok(#t.sent('eclipse_view_text')[1][2] > 1, 'the lines, read while the float was open')
+  t.wait_for('the report', function() return #t.sent('eclipse_view_page') == 1 end)
+  local buf = t.sent('eclipse_view_page')[1][2]
+  t.ok(vim.api.nvim_buf_is_valid(buf), 'a float would wipe it: kept')
+  t.ok(vim.api.nvim_buf_line_count(buf) > 1, 'with its lines')
   vim.g.health = nil
 end)
 
-t.test(':help hands the page to a page editor and leaves no window, loaded buffer or message', function()
+t.test(':help hands the help buffer to a page editor and leaves no window or message', function()
   local win = commands()
   vim.v.errmsg = ''
   t.forget()
   vim.cmd('help help-context')
-  t.wait_for('the page', function() return #t.sent('eclipse_view_help') == 1 end)
-  local tag, file, line, runtimepath, grep, index = unpack(t.sent('eclipse_view_help')[1])
-  t.eq({ '', 0 }, { grep, index }, 'no :helpgrep: the page goes by its tag')
-  t.eq('help-context', tag, 'the tag the cursor is on')
-  t.eq('helphelp.txt', file, 'the name only, no folder')
-  t.ok(line > 1, 'the line :help put the cursor on: ' .. tostring(line))
-  t.eq(vim.o.runtimepath, runtimepath)
+  t.wait_for('the page', function() return #t.sent('eclipse_view_page') == 1 end)
+  local kind, buf, line = unpack(t.sent('eclipse_view_page')[1])
+  t.eq('help', kind)
+  t.eq({ 'help', true }, { vim.bo[buf].buftype, vim.api.nvim_buf_is_loaded(buf) }, 'the help buffer, kept loaded')
+  t.eq('helphelp.txt', vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':t'))
+  t.ok(vim.api.nvim_buf_get_lines(buf, line - 1, line, false)[1]:find('*help-context*', 1, true),
+    'the line :help put the cursor on: ' .. tostring(line))
   t.eq(win, vim.api.nvim_get_current_win(), "back in the editor's window")
   t.eq(1, windows_in_tab())
-  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    t.ok(vim.bo[buf].buftype ~= 'help' or not vim.api.nvim_buf_is_loaded(buf),
-      'the help buffer is unloaded (kept for the quickfix list, unlisted)')
-  end
   t.eq('', vim.v.errmsg, 'no "Window closed" message: the page went somewhere')
 end)
 
@@ -806,77 +807,36 @@ t.test(':vert help and :tab help are handed over too, back in the editor they ca
   for _, command in ipairs({ 'vert help help-context', 'tab help help-context' }) do
     t.forget()
     vim.cmd(command)
-    t.wait_for('the page of ' .. command, function() return #t.sent('eclipse_view_help') == 1 end)
+    t.wait_for('the page of ' .. command, function() return #t.sent('eclipse_view_page') == 1 end)
     t.eq(win, vim.api.nvim_get_current_win(), command)
   end
 end)
 
-t.test('line 1 of a page is reached by the file\'s own tag; a line under a tag by that tag', function()
+t.test('an editor on a help file no window shows gets the file\'s name, not an unnamed buffer', function()
   commands()
   t.forget()
   vim.cmd('help helphelp.txt')
-  t.wait_for('the page', function() return #t.sent('eclipse_view_help') == 1 end)
-  local tag, _, line = unpack(t.sent('eclipse_view_help')[1])
-  t.eq('helphelp.txt', tag, 'line 1 holds the file tag')
-  t.eq(1, line)
-  t.forget()
-  vim.cmd('help help-context')
-  t.wait_for('the second page', function() return #t.sent('eclipse_view_help') == 1 end)
-  t.eq('help-context', t.sent('eclipse_view_help')[1][1])
-end)
-
-t.test('an editor on a help file the view took gets the file\'s name, not an unnamed buffer', function()
-  commands()
-  t.forget()
-  vim.cmd('help helphelp.txt')
-  t.wait_for('the page', function() return #t.sent('eclipse_view_help') == 1 end)
+  t.wait_for('the page', function() return #t.sent('eclipse_view_page') == 1 end)
   local name = vim.fn.fnamemodify(vim.env.VIMRUNTIME .. '/doc/helphelp.txt', ':p')
   local buf, named = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
   t.eq(true, named)
   t.eq(name, vim.api.nvim_buf_get_name(buf))
 end)
 
-t.test(':helpgrep and :cnext go on through the matches, one page each, even inside one file', function()
+t.test(':helpgrep and :cnext from the code hand each match over, on its line', function()
   commands()
   t.forget()
   vim.cmd('silent helpgrep runtimepath')
-  t.wait_for('the first match', function() return #t.sent('eclipse_view_help') == 1 end)
-  t.eq({ 'runtimepath', 1 }, { t.sent('eclipse_view_help')[1][5], t.sent('eclipse_view_help')[1][6] },
-    "the pattern and the entry, for the view's own :helpgrep")
+  t.wait_for('the first match', function() return #t.sent('eclipse_view_page') == 1 end)
   local list = vim.fn.getqflist()
   t.ok(#list > 3, 'matches to go through')
+  t.eq(list[1].lnum, t.sent('eclipse_view_page')[1][3])
   for n = 2, 4 do
     vim.cmd('silent cnext')
-    t.wait_for('match ' .. n, function() return #t.sent('eclipse_view_help') == n end)
+    t.wait_for('match ' .. n, function() return #t.sent('eclipse_view_page') == n end)
     t.eq(n, vim.fn.getqflist({ idx = 0 }).idx, 'the list moved on')
-    t.eq(list[n].lnum, t.sent('eclipse_view_help')[n][3], 'the line of match ' .. n)
-    t.eq(n, t.sent('eclipse_view_help')[n][6], 'the entry sent')
+    t.eq(list[n].lnum, t.sent('eclipse_view_page')[n][3], 'the line of match ' .. n)
   end
-  vim.cmd('silent cprevious')
-  t.wait_for('back one', function() return #t.sent('eclipse_view_help') == 5 end)
-  t.eq(list[3].lnum, t.sent('eclipse_view_help')[5][3])
-end)
-
-t.test(':helpgrep with a space in its pattern is carried over whole', function()
-  commands()
-  t.forget()
-  vim.cmd('silent helpgrep tab page')
-  t.wait_for('the first match', function() return #t.sent('eclipse_view_help') == 1 end)
-  t.eq('tab page', t.sent('eclipse_view_help')[1][5])
-  t.eq(1, t.sent('eclipse_view_help')[1][6])
-end)
-
-t.test('text between stars that is no tag is passed over: the tag sent is one help knows, in that file', function()
-  commands()
-  t.forget()
-  -- autocmd.txt has a line with *.txt,*.info in an example: no tag, though it looks like two.
-  vim.cmd('silent helpgrep \\*\\.txt,\\*\\.info')
-  t.wait_for('the page', function() return #t.sent('eclipse_view_help') == 1 end)
-  local tag, file = unpack(t.sent('eclipse_view_help')[1])
-  t.eq('autocmd.txt', file)
-  vim.cmd('help ' .. tag)
-  t.eq('autocmd.txt', vim.fn.expand('%:t'), 'the tag ' .. tag .. ' leads to the same file')
-  vim.cmd('helpclose')
 end)
 
 t.test('floating windows are left alone', function()
@@ -1022,16 +982,6 @@ t.test("the plug-in's own closes forget the window, though they fire no WinClose
   t.ok(side(win), 'forgotten')
   t.eq(home, vim.api.nvim_get_current_win())
   t.eq({}, t.sent('eclipse_window_closed'))
-end)
-
-t.test("a :helpgrep title's pattern is taken as typed, after the command's name", function()
-  commands()
-  local m = package.loaded['neovim4eclipse.windows']
-  t.eq('tab  page', m.helpgrep_pattern(':silent helpgrep tab  page'), 'runs of spaces kept')
-  t.eq([[a\\b]], m.helpgrep_pattern([[:helpg a\\b]]), 'an abbreviation, and a doubled backslash kept')
-  t.eq('x', m.helpgrep_pattern(':vert helpgrep x'))
-  t.eq('', m.helpgrep_pattern(':vimgrep /helpgrep/ %'), 'another command: none')
-  t.eq('', m.helpgrep_pattern(nil))
 end)
 
 -- Pages' windows (open_page): a page editor shown from this Neovim, as the messages page will be.
@@ -1233,4 +1183,235 @@ t.test('every write of the page that runs autocommands is refused, and leaves no
   t.eq(0, vim.fn.filereadable(dir .. '/b.txt'))
   t.eq({ 'kept' }, vim.fn.readfile(dir .. '/old.txt'), 'an existing file is untouched')
   vim.fn.delete(dir, 'rf')
+end)
+
+-- Help and checkhealth pages: a page window on a buffer Neovim made itself (show_page), which a help
+-- page changes as Neovim's help moves on (follow_page).
+
+local function help_buffer(topic)
+  vim.cmd('help ' .. topic)
+  local buf, line = vim.api.nvim_get_current_buf(), vim.fn.line('.')
+  vim.cmd('helpclose')
+  return buf, line
+end
+
+local function show_page(win, buf, line, kind)
+  return t.run('SHOW_PAGE_BUFFER', tostring(win), tostring(buf), tostring(line), kind)
+end
+
+t.test('a help page opens in a page window with its topic\'s line at the top', function()
+  local home = start()
+  local buf, line = help_buffer('help-context')
+  local win = show_page(-1, buf, line, 'help')
+  t.ok(win > 0, 'a window')
+  t.eq(true, require('neovim4eclipse.windows').is_page(win))
+  t.eq(buf, vim.api.nvim_win_get_buf(win))
+  t.eq(line, vim.api.nvim_win_call(win, function() return vim.fn.line('w0') end), 'the topic at the top, as :help puts it')
+  t.eq(home, vim.api.nvim_get_current_win(), 'not entered')
+  t.eq(-2, show_page(-1, 99999, 1, 'help'), 'a buffer that is gone')
+end)
+
+t.test('the help page shows the next help in the same window', function()
+  start()
+  local first, l1 = help_buffer('help-context')
+  local win = show_page(-1, first, l1, 'help')
+  local second, l2 = help_buffer('options')
+  t.eq(win, show_page(win, second, l2, 'help'), 'the same window')
+  t.eq(second, vim.api.nvim_win_get_buf(win))
+  t.ok(vim.api.nvim_buf_is_valid(first), 'the page before stays, for Ctrl-T and Ctrl-O')
+  t.eq(second, t.run('RESTORE_PAGE_WINDOW', tostring(win)), 'the page is the new help now')
+end)
+
+t.test('a new report replaces the old one, which is wiped when no window shows it', function()
+  start()
+  local function report()
+    local buf = vim.api.nvim_create_buf(false, true) -- as :checkhealth makes one: scratch, its filetype
+    vim.bo[buf].filetype = 'checkhealth'
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'vim.health: OK' })
+    return buf
+  end
+  local old = report()
+  local win = show_page(-1, old, 1, 'checkhealth')
+  local new = report()
+  t.eq(win, show_page(win, new, 1, 'checkhealth'))
+  t.eq(new, vim.api.nvim_win_get_buf(win))
+  t.eq(false, vim.api.nvim_buf_is_valid(old), 'the old report is gone')
+end)
+
+t.test('help follows help in its page window; anything else is put back', function()
+  start()
+  local buf, line = help_buffer('help-context')
+  local win = show_page(-1, buf, line, 'help')
+  t.eq(true, t.run('FOCUS_WINDOW', tostring(win), tostring(vim.api.nvim_get_current_win())) == win)
+  t.forget()
+  vim.cmd('help options') -- in a help window, :help uses that window: no WinNew, no hand-over
+  t.eq(win, vim.api.nvim_get_current_win())
+  local options = vim.api.nvim_get_current_buf()
+  t.eq('options.txt', vim.fn.expand('%:t'))
+  local enter = t.sent('eclipse_buf_enter')
+  t.eq({ options, win, true }, { enter[#enter][1], enter[#enter][2], enter[#enter][5] }, 'Eclipse is told it follows')
+  t.eq({}, t.sent('eclipse_view_page'), 'nothing handed over: it is already the page')
+  t.eq(options, t.run('RESTORE_PAGE_WINDOW', tostring(win)), 'the page is options.txt now')
+  local other = buffer(2)
+  vim.api.nvim_win_set_buf(win, other)
+  t.eq(false, t.sent('eclipse_buf_enter')[#t.sent('eclipse_buf_enter')][5], 'a scratch buffer is no help: not followed')
+  t.eq(options, t.run('RESTORE_PAGE_WINDOW', tostring(win)))
+  t.eq(options, vim.api.nvim_win_get_buf(win), 'put back')
+end)
+
+t.test('a messages page never follows help into its window', function()
+  start()
+  local page = open_page(page_text({ 'one' }))
+  local help = help_buffer('help-context')
+  t.eq(false, require('neovim4eclipse.windows').follow_page(page, help))
+end)
+
+t.test('every write from a help page is refused, and q closes the page editor', function()
+  start()
+  t.run('HOST_COMMANDS', t.host_rules)
+  local buf, line = help_buffer('help-context')
+  show_page(-1, buf, line, 'help')
+  local target = vim.fn.tempname()
+  vim.v.errmsg = ''
+  vim.api.nvim_buf_call(buf, function()
+    pcall(vim.cmd, 'write ' .. vim.fn.fnameescape(target))
+    pcall(vim.cmd, 'write!')
+  end)
+  t.eq(0, vim.fn.filereadable(target), 'nothing written')
+  t.ok(vim.fn.execute('messages'):find('E382', 1, true), vim.fn.execute('messages'))
+  local q = vim.api.nvim_buf_call(buf, function() return vim.fn.maparg('q', 'n') end)
+  t.eq('<Cmd>Eclipse quit<CR>', q)
+end)
+
+-- A real plug-in's help, as a user's help page would show it: the pinned flash
+-- (t.pinned_plugin), its doc folder copied with a tags file made there, as a plug-in manager makes
+-- one with :helptags. How a user's own plug-in manager puts plug-ins on 'runtimepath' is their
+-- config's, and not tested.
+t.test("a real plug-in's help page follows its links in the page window, and back", function()
+  start()
+  local plugin = t.pinned_plugin('flash')
+  local copy = vim.fn.tempname()
+  vim.fn.mkdir(copy .. '/doc', 'p')
+  for _, file in ipairs(vim.fn.glob(plugin .. '/doc/*.txt', false, true)) do
+    vim.fn.writefile(vim.fn.readfile(file, 'b'), copy .. '/doc/' .. vim.fn.fnamemodify(file, ':t'), 'b')
+  end
+  vim.cmd.helptags(copy .. '/doc')
+  local before = vim.o.runtimepath
+  vim.o.runtimepath = before .. ',' .. copy
+  local buf = help_buffer('flash.nvim.txt')
+  local win = show_page(-1, buf, 1, 'help')
+  t.run('FOCUS_WINDOW', tostring(win), tostring(vim.api.nvim_get_current_win()))
+  local link = vim.fn.search('|flash.nvim-flash.nvim-api|')
+  t.ok(link > 0, 'a link in the table of contents')
+  local column = vim.fn.getline(link):find('flash.nvim-flash.nvim-api', 1, true)
+  vim.api.nvim_win_set_cursor(0, { link, column })
+  t.type('<C-]>')
+  t.eq(win, vim.api.nvim_get_current_win(), 'still the page window')
+  t.ok(vim.fn.getline('.'):find('*flash.nvim-flash.nvim-api*', 1, true) ~= nil, 'Ctrl-] went to the tag: ' .. vim.fn.getline('.'))
+  t.type('<C-t>')
+  t.eq(link, vim.fn.line('.'), 'Ctrl-T came back to the link')
+  vim.o.runtimepath = before
+  vim.fn.delete(copy, 'rf')
+end)
+
+t.test(':checkhealth again keeps the page window and shows the new report there', function()
+  commands()
+  t.forget()
+  vim.cmd('checkhealth vim.health')
+  t.wait_for('the first report', function() return #t.sent('eclipse_view_page') == 1 end)
+  local first = t.sent('eclipse_view_page')[1][2]
+  local win = show_page(-1, first, 1, 'checkhealth')
+  t.ok(vim.api.nvim_buf_get_name(first) ~= 'health://', 'renamed, so the next run does not wipe it')
+  vim.cmd('checkhealth vim.health') -- Neovim wipes whatever is named health:// first
+  t.wait_for('the second report', function() return #t.sent('eclipse_view_page') == 2 end)
+  t.ok(vim.api.nvim_win_is_valid(win), 'the page window stays')
+  for _, closed in ipairs(t.sent('eclipse_window_closed')) do
+    t.ok(closed[1] ~= win, 'the page window was never closed (only the report windows the net closes)')
+  end
+  local second = t.sent('eclipse_view_page')[2][2]
+  t.eq(win, show_page(win, second, 1, 'checkhealth'))
+  t.eq(second, vim.api.nvim_win_get_buf(win))
+  t.eq(false, vim.api.nvim_buf_is_valid(first), 'the first report is gone once no window shows it')
+end)
+
+t.test("a document's buffer that :help took is never a page", function()
+  commands()
+  local folder = vim.fn.tempname()
+  vim.fn.mkdir(folder .. '/doc', 'p')
+  local text = { '*myplug.txt*  My plug-in', '', '*myplug-tag*', 'Text.' }
+  vim.fn.writefile(text, folder .. '/doc/myplug.txt')
+  vim.cmd.helptags(folder .. '/doc')
+  vim.o.runtimepath = vim.o.runtimepath .. ',' .. folder
+  local name = vim.fn.fnamemodify(folder .. '/doc/myplug.txt', ':p')
+  local doc = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  t.run('DOCUMENT_BUFFER', tostring(doc))
+  vim.api.nvim_buf_set_lines(doc, 0, -1, false, text) -- Eclipse's text, as its first push puts it
+  vim.bo[doc].tabstop, vim.bo[doc].iskeyword = 4, '@,48-57,_'
+  vim.b[doc].neovim4eclipse_tabstop = 4 -- as SET_INDENTATION keeps Eclipse's tab width
+  t.run('DOCUMENT_BUFFER', tostring(doc)) -- again: keeps the 'iskeyword' set above
+  t.forget()
+  vim.cmd('help myplug-tag') -- reuses the document's buffer, as Neovim does for a loaded file
+  local settled = false
+  vim.schedule(function() settled = true end)
+  t.wait_for('the net', function() return settled end)
+  t.eq({}, t.sent('eclipse_view_page'), 'not handed to the help editor')
+  t.eq({ 'acwrite', true, true, false }, { vim.bo[doc].buftype, vim.bo[doc].modifiable, vim.bo[doc].buflisted,
+    vim.bo[doc].readonly }, 'the document is a document again: its editor keeps working')
+  t.eq({ 4, '@,48-57,_' }, { vim.bo[doc].tabstop, vim.bo[doc].iskeyword }, "its tab width and word characters, not help's")
+  t.wait_for('the message', function() return vim.v.errmsg:find('is open in its editor', 1, true) ~= nil end)
+  t.eq(1, windows_in_tab(), 'the help window is closed')
+  t.eq(-2, show_page(-1, doc, 1, 'help'), 'refused as a page')
+  t.eq(nil, vim.api.nvim_buf_call(doc, function() return vim.fn.maparg('q', 'n', false, true).desc end),
+    "the code's q is not the page's")
+  -- Its editor closed (CLOSE_DOCUMENT_BUFFER takes its hooks off): its help is a page again.
+  t.run('CLOSE_DOCUMENT_BUFFER', tostring(doc))
+  t.eq(false, require('neovim4eclipse.windows').is_document(doc))
+  t.forget()
+  vim.cmd('help myplug-tag')
+  t.wait_for('the page', function() return #t.sent('eclipse_view_page') == 1 end)
+end)
+
+t.test('while the help editor shows a help file, an editor on that file gets a buffer of its own', function()
+  start()
+  local buf, line = help_buffer('helphelp.txt')
+  show_page(-1, buf, line, 'help')
+  local name = vim.api.nvim_buf_get_name(buf)
+  local doc, named = unpack(t.run('CREATE_DOCUMENT_BUFFER', name))
+  t.ok(doc ~= buf, 'not the help page')
+  t.eq(false, named, 'left unnamed while the page shows it')
+  t.ok(vim.api.nvim_buf_is_valid(buf), 'the page keeps its buffer')
+end)
+
+t.test("help reached from the help editor that is an open document's file stays the document's", function()
+  start()
+  local folder = vim.fn.tempname()
+  vim.fn.mkdir(folder .. '/doc', 'p')
+  local text = { '*myplug.txt*  My plug-in', '', '*myplug-tag*', 'Text.' }
+  vim.fn.writefile(text, folder .. '/doc/myplug.txt')
+  vim.cmd.helptags(folder .. '/doc')
+  vim.o.runtimepath = vim.o.runtimepath .. ',' .. folder
+  local doc = unpack(t.run('CREATE_DOCUMENT_BUFFER', vim.fn.fnamemodify(folder .. '/doc/myplug.txt', ':p')))
+  t.run('DOCUMENT_BUFFER', tostring(doc))
+  vim.api.nvim_buf_set_lines(doc, 0, -1, false, text) -- Eclipse's text, as its first push puts it
+  local help, line = help_buffer('help-context')
+  local win = show_page(-1, help, line, 'help')
+  t.run('FOCUS_WINDOW', tostring(win), tostring(vim.api.nvim_get_current_win()))
+  t.eq(win, vim.api.nvim_get_current_win())
+  vim.bo[doc].tabstop, vim.bo[doc].iskeyword = 4, '@,48-57,_'
+  vim.b[doc].neovim4eclipse_tabstop = 4 -- as SET_INDENTATION keeps Eclipse's tab width
+  t.run('DOCUMENT_BUFFER', tostring(doc)) -- again: keeps the 'iskeyword' set above
+  t.forget()
+  vim.cmd('help myplug-tag') -- in the help editor: the same window, as Ctrl-] on |myplug-tag| would
+  local enter = t.sent('eclipse_buf_enter')
+  t.eq({ doc, win, false }, { enter[#enter][1], enter[#enter][2], enter[#enter][5] },
+    'not followed: Eclipse puts the page back (restore_page)')
+  t.eq({ 'acwrite', true, true, false }, { vim.bo[doc].buftype, vim.bo[doc].modifiable, vim.bo[doc].buflisted,
+    vim.bo[doc].readonly }, 'the document is a document again')
+  t.wait_for('the message, after the command', function() return vim.v.errmsg:find('is open in its editor', 1, true) ~= nil end)
+  t.eq({ 4, '@,48-57,_' }, { vim.bo[doc].tabstop, vim.bo[doc].iskeyword }, "its tab width and word characters, not help's")
+  t.eq(help, t.run('RESTORE_PAGE_WINDOW', tostring(win)), 'the page is still the help it showed')
+  t.eq(help, vim.api.nvim_win_get_buf(win), 'put back')
+  t.eq(text, vim.api.nvim_buf_get_lines(doc, 0, -1, false), "the document's text untouched")
+  t.eq(nil, vim.api.nvim_buf_call(doc, function() return vim.fn.maparg('q', 'n', false, true).desc end),
+    "the code's q is not the page's")
 end)

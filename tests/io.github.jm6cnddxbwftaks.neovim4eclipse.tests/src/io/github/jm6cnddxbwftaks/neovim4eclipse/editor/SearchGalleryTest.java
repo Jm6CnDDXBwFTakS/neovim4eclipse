@@ -103,7 +103,7 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "which follow the theme. The second entry is selected (PmenuSel) and stands out from "
                             + "the others in both themes; all entries read. The caret is after the completed word."),
             new Picture("view-messages", "A page editor after :messages",
-                    "The view's second Neovim, in the editor's text font on the editor's background: three "
+                    "The messages page, in the editor's text font on the editor's background: three "
                             + "messages, the newest last with the cursor on it. The E486 error is in Neovim's error "
                             + "color (ErrorMsg), the other two in the default text color; all read in both themes."),
             new Picture("view-checkhealth", "A page editor after :checkhealth neovim4eclipse",

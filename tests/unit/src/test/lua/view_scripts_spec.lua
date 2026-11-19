@@ -1,57 +1,9 @@
 -- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 -- SPDX-License-Identifier: EPL-2.0
 
--- The Lua of a page editor besides SCREEN_SETUP (screen_setup_spec.lua): SCREEN_SHOW_TEXT, the
--- output profile in the second Neovim; and, in the editing Neovim, HEALTH_CHECK (the plug-in's
--- own :checkhealth neovim4eclipse) and SET_REGISTER_FROM_VIEW (a yank in the view, in a register).
+-- HEALTH_CHECK: the plug-in's own :checkhealth neovim4eclipse, in the editing Neovim.
 
 local t = ...
-
---- SCREEN_SHOW_TEXT as core/OutputProfile calls it.
-local function show(lines, filetype, highlights, background, cursor, title)
-  return t.run('SCREEN_SHOW_TEXT', lines, filetype, highlights, background, cursor, title or 'messages')
-end
-
-t.test('the text replaces what was shown, unchangeable, its error lines colored', function()
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'old', 'text', 'here' })
-  t.eq(2, show({ 'plain', 'E486: x' }, '', { { 1, 'ErrorMsg' } }, 'dark', 'end'))
-  t.eq({ 'plain', 'E486: x' }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
-  t.eq(false, vim.bo.modifiable)
-  t.eq('nofile', vim.bo.buftype)
-  t.eq('dark', vim.o.background)
-  t.eq({ 2, 0 }, vim.api.nvim_win_get_cursor(0), ':messages: the newest message, last')
-  local ns = vim.api.nvim_create_namespace('neovim4eclipse.view')
-  local marks = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })
-  t.eq(1, #marks)
-  t.eq(1, marks[1][2], 'on the error line')
-  t.eq('ErrorMsg', marks[1][4].line_hl_group)
-end)
-
-t.test('new text clears the old highlights, sets its filetype and starts at the top', function()
-  show({ 'a', 'E1: b' }, '', { { 1, 'ErrorMsg' } }, 'light', 'end')
-  show({ 'vim.health: OK', '- OK fine' }, 'checkhealth', {}, 'light', 'top')
-  local ns = vim.api.nvim_create_namespace('neovim4eclipse.view')
-  t.eq({}, vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {}))
-  t.eq('checkhealth', vim.bo.filetype)
-  t.eq({ 1, 0 }, vim.api.nvim_win_get_cursor(0))
-  t.eq('light', vim.o.background)
-end)
-
-t.test('the status line names what the view shows, not the scratch buffer', function()
-  show({ 'x' }, '', {}, 'dark', 'top', 'checkhealth')
-  t.eq(' checkhealth%=%l,%c%V  %P ', vim.wo.statusline)
-  show({ 'x' }, '', {}, 'dark', 'top', '100% sure')
-  t.eq(' 100%% sure%=%l,%c%V  %P ', vim.wo.statusline, 'a % shows as it is')
-end)
-
-t.test('q quits, as in Neovim\'s own :checkhealth', function()
-  show({ 'x' }, '', {}, 'dark', 'top')
-  t.eq('<Cmd>quit<CR>', vim.fn.maparg('q', 'n'))
-end)
-
-t.test('a highlight past the text is skipped, not an error', function()
-  t.eq(1, show({ 'only line' }, '', { { 5, 'ErrorMsg' } }, 'dark', 'top'))
-end)
 
 --- HEALTH_CHECK with the stub written where :checkhealth looks for it, then the report's lines.
 local function report(info)
@@ -101,58 +53,4 @@ t.test(':checkhealth neovim4eclipse: a Neovim older than the minimum is an error
     readers = {} })
   t.ok(text:find('ERROR Neovim ', 1, true) and text:find('older than 99.0.0', 1, true), text)
   t.ok(text:find('Eclipse version unknown', 1, true), text)
-end)
-
-t.test('a yank from the view fills the register of its name; the unnamed one follows clipboard', function()
-  t.eq(true, t.run('SET_REGISTER_FROM_VIEW', 'a', 'V', { 'one' }))
-  t.eq('one\n', vim.fn.getreg('a'))
-  t.eq('V', vim.fn.getregtype('a'))
-  vim.o.clipboard = ''
-  t.eq(true, t.run('SET_REGISTER_FROM_VIEW', '', 'v', { 'plain' }))
-  t.eq('plain', vim.fn.getreg('"'))
-  t.eq(false, t.run('SET_REGISTER_FROM_VIEW', '=', 'v', { '1+1' }), 'no yank fills the expression register')
-  t.eq(false, t.run('SET_REGISTER_FROM_VIEW', 'ab', 'v', { 'x' }), 'a register is one character')
-end)
-
--- SCREEN_SHOW_HELP with a real plug-in's help, as a user's help editor would find it: the pinned
--- flash (t.pinned_plugin), its doc folder copied with a tags file made there, as a plug-in manager
--- makes one with :helptags. How a user's own plug-in manager puts plug-ins on 'runtimepath' is
--- their config's, and not tested.
-t.test("a real plug-in's help page opens as Neovim's help, and its links lead on", function()
-  local plugin = t.pinned_plugin('flash')
-  local copy = vim.fn.tempname()
-  vim.fn.mkdir(copy .. '/doc', 'p')
-  for _, file in ipairs(vim.fn.glob(plugin .. '/doc/*.txt', false, true)) do
-    vim.fn.writefile(vim.fn.readfile(file, 'b'), copy .. '/doc/' .. vim.fn.fnamemodify(file, ':t'), 'b')
-  end
-  vim.cmd.helptags(copy .. '/doc')
-  local before = vim.o.runtimepath
-  t.eq('', t.run('SCREEN_SHOW_HELP', 'flash.nvim.txt', 'flash.nvim.txt', 1, before .. ',' .. copy, 'light', '', 0))
-  t.eq('help', vim.bo.buftype)
-  t.eq('help', vim.bo.filetype)
-  t.eq('flash.nvim.txt', vim.fn.expand('%:t'))
-  t.eq(1, #vim.api.nvim_tabpage_list_wins(0), 'the page is the whole screen')
-
-  local link = vim.fn.search('|flash.nvim-flash.nvim-api|')
-  t.ok(link > 0, 'a link in the table of contents')
-  local column = vim.fn.getline(link):find('flash.nvim-flash.nvim-api', 1, true)
-  vim.api.nvim_win_set_cursor(0, { link, column })
-  t.type('<C-]>')
-  t.ok(vim.fn.getline('.'):find('*flash.nvim-flash.nvim-api*', 1, true) ~= nil, 'Ctrl-] went to the tag: ' .. vim.fn.getline('.'))
-  t.type('<C-t>')
-  t.eq(link, vim.fn.line('.'), 'Ctrl-T came back to the link')
-
-  vim.cmd('silent! only')
-  vim.cmd('enew!')
-  vim.o.runtimepath = before
-  vim.fn.delete(copy, 'rf')
-end)
-
-t.test('HELP_HERE runs :help with the topic as given, and shows the error of an unknown one', function()
-  t.eq(true, t.run('HELP_HERE', 'help-context'))
-  t.eq('help', vim.bo.buftype)
-  vim.cmd('helpclose')
-  vim.v.errmsg = ''
-  t.eq(false, t.run('HELP_HERE', 'no-such-topic-anywhere'))
-  t.ok(vim.fn.execute('messages'):find('E149', 1, true) ~= nil, vim.fn.execute('messages'))
 end)

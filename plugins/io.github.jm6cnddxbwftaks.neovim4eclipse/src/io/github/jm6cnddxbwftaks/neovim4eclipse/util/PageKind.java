@@ -4,19 +4,19 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 /**
- * Which page editor shows a piece of {@link ViewContent}: one editor per kind, each with a second
- * Neovim of its own ({@code editor/NeovimPageEditor}). Running the same command again shows its
- * content in the same editor; another kind opens another editor. Example: {@code :help} and then
- * {@code :messages} give two editors, "Neovim: help" and "Neovim: messages"; a second
- * {@code :help} reuses the first.
+ * Which page editor shows a piece of {@link ViewContent}: one editor per kind
+ * ({@code editor/NeovimPageEditor}), each a window of the editing Neovim. Running the same command
+ * again shows its content in the same editor; another kind opens another editor. Example:
+ * {@code :help} and then {@code :messages} give two editors, "Neovim: help" and "Neovim: messages";
+ * a second {@code :help} reuses the first.
  */
 public enum PageKind {
-    /** {@code :help}, {@code :helpgrep}: a {@link HelpPage}. */
-    HELP(HelpPage.TITLE),
+    /** {@code :help}, {@code :helpgrep}: a help buffer, a {@link PageBuffer}. */
+    HELP(PageBuffer.HELP),
     /** {@code :messages}: the message history, a {@link ViewText}. */
     MESSAGES(ViewText.MESSAGES),
-    /** {@code :checkhealth}: a report, a {@link ViewText}. */
-    CHECKHEALTH(ViewText.CHECKHEALTH);
+    /** {@code :checkhealth}: the report's buffer, a {@link PageBuffer}. */
+    CHECKHEALTH(PageBuffer.CHECKHEALTH);
 
     private final String title;
 
@@ -24,7 +24,7 @@ public enum PageKind {
         this.title = title;
     }
 
-    /** What the editor's title says after "Neovim: ", such as {@code help}. */
+    /** What the editor's title says after "Neovim: ", such as {@code help}; Neovim's name for the kind too. */
     public String title() {
         return title;
     }
@@ -32,8 +32,8 @@ public enum PageKind {
     /** The kind of editor that shows {@code content}. */
     public static PageKind of(ViewContent content) {
         return switch (content) {
-            case HelpPage page -> HELP;
-            case ViewText text -> ViewText.CHECKHEALTH.equals(text.title()) ? CHECKHEALTH : MESSAGES;
+            case PageBuffer page -> PageBuffer.CHECKHEALTH.equals(page.title()) ? CHECKHEALTH : HELP;
+            case ViewText text -> MESSAGES;
         };
     }
 }

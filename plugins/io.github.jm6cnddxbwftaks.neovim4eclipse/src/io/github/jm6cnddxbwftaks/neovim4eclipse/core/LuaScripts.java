@@ -141,8 +141,13 @@ final class LuaScripts {
                 -- The fourth value: the file of a buffer that has no editor yet (gf, 'A, quickfix:
                 -- PROJECT_FILES), in a project or not, whose editor Eclipse opens; '' for any other.
                 local project = package.loaded['neovim4eclipse.project_files']
-                vim.rpcnotify(0, 'eclipse_buf_enter', ev.buf, vim.api.nvim_get_current_win(), jumped,
-                  project and project.file_of(ev.buf) or '')
+                -- The fifth: whether a help page's window took this help buffer as its page
+                -- (Ctrl-] in the help editor: WINDOWS' follow_page), so Eclipse leaves it there.
+                local windows = package.loaded['neovim4eclipse.windows']
+                local win = vim.api.nvim_get_current_win()
+                local follows = windows ~= nil and windows.follow_page(win, ev.buf)
+                vim.rpcnotify(0, 'eclipse_buf_enter', ev.buf, win, jumped,
+                  project and project.file_of(ev.buf) or '', follows)
               end
             })
             vim.api.nvim_create_autocmd('TextYankPost', {
@@ -968,11 +973,13 @@ final class LuaScripts {
      * ({@code :b 1}, {@code Ctrl-^}); Eclipse's text replaces that. Only a buffer that is another
      * document's now ({@code acwrite}, see {@link #DOCUMENT_BUFFER}), or a special one (help, a
      * terminal), is not reused: a new buffer is made, left unnamed (the second result is
-     * {@code false}), since two documents must not share one. Except a help page handed to a
-     * page editor ({@link #WINDOWS}, {@code take_help}): unloaded and in no window, kept only for
-     * {@code :helpgrep}'s list. It is wiped, and the document gets its name, as if no help had
-     * been opened (example: {@code :help myplugin}, then {@code doc/myplugin.txt} opened in an
-     * editor from the plug-in's repository); that file's entries in the list are lost. The third result says whether the
+     * {@code false}), since two documents must not share one. Except a help buffer no window shows
+     * (a help page the help editor showed before, kept for {@code Ctrl-T} and {@code :helpgrep}'s
+     * list; {@link #WINDOWS}, {@code take_help}). It is wiped, and the document gets its name, as if
+     * no help had been opened (example: {@code :help myplugin}, then {@code doc/myplugin.txt} opened
+     * in an editor from the plug-in's repository); that file's entries in the list are lost. While
+     * the help editor shows that page, the document's buffer stays unnamed instead, as for any
+     * special buffer. The third result says whether the
      * buffer was reused: its first push then puts the cursor on {@code '"} ({@link #GO_TO_LAST_POSITION}).
      */
     static final String CREATE_DOCUMENT_BUFFER = """
@@ -981,8 +988,7 @@ final class LuaScripts {
             local reused = vim.fn.bufexists(name) == 1
             if reused then
               buf = vim.fn.bufadd(name) -- the existing one, by its exact name
-              if vim.bo[buf].buftype == 'help' and not vim.api.nvim_buf_is_loaded(buf)
-                  and #vim.fn.win_findbuf(buf) == 0 then
+              if vim.bo[buf].buftype == 'help' and #vim.fn.win_findbuf(buf) == 0 then
                 vim.api.nvim_buf_delete(buf, { force = true })
                 buf = vim.fn.bufadd(name)
                 reused = false
@@ -1183,11 +1189,12 @@ final class LuaScripts {
      * send it. A home window closed that way is opened again by the next {@code show} of it.
      *
      * <p>The second net, {@code WinNew}, closes a window Eclipse cannot show (a stray split, the
-     * quickfix window, a focused float) once the command that opened it is over. One window it
-     * reads first: a {@code :checkhealth} report's (its buffer's filetype is {@code checkhealth}),
-     * whose lines it sends as {@code eclipse_view_text("checkhealth", lines)} for a page editor,
-     * then wipes the {@code health://} buffer, with no message ({@code docs/ARCHITECTURE.md},
-     * decision 10).
+     * quickfix window, a focused float) once the command that opened it is over. Two kinds of
+     * window it hands to a page editor instead: a {@code :checkhealth} report's and a help
+     * window ({@code :help}, {@code :helpgrep}). Their buffer stays, and
+     * {@code eclipse_view_page(kind, buf, line)} asks Eclipse to show it in a page window of its
+     * own ({@code show_page}); the window it came in closes, with no message
+     * ({@code docs/ARCHITECTURE.md}, decision 10).
      */
     static final String WINDOWS = """
             local home_buf = tonumber((select(1, ...)))
@@ -1210,6 +1217,10 @@ final class LuaScripts {
             local own = { [home] = true }
             -- Each page window's own buffer (M.open_page), which it keeps (M.restore_page).
             local page_buf = {}
+            -- Each page window's kind: 'messages', 'help' or 'checkhealth' (M.open_page). It says
+            -- which buffers the window may change to: a help page follows Ctrl-] to another help
+            -- buffer (M.follow_page); every other change is put back.
+            local page_kind = {}
             -- The windows the safety net has looked at, so that it knows a new one: a floating window
             -- is closed only when it opened with the focus, never when the user entered one that
             -- was there already (Ctrl-W w into hover documentation), where :q stays Neovim's.
@@ -1410,17 +1421,132 @@ final class LuaScripts {
               end
             end
 
+            --- Makes buf fit to be a page, once per buffer: every write that runs autocommands is
+            --- refused with Vim's E382 (as PAGE_TEXT's own hooks do for the messages page, which
+            --- keeps those), and q closes the page editor (a q the user mapped for the buffer is
+            --- kept). For Neovim's own buffers a page shows: a help file (a real file, 'readonly'
+            --- and 'nomodifiable' already, but :w! or :w x would still write it) and a
+            --- :checkhealth report (a scratch buffer, written only under a name). Example: :w x in
+            --- the help editor gives E382, and nothing is written.
+            local function page_buffer(buf)
+              if vim.b[buf].neovim4eclipse_page or vim.b[buf].neovim4eclipse_page_ready then
+                return
+              end
+              vim.b[buf].neovim4eclipse_page_ready = true
+              for _, event in ipairs({ 'BufWriteCmd', 'FileWriteCmd', 'FileAppendCmd' }) do
+                vim.api.nvim_create_autocmd(event, {
+                  buffer = buf,
+                  callback = function()
+                    vim.api.nvim_echo({ { "E382: Cannot write, 'buftype' option is set" } }, true, { err = true })
+                  end,
+                })
+              end
+              local own_q = vim.api.nvim_buf_call(buf, function()
+                return vim.fn.maparg('q', 'n', false, true)
+              end)
+              if own_q.buffer ~= 1 then
+                vim.keymap.set('n', 'q', '<Cmd>Eclipse quit<CR>', { buffer = buf, nowait = true, desc = 'Close the page editor' })
+              end
+            end
+
+            --- Whether buf is an open document's buffer now: DOCUMENT_BUFFER marked it
+            --- (b:neovim4eclipse_file) and its hooks are on it. CLOSE_DOCUMENT_BUFFER removes the hooks
+            --- and keeps the mark, so a buffer whose editor closed is no document any more: its
+            --- help may be a page again.
+            function M.is_document(buf)
+              if vim.b[buf].neovim4eclipse_file == nil then
+                return false
+              end
+              local ok, hooks = pcall(vim.api.nvim_get_autocmds, { group = 'neovim4eclipse_document', buffer = buf })
+              return ok and #hooks > 0
+            end
+
+            --- Gives a document's buffer back what :help took from it: :help on a help file that is
+            --- open in an editor reuses the document's buffer and makes it a help buffer, read-only,
+            --- unlisted, unchangeable, with 'tabstop' 8 and help's 'iskeyword' (its text, undo
+            --- history and marks stay: :help reads nothing from disk for a loaded buffer); the
+            --- editor's typing and Eclipse's own edits would then fail
+            --- in Neovim, and the two texts drift apart. Quietly (no OptionSet), and with a message
+            --- saying why no help page opened. Example: doc/myplug.txt open in an editor, then
+            --- :help myplug-tag: the editor keeps working, and the message names the file.
+            local function restore_document(buf)
+              if not vim.api.nvim_buf_is_valid(buf) or not M.is_document(buf) then
+                return
+              end
+              quietly(function()
+                local bo = vim.bo[buf]
+                bo.buftype, bo.readonly, bo.modifiable, bo.buflisted = 'acwrite', false, true, true
+                -- :help also set 'tabstop' 8 and help's 'iskeyword': the document's own come back
+                -- (Eclipse's tab width, SET_INDENTATION; the filetype's word characters,
+                -- DOCUMENT_BUFFER), so block selections and w, * and ciw work as before.
+                local ts, isk = vim.b[buf].neovim4eclipse_tabstop, vim.b[buf].neovim4eclipse_iskeyword
+                if ts then
+                  bo.tabstop = ts
+                end
+                if isk then
+                  bo.iskeyword = isk
+                end
+              end)
+            end
+            local function give_document_back(buf)
+              restore_document(buf)
+              -- Again once the command is over: inside a help window (the Ctrl-] route, from
+              -- BufEnter) Neovim sets help's 'iskeyword' after BufEnter.
+              vim.schedule(function()
+                restore_document(buf)
+              end)
+              -- After the command, not inside it: an error message from a BufEnter autocommand (the
+              -- Ctrl-] route, follow_page) aborts the :help that fired it, with Neovim's "Error in
+              -- BufEnter Autocommands" around it.
+              local message = 'The help of ' .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':t')
+                .. ' is open in its editor: edit it there; the help editor shows it once that editor is closed'
+              vim.schedule(function()
+                vim.api.nvim_echo({ { message } }, true, { err = true })
+              end)
+            end
+
+            --- Whether buf may be shown as a page of kind: the one check every way into a page window
+            --- passes (open_page, show_page, follow_page, the net's hand-over). Never an open
+            --- document's buffer (M.is_document): :help on a help file
+            --- that is open in an editor reuses the document's buffer and gives it 'buftype' help,
+            --- and as a page it would take the page's q, keys and write hooks into the code's
+            --- editor. A help page is a 'buftype' help buffer, a report a checkhealth scratch
+            --- buffer; messages are PAGE_TEXT's own buffer. Example: doc/myplug.txt open in an
+            --- editor, :help myplug-tag: refused as a page.
+            local function page_ok(buf, kind)
+              if not vim.api.nvim_buf_is_valid(buf) or M.is_document(buf) then
+                return false
+              end
+              if kind == 'help' then
+                return vim.bo[buf].buftype == 'help'
+              elseif kind == 'checkhealth' then
+                return vim.bo[buf].filetype == 'checkhealth' and vim.bo[buf].buftype == 'nofile'
+              end
+              return true
+            end
+
+            --- A help page's window options, as Neovim's help ftplugin sets them in the window :help
+            --- opened (which the net closed): the stars of *tags* and the bars of |links| hidden.
+            local function help_options(win, kind)
+              if kind == 'help' then
+                vim.wo[win].conceallevel, vim.wo[win].concealcursor = 2, 'nc'
+              end
+            end
+
             --- Opens a window for a page (a page editor shown from this Neovim, not a file's) on buf,
             --- alone in a tabpage of its own as an editor's is, and returns its id; -2 for a buffer
-            --- no longer there. Quietly: its options are a page's, set here, not the look a user's
+            --- no longer there, or one that may not be a page of kind (page_ok). kind is
+            --- 'messages' (the default), 'help' or 'checkhealth'.
+            --- Quietly: its options are a page's, set here, not the look a user's
             --- BufWinEnter gives a code editor's window ('colorcolumn', 'relativenumber'); the
             --- user's WinEnter and BufEnter still run when the page takes the focus, as for any
             --- window. Marked as the plug-in's, so the WinNew net leaves it, and :q in it is a host
             --- command.
-            function M.open_page(buf)
-              if not vim.api.nvim_buf_is_valid(buf) then
+            function M.open_page(buf, kind)
+              if not page_ok(buf, kind or 'messages') then
                 return -2
               end
+              page_buffer(buf)
               local win = quietly(function()
                 local w = vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(buf, false, {}))
                 vim.api.nvim_win_call(w, function()
@@ -1434,18 +1560,99 @@ final class LuaScripts {
                 for name, value in pairs(PAGE_OPTIONS) do
                   vim.wo[w][name] = value
                 end
+                help_options(w, kind)
                 give_ide_keys_back(buf)
                 return w
               end)
               own[win] = 'page'
               seen[win] = true
               page_buf[win] = buf
+              page_kind[win] = kind or 'messages'
               return win
             end
 
             --- Whether win is a page's window (M.open_page).
             function M.is_page(win)
               return own[win] == 'page'
+            end
+
+            --- Opens another page window like win: on the buffer it shows, of its kind (a :split of
+            --- the page: a second view, each with its own cursor). Returns { window, buffer }, or
+            --- { -1, -1 } when win is no page window.
+            function M.open_page_like(win)
+              local buf = page_buf[win]
+              if own[win] ~= 'page' or not buf or not vim.api.nvim_buf_is_valid(buf) then
+                return { -1, -1 }
+              end
+              local second = M.open_page(buf, page_kind[win])
+              pcall(vim.api.nvim_win_set_cursor, second, vim.api.nvim_win_get_cursor(win))
+              return { second, buf }
+            end
+
+            --- Shows buf, a buffer of Neovim's own for page kind ('help': the page :help opened;
+            --- 'checkhealth': a report), in page window win with the cursor on line, the line at
+            --- the top as :help puts it; when win is no open page window, in a new one
+            --- (M.open_page). Returns the window, or -2 when buf is gone. A report the window showed
+            --- before is wiped when no window shows it any more: :checkhealth makes a new buffer
+            --- each time, and an old one would stay in :ls! for nothing. Old help buffers stay, as in
+            --- Vim (Ctrl-T and Ctrl-O go back to them). Example: :help options with the help editor
+            --- open: its window changes to options.txt, quietly, on the topic's line.
+            function M.show_page(win, buf, line, kind)
+              if not page_ok(buf, kind) then
+                return -2
+              end
+              if own[win] ~= 'page' or not vim.api.nvim_win_is_valid(win) then
+                win = M.open_page(buf, kind)
+              else
+                local old = page_buf[win]
+                page_buffer(buf)
+                quietly(function()
+                  put_buf(win, buf)
+                  for name, value in pairs(PAGE_OPTIONS) do
+                    vim.wo[win][name] = value
+                  end
+                  help_options(win, kind)
+                end)
+                give_ide_keys_back(buf)
+                page_buf[win] = buf
+                page_kind[win] = kind
+                if old and old ~= buf and vim.api.nvim_buf_is_valid(old) and vim.bo[old].filetype == 'checkhealth'
+                    and #vim.fn.win_findbuf(old) == 0 then
+                  pcall(vim.api.nvim_buf_delete, old, { force = true })
+                end
+              end
+              if win > 0 then
+                local last = vim.api.nvim_buf_line_count(buf)
+                line = math.max(1, math.min(line, last))
+                vim.api.nvim_win_call(win, function()
+                  vim.fn.winrestview({ lnum = line, col = 0, topline = line })
+                end)
+              end
+              return win
+            end
+
+            --- Called on each BufEnter (SETUP): when a help page's window now shows another help
+            --- buffer, put there by Neovim's help itself (Ctrl-], :help typed in it, Ctrl-T,
+            --- :cnext through a :helpgrep), that buffer becomes the page's, as Vim's help window
+            --- goes from page to page. Returns whether it did; Eclipse then counts it as the
+            --- page's too (DocumentBuffers.onEntered). Any other buffer in a page window is put
+            --- back (M.restore_page). Example: Ctrl-] on |options| in the help editor:
+            --- options.txt is the page now.
+            function M.follow_page(win, buf)
+              if own[win] ~= 'page' or page_kind[win] ~= 'help' or page_buf[win] == buf then
+                return false
+              end
+              if vim.api.nvim_buf_is_valid(buf) and M.is_document(buf) and vim.bo[buf].buftype == 'help' then
+                give_document_back(buf) -- Ctrl-] to it: the page gets its own buffer back (restore_page)
+                return false
+              end
+              if not page_ok(buf, 'help') then
+                return false
+              end
+              page_buf[win] = buf
+              page_buffer(buf)
+              give_ide_keys_back(buf)
+              return true
             end
 
             --- Puts a page window's own buffer back into it, quietly and without a jump, after Neovim
@@ -1515,6 +1722,7 @@ final class LuaScripts {
               quietly(vim.api.nvim_win_close, win, true)
               own[win] = nil
               page_buf[win] = nil
+              page_kind[win] = nil
               seen[win] = nil -- no WinClosed while quiet
             end
 
@@ -1568,6 +1776,7 @@ final class LuaScripts {
               callback = function(ev)
                 own[tonumber(ev.match)] = nil
                 page_buf[tonumber(ev.match)] = nil
+                page_kind[tonumber(ev.match)] = nil
                 seen[tonumber(ev.match)] = nil
                 opened_from[tonumber(ev.match)] = nil
                 vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_window_closed', tonumber(ev.match))
@@ -1593,12 +1802,13 @@ final class LuaScripts {
             -- A :checkhealth report opens in a window of its own however it is asked for (a new
             -- tab, a split with :vert, a float with vim.g.health's style 'float'), and Neovim has
             -- filled it and set its filetype by the time this net runs (after the command). Its
-            -- text goes to a page editor instead (eclipse_view_text): read before the window
-            -- closes, since closing the float wipes its buffer; then the buffer is wiped, so that
-            -- :ls and :bnext never meet health://. Only text leaves, never a file name.
-            -- Matched by all three marks Neovim's report has (filetype, scratch buffer, its name), so a
-            -- file the user gave the filetype by hand is never taken and wiped.
-            -- Neovim goes back to the window the report's was opened from first, then the report
+            -- buffer goes to a page editor instead (eclipse_view_page, then M.show_page): kept
+            -- when its window closes ('bufhidden' hide: a float's would be wiped), unlisted, so
+            -- that :ls and :bnext never meet it, and renamed health://<number>, since the next
+            -- :checkhealth wipes whatever is named health://. Matched by all three marks Neovim's
+            -- report has (filetype, scratch buffer, its name), so a file the user gave the
+            -- filetype by hand is never taken.
+            -- Neovim goes back to the window the report's was opened from first, then the window
             -- closes. Closed while current, its tab would hand Neovim to the next tab, another
             -- editor's.
             local function take_health_report(win)
@@ -1613,115 +1823,57 @@ final class LuaScripts {
                   or vim.api.nvim_buf_get_name(buf) ~= 'health://' then
                 return false
               end
-              local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+              vim.bo[buf].bufhidden, vim.bo[buf].buflisted = 'hide', false
+              -- A name of its own: Neovim's next :checkhealth wipes the buffer named health://
+              -- first, which would close the page window showing this one.
+              pcall(vim.api.nvim_buf_set_name, buf, 'health://' .. buf)
+              -- A rename leaves the old name behind as an empty unlisted buffer (the alternate
+              -- file, as :file does): wiped, so :ls! shows no stray health://.
+              for _, b in ipairs(vim.api.nvim_list_bufs()) do
+                if b ~= buf and vim.api.nvim_buf_get_name(b) == 'health://' and not vim.bo[b].buflisted
+                    and #vim.fn.win_findbuf(b) == 0 and vim.api.nvim_buf_line_count(b) <= 1 then
+                  pcall(vim.api.nvim_buf_delete, b, { force = true })
+                end
+              end
               if before and own[before] and vim.api.nvim_win_is_valid(before) then
                 pcall(vim.api.nvim_set_current_win, before)
               end
               pcall(vim.api.nvim_win_close, win, true)
-              if vim.api.nvim_buf_is_valid(buf) then
-                pcall(vim.api.nvim_buf_delete, buf, { force = true })
-              end
-              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_text', 'checkhealth', lines)
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_page', 'checkhealth', buf, 1)
               return true
             end
-            -- The help tag to reach line `line` (1-based) of help buffer `buf` by: the nearest one at
-            -- or above it that Neovim's help knows and that leads to this same file, else the file's
-            -- own name (every help file starts with *its-name.txt*). Text between stars is not always
-            -- a tag (`*.c,*.txt` in an example, `a*b*`), so each candidate is checked where it ends,
-            -- in the help tags (taglist() in a help buffer reads them), not by its looks. Example:
-            -- on the line under "*help-context*", that tag; on line 1 of helphelp.txt, "helphelp.txt".
-            -- At most 200 candidates are looked up (each about 0.1 ms): a page whose folder has no
-            -- tags file, reached by :helpgrep, would otherwise pause Neovim on every star above.
-            --- The pattern of a :helpgrep list's title, as typed; "" if the title is no :helpgrep.
-            --- Example: ":silent helpgrep tab  page" gives "tab  page". SCREEN_SHOW_HELP has a copy.
-            function M.helpgrep_pattern(title)
-              title = title or ''
-              local ok, parsed = pcall(vim.api.nvim_parse_cmd, title:sub(2), {})
-              if not ok or parsed.cmd ~= 'helpgrep' then
-                return ''
-              end
-              local after = vim.fn.matchend(title, [[\\C\\<helpg\\%[rep]\\>!\\=\\s*]])
-              return after < 0 and '' or title:sub(after + 1)
-            end
-            local function nearest_tag(buf, line, file)
-              local lines = vim.api.nvim_buf_get_lines(buf, 0, line, false)
-              local found
-              local left = 200
-              vim.api.nvim_buf_call(buf, function()
-                for i = #lines, 1, -1 do
-                  local candidates = {}
-                  for tag in lines[i]:gmatch('%*([^%s%*|]+)%*') do
-                    table.insert(candidates, 1, tag)
-                  end
-                  for _, tag in ipairs(candidates) do
-                    left = left - 1
-                    if left < 0 then
-                      return
-                    end
-                    local ok, entries = pcall(vim.fn.taglist, '^' .. vim.fn.escape(tag, '\\\\.*[]~^$') .. '$')
-                    for _, entry in ipairs(ok and entries or {}) do
-                      if entry.name == tag and vim.fn.fnamemodify(entry.filename, ':t') == file then
-                        found = tag
-                        return
-                      end
-                    end
-                  end
-                end
-              end)
-              return found or file
-            end
-            -- Whether this help window is the current entry of a :helpgrep list (:helpgrep itself, or
-            -- :cnext through it): its pattern and the entry's number, so that the help editor runs the
-            -- same :helpgrep and goes on through it there (]q, :cnext typed in it). The pattern is the
-            -- list's title, the command line Neovim keeps there (":silent helpgrep tab  page"): Neovim
-            -- itself says it is a :helpgrep (nvim_parse_cmd), and the pattern is the title's text after
-            -- the command's name, as typed (nvim_parse_cmd's own arguments merge runs of spaces and drop
-            -- a backslash from \\\\). Else ("", 0): the page goes over by its tag.
-            local function helpgrep_at(buf, line)
-              local list = vim.fn.getqflist({ title = 0, idx = 0 })
-              local pattern = M.helpgrep_pattern(list.title)
-              if pattern == '' or (list.idx or 0) < 1 then
-                return '', 0
-              end
-              local entry = vim.fn.getqflist({ idx = list.idx, items = 0 }).items[1]
-              if not entry or entry.bufnr ~= buf or entry.lnum ~= line then
-                return '', 0
-              end
-              return pattern, list.idx
-            end
-            -- A help window (:help, :helpgrep, a plug-in's vim.cmd.help, in a split, a tab or with
-            -- :vert): Eclipse shows help in a page editor instead, with the user's own help pages
-            -- and plug-ins (docs/ARCHITECTURE.md, decision 10). By the time this net runs, :help has
-            -- set 'buftype' help and put the cursor on the topic. What leaves: the tag to open
-            -- (nearest_tag), the help file's name without its folder (to check the second Neovim
-            -- reached the same file), the cursor's line, and 'runtimepath', where the second Neovim
-            -- finds the same pages. Then, as for a report, back to the window it came from and the
-            -- window closed; the help buffer is unloaded unless another window shows it. Unloaded,
-            -- not wiped: a wiped buffer's quickfix entries lose their file, and :cnext after
-            -- :helpgrep stopped at the next match in the same file. (CREATE_DOCUMENT_BUFFER wipes
-            -- it after all if an editor opens that file.)
+            -- A help window (:help, :helpgrep, :cnext through a :helpgrep list, a plug-in's
+            -- vim.cmd.help, in a split, a tab or with :vert): Eclipse shows help in a page editor
+            -- instead, a page window of this Neovim on the same help buffer (docs/ARCHITECTURE.md,
+            -- decision 10), so Ctrl-], :helpgrep and the user's own help pages work as in a
+            -- terminal. By the time this net runs, :help has set 'buftype' help and put the cursor
+            -- on the topic: the buffer and that line go to Eclipse (eclipse_view_page, then
+            -- M.show_page). Then, as for a report, back to the window it came from and the window
+            -- closed; the buffer is kept ('bufhidden' hide, whatever 'hidden' says). Inside the
+            -- help editor :help reuses its own window and never reaches this net (M.follow_page).
             local function take_help(win)
               if not vim.api.nvim_win_is_valid(win) or vim.fn.win_gettype(win) ~= '' then
                 return false
               end
               local buf = vim.api.nvim_win_get_buf(win)
-              if vim.bo[buf].buftype ~= 'help' then
+              local document = M.is_document(buf) and vim.bo[buf].buftype == 'help'
+              if not document and not page_ok(buf, 'help') then
                 return false
               end
               local line = vim.api.nvim_win_get_cursor(win)[1]
-              local file = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':t')
-              local tag = nearest_tag(buf, line, file)
-              local grep, index = helpgrep_at(buf, line)
+              if not document then
+                vim.bo[buf].bufhidden = 'hide'
+              end
               local before = opened_from[win]
               if before and own[before] and vim.api.nvim_win_is_valid(before) then
                 pcall(vim.api.nvim_set_current_win, before)
               end
               pcall(vim.api.nvim_win_close, win, true)
-              if vim.api.nvim_buf_is_valid(buf) and #vim.fn.win_findbuf(buf) == 0 then
-                pcall(vim.api.nvim_buf_delete, buf, { force = true, unload = true })
+              if document then
+                give_document_back(buf) -- the window closed, no page: the editor keeps its document
+              else
+                vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_page', 'help', buf, line)
               end
-              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_view_help', tag, file, line, vim.o.runtimepath,
-                grep, index)
               return true
             end
             -- The window last left: when a command opens a window and enters it (:checkhealth's
@@ -2282,6 +2434,26 @@ final class LuaScripts {
      */
     static final String OPEN_PAGE_WINDOW = """
             return require('neovim4eclipse.windows').open_page(tonumber((select(1, ...))))
+            """;
+
+    /**
+     * Shows a buffer Neovim made for a page ({@code :help}'s help buffer, a {@code :checkhealth}
+     * report) in a page window. Arguments: the page window's id ({@code -1}: open a new one), the
+     * buffer, the line to put at the top, and the kind ({@code "help"}, {@code "checkhealth"}).
+     * Returns the window, or -2 when the buffer is gone. See {@link #WINDOWS} ({@code show_page}).
+     */
+    static final String SHOW_PAGE_BUFFER = """
+            local win, buf, line, kind = ...
+            return require('neovim4eclipse.windows').show_page(tonumber(win), tonumber(buf), tonumber(line), kind)
+            """;
+
+    /**
+     * Opens another page window like a page window (argument: its id), on the buffer it shows and
+     * of its kind: a {@code :split} of the page. Returns {@code {window, buffer}}, or
+     * {@code {-1, -1}} when it is no page window. See {@link #WINDOWS} ({@code open_page_like}).
+     */
+    static final String OPEN_PAGE_LIKE = """
+            return require('neovim4eclipse.windows').open_page_like(tonumber((select(1, ...))))
             """;
 
     /**
@@ -5416,6 +5588,8 @@ final class LuaScripts {
             tabstop = tonumber(tabstop)
             if tabstop >= 1 and tabstop <= 64 then
               vim.bo.tabstop = tabstop
+              -- Kept for WINDOWS' give_document_back: :help on a document's file sets 'tabstop' 8.
+              vim.b.neovim4eclipse_tabstop = tabstop
             end
             vim.bo.expandtab = use_tabs ~= '1'
             vim.bo.shiftwidth = tonumber(width)
@@ -5585,6 +5759,27 @@ final class LuaScripts {
             -- The editor's file, as Neovim names it (links resolved). Writes are compared with it, not
             -- with the buffer's name, which :saveas and :file change.
             vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)
+            -- The document's own 'iskeyword', kept for WINDOWS' give_document_back: :help on the
+            -- document's file (a help file open in an editor) makes it help's, which counts
+            -- foo.bar(x) as one word for w, * and ciw. Kept now, after each FileType (the
+            -- filetype's ftplugin sets it) and after each :setlocal iskeyword, never while the
+            -- buffer is help.
+            local function keep_iskeyword()
+              if vim.bo[buf].buftype ~= 'help' then
+                vim.b[buf].neovim4eclipse_iskeyword = vim.bo[buf].iskeyword
+              end
+            end
+            keep_iskeyword()
+            vim.api.nvim_create_autocmd('FileType', { group = group, buffer = buf, callback = keep_iskeyword })
+            vim.api.nvim_create_autocmd('OptionSet', {
+              group = group,
+              buffer = buf,
+              callback = function(ev)
+                if ev.match == 'iskeyword' then
+                  keep_iskeyword()
+                end
+              end,
+            })
 
             -- An error message, as Neovim shows its own: err = true sets v:errmsg and the ErrorMsg
             -- highlight, and marks the message as an error (msg_show kind "echoerr").
@@ -6084,342 +6279,6 @@ final class LuaScripts {
             """;
 
     /**
-     * Run once in the <em>second</em> Neovim, the one whose whole screen a page editor draws
-     * ({@link ScreenSession}), right after it started. Argument: Eclipse's channel number. Not run
-     * in the editing Neovim.
-     *
-     * <ul>
-     *   <li>{@code VimLeavePre}: {@code eclipse_screen_leaving}, a request (not a notification),
-     *       so that it has reached Eclipse before the process ends, whatever ended it ({@code :q},
-     *       {@code :qa}, {@code ZZ}). Eclipse then takes the end of Neovim's output as expected,
-     *       and closes the page editor.</li>
-     *   <li>{@code TextYankPost}: {@code eclipse_screen_yank(regname, regtype, lines)}, so that a
-     *       yank in the page editor reaches the editing Neovim's register of the same name. Example:
-     *       {@code "ayy} on a line {@code OK} sends {@code ("a", "V", {"OK"})}; a plain {@code yy}
-     *       sends {@code regname ""}.</li>
-     *   <li>{@code Ctrl-W h j k l w W t b p} (with or without Ctrl on the second key, with a
-     *       count), in normal mode: first among this Neovim's own windows, as Vim's own keys (a help
-     *       page and its {@code :copen} list, the user's help splits); when there is none in that
-     *       direction, {@code eclipse_screen_window(key, count)}, and Eclipse goes on among its
-     *       editors from this one, by the same rule as from a code editor ({@code EditorSplits}).
-     *       Example: {@code Ctrl-W k} from the list goes to the page above it; from the page, to the
-     *       code above. Neovim says which: {@code winnr('k')} is the current window's own number
-     *       when nothing is above. {@code w} goes out from the last window (it would wrap to the
-     *       first), {@code W} from the first, {@code p} when there is no previous window;
-     *       {@code t} and {@code b} always go out, since the first and last window are Eclipse's to
-     *       pick. With a count, {@code w} stays inside: window N, or the last one when there
-     *       are fewer, as Vim's {@code N Ctrl-W w}.</li>
-     *   <li>{@code :help} typed in a text page ({@code :messages}, {@code :checkhealth}): a
-     *       {@code CmdlineLeave} hook has Neovim parse the line, aborts a {@code :help} and sends
-     *       {@code eclipse_screen_help(topic)}, so that Eclipse runs it in the editing Neovim and the
-     *       help editor opens ({@code NeovimSession.helpAsync}). Not in the help editor's own Neovim
-     *       ({@code vim.g.neovim4eclipse_help_page}, set by {@link #SCREEN_SHOW_HELP}).</li>
-     *   <li>Neovim's own message and command-line UI, {@code ui2} (new in Neovim 0.12, experimental:
-     *       {@code :help ui2}), loaded with {@code pcall}. Why: the second Neovim draws its messages
-     *       into its screen, and without {@code ui2} messages longer than the message area stop at
-     *       a "Press ENTER" prompt, while which Neovim holds back every call that is not "fast"
-     *       ({@code nvim_exec_lua}, {@code nvim_command}): new content for the page editor, and the
-     *       {@code :qa!} that ends it, would wait for a key in the page editor. With {@code ui2} there is
-     *       no such prompt: long messages are cut with a {@code [+N]} marker, and {@code g<}
-     *       shows them all in a pager window. A Neovim without it (its module moved, say) keeps
-     *       the classic prompt; the page editor still works, and the answer's {@code ui2} says so.</li>
-     *   <li>The {@code term://} reader off, as {@link #NO_TERMINAL_URLS} turns it off in the
-     *       editing Neovim: {@code --clean} keeps Neovim's own {@code nvim.terminal} autocmd, so
-     *       {@code gf} on a shown {@code term:///path/build.sh} (in a message a linter printed,
-     *       say) would run the script. The netrw, zip, tar and http readers are off already,
-     *       through the start command ({@code NvimExecutable.embedCommand}).</li>
-     * </ul>
-     *
-     * <p>Answers what the one rule of the second Neovim rests on, the options that keep it from
-     * writing files, as Neovim has them once started: {@code write}, {@code modeline},
-     * {@code updatecount} (0: no swap file, {@code -n}), {@code undofile} and {@code shadafile}.
-     * {@link ScreenSession} refuses to go on unless each is off ({@code shadafile} is
-     * {@code "NONE"}). Also {@code readers}: how many readers of a name are left
-     * ({@code BufReadCmd}, {@code FileReadCmd} and {@code SourceCmd} autocmds), whatever their
-     * group or pattern, but for the two kept on purpose: {@code nvim.man} (as in the editing
-     * Neovim, SECURITY.md) and {@code nvim.shada}. It must be 0; it is absent if Neovim could not
-     * list them. A known set allowed, not one reader looked for: a reader a later Neovim adds or
-     * renames shows here, and the page editor refuses to start until it is turned off or allowed; then
-     * {@code first_reader} names the first one left, as {@code group:event:pattern} (example:
-     * {@code nvim.net.remotefile:BufReadCmd:http://*}), for the log. Counted once, here at the
-     * start: a reader added later can only come from a command the user types ({@code :packadd},
-     * {@code :runtime}, {@code :luafile}), which stays theirs; Neovim adds none later, and
-     * {@code --clean} loads none of the user's plug-ins. And {@code ui2}: whether that UI is on.
-     * Example answer: {@code {write = false, modeline = false, updatecount = 0, undofile = false,
-     * shadafile = "NONE", readers = 0, ui2 = true}}.
-     */
-    static final String SCREEN_SETUP = """
-            local channel = tonumber((select(1, ...)))
-            local ui2 = pcall(function() require('vim._core.ui2').enable({}) end)
-            local group = vim.api.nvim_create_augroup('neovim4eclipse_screen', { clear = true })
-            vim.api.nvim_create_autocmd('VimLeavePre', {
-              group = group,
-              callback = function()
-                pcall(vim.rpcrequest, channel, 'eclipse_screen_leaving')
-              end,
-            })
-            vim.api.nvim_create_autocmd('TextYankPost', {
-              group = group,
-              callback = function()
-                local e = vim.v.event
-                vim.rpcnotify(channel, 'eclipse_screen_yank', e.regname, e.regtype, e.regcontents)
-              end,
-            })
-            -- Whether Ctrl-W `key` with `count` has a window of this Neovim's own to go to.
-            local function inside(key, count)
-              local here, last = vim.fn.winnr(), vim.fn.winnr('$')
-              if key == 'h' or key == 'j' or key == 'k' or key == 'l' then
-                return vim.fn.winnr((count > 0 and count or '') .. key) ~= here
-              elseif key == 'w' then
-                return count > 0 or here < last
-              elseif key == 'W' then
-                return here > 1
-              elseif key == 'p' then
-                local previous = vim.fn.winnr('#')
-                return previous > 0 and previous ~= here
-              end
-              return false -- t, b: Eclipse's first and last editor
-            end
-            for _, key in ipairs({ 'h', 'j', 'k', 'l', 'w', 'W', 't', 'b', 'p' }) do
-              local function go()
-                local count = vim.v.count
-                if inside(key, count) then
-                  vim.cmd.wincmd({ args = { key }, count = count > 0 and count or nil })
-                else
-                  vim.rpcnotify(channel, 'eclipse_screen_window', key, count)
-                end
-              end
-              vim.keymap.set('n', '<C-w>' .. key, go, { desc = 'Ctrl-W ' .. key .. ', on to Eclipse at the edge' })
-              if key ~= 'W' then
-                vim.keymap.set('n', '<C-w><C-' .. key .. '>', go, { desc = 'Ctrl-W ' .. key .. ', on to Eclipse at the edge' })
-              end
-            end
-            -- :help typed in the messages or checkhealth editor: Neovim parses the line, and a :help
-            -- is not run here (this Neovim has neither the user's help pages nor the help editor's
-            -- rules) but handed to Eclipse, which runs it in the editing Neovim, so the help editor
-            -- opens (eclipse_screen_help, with the topic as Neovim parsed it). The help editor's own Neovim
-            -- (SCREEN_SHOW_HELP sets neovim4eclipse_help_page) runs :help itself.
-            vim.api.nvim_create_autocmd('CmdlineLeave', {
-              group = group,
-              pattern = ':',
-              callback = function()
-                if vim.g.neovim4eclipse_help_page or vim.v.event.abort then
-                  return
-                end
-                local line = vim.fn.getcmdline()
-                local ok, parsed = pcall(vim.api.nvim_parse_cmd, line, {})
-                if not ok or parsed.cmd ~= 'help' then
-                  return
-                end
-                -- v:event seen from Lua is a copy: the abort is set on the real one.
-                vim.cmd('let v:event.abort = v:true')
-                -- The topic as Neovim parsed it (a help topic is one word; :filter /h/ help x gives x).
-                vim.rpcnotify(channel, 'eclipse_screen_help', table.concat(parsed.args, ' '))
-              end,
-            })
-            pcall(vim.api.nvim_clear_autocmds, { group = 'nvim.terminal', event = 'BufReadCmd' })
-            -- Every reader of a name left, whatever its group or pattern, except the two kept on
-            -- purpose. nil (no answer) if the list cannot be read: ScreenSession refuses that too.
-            local kept = { ['nvim.man'] = true, ['nvim.shada'] = true }
-            local readers = nil
-            local first_reader = nil
-            local ok, found = pcall(vim.api.nvim_get_autocmds, { event = { 'BufReadCmd', 'FileReadCmd', 'SourceCmd' } })
-            if ok then
-              readers = 0
-              for _, autocmd in ipairs(found) do
-                if not kept[autocmd.group_name] then
-                  readers = readers + 1
-                  first_reader = first_reader
-                    or ((autocmd.group_name or '(no group)') .. ':' .. autocmd.event .. ':' .. autocmd.pattern)
-                end
-              end
-            end
-            return {
-              readers = readers,
-              first_reader = first_reader,
-              write = vim.o.write,
-              modeline = vim.o.modeline,
-              updatecount = vim.o.updatecount,
-              undofile = vim.o.undofile,
-              shadafile = vim.o.shadafile,
-              ui2 = ui2,
-            }
-            """;
-
-    /**
-     * The output profile of a page editor ({@code :messages}, {@code :checkhealth}): puts text
-     * into the second Neovim's one buffer, replacing what it showed, and returns its line count.
-     * Arguments: the lines; the filetype ({@code "checkhealth"}, or {@code ""} for none); the lines
-     * to color, as {@code {line, group}} pairs (0-based lines, Neovim's highlight groups:
-     * {@code {0, "ErrorMsg"}}); {@code 'background'} ({@code "light"} or {@code "dark"}, the
-     * editor's, so Neovim's default colors suit it); where the cursor goes ({@code "end"} for
-     * {@code :messages}, whose newest message is last; {@code "top"} otherwise); and the title,
-     * which the window's status line shows instead of the scratch buffer's {@code [Scratch] [-]}
-     * (example: {@code " messages"} on the left, line, column and position on the right). The title
-     * is one of the plug-in's own ({@code ViewText}); a {@code %} in it is doubled anyway, so the
-     * status line shows it as it is.
-     *
-     * <p>The buffer is a scratch one ({@code buftype=nofile}), changeable only while its text is
-     * set: the profile starts Neovim with {@code -M}, and the buffer is {@code nomodifiable} again
-     * at the end. {@code q} quits, which ends the second Neovim and closes the page editor, as {@code q}
-     * closes Neovim's own {@code :checkhealth}. Example: {@code ({"E486: x", "3 lines yanked"}, "",
-     * {{0, "ErrorMsg"}}, "dark", "end")} shows two lines, the first in red, the cursor on the second.
-     */
-    static final String SCREEN_SHOW_TEXT = """
-            local lines, filetype, highlights, background, cursor, title = ...
-            if background == 'light' or background == 'dark' then
-              vim.o.background = background
-            end
-            local buf = vim.api.nvim_get_current_buf()
-            vim.bo[buf].buftype = 'nofile'
-            vim.bo[buf].modifiable = true
-            vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-            vim.bo[buf].modifiable = false
-            local ns = vim.api.nvim_create_namespace('neovim4eclipse.view')
-            vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-            for _, h in ipairs(highlights) do
-              pcall(vim.api.nvim_buf_set_extmark, buf, ns, h[1], 0, { line_hl_group = h[2] })
-            end
-            vim.bo[buf].filetype = filetype
-            local count = vim.api.nvim_buf_line_count(buf)
-            vim.api.nvim_win_set_cursor(0, { cursor == 'end' and count or 1, 0 })
-            vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the page editor' })
-            vim.wo.statusline = ' ' .. (title or ''):gsub('%%', '%%%%') .. '%=%l,%c%V  %P '
-            return count
-            """;
-
-    /**
-     * The help profile of a page editor ({@code :help}, {@link HelpProfile}): opens a help page in
-     * the second Neovim, as the editing Neovim had it. Arguments: the tag, the help file's name
-     * without its folder, the line, the editing Neovim's {@code 'runtimepath'},
-     * {@code 'background'} ({@code "light"} or {@code "dark"}), and for a {@code :helpgrep} entry
-     * its pattern and number ({@code ""} and 0 otherwise). Example:
-     * {@code ("help-context", "helphelp.txt", 27, rtp, "dark", "", 0)}.
-     *
-     * <p><b>{@code :helpgrep}.</b> With a pattern, the same {@code :helpgrep} runs here (unless this
-     * Neovim's list is that one already) and {@code :cc} goes to the entry, so {@code ]q},
-     * {@code [q}, {@code :cnext} and {@code :copen} typed in the page editor go on through the matches
-     * without a trip to the editor. If the entry is not that file (the path differs), the tag is
-     * used instead.
-     *
-     * <ol>
-     *   <li>{@code 'runtimepath'} becomes the editing Neovim's, so the user's plug-ins' help pages
-     *       are found, and their help scripts ({@code ftplugin/help.lua}, {@code after/ftplugin})
-     *       run on each page, as in the user's editor. Set after the start, so their
-     *       {@code plugin/} folders do not run: only what Neovim loads for a help page.</li>
-     *   <li>{@code :help tag}, Neovim's own: the page opens as a help buffer (tags concealed,
-     *       {@code Ctrl-]} follows them, {@code :help} again replaces it); if the tag is not found,
-     *       {@code :help file} (every help file starts with its own name as a tag). Then the page is
-     *       the whole screen, but for help windows the user split there and the quickfix window.
-     *       At the first page, {@code :clearjumps}, so
-     *       that {@code Ctrl-O} does not end on the empty buffer Neovim started with.</li>
-     *   <li>If the page is the file the editing Neovim had, the cursor goes to its line, at the top
-     *       of the window, as {@code :help} puts a topic; otherwise it stays on the tag (two files
-     *       of the same name on the path).</li>
-     * </ol>
-     *
-     * <p>The page editor shows help only: a buffer that is no help page, in a window of the screen
-     * ({@code gf} on a path, {@code :edit}), in any window that shows it, is swapped back for the
-     * page it replaced, with a message; floating windows ({@code ui2}'s pager), the command-line
-     * window and the quickfix window are left alone. The file has been read by then, with its filetype's scripts: the rule
-     * keeps the page editor on help, it does not stop a read the user asked for. {@code q} quits the
-     * window, as in the text profile: the last one ends the second Neovim and closes the page editor.
-     * Returns {@code ""}, or Neovim's error if neither the tag nor the file is found; the second
-     * Neovim then shows it on its message line, and {@code q} still closes the page editor.
-     */
-    static final String SCREEN_SHOW_HELP = """
-            local tag, file, line, runtimepath, background, grep, index = ...
-            vim.g.neovim4eclipse_help_page = true -- :help here is this Neovim's own (SCREEN_SETUP)
-            if background == 'light' or background == 'dark' then
-              vim.o.background = background
-            end
-            vim.o.runtimepath = runtimepath
-            local group = vim.api.nvim_create_augroup('neovim4eclipse_help_view', { clear = true })
-            local function quit_with_q(buf)
-              vim.keymap.set('n', 'q', '<Cmd>quit<CR>', { buffer = buf, nowait = true, desc = 'Close the page editor' })
-            end
-            vim.api.nvim_create_autocmd('BufWinEnter', {
-              group = group,
-              callback = function(ev)
-                -- 'buftype' help is set only after the buffer is entered: checked once that is over,
-                -- in every window that shows the buffer, current or not.
-                vim.schedule(function()
-                  if not vim.api.nvim_buf_is_valid(ev.buf) then
-                    return
-                  end
-                  if vim.bo[ev.buf].buftype == 'help' then
-                    quit_with_q(ev.buf)
-                    return
-                  end
-                  if vim.bo[ev.buf].buftype == 'quickfix' then
-                    return -- :copen after :helpgrep: the list of pages, which Enter opens
-                  end
-                  local swapped = false
-                  for _, win in ipairs(vim.fn.win_findbuf(ev.buf)) do
-                    if vim.fn.win_gettype(win) == '' then
-                      local alternate = vim.api.nvim_win_call(win, function() return vim.fn.bufnr('#') end)
-                      if alternate > 0 and vim.bo[alternate].buftype == 'help' then
-                        vim.api.nvim_win_set_buf(win, alternate)
-                      else
-                        vim.api.nvim_win_call(win, function() pcall(vim.cmd, 'help | only') end)
-                      end
-                      swapped = true
-                    end
-                  end
-                  if swapped then
-                    vim.api.nvim_echo({ { 'The help editor shows help only' } }, true, { err = true })
-                  end
-                end)
-              end,
-            })
-            local first = vim.bo.buftype ~= 'help'
-            local ok, err = false, nil
-            if grep and grep ~= '' then
-              -- The same :helpgrep, run here unless this list is it already, then its entry.
-              -- The title's pattern as typed, by the rule of WINDOWS' helpgrep_pattern.
-              local title = vim.fn.getqflist({ title = 0 }).title or ''
-              local same, parsed = pcall(vim.api.nvim_parse_cmd, title:sub(2), {})
-              local after = vim.fn.matchend(title, [[\\C\\<helpg\\%[rep]\\>!\\=\\s*]])
-              ok = same and parsed.cmd == 'helpgrep' and after >= 0 and title:sub(after + 1) == grep
-              if not ok then
-                ok = pcall(vim.cmd.helpgrep, { args = { grep }, mods = { silent = true } })
-              end
-              ok = ok and pcall(vim.cmd, 'silent cc ' .. math.floor(tonumber(index) or 1))
-              ok = ok and vim.bo.buftype == 'help' and vim.fn.expand('%:t') == file
-            end
-            if not ok then
-              ok, err = pcall(vim.cmd.help, tag)
-            end
-            if not ok and tag ~= file then
-              ok = pcall(vim.cmd.help, file)
-            end
-            if not ok then
-              -- Shown where the page would be, and q still closes the page editor.
-              quit_with_q(vim.api.nvim_get_current_buf())
-              vim.api.nvim_echo({ { tostring(err) } }, true, { err = true })
-              return tostring(err)
-            end
-            -- The page is the whole screen but for the user's own help windows and the list's: the
-            -- empty window Neovim started with, or a window a :helpgrep left, closes.
-            for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-              local buf = vim.api.nvim_win_get_buf(win)
-              if win ~= vim.api.nvim_get_current_win() and vim.fn.win_gettype(win) == ''
-                  and vim.bo[buf].buftype ~= 'help' then
-                pcall(vim.api.nvim_win_close, win, true)
-              end
-            end
-            if first then
-              -- The empty buffer the second Neovim started with would be Ctrl-O's last stop.
-              vim.cmd.clearjumps()
-            end
-            if vim.fn.expand('%:t') == file and line >= 1 and line <= vim.api.nvim_buf_line_count(0) then
-              vim.api.nvim_win_set_cursor(0, { line, 0 })
-              vim.cmd('normal! zt')
-            end
-            return ''
-            """;
-
-    /**
      * Registers {@code :checkhealth neovim4eclipse} in the editing Neovim ({@link HealthCheck}): run
      * once at start of each Neovim, after the user's config, so the folder is appended once.
      * Arguments: the folder holding the stub {@code lua/neovim4eclipse/health.lua}, appended to
@@ -6481,49 +6340,6 @@ final class LuaScripts {
               end
             end
             package.loaded['neovim4eclipse.health'] = M
-            return true
-            """;
-
-    /**
-     * Runs {@code :help topic} in the editing Neovim ({@link NeovimSession#helpAsync}), for a
-     * {@code :help} typed in the messages or checkhealth editor. Argument: the topic as Neovim
-     * parsed the typed line ({@code nvim_parse_cmd}'s arguments, joined by spaces),
-     * {@code ""} for none. A structured call ({@code vim.cmd.help}), so the topic is never read as
-     * a command line. A topic Neovim does not know shows its own error (E149) on the message line.
-     */
-    static final String HELP_HERE = """
-            local topic = ...
-            local ok, err = pcall(vim.cmd.help, topic ~= '' and { args = { topic } } or {})
-            if not ok then
-              vim.api.nvim_echo({ { (tostring(err):gsub('^.-(E%d+:)', '%1')) } }, true, { err = true })
-            end
-            return ok
-            """;
-
-    /**
-     * Puts a yank from a page editor into the editing Neovim's register of the same name
-     * ({@code NeovimSession.setRegisterFromViewAsync}). Arguments: the register's name ({@code ""}
-     * for the unnamed one), Neovim's register type and the lines. The unnamed register fills
-     * {@code "}, and {@code +} or {@code *} too when {@code 'clipboard'} holds {@code unnamedplus}
-     * or {@code unnamed}, as a yank in an editor would. A name a yank cannot have (one of the
-     * read-only registers, {@code =}) is ignored. Answers whether a register was set.
-     */
-    static final String SET_REGISTER_FROM_VIEW = """
-            local name, regtype, lines = ...
-            if name == '' then
-              vim.fn.setreg('"', lines, regtype)
-              local clipboard = vim.o.clipboard
-              if clipboard:find('unnamedplus', 1, true) then
-                vim.fn.setreg('+', lines, regtype)
-              elseif clipboard:find('unnamed', 1, true) then
-                vim.fn.setreg('*', lines, regtype)
-              end
-              return true
-            end
-            if not name:match('^[%w"+*_-]$') then
-              return false
-            end
-            vim.fn.setreg(name, lines, regtype)
             return true
             """;
 }

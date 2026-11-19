@@ -6,9 +6,9 @@ belongs to, then how the plug-in maps one side onto the other. [LEARNING.md](LEA
 the machinery behind each term; [ARCHITECTURE.md](ARCHITECTURE.md) the design decisions.
 
 Example of the mix-up it prevents: "the help editor is in a hidden tab page" mixes both sides. On
-the Eclipse side the help editor is an editor tab in an editor stack. On the Neovim side its
-content is a whole second Neovim; the windows in hidden tab pages are the editing Neovim's, one
-per text editor and one per messages editor.
+the Eclipse side the help editor is an editor tab in an editor stack. On the Neovim side it is a
+window of the editing Neovim, alone in a hidden tab page, as each text editor's window is: one
+window per text editor and one per page editor.
 
 ## Eclipse side
 
@@ -49,15 +49,13 @@ per text editor and one per messages editor.
 | Editor tabs | — | What Vim's tab commands move between (`editor/EditorTabs`); Neovim's tab pages are not used for them. |
 | The text editor's `StyledText` | — | Eclipse draws the text and the caret; Neovim's grid for that window is not drawn. |
 | The q: panel, floats over the editor | Their grids | Drawn by the plug-in over the text editor (`editor/NeovimWindowPanel`, `editor/FloatingWindows`). |
-| A help or checkhealth editor | A whole second Neovim | One per page kind, its own process; its grid 1 is what the page editor shows (`core/ScreenSession`, decision 10 in ARCHITECTURE.md). |
-| A messages editor | A window of the editing Neovim, alone in a hidden tab page | Drawn from that window's grid (`editor/WindowPane`); a split's two halves are two windows on the one messages buffer. |
+| A page editor (help, messages, checkhealth) | A window of the editing Neovim, alone in a hidden tab page | Drawn from that window's grid (`editor/WindowPane`, decision 10 in ARCHITECTURE.md); a split's two halves are two windows on one buffer. |
 
 ## The plug-in's own words
 
 | Term | Meaning |
 |---|---|
 | Editing Neovim | The one Neovim behind every text editor of a workbench. |
-| Second Neovim | The help or checkhealth editor's own Neovim, started at its first content; it never writes a file. |
 | Attached | The text editor (and its window) whose document Neovim mirrors now: its buffer is kept in step and its caret follows Neovim's cursor. |
 | Focused window | Neovim's current window, and the part shown from it. The mode, the `:` box, messages, floats and host commands follow it (`core/FocusRouter`). Usually the attached editor's; a page's window can have it while the text editor stays attached. |
 | Home window | The window Neovim starts with. Documents are shown in it only by tests that pass no editor window. |

@@ -399,7 +399,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
     /**
      * Files Eclipse would open outside the IDE (a zip: the system's program) or not as text are not
      * opened, and Neovim goes back, as before; {@code :help} afterwards still goes to the help
-     * editor, with Neovim back in the file it came from. Neovim's {@code zip.vim} lists the archive in the
+     * editor, which takes the keyboard, with a.txt still in its own window. Neovim's {@code zip.vim} lists the archive in the
      * buffer ({@code 'buftype'} set), so Neovim does not name it to Eclipse at all; were it named,
      * {@link ProjectFileEditors}' check would still keep the system's program from starting.
      *
@@ -428,8 +428,8 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             waitUntil("the help editor", TIMEOUT_MS,
                     () -> page().findEditor(new NeovimPageInput(PageKind.HELP)) instanceof NeovimPageEditor);
             settle();
-            waitUntil("Neovim back in a.txt after :help", TIMEOUT_MS,
-                    () -> "a.txt".equals(String.valueOf(SessionProbe.lua(session, "return vim.fn.expand('%:t')"))));
+            waitUntil("a.txt still in its window after :help", TIMEOUT_MS, () -> Boolean.TRUE.equals(SessionProbe.lua(session,
+                    "local b = vim.fn.bufnr('a.txt') return b > 0 and #vim.fn.win_findbuf(b) > 0")));
             assertEquals(null, editorTitled("x.zip"), "still no editor for the zip");
         } finally {
             closeAllBut(null);

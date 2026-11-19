@@ -332,8 +332,7 @@ VIEWPORT.md was built for one window; with a window per editor:
 
 ## 4a. Pages' windows
 
-A page editor shown from this Neovim (not from a second Neovim of its own) has a window of its
-own too, alone in a hidden tabpage: the one-to-one rule, one Eclipse editor, one Neovim window,
+A page editor (help, messages, checkhealth) has a window of its own too, alone in a hidden tabpage: the one-to-one rule, one Eclipse editor, one Neovim window,
 holds for pages as for text editors. `open_page` (`LuaScripts.OPEN_PAGE_WINDOW`) opens it:
 
 - **Quietly** (`'eventignore'` all): its options are a page's, set here, not the code look a

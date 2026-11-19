@@ -20,9 +20,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
  *   <li>First it waits for the session's input thread to run what is queued there
  *       ({@code NeovimSession.queuedWorkDone}): an {@code *Async} call only queues its work, and the
  *       request below, sent from the test thread, would otherwise overtake it. Example:
- *       {@code setRegisterFromViewAsync("a", ...)}, then {@code pass}, then reading register
- *       {@code a}: without this step the read can come before the {@code setreg} (it did on a
- *       Windows machine, where the input thread was not yet started).</li>
+ *       {@code setBackgroundAsync(true)}, then {@code pass}, then reading {@code 'background'}:
+ *       without this step the read can come before the change (a queued register write once did,
+ *       on a Windows machine, where the input thread was not yet started).</li>
  *   <li>Neovim runs a non-fast API call such as {@code nvim_exec_lua} from its main loop, only once
  *       the keys queued before it have been handled (unlike {@code nvim_get_mode}, which is "fast"
  *       and answered at once). So by then every autocmd those keys fired has run, and every

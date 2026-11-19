@@ -72,7 +72,7 @@ public final class NeovimPageOpener {
         }
         PageKind kind = PageKind.of(content);
         NeovimPageInput input = new NeovimPageInput(kind);
-        IEditorPart open = kind == PageKind.MESSAGES ? openMessages(page) : page.findEditor(input);
+        IEditorPart open = openOfKind(page, kind);
         IEditorPart another = anotherPage(page, kind);
         PagePlacement placement = PagePlacement.of(open != null, another != null, from != null);
         try {
@@ -110,28 +110,29 @@ public final class NeovimPageOpener {
     }
 
     /**
-     * The messages editor to show {@code :messages} in: the one used last, else any one open (a
-     * split's other half), else {@code null}. All of them show the one messages buffer, so filling
-     * it shows the new text in each.
+     * The editor of {@code kind} to show the content in: the one used last, else any one open (a
+     * split's other half), else {@code null}. For messages all of them show the one messages
+     * buffer, so filling it shows the new text in each; for help and checkhealth the one chosen
+     * changes to the new buffer, and a split's other half keeps what it shows.
      */
-    private static IEditorPart openMessages(IWorkbenchPage page) {
+    private static IEditorPart openOfKind(IWorkbenchPage page, PageKind kind) {
         NeovimSession current = Activator.getDefault().currentSession();
         // An editor of a Neovim that ended (a crash, then a new start) shows a window that is
-        // gone: it closes, and the new history gets an editor on the new Neovim.
+        // gone: it closes, and the new content gets an editor on the new Neovim.
         for (IEditorReference reference : page.getEditorReferences()) {
             if (NeovimPageEditor.ID.equals(reference.getId()) && reference.getEditor(false) instanceof NeovimPageEditor editor
-                    && editor.kind() == PageKind.MESSAGES && editor.windowPane() != null
+                    && editor.kind() == kind && editor.windowPane() != null
                     && editor.windowPane().session() != current) {
                 page.closeEditor(editor, false);
             }
         }
-        NeovimPageEditor last = NeovimPageEditor.lastUsed(PageKind.MESSAGES);
+        NeovimPageEditor last = NeovimPageEditor.lastUsed(kind);
         if (last != null && last.getSite().getPage() == page) {
             return last;
         }
         for (IEditorReference reference : page.getEditorReferences()) {
             if (NeovimPageEditor.ID.equals(reference.getId()) && reference.getEditor(false) instanceof NeovimPageEditor editor
-                    && editor.kind() == PageKind.MESSAGES) {
+                    && editor.kind() == kind) {
                 return editor;
             }
         }

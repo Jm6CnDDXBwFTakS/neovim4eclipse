@@ -49,7 +49,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
  * The page editors in a real workbench, opened by the commands typed in an editor:
  * {@code :messages}, {@code :checkhealth} and {@code :help} each open an editor of their own below
  * the code (the next ones as tabs beside the first), titled with what it holds and showing it in a
- * second Neovim; {@code Ctrl-W p} gives the keyboard back to the editor; {@code q} closes it. The
+ * window of the editing Neovim; {@code Ctrl-W p} gives the keyboard back to the editor; {@code q}
+ * closes it. The
  * editor itself, opened directly, is {@link NeovimPageEditorEndToEndTest}'s.
  */
 class NeovimPagesEndToEndTest extends EndToEndTestBase {
@@ -58,7 +59,7 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
 
     @AfterEach
     void closeThePages() {
-        // A failed test leaves no page editor (and no second Neovim) for the next one.
+        // A failed test leaves no page editor (and no page window) for the next one.
         for (PageKind kind : PageKind.values()) {
             IEditorPart page = page().findEditor(new NeovimPageInput(kind));
             if (page != null) {
@@ -315,16 +316,22 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * {@code :help} opens the page in the help editor, as Neovim's own help (the editing Neovim
-     * keeps no help window), and {@code :messages} afterwards opens the messages editor, a tab in
-     * the help editor's stack, with a second Neovim of its own; the help editor stays.
+     * {@code :help} opens the page in the help editor, a page window of the editing Neovim on the
+     * help buffer (no help window is left beside the code), and {@code :messages} afterwards opens
+     * the messages editor, a tab in the help editor's stack; the help editor stays.
      */
+    /** The {@code 'buftype'} of the buffer page editor {@code view}'s window shows. */
+    private String bufferTypeOf(NeovimPageEditor view) {
+        int win = view.windowPane().window();
+        return String.valueOf(SessionProbe.lua(session, "return vim.bo[vim.api.nvim_win_get_buf(" + win + ")].buftype"));
+    }
+
     @Test
     void helpAndMessagesGetEditorsOfTheirOwnInOneStack() {
         colon("help help-context");
         NeovimPageEditor view = pageShowing("help-context");
         assertEquals("Neovim: help", view.getPartName());
-        assertTrue(rowsOf(view).contains("[Help]"), rowsOf(view));
+        assertEquals("help", bufferTypeOf(view), "the help buffer itself");
         assertEquals(1L, ((Number) SessionProbe.lua(session, "return #vim.api.nvim_tabpage_list_wins(0)")).longValue(),
                 "no help window left in the editing Neovim");
 
@@ -334,7 +341,7 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
         colon("messages");
         view = pageShowing("after help");
         assertEquals("Neovim: messages", view.getPartName());
-        assertTrue(!rowsOf(view).contains("[Help]"), rowsOf(view));
+        assertEquals("nofile", bufferTypeOf(view), "the messages buffer, not help");
         IEditorPart help = page().findEditor(new NeovimPageInput(PageKind.HELP));
         assertTrue(help != null, "the help editor stays open beside it");
         assertEquals(EditorSplits.stackOf(help.getSite().getService(MPart.class)),
@@ -371,7 +378,7 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
 
     /**
      * {@code :help} typed in the messages editor opens the help editor, as if typed in the code:
-     * the messages editor's Neovim has neither the user's help pages nor the help editor's rules.
+     * the help window it opens beside the messages page goes to the help editor.
      */
     @Test
     void helpTypedInTheMessagesEditorOpensTheHelpEditor() {
@@ -392,8 +399,32 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * {@code :help} typed in the help editor changes the page there, as Vim's help window does: the
+     * same editor and window, now on {@code options.txt}, with the keyboard; no second help editor.
+     */
+    @Test
+    void helpTypedInTheHelpEditorChangesThePageThere() {
+        colon("help help-context");
+        NeovimPageEditor help = pageShowing("help-context");
+        int win = help.windowPane().window();
+        UiTestSupport.requireKeyboardFocus(help.canvasForTests(), TIMEOUT_MS);
+        for (char c : ":help options".toCharArray()) {
+            key(help.canvasForTests(), c, c, 0);
+        }
+        key(help.canvasForTests(), SWT.CR, SWT.CR, 0);
+        waitUntil("options.txt in the same window", TIMEOUT_MS, () -> {
+            settle();
+            return "options.txt".equals(SessionProbe.lua(session,
+                    "return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(" + win + ")), ':t')"));
+        });
+        assertEquals(win, help.windowPane().window(), "the same page window");
+        assertEquals(1, pages().stream().filter(p -> p.kind() == PageKind.HELP).count(), "one help editor");
+        assertTrue(help.canvasForTests().isFocusControl(), "the help editor keeps the keyboard");
+    }
+
+    /**
      * {@code Ctrl-W} goes both ways by where the editors are: {@code Ctrl-W k} from the help editor
-     * below the code reaches the code's editor (the help Neovim has no window above its own), and
+     * below the code reaches the code's editor (the help page's window is alone in its tabpage), and
      * {@code Ctrl-W j} from the code reaches the help editor again.
      */
     @Test

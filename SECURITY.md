@@ -69,16 +69,16 @@ What stays as in Vim, because it takes a key you press on purpose or your own se
   unpacked with the system's `gzip`), `editorconfig` (a repository's `.editorconfig` may set
   indent, line-ending and text-width options) and the `man://` reader of manual pages.
 - Your own `init.lua` and the plug-ins it loads run with your rights, as in any Neovim.
-- The help editor (`:help`) runs the help scripts of your plug-ins (`ftplugin/help.lua`,
-  `after/ftplugin/help.lua`, a parser for a code block's language) on each page, as your Neovim
-  does: it has your `'runtimepath'`. A help page is a plug-in's, not a cloned repository's file.
-  The `:checkhealth` editor runs in another Neovim, without your plug-ins. The `:messages`
-  editor is a read-only window of your own Neovim (a `nofile` buffer that no file has), so your
-  config and plug-ins act there as in any of your windows, with the same switches as above: the
-  readers and modelines stay off, and a file you open from it (`gf`, `:e`) opens in an editor of
-  its own, never in that window. Its text can quote a file's name or lines (an error naming a
-  file), so `K` (your `'keywordprg'`, `:Man` by default) and `gx` (the system's opener) act on that
-  text there as in any of your windows: each only on a key you press.
+- The page editors (`:help`, `:messages`, `:checkhealth`) are read-only windows of your own
+  Neovim, so your config and plug-ins act there as in any of your windows, with the same switches
+  as above: the readers and modelines stay off, every write from a page is refused, and a file you
+  open from one (`gf`, `:e`) opens in an editor of its own, never in that window. The help editor
+  runs the help scripts of your plug-ins (`ftplugin/help.lua`, `after/ftplugin/help.lua`, a parser
+  for a code block's language) on each page, as your Neovim does in a terminal; a help page is a
+  plug-in's, not a cloned repository's file. `:checkhealth` runs your plug-ins' checks, as in a
+  terminal. A page's text can quote a file's name or lines (an error naming a file), so `K` (your
+  `'keywordprg'`, `:Man` by default) and `gx` (the system's opener) act on that text there as in any
+  of your windows: each only on a key you press.
 
 A way around the first list is a vulnerability: please report it as described above.
 

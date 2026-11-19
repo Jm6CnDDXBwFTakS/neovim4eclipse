@@ -32,9 +32,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 
 import org.junit.jupiter.api.Tag;
@@ -484,48 +484,37 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * {@code :checkhealth}'s report goes to a page editor too, taken from its window by the
-     * {@code WinNew} net; its buffer is wiped, so {@code :ls} never lists {@code health://}.
+     * {@code :checkhealth}'s report goes to a page editor too: its buffer, taken from its window by
+     * the {@code WinNew} net and kept (unlisted, so {@code :ls} never lists {@code health://}).
      */
     @Test
     void aCheckhealthReportGoesToTheView() throws Exception {
         try (NeovimSession s = start()) {
-            List<ViewText> texts = new CopyOnWriteArrayList<>();
-            s.addViewContentListener(c -> {
-                if (c instanceof ViewText t) {
-                    texts.add(t);
-                }
-            });
+            List<PageBuffer> pages = pagesOf(s);
             s.commandAsync("checkhealth vim.health");
-            waitFor(() -> !texts.isEmpty(), "the report");
-            ViewText text = texts.get(0);
-            assertEquals(ViewText.CHECKHEALTH, text.title());
-            assertEquals(ViewText.CHECKHEALTH, text.filetype());
-            assertTrue(String.join("\n", text.lines()).contains("vim.health"), text.lines().toString());
-            assertEquals(-1L, ((Number) s.lua("return vim.fn.bufnr('health://')")).longValue(), "the buffer is wiped");
+            waitFor(() -> !pages.isEmpty(), "the report");
+            PageBuffer page = pages.get(0);
+            assertEquals(PageBuffer.CHECKHEALTH, page.title());
+            assertEquals(1, page.line());
+            assertTrue(linesOf(s, page).contains("vim.health"), linesOf(s, page));
+            assertEquals(false, s.lua("return vim.bo[" + page.buffer() + "].buflisted"), "unlisted");
         }
     }
 
     /**
-     * {@code :help} goes to a page editor: the page, taken from its window by the {@code WinNew}
-     * net, as a tag, the file's name and the line, with the editing Neovim's {@code 'runtimepath'}.
+     * {@code :help} goes to a page editor: the help buffer, taken from its window by the
+     * {@code WinNew} net, and the topic's line.
      */
     @Test
     void aHelpPageGoesToTheView() throws Exception {
         try (NeovimSession s = start()) {
-            List<HelpPage> pages = new CopyOnWriteArrayList<>();
-            s.addViewContentListener(c -> {
-                if (c instanceof HelpPage page) {
-                    pages.add(page);
-                }
-            });
+            List<PageBuffer> pages = pagesOf(s);
             s.commandAsync("help help-context");
             waitFor(() -> !pages.isEmpty(), "the page");
-            HelpPage page = pages.get(0);
-            assertEquals("help-context", page.tag());
-            assertEquals("helphelp.txt", page.file());
+            PageBuffer page = pages.get(0);
+            assertEquals(PageBuffer.HELP, page.title());
+            assertEquals("helphelp.txt", s.lua("return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(" + page.buffer() + "), ':t')"));
             assertTrue(page.line() > 1, "the topic's line: " + page.line());
-            assertEquals(s.lua("return vim.o.runtimepath"), page.runtimepath());
         }
     }
 
@@ -534,15 +523,10 @@ class NeovimSessionIntegrationTest {
     void thePluginsOwnHealthCheckReports(@TempDir Path runtime) throws Exception {
         try (NeovimSession s = start()) {
             s.installHealthCheckAsync(runtime, new HealthCheck.Info(false, "0.2.27", "4.38.0"));
-            List<ViewText> texts = new CopyOnWriteArrayList<>();
-            s.addViewContentListener(c -> {
-                if (c instanceof ViewText t) {
-                    texts.add(t);
-                }
-            });
+            List<PageBuffer> pages = pagesOf(s);
             s.commandAsync("checkhealth neovim4eclipse");
-            waitFor(() -> !texts.isEmpty(), "the report");
-            String report = String.join("\n", texts.get(0).lines());
+            waitFor(() -> !pages.isEmpty(), "the report");
+            String report = linesOf(s, pages.get(0));
             assertTrue(report.contains("OK Neovim " + s.neovimVersion()), report);
             assertTrue(report.contains("WARNING A Neovim program of your own"), report);
             assertTrue(report.contains("Neovim for Eclipse 0.2.27"), report);
@@ -557,31 +541,28 @@ class NeovimSessionIntegrationTest {
     void thePluginsOwnHelpPageIsFound(@TempDir Path runtime) throws Exception {
         try (NeovimSession s = start()) {
             s.installHealthCheckAsync(runtime, new HealthCheck.Info(false, "0.2.28", ""));
-            List<HelpPage> pages = new CopyOnWriteArrayList<>();
-            s.addViewContentListener(c -> {
-                if (c instanceof HelpPage p) {
-                    pages.add(p);
-                }
-            });
+            List<PageBuffer> pages = pagesOf(s);
             s.commandAsync("help neovim4eclipse");
             waitFor(() -> !pages.isEmpty(), "the page");
-            assertEquals("neovim4eclipse", pages.get(0).tag());
-            assertEquals("neovim4eclipse.txt", pages.get(0).file());
+            assertEquals("neovim4eclipse.txt",
+                    s.lua("return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(" + pages.get(0).buffer() + "), ':t')"));
         }
     }
 
-    /** A yank in a page editor lands in the editing Neovim's register of the same name. */
-    @Test
-    void aYankFromTheViewFillsTheRegister() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setRegisterFromViewAsync("a", "V", List.of("from the view"));
-            s.setRegisterFromViewAsync("", "v", List.of("plain"));
-            s.setRegisterFromViewAsync("=", "v", List.of("1+1")); // no yank fills the expression register
-            NeovimBarrier.pass(s);
-            assertEquals("from the view\n", s.lua("return vim.fn.getreg('a')"));
-            assertEquals("V", s.lua("return vim.fn.getregtype('a')"));
-            assertEquals("plain", s.lua("return vim.fn.getreg('\"')"));
-        }
+    /** The page buffers {@code s} hands to page editors, as they come. */
+    private static List<PageBuffer> pagesOf(NeovimSession s) {
+        List<PageBuffer> pages = new CopyOnWriteArrayList<>();
+        s.addViewContentListener(c -> {
+            if (c instanceof PageBuffer page) {
+                pages.add(page);
+            }
+        });
+        return pages;
+    }
+
+    /** The text of {@code page}'s buffer, its lines joined. */
+    private static String linesOf(NeovimSession s, PageBuffer page) throws Exception {
+        return String.valueOf(s.lua("return table.concat(vim.api.nvim_buf_get_lines(" + page.buffer() + ", 0, -1, false), '\\n')"));
     }
 
     /**

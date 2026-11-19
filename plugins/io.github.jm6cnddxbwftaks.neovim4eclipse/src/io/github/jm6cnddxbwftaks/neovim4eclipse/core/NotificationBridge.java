@@ -14,9 +14,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
@@ -82,8 +81,11 @@ final class NotificationBridge implements Incoming {
          * {@code projectFile}: the buffer's file when it belongs to an open project and has no editor
          * yet, read by {@link LuaScripts#PROJECT_FILES} ({@code gf}, {@code 'A}, a quickfix entry);
          * Eclipse opens its editor. {@code ""} for any other buffer, or if not sent.
+         * {@code pageFollows}: {@code winid} is a help page's window, and Neovim's help put this
+         * other help buffer there ({@code Ctrl-]}), which is now the page's
+         * ({@link LuaScripts#WINDOWS}' {@code follow_page}); false if not sent.
          */
-        void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile);
+        void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows);
 
         /**
          * A document's buffer was unloaded and loaded again by Neovim ({@code :edit!} from a script;
@@ -204,9 +206,9 @@ final class NotificationBridge implements Incoming {
 
         /**
          * Content for a page editor that is no message, which the {@code WinNew} net of
-         * {@link LuaScripts#WINDOWS} took from its window: a {@code :checkhealth} report
-         * ({@code eclipse_view_text}) or a {@code :help} page ({@code eclipse_view_help}). A default
-         * that does nothing, for the fakes of tests that do not use it.
+         * {@link LuaScripts#WINDOWS} took from its window ({@code eclipse_view_page}): the buffer
+         * of a {@code :checkhealth} report or of a {@code :help} page. A default that does
+         * nothing, for the fakes of tests that do not use it.
          */
         default void onViewContent(ViewContent content) {
         }
@@ -272,8 +274,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_search" -> onSearch(args);
             case "eclipse_highlights" -> onHighlights(args);
             case "eclipse_window_closed" -> onWindowClosed(args);
-            case "eclipse_view_text" -> onViewText(args);
-            case "eclipse_view_help" -> onViewHelp(args);
+            case "eclipse_view_page" -> onViewPage(args);
             case "eclipse_echo" -> onEcho(args);
             case "eclipse_cmdwin" -> onCommandWindow(args);
             case "eclipse_cmdwin_closed" -> sink.onCommandWindowClosed();
@@ -317,12 +318,13 @@ final class NotificationBridge implements Incoming {
         }
     }
 
-    /** Payload: {@code [bufnr, winid, jumped, projectFile]} (see {@link Sink#onBufferEnter}). */
+    /** Payload: {@code [bufnr, winid, jumped, projectFile, pageFollows]} (see {@link Sink#onBufferEnter}). */
     private void onBufEnter(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
             String file = args.size() > 3 && args.get(3) instanceof String name ? name : "";
-            sink.onBufferEnter(buf, window(args, 1), args.size() > 2 && Boolean.TRUE.equals(args.get(2)), file);
+            sink.onBufferEnter(buf, window(args, 1), args.size() > 2 && Boolean.TRUE.equals(args.get(2)), file,
+                    args.size() > 4 && Boolean.TRUE.equals(args.get(4)));
         }
     }
 
@@ -381,41 +383,23 @@ final class NotificationBridge implements Incoming {
     }
 
     /**
-     * Payload: {@code [kind, lines]}, from the {@code WinNew} net of {@link LuaScripts#WINDOWS}.
-     * Only the kind {@code "checkhealth"} is known; any other is ignored, so that no text reaches
-     * a page editor under a name the plug-in did not choose.
+     * Payload: {@code [kind, buffer, line]}, from the {@code WinNew} net of {@link LuaScripts#WINDOWS}:
+     * a buffer of Neovim's own for a page editor ({@code util/PageBuffer}). Only the kinds
+     * {@code "help"} and {@code "checkhealth"} are known, and only with a buffer number and a line
+     * of 1 or more; anything else is ignored, so no buffer reaches a page editor under a name the
+     * plug-in did not choose.
      */
-    private void onViewText(List<?> args) {
-        if (args.size() < 2 || !ViewText.CHECKHEALTH.equals(args.get(0)) || !(args.get(1) instanceof List<?> raw)) {
+    private void onViewPage(List<?> args) {
+        if (args.size() < 3 || !(args.get(0) instanceof String kind)
+                || !(PageBuffer.HELP.equals(kind) || PageBuffer.CHECKHEALTH.equals(kind))) {
             return;
         }
-        List<String> lines = new ArrayList<>();
-        for (Object line : raw) {
-            lines.add(String.valueOf(line));
-        }
-        sink.onViewContent(ViewText.checkhealth(lines));
-    }
-
-    /**
-     * Payload: {@code [tag, file, line, runtimepath, helpgrep, index]}, from the {@code WinNew} net
-     * of {@link LuaScripts#WINDOWS}: a help window it took ({@code util/HelpPage}). Ignored unless
-     * each of the first four parts has its type and the tag and file are not empty; the last two
-     * count only together, as a string and a number, else the page goes by its tag.
-     */
-    private void onViewHelp(List<?> args) {
-        if (args.size() < 4 || !(args.get(0) instanceof String tag) || !(args.get(1) instanceof String file)
-                || !(args.get(2) instanceof Number line) || !(args.get(3) instanceof String runtimepath)
-                || tag.isEmpty() || file.isEmpty()) {
+        Integer buffer = toInt(args.get(1));
+        Integer line = toInt(args.get(2));
+        if (buffer == null || line == null || buffer < 1 || line < 1) {
             return;
         }
-        String grep = "";
-        int index = 0;
-        if (args.size() >= 6 && args.get(4) instanceof String pattern && args.get(5) instanceof Number n
-                && !pattern.isEmpty() && n.intValue() > 0) {
-            grep = pattern;
-            index = n.intValue();
-        }
-        sink.onViewContent(new HelpPage(tag, file, line.intValue(), runtimepath, grep, index));
+        sink.onViewContent(new PageBuffer(kind, buffer, line));
     }
 
     private void onWindowClosed(List<?> args) {

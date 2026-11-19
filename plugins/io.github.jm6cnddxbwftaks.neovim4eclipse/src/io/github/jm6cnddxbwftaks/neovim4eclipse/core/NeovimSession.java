@@ -31,31 +31,32 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimErrorException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandOrigin;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Grids;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewportSize;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
 /**
  * Façade over one embedded {@code nvim --embed} process, through the plug-in's own msgpack-rpc
@@ -419,14 +420,31 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Opens another window on page window {@code win}'s buffer (a split of the page: a second
-     * view, each with its own cursor, as {@code :split} gives in Neovim), draws it, and calls
-     * {@code shown} with it on the input thread. Nothing when {@code win} is no page window. Queued.
+     * Shows {@code page}, a buffer Neovim made for a page ({@code :help}, {@code :checkhealth}), in
+     * page window {@code win}, or in a new page window when {@code win} is none
+     * ({@link DocumentBuffers#showPage}), draws it, and calls {@code shown} with the window on the
+     * input thread; not at all when the buffer is gone. Queued. Example: {@code :help options}
+     * with the help editor open: its window changes to {@code options.txt}.
+     */
+    public void showPageBufferAsync(PageBuffer page, int win, IntConsumer shown) {
+        submit("page " + page.title(), Level.WARNING, () -> {
+            int window = buffers.showPage(page, win);
+            if (window != EditorWindow.UNKNOWN) {
+                grids.drawPage(window);
+                shown.accept(window);
+            }
+        });
+    }
+
+    /**
+     * Opens another window like page window {@code win}, on the buffer it shows (a split of the
+     * page: a second view, each with its own cursor, as {@code :split} gives in Neovim), draws it,
+     * and calls {@code shown} with it on the input thread. Nothing when {@code win} is no page
+     * window. Queued.
      */
     public void openSecondPageAsync(int win, IntConsumer shown) {
         submit("second page window", Level.WARNING, () -> {
-            int buf = buffers.pageBuffer(win);
-            int window = buf == EditorWindow.UNKNOWN ? EditorWindow.UNKNOWN : buffers.openPage(buf);
+            int window = buffers.openPageLike(win);
             if (window != EditorWindow.UNKNOWN) {
                 grids.drawPage(window);
                 shown.accept(window);
@@ -846,8 +864,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Notified (on the RPC reader thread) of what a page editor shows: {@code :messages} with
-     * its errors marked and a {@code :checkhealth} report ({@code util/ViewText}), and the page a
-     * {@code :help} reached ({@code util/HelpPage}). None goes to the output popup.
+     * its errors marked ({@code util/ViewText}), and the buffer of a {@code :help} page or a
+     * {@code :checkhealth} report ({@code util/PageBuffer}). None goes to the output popup.
      */
     public void addViewContentListener(Consumer<ViewContent> listener) {
         status.addViewContentListener(listener);
@@ -1066,30 +1084,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         String background = dark ? "dark" : "light";
         submit("'background' " + background, Level.FINE,
                 () -> await(api.execLua(LuaScripts.SET_BACKGROUND, List.of(background))));
-    }
-
-    /**
-     * Puts text yanked in a page editor into this Neovim's register of the same name
-     * ({@link LuaScripts#SET_REGISTER_FROM_VIEW}), so that {@code p} in an editor pastes it. A
-     * plain {@code yy} in a page editor (register {@code ""}) fills the unnamed register, and the
-     * clipboard as well when this Neovim's {@code 'clipboard'} says so. Example:
-     * {@code ("a", "V", ["OK"])} after {@code "ayy} on a line {@code OK}.
-     */
-    public void setRegisterFromViewAsync(String register, String type, List<String> lines) {
-        submit("register from a page editor", Level.FINE,
-                () -> await(api.execLua(LuaScripts.SET_REGISTER_FROM_VIEW, List.of(register, type, lines))));
-    }
-
-    /**
-     * {@code :help topic} in this Neovim, as if typed in the attached editor: the help window it
-     * opens goes to the help editor ({@link LuaScripts#WINDOWS}). For {@code :help} typed in the
-     * messages or checkhealth editor, whose Neovim has neither the user's help pages nor the help
-     * editor's rules ({@link LuaScripts#HELP_HERE}). Example: {@code helpAsync("telescope")}.
-     *
-     * @param topic the help topic, as typed; {@code ""} for {@code :help} alone
-     */
-    public void helpAsync(String topic) {
-        submit("help from a page editor", Level.FINE, () -> await(api.execLua(LuaScripts.HELP_HERE, List.of(topic))));
     }
 
     /**
@@ -2282,8 +2276,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * {@code *Async} call so far has been sent to Neovim (and answered, for the ones that wait for an
      * answer). For tests: {@code NeovimBarrier.pass} waits for it before its own round trip, since
      * a call the test thread sends itself overtakes work still in the queue. Example:
-     * {@code setRegisterFromViewAsync("a", ...)} only queues the {@code setreg}; without this wait a
-     * test could read register {@code a} before it is set. Work held by {@link #whenAnswering}
+     * {@code setBackgroundAsync(true)} only queues the {@code 'background'} change; without this
+     * wait a test could read the option before it is set. Work held by {@link #whenAnswering}
      * while Neovim waits for the rest of a command is not covered: it runs when the wait ends.
      * Completes at once if the session is closed (the queue is dropped). Any thread.
      */
@@ -2418,8 +2412,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile) {
-            buffers.onEntered(bufnr, winid, jumped, projectFile, NeovimSession.this::returnToAttachedBufferAsync,
+        public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows) {
+            buffers.onEntered(bufnr, winid, jumped, projectFile, pageFollows, NeovimSession.this::returnToAttachedBufferAsync,
                     () -> restorePageAsync(winid));
         }
 

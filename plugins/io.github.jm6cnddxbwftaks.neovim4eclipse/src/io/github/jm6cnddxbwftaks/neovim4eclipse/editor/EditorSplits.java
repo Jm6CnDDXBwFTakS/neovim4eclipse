@@ -633,7 +633,7 @@ final class EditorSplits {
 
     /**
      * {@code Ctrl-W key} from {@code part}, which may be a page editor ({@code NeovimPageEditor}:
-     * its second Neovim had no window of its own in that direction): the same rule as from a code
+     * its window is alone in its tabpage, as a code editor's is): the same rule as from a code
      * editor ({@link WindowLayout#focus}), with {@code caret}, in display pixels, as the point
      * whose row or column {@code h j k l} keep. Example: {@code Ctrl-W k} from the help editor
      * below the code goes to the code's editor.

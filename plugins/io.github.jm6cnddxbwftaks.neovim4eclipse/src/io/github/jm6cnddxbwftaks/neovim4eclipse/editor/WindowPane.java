@@ -37,18 +37,23 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageRows;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 
 /**
- * A page shown from a window of the editing Neovim, the one behind the text editors: the messages
- * page. The page's text is a buffer there ({@code LuaScripts.PAGE_TEXT}), the pane shows that
+ * What a page editor ({@link NeovimPageEditor}) shows its page in: a window of the editing Neovim,
+ * the one behind the text editors. The page is a buffer there: the messages buffer the plug-in
+ * fills ({@code LuaScripts.PAGE_TEXT}), or one Neovim made itself, a help page or a
+ * {@code :checkhealth} report ({@code LuaScripts.WINDOWS}' {@code show_page}). The pane shows that
  * buffer's window, alone in a hidden tabpage as an editor's window is (one Eclipse editor, one
  * Neovim window), drawn from its grid ({@link NeovimSession#drawPageWindow}). Being the same
  * Neovim, its registers, search history, colors and mappings are the code's: {@code y} in the page
- * and {@code p} in the code just work, as in a terminal Neovim.
+ * and {@code p} in the code just work, as in a terminal Neovim, and in help {@code Ctrl-]} follows
+ * the user's own help pages.
  *
  * <h2>The focus</h2>
  * When the pane's canvas gets the keyboard, the page takes the focus as Neovim sees it: Neovim
@@ -66,7 +71,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  *
  * <p>UI thread, except the session's callbacks, which hop to it.
  */
-final class WindowPane implements PagePane {
+final class WindowPane {
 
     /** What the editor holding the pane does for it. UI thread. */
     interface Host {
@@ -363,7 +368,6 @@ final class WindowPane implements PagePane {
         });
     }
 
-    @Override
     public GridCanvas canvas() {
         return canvas;
     }
@@ -394,14 +398,18 @@ final class WindowPane implements PagePane {
     }
 
     /**
-     * Shows {@code text} (the message history), in the colors of the editor it came from until
-     * Neovim's own arrive: fills the page's buffer, and opens this pane's window on it the first
-     * time ({@link NeovimSession#showPageTextAsync}).
+     * Shows {@code content}, in the colors of the editor it came from until Neovim's own arrive:
+     * the message history fills the messages buffer ({@link NeovimSession#showPageTextAsync}); a
+     * buffer Neovim made (a help page, a {@code :checkhealth} report) goes into this pane's window
+     * ({@link NeovimSession#showPageBufferAsync}). Either opens the pane's window the first time.
      */
-    void show(ViewText text, int fg, int bg) {
+    void show(ViewContent content, int fg, int bg) {
         foreground = fg;
         background = bg;
-        session.showPageTextAsync(text, window, this::shown);
+        switch (content) {
+            case ViewText text -> session.showPageTextAsync(text, window, this::shown);
+            case PageBuffer page -> session.showPageBufferAsync(page, window, this::shown);
+        }
     }
 
     /**
@@ -414,9 +422,21 @@ final class WindowPane implements PagePane {
         session.openSecondPageAsync(other, this::shown);
     }
 
-    /** The page's window is open (input thread): kept, and given the focus if the pane has the keyboard. */
+    /**
+     * The page's window is open (input thread): kept, and given the focus if the pane has the
+     * keyboard. A window that opens after the editor closed (a {@code :checkhealth} whose editor
+     * closed meanwhile) is closed again, so no page window is left in a hidden tabpage.
+     */
     private void shown(int win) {
-        onUi(() -> {
+        if (disposed || canvas.isDisposed()) {
+            session.closePageWindowAsync(win);
+            return;
+        }
+        canvas.getDisplay().asyncExec(() -> {
+            if (disposed || canvas.isDisposed()) {
+                session.closePageWindowAsync(win);
+                return;
+            }
             window = win;
             if (canvas.isFocusControl()) {
                 takeFocus();
@@ -424,7 +444,6 @@ final class WindowPane implements PagePane {
         });
     }
 
-    @Override
     public void setFocus() {
         if (!canvas.isDisposed()) {
             canvas.setFocus();
@@ -520,7 +539,7 @@ final class WindowPane implements PagePane {
         }
     }
 
-    /** Tab, Shift+Tab, Esc and Enter come as traversals: kept here, and Tab sent ({@link ScreenPane} does the same). */
+    /** Tab, Shift+Tab, Esc and Enter come as traversals: kept here, and Tab sent, as the {@code q:} panel does. */
     private void onTraverse(TraverseEvent e) {
         e.doit = false;
         if (window != EditorWindow.UNKNOWN && (e.detail == SWT.TRAVERSE_TAB_NEXT || e.detail == SWT.TRAVERSE_TAB_PREVIOUS)) {
@@ -528,7 +547,6 @@ final class WindowPane implements PagePane {
         }
     }
 
-    @Override
     public void sendKey(String key) {
         if (window != EditorWindow.UNKNOWN) {
             takeFocus();
@@ -568,7 +586,6 @@ final class WindowPane implements PagePane {
         return measuredHeight;
     }
 
-    @Override
     public void dispose() {
         if (disposed) {
             return;

@@ -970,24 +970,20 @@ The user has had a few errors and types `:messages` and Enter in an attached edi
    above. The code, activated, takes the focus back (`NeovimEditorController.takeFocusBack`). `q`
    runs `:Eclipse quit` from the page's window, which closes the page editor and its window.
 
-`:checkhealth` takes another road to its editor: its report opens in a Neovim window Eclipse
-cannot show, and the `WinNew` net (`LuaScripts.WINDOWS`) reads the lines, closes the window, wipes
-the buffer and sends `eclipse_view_text`.
-
-`:help help-context` takes the same net, with a page instead of text. Neovim opens its help
-window; once the command is over, the net sees `'buftype'` `help` and sends
-`eclipse_view_help("help-context", "helphelp.txt", 27, rtp)`: the nearest tag above the cursor,
-the file's name, the line and `'runtimepath'`. No path crosses; the second Neovim finds the page
-itself. The opener sees a `HelpPage`, not a `ViewText` (`util/ViewContent` is sealed, so a
-`switch` over it names both), and opens the help editor, a tab beside the messages editor, with a
-second Neovim of the help profile (`core/HelpProfile`). `SCREEN_SHOW_HELP` sets the path, runs
-`:help help-context` and puts the cursor on line 27. Why one editor per kind: help should run the
-user's help plug-ins, as Neovim does; text should meet none of them. Keeping them apart is one
-check, the kind, rather than a list of what each script may do. Design:
-[ARCHITECTURE.md](ARCHITECTURE.md), decision 10. Tests: `ScreenGridTest`, `ViewTextTest`,
-`PageKindTest`, `PagePlacementTest`, `screen_setup_spec.lua`, `view_scripts_spec.lua`,
-`windows_spec.lua`, `ScreenSessionIntegrationTest`, `NeovimPagesEndToEndTest`,
-`NeovimPageEditorEndToEndTest`.
+`:checkhealth` and `:help` take another road to their editors: Neovim opens a window Eclipse
+cannot show, for the report or the help page, and once the command is over the `WinNew` net
+(`LuaScripts.WINDOWS`) sees what it is (the report's filetype, name and scratch buffer;
+`'buftype'` `help`). It keeps the buffer, goes back to the window the command came from, closes the
+new window, and sends `eclipse_view_page("help", 7, 27)`: the kind, the buffer, the line the cursor
+was on. The opener sees a `PageBuffer`, not a `ViewText` (`util/ViewContent` is sealed, so a
+`switch` over it names both), and opens the help editor, a tab beside the messages editor, whose
+pane shows that buffer in a page window (`WINDOWS.show_page`), line 27 at the top. In that window
+`Ctrl-]` puts another help buffer: `SETUP`'s `BufEnter` asks `WINDOWS.follow_page`, which makes it
+the page's, as Vim's help window moves on; any other buffer is put back. Every page buffer gets
+write hooks that answer E382, so a help file, a real file, is never written from its page. Design:
+[ARCHITECTURE.md](ARCHITECTURE.md), decision 10. Tests: `ViewTextTest`, `PageKindTest`,
+`PagePlacementTest`, `view_scripts_spec.lua`, `windows_spec.lua`, `NeovimSessionIntegrationTest`,
+`NeovimPagesEndToEndTest`, `NeovimPageEditorEndToEndTest`.
 
 ### 3.3 Insert mode
 

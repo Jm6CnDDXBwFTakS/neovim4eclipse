@@ -8,26 +8,20 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Text for a page editor: what the editing Neovim produced and the second Neovim shows
- * ({@code core/ScreenSession}). Only text goes over, never a file name, so the second Neovim has
- * nothing to open and nothing to write. Example: {@code :messages} becomes
- * {@code ViewText("messages", "", ["E486: Pattern not found: x", "3 lines yanked"],
- * [(0, "ErrorMsg")])}.
+ * Text for a page editor: the message history ({@code :messages}), which arrives as UI events, not
+ * as a buffer, and which the plug-in puts into a page buffer of the editing Neovim
+ * ({@code LuaScripts.PAGE_TEXT}). Example: {@code :messages} becomes
+ * {@code ViewText("messages", ["E486: Pattern not found: x", "3 lines yanked"], [(0, "ErrorMsg")])}.
  *
- * @param title      what the page editor's title says after "Neovim: ", such as {@code messages} or
- *                   {@code checkhealth}
- * @param filetype   the filetype the second Neovim gives the text, for Neovim's own highlighting
- *                   ({@code checkhealth}); {@code ""} for none
+ * @param title      what the page editor's title says after "Neovim: ": {@code messages}
  * @param lines      the text, one string per line, without line breaks
- * @param highlights lines drawn in a highlight group of Neovim's, on top of the filetype's
+ * @param highlights lines drawn in a highlight group of Neovim's
  */
-public record ViewText(String title, String filetype, List<String> lines, List<LineHighlight> highlights)
+public record ViewText(String title, List<String> lines, List<LineHighlight> highlights)
         implements ViewContent {
 
     /** The title of {@link #messages}. */
     public static final String MESSAGES = "messages";
-    /** The title and filetype of {@link #checkhealth}. */
-    public static final String CHECKHEALTH = "checkhealth";
 
     /** Message kinds that are warnings, drawn in {@code WarningMsg}. */
     static final Set<String> WARNING_KINDS = Set.of("wmsg");
@@ -45,7 +39,7 @@ public record ViewText(String title, String filetype, List<String> lines, List<L
      * {@code :messages} as its page editor shows it: each entry on its own lines, an error in
      * {@code ErrorMsg}, a warning in {@code WarningMsg}, the rest in the default colors. A message
      * of three lines (a Lua error and its traceback) colors all three. No highlight definitions are
-     * copied: the second Neovim draws its own {@code ErrorMsg}.
+     * copied: the page draws Neovim's own {@code ErrorMsg}.
      */
     public static ViewText messages(MessageEvent.History history) {
         List<String> lines = new ArrayList<>();
@@ -59,12 +53,7 @@ public record ViewText(String title, String filetype, List<String> lines, List<L
                 lines.add(line);
             }
         }
-        return new ViewText(MESSAGES, "", lines, highlights);
-    }
-
-    /** A {@code :checkhealth} report, as its buffer held it; Neovim's {@code checkhealth} filetype colors it. */
-    public static ViewText checkhealth(List<String> lines) {
-        return new ViewText(CHECKHEALTH, CHECKHEALTH, lines, List.of());
+        return new ViewText(MESSAGES, lines, highlights);
     }
 
     /** The highlight group a message of {@code kind} is drawn in, {@code ""} for the default colors. */

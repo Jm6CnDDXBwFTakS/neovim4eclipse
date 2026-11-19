@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -102,16 +101,6 @@ final class NeovimConnection implements AutoCloseable {
         return uiOptions(List.of("rgb", "ext_cmdline", "ext_messages", "ext_linegrid", "ext_multigrid", "ext_popupmenu"));
     }
 
-    /**
-     * The UI a second Neovim attaches as, the one whose whole screen a page editor draws
-     * ({@link ScreenSession}): 24-bit color and {@code ext_linegrid} only. Everything else, the
-     * command line and the messages included, Neovim draws into its one grid, as on a terminal, so
-     * the page editor shows the screen as it is and needs no command box of its own
-     * ({@code util/ScreenGrid}). The "Press ENTER" prompt that long messages would bring is
-     * avoided inside that Neovim, by its own {@code ui2} ({@link LuaScripts#SCREEN_SETUP}).
-     */
-    static final Map<String, Object> SCREEN_UI = uiOptions(List.of("rgb", "ext_linegrid"));
-
     /** Every {@code nvim_ui_attach} option the plug-in names, those in {@code on} true, in a fixed order. */
     private static Map<String, Object> uiOptions(List<String> on) {
         Map<String, Object> options = new LinkedHashMap<>();
@@ -123,17 +112,10 @@ final class NeovimConnection implements AutoCloseable {
     }
 
     /**
-     * What {@code nvim_ui_attach} is called with, the screen's size in cells and the UI options, and
-     * the folder the process starts in. Example: the editing Neovim's {@code new Ui(120, 40,
-     * TERMINAL_UI, null)}.
-     *
-     * @param directory the process's working folder, or {@code null} for Eclipse's own. A second
-     *                  Neovim gets one of the plug-in's ({@link ScreenSession}): Lua's
-     *                  {@code require} also looks in {@code ./}, so started in a cloned repository's
-     *                  folder (Eclipse launched from there), a module Neovim lacks could be read
-     *                  from that repository.
+     * What {@code nvim_ui_attach} is called with: the screen's size in cells and the UI options.
+     * Example: the editing Neovim's {@code new Ui(120, 40, TERMINAL_UI)}.
      */
-    record Ui(int width, int height, Map<String, Object> options, Path directory) {
+    record Ui(int width, int height, Map<String, Object> options) {
     }
 
     /** Upper bound for the requests made while opening. */
@@ -186,20 +168,14 @@ final class NeovimConnection implements AutoCloseable {
      * @throws Exception if the process cannot start or does not answer in time
      */
     static NeovimConnection open(String nvimPath, List<String> extraArgs, String clientVersion) throws Exception {
-        return open(nvimPath, extraArgs, clientVersion, new Ui(UI_WIDTH, UI_HEIGHT, TERMINAL_UI, null));
+        return open(nvimPath, extraArgs, clientVersion, new Ui(UI_WIDTH, UI_HEIGHT, TERMINAL_UI));
     }
 
-    /**
-     * {@link #open(String, List, String)} with a UI of the caller's: a second Neovim attaches with
-     * {@link #SCREEN_UI} at the size of the page editor that shows it ({@link ScreenSession}).
-     */
+    /** {@link #open(String, List, String)} with the UI {@code ui}. */
     static NeovimConnection open(String nvimPath, List<String> extraArgs, String clientVersion, Ui ui) throws Exception {
         List<String> cmd = NvimExecutable.embedCommand(nvimPath, extraArgs);
         // Inherit the environment: Neovim and the programs it runs (:!, :terminal) need PATH and the rest.
         ProcessBuilder pb = new ProcessBuilder(cmd);
-        if (ui.directory() != null) {
-            pb.directory(ui.directory().toFile());
-        }
         NvimExecutable.prepareEnvironment(pb.environment(), PlatformUtil.isWindows());
         Process process = pb.start();
         LOG.info(() -> "Started Neovim pid=" + process.pid() + " cmd=" + cmd);
@@ -458,25 +434,6 @@ final class NeovimConnection implements AutoCloseable {
 
     boolean isAlive() {
         return process != null && process.isAlive();
-    }
-
-    /**
-     * Completes when the Neovim process has ended, for whatever reason: {@link #close}, a
-     * {@code :qa!}, or the user's {@code :q} in a Neovim whose last window that was
-     * ({@link ScreenSession}). Completed on a thread of the JDK's, so what is chained to it must
-     * not touch SWT.
-     */
-    CompletableFuture<Void> ended() {
-        return process.onExit().thenApply(p -> null);
-    }
-
-    /**
-     * Says that Neovim is about to end on its own, so that the end of its output is logged as
-     * expected, not as "Neovim exited unexpectedly" ({@link RpcChannel#closing()}). Example: a
-     * second Neovim reports {@code VimLeavePre} when the user types {@code :q}.
-     */
-    void expectEnd() {
-        channel.closing();
     }
 
     /**

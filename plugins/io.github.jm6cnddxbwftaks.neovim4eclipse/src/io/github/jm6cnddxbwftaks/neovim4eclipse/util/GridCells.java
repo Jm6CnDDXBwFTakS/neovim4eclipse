@@ -8,9 +8,8 @@ import java.util.List;
 
 /**
  * The cells of one Neovim grid: its size, each cell's text and highlight id, changed by the grid
- * events ({@link GridEvent}). Shared by {@link Grids} (the editing Neovim's many grids, one per
- * window) and {@link ScreenGrid} (a second Neovim's one screen), so both read the events the same
- * way. Not thread-safe: used on the RPC reader thread only, and copied into a {@link GridSnapshot}
+ * events ({@link GridEvent}), for {@link Grids} (the editing Neovim's many grids, one per window).
+ * Not thread-safe: used on the RPC reader thread only, and copied into a {@link GridSnapshot}
  * before anything leaves it.
  *
  * <p>Cells are kept row by row in two flat arrays: cell {@code (row, col)} is at

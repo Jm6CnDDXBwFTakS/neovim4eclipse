@@ -17,8 +17,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
  * a split's second half has an input of its own ({@link #another}). Example:
  * {@code new NeovimPageInput(PageKind.HELP)} is named "Neovim: help".
  *
- * <p>Not saved with the workbench ({@link #getPersistable} is {@code null}): its second Neovim
- * ended with Eclipse, and there is nothing to show at the next start. Eclipse still keeps a tab for
+ * <p>Not saved with the workbench ({@link #getPersistable} is {@code null}): its window was in the
+ * Neovim that ended with Eclipse, and there is nothing to show at the next start. Eclipse still keeps a tab for
  * it in its saved layout, which {@link NeovimPageEditor#closeLeftovers} closes at the start.
  */
 final class NeovimPageInput implements IEditorInput {

@@ -19,6 +19,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimConnectionClosedException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EnterDecision;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 
 /**
  * The Neovim buffers that mirror Eclipse documents, the windows of the editors that show them, and
@@ -234,6 +235,40 @@ final class DocumentBuffers {
     }
 
     /**
+     * Shows {@code page}'s buffer in page window {@code win}, or in a new page window when
+     * {@code win} is no open one ({@link LuaScripts#SHOW_PAGE_BUFFER}), with the topic's line at the
+     * top. Returns the window, or {@link EditorWindow#UNKNOWN} when the buffer is gone.
+     */
+    int showPage(PageBuffer page, int win) throws Exception {
+        int target = pageWindows.containsKey(win) ? win : EditorWindow.UNKNOWN;
+        Object answer = await(api.execLua(LuaScripts.SHOW_PAGE_BUFFER, List.of(String.valueOf(target),
+                String.valueOf(page.buffer()), String.valueOf(page.line()), page.title())));
+        if (!(answer instanceof Number n) || n.intValue() < 1) {
+            return EditorWindow.UNKNOWN;
+        }
+        pageWindows.put(n.intValue(), page.buffer());
+        return n.intValue();
+    }
+
+    /**
+     * Opens another page window like {@code win}, on its buffer and of its kind
+     * ({@link LuaScripts#OPEN_PAGE_LIKE}): a {@code :split} of the page. Returns its id, or
+     * {@link EditorWindow#UNKNOWN} when {@code win} is no page window.
+     */
+    int openPageLike(int win) throws Exception {
+        if (!pageWindows.containsKey(win)) {
+            return EditorWindow.UNKNOWN;
+        }
+        Object answer = await(api.execLua(LuaScripts.OPEN_PAGE_LIKE, List.of(String.valueOf(win))));
+        if (!(answer instanceof List<?> pair) || pair.size() < 2 || !(pair.get(0) instanceof Number w)
+                || !(pair.get(1) instanceof Number b) || w.intValue() < 1) {
+            return EditorWindow.UNKNOWN;
+        }
+        pageWindows.put(w.intValue(), b.intValue());
+        return w.intValue();
+    }
+
+    /**
      * Closes page window {@code win} (its editor closed), quietly ({@link LuaScripts#CLOSE_WINDOW}),
      * and when it had the focus gives the focus back to the attached window. The page's buffer stays
      * for the page's other windows (a split's other half) and the next {@code :messages}.
@@ -257,12 +292,6 @@ final class DocumentBuffers {
         if (focused) {
             returnToAttached(); // the close left Neovim in the home window
         }
-    }
-
-    /** The buffer of page window {@code win}, or {@link EditorWindow#UNKNOWN} when it is no page's. */
-    int pageBuffer(int win) {
-        Integer buf = pageWindows.get(win);
-        return buf == null ? EditorWindow.UNKNOWN : buf;
     }
 
     /** Puts the page's own buffer back into its window {@code win} ({@link LuaScripts#RESTORE_PAGE_WINDOW}). */
@@ -1033,10 +1062,15 @@ final class DocumentBuffers {
      * @param jumped      whether the move is in the window's jump history ({@code :b}, {@code Ctrl-O};
      *                    not {@code :keepjumps})
      * @param projectFile the buffer's file when it is a project's and no document's, else {@code ""}
+     * @param pageFollows whether {@code winid} is a help page's window that took this help buffer as
+     *                    its page ({@code Ctrl-]} in the help editor): it is the page's buffer now
      * @param restorePage puts the page's own buffer back into {@code winid}, a page's window
      */
-    void onEntered(int bufnr, int winid, boolean jumped, String projectFile, Runnable returnBack,
+    void onEntered(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows, Runnable returnBack,
             Runnable restorePage) {
+        if (pageFollows && pageWindows.containsKey(winid)) {
+            pageWindows.put(winid, bufnr);
+        }
         Integer pageBuffer = winid == EditorWindow.UNKNOWN ? null : pageWindows.get(winid);
         enteredByJump = jumped;
         enteredFromPage = pageBuffer != null;

@@ -30,14 +30,14 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HelpPage;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 
 /**
- * The page editor in a real workbench: one per kind, showing its content in a second Neovim,
- * reused for the same kind, refusing a file, closed by {@code q}, and its leftovers closed at the
- * start ({@link NeovimPageEditor#closeLeftovers}).
+ * The page editor in a real workbench: one per kind, showing its content in a window of the
+ * editing Neovim, reused for the same kind, refusing a file, closed by {@code q}, and its leftovers
+ * closed at the start ({@link NeovimPageEditor#closeLeftovers}).
  */
 class NeovimPageEditorEndToEndTest extends EndToEndTestBase {
 
@@ -69,9 +69,19 @@ class NeovimPageEditorEndToEndTest extends EndToEndTestBase {
         return rows.toString();
     }
 
-    private HelpPage helpContext() {
-        String runtimepath = String.valueOf(SessionProbe.lua(session, "return vim.o.runtimepath"));
-        return new HelpPage("help-context", "helphelp.txt", 1, runtimepath);
+    /**
+     * The help buffer of {@code help-context}, made in the editing Neovim without the window net
+     * ({@code :noautocmd}), so that this test hands it to the editor itself.
+     */
+    private PageBuffer helpContext() {
+        Object answer = SessionProbe.lua(session, """
+                vim.cmd('noautocmd help help-context')
+                local buf, line = vim.api.nvim_get_current_buf(), vim.fn.line('.')
+                vim.bo[buf].bufhidden = 'hide'
+                vim.cmd('noautocmd helpclose')
+                return { buf, line }""");
+        List<?> pair = (List<?>) answer;
+        return new PageBuffer(PageBuffer.HELP, ((Number) pair.get(0)).intValue(), ((Number) pair.get(1)).intValue());
     }
 
     @Test

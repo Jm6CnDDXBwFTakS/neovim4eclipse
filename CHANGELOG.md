@@ -22,6 +22,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   an editor beside your code, `:new` opens an untitled editor beside it, and `q` closes it. It
   cannot be changed or written. Restart Neovim closes it
   ([The messages editor](docs/USER_GUIDE.md#the-messages-editor-messages)).
+- **`:help` and `:checkhealth` are windows of your own Neovim too**, and the second Neovim they
+  ran in is gone. Help has your colors, mappings and help scripts; `Ctrl-]`, `Ctrl-T` and `:help`
+  typed there change the page in the same editor, and `:helpgrep`'s matches go through it, from
+  the help editor or your code (`:copen` shows the list as from your code, no longer beside the
+  page). `:checkhealth` shows its report there with your colors, and `:checkhealth` again replaces
+  it. Every write from a page editor is refused, a help file's included
+  ([The page editors](docs/USER_GUIDE.md#the-page-editors-help-messages-checkhealth)).
 
 ### Fixed
 
