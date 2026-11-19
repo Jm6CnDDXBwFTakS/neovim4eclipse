@@ -24,7 +24,7 @@ The safe loop for any upgrade:
 
 | What | Source of truth | Copies (checked by `VersionConsistencyTest` unless noted) |
 |------|-----------------|-----------------------------------------------------------|
-| Java release (minimum JRE) | `<java.release>` in the root `pom.xml` | `.java-version`; `Bundle-RequiredExecutionEnvironment` in both `MANIFEST.MF`; `jre.compilation.profile` in the plug-in's `build.properties`; "JDK/Java/JavaSE-N" in README, CONTRIBUTING, docs/HOWTO_ECLIPSE, docs/LEARNING |
+| Java release (minimum JRE) | `<java.release>` in the root `pom.xml` | listed under `[java.release]` in `releng/version-copies.txt`: `.java-version`; `Bundle-RequiredExecutionEnvironment` in both `MANIFEST.MF`; `jre.compilation.profile` in the plug-in's `build.properties`; "JDK/Java/JavaSE-N" in README, CONTRIBUTING, docs/HOWTO_ECLIPSE, docs/LEARNING |
 | Eclipse release (oldest supported) | `<eclipse-repo.url>` in the root `pom.xml` | the release name (`2024-12`) and its number (`4.34`) where `releng/version-copies.txt` lists them, sections `[eclipse.oldest]` and `[eclipse.oldest.number]` (docs, `feature.xml` with its `org.eclipse.platform` import, workflow comments); the first entry of the smoke job in `update-site.yml` and `rehearse-release.yml` (checked: its number and that its download is that release's). Not checked: the jar versions for `tests/text` and `tests/swt` (the `<eclipse.*.version>` properties). `java releng/tools/eclipse/EclipseUpgrade.java oldest <release>` moves all of them |
 | Eclipse release (newest tested) | the second entry (`eclipse: '4.41'`, its `platform-url` and `platform-sha512`) of the `smoke` job in `.github/workflows/update-site.yml` | the same entry in `rehearse-release.yml`; the README's "tested up to 2026-09 (4.41)" and the copies in sections `[eclipse.newest]` and `[eclipse.newest.number]`. `java releng/tools/eclipse/EclipseUpgrade.java newest` moves them |
 | Embedded library (msgpack-core) | `<msgpack.version>` in the root `pom.xml` | none; `BundleClassPathConsistencyTest` checks the jar list. `plugins/.../licenses/` is compared by `Dependencies.java` |
@@ -114,7 +114,27 @@ property's copies are its section in `releng/version-copies.txt` (`[tycho.versio
 The Java release is the **minimum** Java the plug-in runs on, not the JDK you build with. Building
 with a newer JDK is fine: `--release 21` produces Java 21 class files on JDK 25 too.
 
-To raise it (example: 21 to 25):
+**The tool** (a JDK of release 22 or newer runs it, as the Release tool) does steps 3 to 5 and
+proves the result:
+
+```bash
+java releng/tools/javarelease/JavaUpgrade.java 25 --java /usr/lib/jvm/temurin-25-jdk
+```
+
+It raises only to a long-term-support release (17, 21, 25, 29: every fourth since 17, the ones
+with years of updates; Eclipse raises its own minimum only to one), higher than today's, and wants
+a JDK of exactly that release (`--java` names its home; on macOS `…/Contents/Home`). It downloads
+no JDK. After y/N it sets `<java.release>`, rewrites every copy listed under `[java.release]` in
+`releng/version-copies.txt`, and adds the changelog entry users need
+(**Java 25 or newer** is now required…). Then, with `JAVA_HOME` and `PATH` on that JDK, so that
+`./mvnw` builds with it: `EclipseUpgrade.java smoke`, which installs the plug-in into the oldest
+and the newest pinned Eclipse started on that Java, and `LikeCi --all`. Only after both does it
+commit *Raise the Java release to 25*; a failure puts every file back. If the oldest Eclipse does
+not start on the new Java (4.34 refuses 24 and newer), raise it first, on today's Java (next
+section). `--no-tests` skips the proof, `--dry-run` shows the steps. Steps 1, 2 and 6 stay yours,
+and `LikeCi --all` and `smoke` on macOS and Windows.
+
+To raise it by hand (example: 21 to 25):
 
 1. Check that the oldest supported Eclipse (`eclipse-repo.url`) runs on that Java and knows the
    execution environment `JavaSE-25`. If not, raise the Eclipse release first (next section).

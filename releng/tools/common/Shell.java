@@ -84,7 +84,7 @@ public final class Shell {
     public Result capture(List<String> command, Map<String, String> env) {
         try {
             ProcessBuilder pb = new ProcessBuilder(command(command)).directory(root.toFile());
-            pb.environment().putAll(env);
+            putEnv(pb.environment(), env);
             Process p = pb.start();
             p.getOutputStream().close();
             // Both streams at once: a program that fills one pipe while the other is read would block.
@@ -123,10 +123,32 @@ public final class Shell {
         }
     }
 
+    /**
+     * Puts {@code extra} into a child's environment, each under the name it already has there in
+     * another case: Windows spells {@code PATH} as {@code Path}, and a second variable
+     * {@code PATH} beside it would not replace it.
+     */
+    private static void putEnv(Map<String, String> environment, Map<String, String> extra) {
+        for (Map.Entry<String, String> e : extra.entrySet()) {
+            String name = environment.keySet().stream().filter(k -> k.equalsIgnoreCase(e.getKey())).findFirst().orElse(e.getKey());
+            environment.put(name, e.getValue());
+        }
+    }
+
     /** Runs {@code command} on this terminal (its output shows as it comes); its exit status. */
     public int show(List<String> command) {
+        return show(command, Map.of());
+    }
+
+    /**
+     * {@link #show(List)} with extra environment variables. Example: {@code JAVA_HOME} for a test
+     * run on another JDK than this tool's, which {@code ./mvnw} then builds with.
+     */
+    public int show(List<String> command, Map<String, String> env) {
         try {
-            return new ProcessBuilder(command(command)).directory(root.toFile()).inheritIO().start().waitFor();
+            ProcessBuilder pb = new ProcessBuilder(command(command)).directory(root.toFile()).inheritIO();
+            putEnv(pb.environment(), env);
+            return pb.start().waitFor();
         } catch (IOException e) {
             System.err.println(command.get(0) + ": " + e.getMessage());
             return 127;

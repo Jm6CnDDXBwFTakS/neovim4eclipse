@@ -14,6 +14,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- For contributors: `releng/tools/javarelease/JavaUpgrade.java` raises the Java release the plug-in
+  needs to a newer long-term-support release, with every copy of it and the changelog entry, and
+  commits only after the plug-in installs into the oldest and the newest Eclipse on that Java and
+  every test passes there.
 - For contributors: the Release tool's `next --next 0.3.0` also deletes, after asking, the
   `release/0.2.31` an earlier run cut by default (a `go --yes` that ran to its end), here and on
   origin, while that branch holds only the commit that sets its version. A branch with any other
