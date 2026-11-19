@@ -25,10 +25,18 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- On Windows, `XDG_DATA_HOME`, `LOCALAPPDATA`, `HOME` and `SHELL` count under any spelling of their
+  names (`Xdg_Data_Home`), as Windows and Neovim read them. Spelled another way, the plug-in kept
+  its own folder elsewhere than the Neovim it started kept its data, and a `Shell` set by a
+  Unix-style shell still reached Neovim, where `:!` then failed. If you have set one of the folder
+  variables in another spelling, the plug-in's folder is now the one it names, and a Neovim that
+  *Get Neovim* installed in the old folder is offered again.
 - For contributors: on Windows the tools find the programs on the search path (`gh`, `gpg`, an
   `eclipse` named without its folder) in a console that spells the variable `Path`, as cmd and
   PowerShell opened from the Start menu do. They looked the variable up by the exact name `PATH`,
-  which Git Bash has, and so found no program anywhere else.
+  which Git Bash has, and so found no program anywhere else. A variable the tools set for a program
+  they start (`XDG_DATA_HOME`, `JAVA_HOME`, `JAVA_TOOL_OPTIONS`) replaces the one spelled another
+  way there, and no longer sits beside it.
 
 ## [0.2.30] - 2026-11-19
 

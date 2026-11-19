@@ -19,6 +19,7 @@ import common.EclipseCopy;
 import common.Folders;
 import common.PgpKey;
 import common.Settings;
+import common.Shell;
 import common.ToolCache;
 import common.ToolFailure;
 import common.UpdateSite;
@@ -571,7 +572,7 @@ public final class InstallCheckTool {
         Files.createDirectories(xdg);
         Path log = root.resolve("eclipse.log");
         ProcessBuilder builder = new ProcessBuilder(program.toString(), "-data", workspace.toString()).directory(root.toFile());
-        builder.environment().put("XDG_DATA_HOME", xdg.toString());
+        Shell.putEnv(builder.environment(), Map.of("XDG_DATA_HOME", xdg.toString()));
         builder.redirectErrorStream(true).redirectOutput(log.toFile());
         builder.start();
         System.out.println("Started " + program + " -data " + workspace + "\n  with XDG_DATA_HOME=" + xdg + ", output in " + log);

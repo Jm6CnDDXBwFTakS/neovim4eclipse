@@ -12,12 +12,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
+import common.EclipseCopy;
 import common.Shell;
 
 /**
@@ -27,11 +30,20 @@ import common.Shell;
  * {@code System.getenv("PATH")} finds it; the map's {@code get("PATH")} compares the keys exactly
  * and finds nothing, so every "is it on PATH" answered no in a console opened from the Start menu
  * (a shell that spells it {@code PATH}, as Git Bash does, hid that).
+ *
+ * <p>The same goes for a child's environment, {@code ProcessBuilder.environment()}: a tool sets a
+ * variable there with {@link Shell#putEnv}, under the name it already has ({@link Shell#nameIn}),
+ * since a {@code PATH} put beside {@code Path} gives the child two.
  */
 class ToolEnvironmentTest {
 
-    /** A call of {@code System.getenv()} without a name: the map. */
-    private static final Pattern THE_MAP = Pattern.compile("System\\s*\\.\\s*getenv\\s*\\(\\s*\\)");
+    /**
+     * A call of {@code System.getenv()} without a name (the map), or a variable read or set by its
+     * exact name in a child's {@code ProcessBuilder.environment()}, which is such a map too: a
+     * tool sets a child's variable with {@link Shell#putEnv}, under the name it has there.
+     */
+    private static final Pattern THE_MAP = Pattern.compile("System\\s*\\.\\s*getenv\\s*\\(\\s*\\)"
+            + "|\\.\\s*environment\\s*\\(\\s*\\)\\s*\\.\\s*(put|putAll|get|getOrDefault|remove|containsKey)\\s*\\(");
 
     private static Path root() {
         Path dir = Path.of("").toAbsolutePath();
@@ -63,14 +75,18 @@ class ToolEnvironmentTest {
                 }
             }
         }
-        assertEquals(List.of(), wrong, "read a variable with Shell.env(name, orElse) or System.getenv(name):"
-                + " the map System.getenv() returns has no PATH on Windows, where the name is Path");
+        assertEquals(List.of(), wrong, "read a variable with Shell.env(name, orElse) or System.getenv(name), and set a child's"
+                + " with Shell.putEnv: a map of the environment has no PATH on Windows, where the name is Path");
     }
 
     @Test
     void theRuleSeesTheMapAndNotALookupByName() {
         assertTrue(takesTheMap("for (String dir : System.getenv().getOrDefault(\"PATH\", \"\").split(File.pathSeparator)) {"));
         assertTrue(takesTheMap("Map<String, String> env = System.getenv();"));
+        assertTrue(takesTheMap("builder.environment().put(\"XDG_DATA_HOME\", xdg.toString());"));
+        assertTrue(takesTheMap("String options = builder.environment().getOrDefault(\"JAVA_TOOL_OPTIONS\", \"\");"));
+        assertFalse(takesTheMap("Shell.putEnv(builder.environment(), Map.of(\"XDG_DATA_HOME\", xdg.toString()));"));
+        assertFalse(takesTheMap("putEnv(pb.environment(), env);"));
         assertFalse(takesTheMap("String path = System.getenv(\"PATH\");"));
         assertFalse(takesTheMap("String value = System.getenv(name);"));
         assertFalse(takesTheMap("// System.getenv() returns does not, and would give no PATH at all there."), "a comment may name it");
@@ -81,6 +97,32 @@ class ToolEnvironmentTest {
     void aVariableThatIsNotSetGivesTheFallback() {
         assertEquals("fallback", Shell.env("NEOVIM4ECLIPSE_NO_SUCH_VARIABLE", "fallback"));
         assertEquals(System.getenv("PATH"), Shell.env("PATH", null));
+    }
+
+    @Test
+    void aChildsVariableKeepsTheNameItHasOnWindows() {
+        // Windows: PATH is the variable spelled Path; a second one beside it would not replace it.
+        assertEquals("Path", Shell.nameIn(Map.of("Path", "C:\\bin"), "PATH", true));
+        assertEquals("PATH", Shell.nameIn(Map.of("PATH", "C:\\bin"), "PATH", true));
+        assertEquals("JAVA_HOME", Shell.nameIn(Map.of("Path", "C:\\bin"), "JAVA_HOME", true), "not there yet: the name as given");
+        // Linux and macOS: path and PATH are two variables.
+        assertEquals("PATH", Shell.nameIn(Map.of("path", "/elsewhere"), "PATH", false));
+    }
+
+    @Test
+    void englishIsAddedToTheJavaOptionsThatAreThere() {
+        Map<String, String> none = new HashMap<>();
+        EclipseCopy.english(none, true);
+        assertEquals(Map.of("JAVA_TOOL_OPTIONS", "-Duser.language=en -Duser.country=US"), none);
+
+        Map<String, String> otherCase = new HashMap<>(Map.of("Java_Tool_Options", "-Xmx1g"));
+        EclipseCopy.english(otherCase, true);
+        assertEquals(Map.of("Java_Tool_Options", "-Xmx1g -Duser.language=en -Duser.country=US"), otherCase, "one variable on Windows");
+
+        Map<String, String> linux = new HashMap<>(Map.of("java_tool_options", "-Xmx1g"));
+        EclipseCopy.english(linux, false);
+        assertEquals(Map.of("java_tool_options", "-Xmx1g", "JAVA_TOOL_OPTIONS", "-Duser.language=en -Duser.country=US"), linux,
+                "another variable on Linux and macOS, which Java does not read");
     }
 
     @Test

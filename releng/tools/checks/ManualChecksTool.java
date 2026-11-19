@@ -26,6 +26,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import common.EclipseCopy;
+import common.Shell;
 import common.ToolFailure;
 
 /**
@@ -747,7 +748,7 @@ public final class ManualChecksTool {
         // or anything else written by a relative path lands with the checks, not as an untracked file.
         ProcessBuilder builder = new ProcessBuilder(command).directory(root.toFile());
         if (!card.launch().equals("normal")) {
-            builder.environment().put("XDG_DATA_HOME", xdg.toString());
+            Shell.putEnv(builder.environment(), Map.of("XDG_DATA_HOME", xdg.toString()));
         }
         Path log = root.resolve("eclipse-" + card.id() + ".log");
         builder.redirectErrorStream(true).redirectOutput(log.toFile());

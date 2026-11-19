@@ -124,15 +124,31 @@ public final class Shell {
     }
 
     /**
-     * Puts {@code extra} into a child's environment, each under the name it already has there in
-     * another case: Windows spells {@code PATH} as {@code Path}, and a second variable
-     * {@code PATH} beside it would not replace it.
+     * Puts {@code extra} into a child's environment, each under the name it already has there
+     * ({@link #nameIn}). The tools set a child's variable through this, never with a plain
+     * {@code environment().put}: with {@code Xdg_Data_Home} set in a Windows console, a put of
+     * {@code XDG_DATA_HOME} would give the child both.
      */
-    private static void putEnv(Map<String, String> environment, Map<String, String> extra) {
+    public static void putEnv(Map<String, String> environment, Map<String, String> extra) {
         for (Map.Entry<String, String> e : extra.entrySet()) {
-            String name = environment.keySet().stream().filter(k -> k.equalsIgnoreCase(e.getKey())).findFirst().orElse(e.getKey());
-            environment.put(name, e.getValue());
+            environment.put(nameIn(environment, e.getKey(), WINDOWS), e.getValue());
         }
+    }
+
+    /**
+     * The name the variable {@code name} has in a child's {@code environment}. On Windows the
+     * spelling already there in another case: Windows spells {@code PATH} as {@code Path}, and a
+     * second variable {@code PATH} beside it would not replace it. Elsewhere, and for a variable
+     * that is not there yet, {@code name} itself: Linux and macOS tell {@code path} from
+     * {@code PATH}, two variables.
+     *
+     * @param windows whether Windows' rule for names applies
+     */
+    public static String nameIn(Map<String, String> environment, String name, boolean windows) {
+        if (!windows || environment.containsKey(name)) {
+            return name;
+        }
+        return environment.keySet().stream().filter(k -> k.equalsIgnoreCase(name)).findFirst().orElse(name);
     }
 
     /** Runs {@code command} on this terminal (its output shows as it comes); its exit status. */

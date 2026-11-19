@@ -109,6 +109,24 @@ class PluginFoldersTest {
                 windows(Map.of("XDG_DATA_HOME", "relative", "LOCALAPPDATA", "  ", "HOME", "home")));
     }
 
+    /**
+     * Windows ignores the case of a variable's name, and Neovim reads {@code Xdg_Data_Home} and
+     * {@code localappdata} as it reads the usual spellings: the plug-in's folder must not end up
+     * elsewhere than Neovim's.
+     */
+    @Test
+    void windowsReadsTheVariablesUnderAnySpelling() {
+        assertEquals(XDG, windows(Map.of("Xdg_Data_Home", XDG.toString(), "LOCALAPPDATA", LOCAL_APP_DATA.toString())));
+        assertEquals(LOCAL_APP_DATA, windows(Map.of("LocalAppData", LOCAL_APP_DATA.toString(), "Home", HOME.toString())));
+        assertEquals(HOME.resolve("AppData").resolve("Local"), windows(Map.of("Home", HOME.toString())));
+    }
+
+    /** On Linux and macOS {@code Xdg_Data_Home} is another variable, which Neovim does not read. */
+    @Test
+    void unixReadsOnlyTheExactNames() {
+        assertEquals(Path.of(USER_HOME, ".local", "share"), unix(Map.of("Xdg_Data_Home", XDG.toString(), "Home", HOME.toString())));
+    }
+
     @Test
     void thePluginsFoldersAreInTheDataHome() {
         assertEquals(PluginFolders.dataHome().resolve("neovim4eclipse-plugin"), PluginFolders.pluginFolder());

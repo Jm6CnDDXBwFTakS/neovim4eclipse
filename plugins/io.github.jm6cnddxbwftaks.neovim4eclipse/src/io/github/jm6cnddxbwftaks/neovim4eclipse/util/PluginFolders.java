@@ -43,7 +43,10 @@ import java.util.Map;
  *   no LOCALAPPDATA, no HOME                           C:\Users\you\AppData\Local\nvim-data
  *   NVIM_APPNAME=neovim4eclipse-plugin/tests           C:\Users\you\AppData\Local\neovim4eclipse-plugin\tests-data
  * </pre>
- * So {@code HOME} matters only when {@code LOCALAPPDATA} is missing.
+ * So {@code HOME} matters only when {@code LOCALAPPDATA} is missing. Windows ignores the case of a
+ * variable's name and Neovim reads the variables so ({@code Xdg_Data_Home=C:\xdg-test} gives
+ * {@code C:\xdg-test\nvim-data} too), so on Windows this rule finds them under any spelling
+ * ({@link EnvVariables}).
  *
  * <p>Eclipse sees only the environment of whatever started it. A variable set in a shell's startup
  * file is missing when Eclipse starts from the macOS Dock or the Windows Start menu, and the folder
@@ -73,17 +76,17 @@ public final class PluginFolders {
      * @param windows  whether to apply the Windows rule
      */
     static Path dataHome(Map<String, String> env, String userHome, boolean windows) {
-        Path xdg = absolute(env.get("XDG_DATA_HOME"));
+        Path xdg = absolute(EnvVariables.get(env, "XDG_DATA_HOME", windows));
         if (xdg != null) {
             return xdg;
         }
         if (windows) {
-            Path localAppData = absolute(env.get("LOCALAPPDATA"));
+            Path localAppData = absolute(EnvVariables.get(env, "LOCALAPPDATA", true));
             if (localAppData != null) {
                 return localAppData;
             }
         }
-        Path home = absolute(env.get("HOME"));
+        Path home = absolute(EnvVariables.get(env, "HOME", windows));
         Path base = home != null ? home : Path.of(userHome);
         return windows ? base.resolve("AppData").resolve("Local") : base.resolve(".local").resolve("share");
     }

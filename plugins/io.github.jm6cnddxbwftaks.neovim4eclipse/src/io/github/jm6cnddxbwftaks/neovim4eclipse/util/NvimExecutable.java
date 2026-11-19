@@ -270,14 +270,16 @@ public final class NvimExecutable {
      * {@code bash /s /c "echo hi"} and failed with "/s: No such file or directory". Without
      * {@code SHELL}, Neovim uses {@code cmd.exe} as when Eclipse is started from Explorer or
      * PowerShell. A user who wants another shell sets {@code 'shell'} and its flags in
-     * {@code init.lua} ({@code :help shell-powershell}).
+     * {@code init.lua} ({@code :help shell-powershell}). The variable is dropped under every
+     * spelling: Windows ignores the case of its name, and Neovim takes {@code Shell} just the same
+     * ({@link EnvVariables}).
      *
      * @param env     the child's environment, changed in place
      * @param windows whether Windows rules apply
      */
     public static void prepareEnvironment(Map<String, String> env, boolean windows) {
         if (windows) {
-            env.remove("SHELL");
+            EnvVariables.remove(env, "SHELL", true);
         }
     }
 

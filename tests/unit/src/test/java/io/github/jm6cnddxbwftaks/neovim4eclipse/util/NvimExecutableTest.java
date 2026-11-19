@@ -254,6 +254,24 @@ class NvimExecutableTest {
         Map<String, String> linux = new HashMap<>(Map.of("SHELL", "/bin/zsh", "PATH", "/usr/bin"));
         NvimExecutable.prepareEnvironment(linux, false);
         assertEquals(Map.of("SHELL", "/bin/zsh", "PATH", "/usr/bin"), linux);
+
+        // Windows ignores the case of the name, and Neovim takes 'shell' from Shell just the same.
+        Map<String, String> otherCase = new HashMap<>(Map.of("Shell", "/usr/bin/bash", "Path", "C:\\bin"));
+        NvimExecutable.prepareEnvironment(otherCase, true);
+        assertEquals(Map.of("Path", "C:\\bin"), otherCase);
+    }
+
+    /** The same on the map a real child gets, which is a class of the JDK's own, not a HashMap. */
+    @Test
+    void shellIsDroppedFromARealChildsEnvironment() {
+        boolean windows = PlatformUtil.isWindows();
+        Map<String, String> env = new ProcessBuilder("nvim").environment();
+        env.put("SHELL", "/usr/bin/bash");
+        if (windows) {
+            env.put("Shell", "/usr/bin/bash"); // the map keeps both spellings, and both would reach the child
+        }
+        NvimExecutable.prepareEnvironment(env, windows);
+        assertEquals(!windows, env.keySet().stream().anyMatch(name -> name.equalsIgnoreCase("SHELL")), env.keySet().toString());
     }
 
     @Test

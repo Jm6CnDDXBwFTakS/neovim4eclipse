@@ -283,9 +283,8 @@ public final class EclipseCopy {
      */
     public static String run(List<String> command, Path log, Map<String, String> env) throws IOException, InterruptedException {
         ProcessBuilder builder = new ProcessBuilder(command).directory(log.getParent().toFile()); // the log's folder: stray files land there
-        builder.environment().putAll(env);
-        String options = builder.environment().getOrDefault("JAVA_TOOL_OPTIONS", "");
-        builder.environment().put("JAVA_TOOL_OPTIONS", (options + " " + ENGLISH).strip());
+        Shell.putEnv(builder.environment(), env);
+        english(builder.environment(), Shell.WINDOWS);
         Process process = builder.redirectErrorStream(true).start();
         String output;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -295,6 +294,19 @@ public final class EclipseCopy {
         Files.writeString(log, String.join(" ", command) + "\n" + output + "\n\n",
                 java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
         return output;
+    }
+
+    /**
+     * Adds {@link #ENGLISH} to the {@code JAVA_TOOL_OPTIONS} of a child's {@code environment}, after
+     * any options it has. On Windows it goes under the name the variable already has there
+     * ({@code Java_Tool_Options}, see {@link Shell#nameIn}): a second variable beside it would
+     * leave it to chance which one Java picks up.
+     *
+     * @param windows whether Windows' rule for names applies
+     */
+    public static void english(Map<String, String> environment, boolean windows) {
+        String name = Shell.nameIn(environment, "JAVA_TOOL_OPTIONS", windows);
+        environment.put(name, (environment.getOrDefault(name, "") + " " + ENGLISH).strip());
     }
 
     /**
