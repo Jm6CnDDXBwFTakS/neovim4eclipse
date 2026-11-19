@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.30] - 2026-11-19
+
 ### Changed
 
 - **`:messages` is a window of your own Neovim**, the one behind your code, not a second Neovim:
