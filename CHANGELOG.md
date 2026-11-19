@@ -12,6 +12,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- With noice.nvim in your config (LazyVim turns it on), Eclipse no longer shows a "Neovim
+  configuration error" warning at every start: noice's "can't work when the GUI has ext_cmdline
+  enabled" lines are left out of it. noice turns itself off inside Eclipse and keeps working in
+  terminal Neovim; the README says how to keep it from loading in Eclipse.
+
 ## [0.2.28] - 2026-11-18
 
 ### Added

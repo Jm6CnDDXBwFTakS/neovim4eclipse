@@ -176,9 +176,21 @@ Eclipse, where Neovim gets the typed text only at `Esc`:
 { 'hrsh7th/nvim-cmp', cond = not vim.g.neovim4eclipse },
 ```
 
-The
-variable is set with `--cmd`, not in the environment, so a Neovim you start in a `:terminal` inside
-Eclipse does not see it.
+The variable is set with `--cmd`, not in the environment, so a Neovim you start in a `:terminal`
+inside Eclipse does not see it.
+
+**noice.nvim** (on in LazyVim) cannot run inside Eclipse: it refuses any UI that draws the command
+line, the completion menu and the messages itself, as the plug-in does for the `:` box and the
+message line. It turns itself off and says why in three lines (`Noice can't work when the GUI has
+ext_cmdline enabled`, and the like); the plug-in leaves those out of its start-up warning, so they
+alone open none, and noice keeps working in terminal Neovim. To keep it from loading in Eclipse at
+all:
+
+```lua
+{ 'folke/noice.nvim', cond = not vim.g.neovim4eclipse },
+```
+
+or, without lazy.nvim, `if not vim.g.neovim4eclipse then require('noice').setup() end`.
 
 **Distributions** (LazyVim, NvChad, AstroNvim and other large configs) are made for a terminal, and
 most of what they add draws windows Eclipse does not show (see Known limitations, item 7). With

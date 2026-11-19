@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,6 +20,47 @@ class StartupErrorReportTest {
         assertTrue(message.contains("partly loaded"), message);
         assertTrue(message.contains("restart Eclipse"), message);
         assertTrue(message.contains("vim.keymap.set"), message);
+    }
+
+    /** noice.nvim's three lines, as noice 4.x prints them when it turns itself off under the plug-in's UI. */
+    private static final String NOICE = """
+            You're using a GUI that uses ext_cmdline. Noice can't work when the GUI has ext_cmdline enabled.
+            You're using a GUI that uses ext_popupmenu. Noice can't work when the GUI has ext_popupmenu enabled.
+            You're using a GUI that uses ext_messages. Noice can't work when the GUI has ext_messages enabled.
+            """;
+
+    @Test
+    void noicesLinesAloneOpenNoWarning() {
+        assertEquals("", StartupErrorReport.withoutKnownNotices(NOICE));
+        // Windows line ends and spaces around a line change nothing.
+        assertEquals("", StartupErrorReport.withoutKnownNotices(NOICE.replace("\n", "\r\n")));
+        assertEquals("", StartupErrorReport.withoutKnownNotices("  " + NOICE.replace("\n", "  \n")));
+    }
+
+    @Test
+    void anErrorBesideNoicesLinesIsKept() {
+        String kept = StartupErrorReport.withoutKnownNotices("Error in /home/you/.config/nvim/init.lua:\n" + NOICE
+                + "E5112: Lua chunk: init.lua:2: '=' expected near '<'\n");
+        assertEquals("Error in /home/you/.config/nvim/init.lua:\nE5112: Lua chunk: init.lua:2: '=' expected near '<'",
+                kept);
+    }
+
+    @Test
+    void onlyNoicesExactSentencesAreLeftOut() {
+        // A line that only resembles noice's (another extension, other words around it) stays.
+        String lookalikes = """
+                You're using a GUI that uses ext_tabline. Noice can't work when the GUI has ext_tabline enabled.
+                You're using a GUI that uses ext_cmdline. Noice can't work when the GUI has ext_messages enabled.
+                E5108: You're using a GUI that uses ext_cmdline. Noice can't work when the GUI has ext_cmdline enabled.
+                """;
+        assertEquals(lookalikes.strip(), StartupErrorReport.withoutKnownNotices(lookalikes));
+    }
+
+    @Test
+    void messagesWithoutNoiceAreUnchanged() {
+        assertEquals("E492: Not an editor command: nnoremap ; :",
+                StartupErrorReport.withoutKnownNotices("E492: Not an editor command: nnoremap ; :\n"));
+        assertEquals("", StartupErrorReport.withoutKnownNotices(""));
     }
 
     @Test

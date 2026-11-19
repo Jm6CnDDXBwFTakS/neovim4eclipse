@@ -30,6 +30,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimVersion;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StartupErrorReport;
 
 /**
  * The {@code nvim --embed} process and the msgpack-rpc connection to it: everything needed to call
@@ -298,9 +299,15 @@ final class NeovimConnection implements AutoCloseable {
                     + " s (is its configuration, init.lua, waiting for something?)");
         }
         Object errors = await(api.execLua(STARTUP_ERRORS, List.of()));
-        String text = errors == null ? "" : errors.toString().strip();
+        String all = errors == null ? "" : errors.toString().strip();
+        // noice.nvim's "can't work when the GUI has ext_cmdline enabled" lines are no error to fix:
+        // noice turns itself off and Eclipse works. They are logged, not warned about at every start.
+        String text = StartupErrorReport.withoutKnownNotices(all);
         if (!text.isEmpty()) {
             LOG.warning(() -> "Neovim's configuration reported errors while starting:\n" + text);
+        } else if (!all.isEmpty()) {
+            LOG.info(() -> "Neovim's configuration reported only notices that need no warning"
+                    + " (noice.nvim turning itself off in Eclipse):\n" + all);
         }
         return text;
     }

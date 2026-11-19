@@ -801,7 +801,10 @@ view to the controller, which shows it in the box. The box edits nothing:
   Neovim goes on (with `ext_messages` there is no hit-enter prompt to wait at).
   `NeovimConnection.waitForStartup` therefore waits for an idle answer and keeps the errors
   (`:messages`) for a one-time warning
-  (`editor/StartupErrorNotice`, `util/StartupErrorReport`).
+  (`editor/StartupErrorNotice`, `util/StartupErrorReport`). noice.nvim's three
+  "can't work when the GUI has ext_cmdline enabled" lines are left out of it
+  (`StartupErrorReport.withoutKnownNotices`, those exact sentences only) and logged: noice turns
+  itself off and Eclipse works, so they are no error to fix.
 - **Output:** a command runs in Neovim as typed, so the history, macros and `@:` see it, listings
   such as `:ls` too. What it prints arrives as message events and goes to the message line or the
   `OutputPopup` (see "Messages and output"); output that arrives while a line is open does not take the
