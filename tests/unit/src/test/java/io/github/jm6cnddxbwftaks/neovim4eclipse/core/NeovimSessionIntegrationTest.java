@@ -1535,8 +1535,10 @@ class NeovimSessionIntegrationTest {
             assertEquals(1L, number(s, "return vim.fn.line('.')"), "the editor's window kept the focus");
             assertEquals(reports.get(reports.size() - 1), s.floatingWindows());
             int row = drawn.row();
-            assertEquals(number(s, "return vim.api.nvim_win_get_height(0)"), drawn.hostRows(),
-                    "the editor's window, whose place Neovim said once, right after the UI attached");
+            // The editor's window, whose place Neovim said once, right after the UI attached, and the
+            // rows under it on the screen (status line, command line), which the editor draws too.
+            assertEquals(number(s, "return vim.o.lines"), drawn.hostRows(),
+                    "the editor's window and the rows under it: the whole screen");
             keys(s, "<C-e>");
             waitFor(() -> plugInFloats(s, reports.get(reports.size() - 1)).size() == 1
                     && plugInFloats(s, reports.get(reports.size() - 1)).get(0).row() == row - 1,
