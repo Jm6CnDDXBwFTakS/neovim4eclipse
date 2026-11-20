@@ -59,7 +59,7 @@ final class NeovimMouse {
     /** Whether Neovim handles the mouse now (Neovim mode, not insert mode). */
     private final BooleanSupplier forward;
     private final Consumer<MouseInput> neovim;
-    /** Runs on every forwarded press; the editor passes none now (once, it hid the message line). */
+    /** Runs on every forwarded press, before it is sent: the editor abandons an open {@code :} line there. */
     private final Runnable onPress;
     private final Display display;
     private final Listener filter = this::onMouse;
@@ -110,8 +110,8 @@ final class NeovimMouse {
                 swallow(event);
                 if (!widget.isFocusControl()) {
                     // The widget did not see the press, so it would not take the focus itself.
-                    // forceFocus, not setFocus: setFocus on a widget with children (the : box is one)
-                    // gives the focus to a child, and the box would stay open.
+                    // forceFocus, not setFocus: setFocus on a widget with children (an overlay is
+                    // one) gives the focus to a child.
                     widget.forceFocus();
                 }
                 pressed = true;

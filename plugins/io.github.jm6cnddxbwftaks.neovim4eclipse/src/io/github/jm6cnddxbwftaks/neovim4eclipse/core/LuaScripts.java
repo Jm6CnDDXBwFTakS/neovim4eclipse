@@ -1360,8 +1360,10 @@ final class LuaScripts {
                 return -2 -- wiped in Neovim (:noautocmd bwipeout): Eclipse makes the buffer anew
               end
               -- Not entered: fires WinNew, TabNew, BufWinEnter and WinScrolled only (E7), so the
-              -- user's BufWinEnter autocommands run, and Eclipse sees no switch.
-              local win = vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(buf, false, {}))
+              -- user's BufWinEnter autocommands run, and Eclipse sees no switch. Without the file
+              -- info putting the buffer in a window would give ('shortmess' F): Neovim shows it at
+              -- its next redraw, for an editor the user opened in Eclipse.
+              local win = vim.api.nvim_tabpage_get_win(without_file_info(vim.api.nvim_open_tabpage, buf, false, {}))
               own[win] = true
               vim.api.nvim_win_call(win, function()
                 -- A new window copies the jump history of the current one (E7): another editor's

@@ -13,7 +13,6 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
@@ -89,7 +88,6 @@ class FileInfoEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
-    @Disabled("ui2: Eclipse's own buffer switch shows Neovim's file info; MessageRoute, which left it out, is gone")
     void withoutFEclipsesSwitchStillShowsNothing() throws Exception {
         neovimGivesFileInfo();
         ITextEditor other = switchAwayAndBack();

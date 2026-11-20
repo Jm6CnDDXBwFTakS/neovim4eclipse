@@ -36,7 +36,6 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
@@ -419,7 +418,6 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
      * its rows are always the canvas's rows ({@code :set laststatus=0}, then back).
      */
     @Test
-    @Disabled("ui2: with laststatus=0 the page's status row stays; Grids.pageStatusIfChanged takes the command line's row (cmdheight) for it")
     void thePagesWindowKeepsItsCanvasRowsAsTheStatusRowComesAndGoes() {
         NeovimPageEditor page = messagesShowing("rows follow");
         WindowPane pane = page.windowPane();

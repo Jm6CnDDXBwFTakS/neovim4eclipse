@@ -429,6 +429,20 @@ class GridsTest {
         assertTrue(grids.pageStatusIfChanged().isEmpty(), "said once");
     }
 
+    /**
+     * The screen's last row is ui2's command line ({@code 'cmdheight'} 1): a window that reaches
+     * down to it has no status line, though a row is left below it.
+     */
+    @Test
+    void theCommandLinesRowIsNoStatusLine() {
+        screenWithPage();
+        grids.pageStatusIfChanged();
+        grids.apply(new GridEvent.WinPos(5, 1005, false, 0, 0, 8, 6, 0)); // 'laststatus' 0: rows 0-5, the line on row 6
+        List<GridSnapshot> rows = grids.pageStatusIfChanged();
+        assertEquals(1, rows.size());
+        assertEquals(0, rows.get(0).height(), "row 6 is the command line's");
+    }
+
     /** {@code :set laststatus=0} while the page shows its status line: the row is taken back. */
     @Test
     void aStatusLineThatGoesIsSaidToBeGone() {

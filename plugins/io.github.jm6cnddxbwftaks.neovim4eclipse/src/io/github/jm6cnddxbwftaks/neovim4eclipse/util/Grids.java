@@ -332,12 +332,13 @@ public final class Grids {
      * colors, as one-row snapshots whose {@link GridSnapshot#window()} is the page's. Called at
      * each {@code flush}. Only a page on screen has one: Neovim draws the status lines of the
      * current tabpage only, so a page in the background keeps the one it had, as its text.
-     * When the window reaches the screen's bottom there is no status line ({@code 'laststatus'} 0,
-     * or 1 with the page alone): then a snapshot of no rows ({@link GridSnapshot#height()} 0) says
-     * so, once, so that the page hides a row it showed (example: {@code :set laststatus=0} while the
-     * page is open; the row goes, and the page's grid takes that height). The command line takes no row of the screen: the plug-in draws it
-     * from Neovim's command-line events ({@code ext_cmdline}). Example: lualine's line below the
-     * messages page, its mode in its own colors.
+     * The screen's last row is the command line's ({@code 'cmdheight'} 1, ui2's line, which the
+     * page draws as a float): when the window reaches down to it there is no status line
+     * ({@code 'laststatus'} 0, or 1 with the page alone), and a snapshot of no rows
+     * ({@link GridSnapshot#height()} 0) says so, once, so that the page hides a row it showed
+     * (example: {@code :set laststatus=0} while the page is open; the row goes, and the page's grid
+     * takes that height). Example: lualine's line below the messages page, its mode in its own
+     * colors.
      */
     public List<GridSnapshot> pageStatusIfChanged() {
         lastPageStatus.keySet().retainAll(pages);
@@ -353,8 +354,8 @@ public final class Grids {
                 continue; // not on screen now: it keeps its last status line
             }
             int row = place.row() + place.height();
-            GridSnapshot status = row < 0 || row >= screen.height
-                    ? noStatusLine(win) // the window reaches the screen's bottom ('laststatus' 0)
+            GridSnapshot status = row < 0 || row >= screen.height - 1
+                    ? noStatusLine(win) // the window reaches the command line's row ('laststatus' 0)
                     : rowOf(win, screen, row);
             if (!status.equals(lastPageStatus.get(win))) {
                 lastPageStatus.put(win, status);
