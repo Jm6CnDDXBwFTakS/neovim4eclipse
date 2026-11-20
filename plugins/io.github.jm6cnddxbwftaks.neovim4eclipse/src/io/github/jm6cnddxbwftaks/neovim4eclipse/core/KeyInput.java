@@ -47,7 +47,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  * <ul>
  *   <li>{@link StateSync}: the mode, reading it, buffer-event suppression and publishing (shared
  *       with the rest of the session);</li>
- *   <li>{@link StatusTracker}: the status bar message, the pending key, and macro recording;</li>
+ *   <li>{@link StatusTracker}: macro recording;</li>
  *   <li>the small {@link Neovim} interface: the few raw calls it makes itself;</li>
  *   <li>a supplier for what the editor installs later: the document push before leaving insert
  *       mode.</li>
@@ -375,7 +375,6 @@ final class KeyInput {
             LOG.fine(() -> "mouse " + event + " dropped: Neovim waits for the rest of a command");
             return;
         }
-        status.clearMessage(); // as a key does: a message stays until the next key or click
         nvim.mouse(event);
         nvim.awaitKeysConsumed(); // the script queued the event as input
         Mode mode = state.readMode();
@@ -387,7 +386,6 @@ final class KeyInput {
 
     private void inputKey(String keys) throws Exception {
         LOG.fine(() -> "input(" + keys + ") mode=" + state.mode());
-        status.clearMessage(); // a message stays visible until the next key
 
         boolean wasTyping = state.isTypingMode();
         String modeBefore = state.mode();
@@ -759,7 +757,6 @@ final class KeyInput {
             state.publishState();
             return;
         }
-        status.clearMessage(); // as a key does
         nvim.type(key);
         Mode mode = state.readMode();
         if (mode != null && mode.blocking()) {

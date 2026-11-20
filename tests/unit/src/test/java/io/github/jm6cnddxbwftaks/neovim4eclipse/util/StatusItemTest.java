@@ -14,19 +14,18 @@ class StatusItemTest {
     @Test
     void keysAreStable() {
         assertEquals("mode", StatusItem.MODE.key());
-        assertEquals("cmd", StatusItem.CMD.key());
         assertEquals("statusline", StatusItem.STATUSLINE.key());
     }
 
     @Test
     void defaultsShowEverythingExceptTheLongStatusline() {
-        assertEquals(EnumSet.of(StatusItem.MODE, StatusItem.CMD), StatusItem.defaults());
+        assertEquals(EnumSet.of(StatusItem.MODE), StatusItem.defaults());
     }
 
     @Test
     void neovimModeShowsThePartsChosen() {
-        assertEquals(EnumSet.of(StatusItem.CMD, StatusItem.STATUSLINE),
-                StatusItem.shown(EnumSet.of(StatusItem.CMD, StatusItem.STATUSLINE), false));
+        assertEquals(EnumSet.of(StatusItem.STATUSLINE),
+                StatusItem.shown(EnumSet.of(StatusItem.STATUSLINE), false));
         assertEquals(EnumSet.noneOf(StatusItem.class), StatusItem.shown(EnumSet.noneOf(StatusItem.class), false),
                 "nothing chosen, nothing shown");
     }
@@ -41,13 +40,13 @@ class StatusItemTest {
 
     @Test
     void theSetShownIsTheCallersOwn() {
-        EnumSet<StatusItem> chosen = EnumSet.of(StatusItem.CMD);
+        EnumSet<StatusItem> chosen = EnumSet.of(StatusItem.STATUSLINE);
         StatusItem.shown(chosen, false).add(StatusItem.MODE);
-        assertEquals(EnumSet.of(StatusItem.CMD), chosen, "the chosen set is not changed through the result");
+        assertEquals(EnumSet.of(StatusItem.STATUSLINE), chosen, "the chosen set is not changed through the result");
     }
 
     @Test
-    void thereAreExactlyThreeItems() {
-        assertEquals(3, StatusItem.values().length);
+    void thereAreExactlyTwoItems() {
+        assertEquals(2, StatusItem.values().length);
     }
 }

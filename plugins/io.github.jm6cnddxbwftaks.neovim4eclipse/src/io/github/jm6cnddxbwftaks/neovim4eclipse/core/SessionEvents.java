@@ -7,9 +7,7 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
@@ -38,14 +36,12 @@ final class SessionEvents implements StateSync.Listeners {
     /** {@link ListenerList} holds consumers; these take no value, so each is wrapped once, here. */
     private final ListenerList<Void> inputHandledListeners = new ListenerList<>("input handled", Level.WARNING);
     private final java.util.Map<Runnable, Consumer<Void>> inputHandledWrappers = new java.util.concurrent.ConcurrentHashMap<>();
-    private final ListenerList<CmdlineState.View> cmdlineListeners = new ListenerList<>("command line", Level.WARNING);
     private final ListenerList<GridSnapshot> pageGridListeners = new ListenerList<>("page grid", Level.WARNING);
     private final ListenerList<GridSnapshot> pageStatusListeners = new ListenerList<>("page status line", Level.WARNING);
+    private final ListenerList<String> cmdlineTypeListeners = new ListenerList<>("command line", Level.WARNING);
     private final ListenerList<CommandWindowView> commandWindowListeners = new ListenerList<>("command-line window",
             Level.WARNING);
     private final ListenerList<List<FloatWindow>> floatingWindowListeners = new ListenerList<>("floating windows",
-            Level.WARNING);
-    private final ListenerList<CompletionMenu.View> completionMenuListeners = new ListenerList<>("completion list",
             Level.WARNING);
     private final ListenerList<ViewportPort.WrapChange> wrapListeners = new ListenerList<>("wrap", Level.WARNING);
     private final ListenerList<ViewportPort.TopLine> topLineListeners = new ListenerList<>("top line", Level.WARNING);
@@ -114,16 +110,6 @@ final class SessionEvents implements StateSync.Listeners {
         topLineListeners.fire(top);
     }
 
-    /** Neovim's command line changed: opened, edited, completed or closed (see {@code CmdlineState}). */
-    void cmdline(CmdlineState.View view) {
-        cmdlineListeners.fire(view);
-    }
-
-    /** The completion list to draw changed (see {@code util/CompletionMenu}); a hidden view: it closed. */
-    void completionMenu(CompletionMenu.View view) {
-        completionMenuListeners.fire(view);
-    }
-
     /** The floating windows to draw changed (see {@code Grids.floatsIfChanged}); an empty list: none is left. */
     void floatingWindows(List<FloatWindow> windows) {
         floatingWindowListeners.fire(windows);
@@ -132,6 +118,11 @@ final class SessionEvents implements StateSync.Listeners {
     /** The command-line window opened, was redrawn or closed (see {@code CommandWindowView}). */
     void commandWindow(CommandWindowView view) {
         commandWindowListeners.fire(view);
+    }
+
+    /** A command line opened, of type {@code ":"}, {@code "/"} ..., or closed ({@code ""}); Neovim draws it (ui2). */
+    void cmdlineType(String type) {
+        cmdlineTypeListeners.fire(type);
     }
 
     /** A page window's grid changed (one snapshot per page; each page editor takes its own window's). */
@@ -244,12 +235,12 @@ final class SessionEvents implements StateSync.Listeners {
         hostCommandListeners.remove(listener);
     }
 
-    void addCmdlineListener(Consumer<CmdlineState.View> listener) {
-        cmdlineListeners.add(listener);
+    void addCmdlineTypeListener(Consumer<String> listener) {
+        cmdlineTypeListeners.add(listener);
     }
 
-    void removeCmdlineListener(Consumer<CmdlineState.View> listener) {
-        cmdlineListeners.remove(listener);
+    void removeCmdlineTypeListener(Consumer<String> listener) {
+        cmdlineTypeListeners.remove(listener);
     }
 
     void addCommandWindowListener(Consumer<CommandWindowView> listener) {
@@ -258,14 +249,6 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removeCommandWindowListener(Consumer<CommandWindowView> listener) {
         commandWindowListeners.remove(listener);
-    }
-
-    void addCompletionMenuListener(Consumer<CompletionMenu.View> listener) {
-        completionMenuListeners.add(listener);
-    }
-
-    void removeCompletionMenuListener(Consumer<CompletionMenu.View> listener) {
-        completionMenuListeners.remove(listener);
     }
 
     void addFloatingWindowListener(Consumer<List<FloatWindow>> listener) {

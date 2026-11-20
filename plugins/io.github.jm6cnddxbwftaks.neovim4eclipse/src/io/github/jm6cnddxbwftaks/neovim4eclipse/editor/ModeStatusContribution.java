@@ -56,9 +56,6 @@ public final class ModeStatusContribution extends ContributionItem {
 
     public static final String ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.modeStatus";
 
-    /** Width of the pending-command label in characters: Vim's {@code 'showcmd'} area holds 10. */
-    static final int CMD_CHARS = 10;
-
     private static final Logger LOG = Logger.getLogger(ModeStatusContribution.class.getName());
 
     /** Hears the statusline label's width in characters (Neovim's {@code maxwidth} for it). */
@@ -81,7 +78,7 @@ public final class ModeStatusContribution extends ContributionItem {
     private boolean eclipse;
     /** Register being recorded into ("" when not recording); shown after the mode, as Vim does. */
     private String recording = "";
-    /** Pending command and statusline as reported by Neovim. */
+    /** The statusline as reported by Neovim. */
     private StatusInfo info = StatusInfo.EMPTY;
 
     /**
@@ -212,7 +209,7 @@ public final class ModeStatusContribution extends ContributionItem {
         refresh();
     }
 
-    /** Pending command and statusline text from Neovim. */
+    /** The statusline text from Neovim. */
     public void setStatusInfo(StatusInfo statusInfo) {
         info = statusInfo == null ? StatusInfo.EMPTY : statusInfo;
         refresh();
@@ -252,7 +249,7 @@ public final class ModeStatusContribution extends ContributionItem {
      * {@code rec @a} only while recording (the label widens then, rather than always).
      */
     private StatusBarLabels.Widths widths() {
-        return new StatusBarLabels.Widths(ModeLabels.texts(!eclipse && !recording.isEmpty()), CMD_CHARS,
+        return new StatusBarLabels.Widths(ModeLabels.texts(!eclipse && !recording.isEmpty()),
                 statuslineChars, maxWidthPercent);
     }
 
@@ -279,14 +276,12 @@ public final class ModeStatusContribution extends ContributionItem {
         showTexts();
     }
 
-    /** Sets the three labels' texts, tooltips and the mode's color. UI thread. */
+    /** Sets the two labels' texts, tooltips and the mode's color. UI thread. */
     private void showTexts() {
         ModeLabels.Label label = eclipse ? ModeLabels.ECLIPSE : ModeLabels.of(mode);
         String register = eclipse ? "" : recording;
         labels.show(StatusItem.MODE, ModeLabels.text(label, register), ModeLabels.tooltip(label, register),
                 Display.getDefault().getSystemColor(foregroundColorId(label, register)));
-        String cmd = StatusLineFormat.cleanText(info.cmd());
-        labels.show(StatusItem.CMD, cmd, cmd.isEmpty() ? null : "Pending command: " + cmd, null);
         labels.show(StatusItem.STATUSLINE, StatusLineFormat.oneLine(info.statusline()), null, null);
     }
 

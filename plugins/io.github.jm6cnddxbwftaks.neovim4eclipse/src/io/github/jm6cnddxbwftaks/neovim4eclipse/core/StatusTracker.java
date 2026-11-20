@@ -8,43 +8,26 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageRoute;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 
 /**
- * The status side of a {@link NeovimSession}: the {@code showcmd} text, the message for the
- * editor's message line, the output for the popup, the statusline, and the register of a macro
- * being recorded. It turns what Neovim reports into {@link StatusInfo} and {@link CommandOutput}
- * events and fires them only when something changed.
+ * The status side of a {@link NeovimSession}: Neovim's {@code 'statusline'}, the register of a
+ * macro being recorded, and what a page editor shows. It fires each only when it changed.
  *
- * <p>Where each part comes from:
+ * <p>Neovim's messages and its pending command ({@code showcmd}) are not here: Neovim draws them
+ * itself, in ui2's windows ({@code LuaScripts.UI2}), which the editor draws as floats.
+ *
  * <ul>
- *   <li>Messages and {@code showcmd} are pushed by Neovim as UI events ({@code ext_messages}, see
- *       {@link MessageEvent}), on the RPC reader thread. {@link MessageRoute} decides what goes to
- *       the message line and what to the popup; what arrived is passed on at each {@code flush},
- *       the end of one of Neovim's redraws, so that a search's echo and its {@code [1/5]} count,
- *       sent together, show as one.</li>
- *   <li>The statusline is pulled with each key's state snapshot ({@link #publishStatusline}).</li>
+ *   <li>The statusline is pulled with each key's state snapshot ({@link #publishStatusline}),
+ *       when the status bar shows it ({@link StatusItem#STATUSLINE}).</li>
+ *   <li>The recording register comes with the same snapshot ({@link #updateRecording}).</li>
+ *   <li>A page editor's content ({@code :messages}, {@code :checkhealth}, {@code :help}) comes from
+ *       the bridge, on the RPC reader thread ({@link #onViewContent}).</li>
  * </ul>
  *
- * <p>A message stays visible until the next key ({@link #clearMessage()}), as in Vim. The pending
- * command shows while Neovim waits for the rest of it: after {@code 2} then {@code f}, Neovim sends
- * {@code msg_showcmd "2f"} even though it answers almost no request then.
- *
- * <p>Thread-safe: messages arrive on the RPC reader thread, keys clear them on the input thread.
- * The state is guarded by {@code this}; listeners are called outside that lock, on the thread that
- * made the change.
- *
- * <p>Why a status is computed, compared and recorded in one locked step, and numbered: two threads
- * change the status at once, say the input thread clearing the message for a key while the reader
- * thread passes on Neovim's {@code E486}. If each computed its status in one locked block and
- * recorded it in another, the clear could be computed first and recorded last, and the status
- * bar would show an empty message while Neovim shows the error. Recording in the same block puts
- * the statuses in one order; the {@link Delivery} number keeps the listeners to that order: a
- * thread that comes to deliver after a newer status went out drops its stale one.
+ * <p>Thread-safe: the snapshot thread and the reader thread call it; listeners are called on the
+ * calling thread, outside the lock.
  */
 final class StatusTracker {
 
@@ -52,35 +35,19 @@ final class StatusTracker {
 
     /** Which optional status bar parts to ask Neovim for. */
     private volatile Set<StatusItem> items = StatusItem.defaults();
-    /** The messages of the current command; guarded by {@code this}. */
-    private final MessageRoute route = new MessageRoute();
-    /** The latest {@code msg_showcmd} text; guarded by {@code this}. */
-    private String showcmd = "";
-    /** The latest statusline from the snapshot; guarded by {@code this}. */
-    private String statusline = "";
-    /** The output last passed to the output listeners, so it is passed once; guarded by {@code this}. */
-    private String lastOutput = "";
     private volatile StatusInfo lastStatus = StatusInfo.EMPTY;
-    /** The number of the status last recorded in {@link #lastStatus}; guarded by {@code this}. */
-    private long recordedSeq;
-    /** The number of the status last passed to the listeners; guarded by {@link #deliveryLock}. */
-    private long deliveredSeq;
-    /** Serializes the calls to the status listeners, so that they hear statuses in recorded order. */
-    private final Object deliveryLock = new Object();
     /** Register of the macro being recorded ({@code qa} ... {@code q}), or "" if none. */
     private volatile String recordingRegister = "";
-
-    private final ListenerList<StatusInfo> statusListeners = new ListenerList<>("status", Level.FINE);
-    private final ListenerList<CommandOutput> outputListeners = new ListenerList<>("output", Level.FINE);
-    private final ListenerList<ViewContent> viewListeners = new ListenerList<>("view content", Level.FINE);
-    private final ListenerList<String> recordingListeners = new ListenerList<>("recording", Level.FINE);
-
     /**
      * The statusline label's width in characters, the {@code maxwidth} Neovim evaluates the
      * {@code 'statusline'} at; the status bar sets it as it lays out its label. 0 until then: no
      * label, nothing to evaluate.
      */
     private volatile int statuslineColumns;
+
+    private final ListenerList<StatusInfo> statusListeners = new ListenerList<>("status", Level.FINE);
+    private final ListenerList<ViewContent> viewListeners = new ListenerList<>("view content", Level.FINE);
+    private final ListenerList<String> recordingListeners = new ListenerList<>("recording", Level.FINE);
 
     Set<StatusItem> items() {
         return items;
@@ -98,117 +65,21 @@ final class StatusTracker {
         this.items = Set.copyOf(items);
     }
 
-    /**
-     * A new command starts (a key, or a line from the box): its messages replace the last
-     * command's, which are hidden now. Listeners hear of it at once, so that the same message given
-     * again by the next key (a second {@code n} with no match) shows again.
-     */
-    void clearMessage() {
-        Delivery delivery;
-        synchronized (this) {
-            route.clear();
-            lastOutput = "";
-            delivery = record(status(MessageRoute.View.NONE));
-        }
-        deliver(delivery);
-    }
-
-    /** Neovim showed command line {@code text}, such as {@code ":ls"}: the title for its output. */
-    synchronized void commandLine(String text) {
-        route.commandLine(text);
-    }
-
-    /** One message event from Neovim; see the class comment. */
-    void onMessageEvent(MessageEvent event) {
-        if (event instanceof MessageEvent.History history) {
-            // :messages goes to a page editor, not the output popup (docs/ARCHITECTURE.md,
-            // decision 10); the message line keeps what it showed. An empty history shows nothing,
-            // as in Vim, rather than an empty view that takes the keyboard.
-            if (!history.entries().isEmpty()) {
-                viewListeners.fire(ViewText.messages(history));
-            }
-            return;
-        }
-        Delivery delivery = null;
-        CommandOutput output = null;
-        synchronized (this) {
-            switch (event) {
-                case MessageEvent.Show show -> route.add(show);
-                case MessageEvent.History history -> throw new AssertionError("handled above");
-                case MessageEvent.Showcmd cmd -> showcmd = cmd.text();
-                case MessageEvent.Flush flush -> {
-                    MessageRoute.View view = route.view();
-                    delivery = record(status(view));
-                    if (view.hasOutput() && !view.output().equals(lastOutput)) {
-                        lastOutput = view.output();
-                        output = new CommandOutput(view.title(), view.output());
-                    }
-                }
-            }
-        }
-        deliver(delivery);
-        if (output != null) {
-            CommandOutput shown = output;
-            LOG.fine(() -> "output for the popup: " + shown.title());
-            outputListeners.fire(shown);
-        }
-    }
-
     /** The statusline read with the state snapshot ("" when the status bar does not show it). */
     void publishStatusline(String text) {
-        Delivery delivery;
+        StatusInfo info = new StatusInfo(text);
         synchronized (this) {
-            statusline = text;
-            delivery = record(status(route.view()));
-        }
-        deliver(delivery);
-    }
-
-    /** The status for {@code view}: the message line shows its line (the popup, its output). */
-    private StatusInfo status(MessageRoute.View view) {
-        String cmd = items.contains(StatusItem.CMD) ? showcmd : "";
-        return new StatusInfo(statusline, cmd, view.line(), view.error());
-    }
-
-    /** A recorded status, numbered in the order it was recorded, waiting to reach the listeners. */
-    record Delivery(long seq, StatusInfo info) {
-    }
-
-    /**
-     * Records {@code info} as the current status if it differs from the last one. Called in the
-     * same locked block that computed {@code info} (see the class comment); {@code synchronized}
-     * is reentrant, so holding the lock already is fine.
-     *
-     * @return what to pass to {@link #deliver}, or {@code null} when nothing changed
-     */
-    synchronized Delivery record(StatusInfo info) {
-        if (info.equals(lastStatus)) {
-            return null;
-        }
-        lastStatus = info;
-        return new Delivery(++recordedSeq, info);
-    }
-
-    /**
-     * Passes a recorded status to the listeners, outside the state lock, unless a newer one went
-     * out already. Example: the reader thread records {@code E486} (2) after the input thread
-     * recorded a cleared message (1), and gets to deliver first: the input thread then drops 1,
-     * and the listeners end on {@code E486}, the status {@link #current()} returns.
-     *
-     * <p>The listeners are called under {@link #deliveryLock}; they only hand the status on to the
-     * UI thread ({@code asyncExec}), so another thread waits for no more than that.
-     */
-    void deliver(Delivery delivery) {
-        if (delivery == null) {
-            return;
-        }
-        synchronized (deliveryLock) {
-            if (delivery.seq() <= deliveredSeq) {
+            if (info.equals(lastStatus)) {
                 return;
             }
-            deliveredSeq = delivery.seq();
-            statusListeners.fire(delivery.info());
+            lastStatus = info;
         }
+        statusListeners.fire(info);
+    }
+
+    /** The status last passed to the listeners: what Neovim shows now. Any thread. */
+    StatusInfo current() {
+        return lastStatus;
     }
 
     // ---- macro recording ----
@@ -227,11 +98,6 @@ final class StatusTracker {
         }
     }
 
-    /** The status last recorded (passed to the listeners, or about to be): what Neovim shows now. Any thread. */
-    StatusInfo current() {
-        return lastStatus;
-    }
-
     // ---- listeners ----
 
     void addStatusListener(Consumer<StatusInfo> listener) {
@@ -240,14 +106,6 @@ final class StatusTracker {
 
     void removeStatusListener(Consumer<StatusInfo> listener) {
         statusListeners.remove(listener);
-    }
-
-    void addOutputListener(Consumer<CommandOutput> listener) {
-        outputListeners.add(listener);
-    }
-
-    void removeOutputListener(Consumer<CommandOutput> listener) {
-        outputListeners.remove(listener);
     }
 
     /**
@@ -262,10 +120,7 @@ final class StatusTracker {
         viewListeners.remove(listener);
     }
 
-    /**
-     * Content for a page editor that is no message ({@code :checkhealth}'s report, a
-     * {@code :help} page): to the same listeners.
-     */
+    /** Content for a page editor: the message history, a {@code :checkhealth} report, a {@code :help} page. */
     void onViewContent(ViewContent content) {
         viewListeners.fire(content);
     }

@@ -11,9 +11,8 @@
 
        Tests of editor/ classes that work on SWT widgets (StyledText, painting, folded-code offsets)
        but not on the workbench: StyledTextCaret, CursorStyleController, BlockOverlay, OverlayFrame,
-       WidgetOffsets, and
-       CommandLineBox with OutputPopup (Neovim and the IDE behind its Commands interface); and the
-       preference pages' bodies (prefs/NeovimPage, StatusBarPage, CtrlKeysPage, with
+       WidgetOffsets, GridCanvas and FloatingWindows (Neovim's floats, its command line among them);
+       and the preference pages' bodies (prefs/NeovimPage, StatusBarPage, CtrlKeysPage, with
        NeovimStatusSection), on an in-memory preference store; and SearchColors, with a color
        source of the test's own. They
        need SWT and a display, like the UI tests, but not a started Eclipse: plain JUnit creates
@@ -185,14 +184,10 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/BlockHighlight.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/BlockOverlay.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/OverlayFrame.java</include>
-            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/OutputPopup.java</include>
-            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/MessageLine.java</include>
-            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/CommandLineBox.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/GridCanvas.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimWindowPanel.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/GridMouse.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/FloatingWindows.java</include>
-            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/CompletionMenuPopup.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/ClipboardBridge.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/DocumentPositions.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/sync/FinalNewlines.java</include>

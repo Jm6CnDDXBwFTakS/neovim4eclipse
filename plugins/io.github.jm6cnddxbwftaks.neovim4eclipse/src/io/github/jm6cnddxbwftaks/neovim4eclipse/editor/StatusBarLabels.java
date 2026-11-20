@@ -27,7 +27,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
 /**
  * The widgets of the plug-in's part of the Eclipse status bar: one label per part the user chose
- * (mode, cmd, statusline; {@link StatusItem}), each after a separator, left-aligned, sized to its
+ * (mode, statusline; {@link StatusItem}), each after a separator, left-aligned, sized to its
  * content and fitted under the cap ({@link StatusBarWidths}). Only SWT and JFace, no workbench, so
  * {@code tests/swt} can test it; {@code ModeStatusContribution} decides what the labels say.
  *
@@ -63,12 +63,11 @@ final class StatusBarLabels {
      *
      * @param modeTexts       every text the mode label may show in the chosen style; it is as wide as
      *                        the widest
-     * @param cmdChars        the pending-command label, in characters
      * @param statuslineChars the statusline label, in characters, before the cap
      * @param maxWidthPercent the most all labels may take of the bar, in percent (the
      *                        {@code statusMaxWidthPercent} preference)
      */
-    record Widths(List<String> modeTexts, int cmdChars, int statuslineChars, int maxWidthPercent) {
+    record Widths(List<String> modeTexts, int statuslineChars, int maxWidthPercent) {
     }
 
     /** The gap JFace's status bar layout leaves after every item, in pixels. */
@@ -93,7 +92,7 @@ final class StatusBarLabels {
     /**
      * Creates the labels of {@code parts} at the end of {@code bar}, the status bar's composite.
      *
-     * @param font           the mode and cmd labels' font (bold, as before); {@code null} keeps the bar's
+     * @param font           the mode label's font (bold, as before); {@code null} keeps the bar's
      * @param statuslineFont the statusline label's font, fixed-width (see the class comment);
      *                       {@code null} keeps the bar's
      * @param columns        hears the statusline label's width in characters whenever it changes
@@ -203,10 +202,6 @@ final class StatusBarLabels {
                 case MODE -> {
                     wanted[i] = widestText(label, widths.modeTexts()) + margins;
                     minimum[i] = wanted[i]; // the mode keeps its size: it is short, and the first to read
-                }
-                case CMD -> {
-                    wanted[i] = StatusBarWidths.pixels(widths.cmdChars(), averageCharWidth(label)) + margins;
-                    minimum[i] = wanted[i];
                 }
                 case STATUSLINE -> {
                     statuslineCharWidth = averageCharWidth(label);

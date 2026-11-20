@@ -52,10 +52,6 @@ class CommandRunnerTest {
             calls.add("normal " + keys);
         }
 
-        @Override
-        public void clearMessages() {
-            calls.add("clearMessages");
-        }
 
         @Override
         public void syncBuffer() {
@@ -79,7 +75,7 @@ class CommandRunnerTest {
     void runClearsTheLastMessagesTypesTheCommandWaitsAndRefreshes() throws Exception {
         runner.run("echo 'hello'");
 
-        assertEquals(List.of("clearMessages", "type :echo 'hello'<CR>", "awaitIdle 5000", "syncBuffer",
+        assertEquals(List.of("type :echo 'hello'<CR>", "awaitIdle 5000", "syncBuffer",
                 "syncModeAndCursor"), nvim.calls);
     }
 
@@ -111,7 +107,7 @@ class CommandRunnerTest {
         Exception e = assertThrows(IllegalStateException.class, () -> runner.run("echo 1"));
 
         assertSame(nvim.typeFailure, e);
-        assertEquals(List.of("clearMessages", "type :echo 1<CR>"), nvim.calls);
+        assertEquals(List.of("type :echo 1<CR>"), nvim.calls);
     }
 
     /** Its messages belong to the key that asked for it ({@code gd}), so they are not cleared. */

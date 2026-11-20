@@ -5,9 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import java.util.List;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
@@ -50,10 +48,6 @@ public interface FocusTarget {
     default void onStatus(StatusInfo status) {
     }
 
-    /** Output for the popup: a listing, shell output, a message of several lines. */
-    default void onOutput(CommandOutput output) {
-    }
-
     /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gr*}). */
     default void onIdeAction(IdeAction action) {
     }
@@ -62,8 +56,11 @@ public interface FocusTarget {
     default void onHostCommand(HostCommand command) {
     }
 
-    /** The {@code :}, {@code /} or {@code ?} line opened, changed or closed. */
-    default void onCmdline(CmdlineState.View view) {
+    /**
+     * A command line opened, of type {@code ":"}, {@code "/"}, {@code "?"} ..., or closed
+     * ({@code ""}). Neovim draws the line itself (ui2); the editor only needs its type.
+     */
+    default void onCmdlineType(String type) {
     }
 
     /** The command-line window ({@code q:}) opened, changed or closed. */
@@ -72,10 +69,6 @@ public interface FocusTarget {
 
     /** The floating windows to draw changed; an empty list when the last one closed. */
     default void onFloatingWindows(List<FloatWindow> windows) {
-    }
-
-    /** The insert-mode completion list showed, changed or closed. */
-    default void onCompletionMenu(CompletionMenu.View view) {
     }
 
     /**

@@ -8,8 +8,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Text for a page editor: the message history ({@code :messages}), which arrives as UI events, not
- * as a buffer, and which the plug-in puts into a page buffer of the editing Neovim
+ * Text for a page editor: the message history ({@code :messages}), which arrives from Neovim's ui2
+ * as a list of messages ({@code LuaScripts.UI2}), not as a buffer, and which the plug-in puts into a page buffer of the editing Neovim
  * ({@code LuaScripts.PAGE_TEXT}). Example: {@code :messages} becomes
  * {@code ViewText("messages", ["E486: Pattern not found: x", "3 lines yanked"], [(0, "ErrorMsg")])}.
  *
@@ -23,8 +23,17 @@ public record ViewText(String title, List<String> lines, List<LineHighlight> hig
     /** The title of {@link #messages}. */
     public static final String MESSAGES = "messages";
 
+    /** Message kinds that are errors, drawn in {@code ErrorMsg}. */
+    static final Set<String> ERROR_KINDS = Set.of("emsg", "echoerr", "lua_error", "rpc_error");
     /** Message kinds that are warnings, drawn in {@code WarningMsg}. */
     static final Set<String> WARNING_KINDS = Set.of("wmsg");
+
+    /**
+     * One message of the history: its kind as Neovim names it ({@code "emsg"}, {@code "wmsg"},
+     * {@code "echoerr"}, {@code ""} ...) and its text, which may hold line breaks.
+     */
+    public record Message(String kind, String text) {
+    }
 
     public ViewText {
         lines = List.copyOf(lines);
@@ -41,10 +50,10 @@ public record ViewText(String title, List<String> lines, List<LineHighlight> hig
      * of three lines (a Lua error and its traceback) colors all three. No highlight definitions are
      * copied: the page draws Neovim's own {@code ErrorMsg}.
      */
-    public static ViewText messages(MessageEvent.History history) {
+    public static ViewText messages(List<Message> history) {
         List<String> lines = new ArrayList<>();
         List<LineHighlight> highlights = new ArrayList<>();
-        for (MessageEvent.History.Entry entry : history.entries()) {
+        for (Message entry : history) {
             String group = groupOf(entry.kind());
             for (String line : entry.text().replace("\r", "").split("\n", -1)) {
                 if (!group.isEmpty()) {
@@ -58,7 +67,7 @@ public record ViewText(String title, List<String> lines, List<LineHighlight> hig
 
     /** The highlight group a message of {@code kind} is drawn in, {@code ""} for the default colors. */
     static String groupOf(String kind) {
-        if (MessageRoute.ERROR_KINDS.contains(kind)) { // the kinds the message line shows as errors
+        if (ERROR_KINDS.contains(kind)) {
             return "ErrorMsg";
         }
         return WARNING_KINDS.contains(kind) ? "WarningMsg" : "";

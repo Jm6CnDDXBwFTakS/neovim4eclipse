@@ -25,15 +25,13 @@ class StatusBarPage extends FieldEditorPreferencePage {
     StatusBarPage(IPreferenceStore store) {
         super(GRID);
         setPreferenceStore(store);
-        setDescription("Parts of Vim's status information shown in the Eclipse status bar. Messages and errors appear at the bottom of the editor.");
+        setDescription("Parts of Vim's status information shown in the Eclipse status bar. Neovim shows its messages and pending command itself, at the bottom of the editor.");
     }
 
     @Override
     protected void createFieldEditors() {
         addField(new BooleanFieldEditor(PreferenceConstants.STATUS_MODE,
                 "mode  (INSERT, V-BLOCK, rec @q)", getFieldEditorParent()));
-        addField(new BooleanFieldEditor(PreferenceConstants.STATUS_SHOWCMD,
-                "cmd  (pending command, e.g. 2d)", getFieldEditorParent()));
         addField(new BooleanFieldEditor(PreferenceConstants.STATUS_STATUSLINE,
                 "statusline  (Neovim's 'statusline')", getFieldEditorParent()));
         IntegerFieldEditor width = new IntegerFieldEditor(PreferenceConstants.STATUS_STATUSLINE_WIDTH,

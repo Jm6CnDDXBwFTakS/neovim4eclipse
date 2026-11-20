@@ -210,7 +210,7 @@ xattr -l ~/var/n4e-checks/xdg/neovim4eclipse-plugin/neovim/ma/bin/nvim
 
 - **On:** any
 - **Launch:** none
-- **Areas:** editor/SearchHighlighter.java, editor/NeovimHighlighter.java, editor/JumpLabelPainter.java, editor/SearchColors.java, editor/ThemeColorSource.java, util/OverlayColors.java, editor/GridCanvas.java, editor/NeovimPage*.java, editor/WindowPane.java, util/ViewText.java, core/HealthCheck.java, editor/NeovimWindowPanel.java, editor/FloatingWindows.java, util/FloatPlacement.java, util/GridSnapshot.java, editor/CompletionMenuPopup.java, util/CompletionMenu.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
+- **Areas:** editor/SearchHighlighter.java, editor/NeovimHighlighter.java, editor/JumpLabelPainter.java, editor/SearchColors.java, editor/ThemeColorSource.java, util/OverlayColors.java, editor/GridCanvas.java, editor/NeovimPage*.java, editor/WindowPane.java, util/ViewText.java, core/HealthCheck.java, editor/NeovimWindowPanel.java, editor/FloatingWindows.java, util/FloatPlacement.java, util/GridSnapshot.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/css/**, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/SearchGalleryTest.java, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/**/GalleryCamera.java
 
 Whether a color reads well is for a person to judge; the painting itself is tested
 (`SearchHighlighterTest`, `SearchHighlightingEndToEndTest`). The gallery takes the pictures in two
@@ -403,7 +403,7 @@ editor and watch it.
 
 - **On:** macos
 - **Launch:** normal
-- **Areas:** util/MarkedTextInput.java, editor/CommandLineBox*.java, /pom.xml
+- **Areas:** editor/NeovimEditorController.java, editor/FloatingWindows.java, /pom.xml
 
 The input method's events come from macOS itself, so no test can send them; the logic behind them
 is tested (`MarkedTextInputTest`). Add *Japanese – Romaji* in *System Settings → Keyboard → Input
@@ -425,7 +425,7 @@ Sources* first.
 
 - **On:** macos
 - **Launch:** normal
-- **Areas:** util/MarkedTextInput.java, editor/CommandLineBox*.java, /pom.xml
+- **Areas:** editor/NeovimEditorController.java, editor/FloatingWindows.java, /pom.xml
 
 1. `:` `abc`, switch to Japanese, type `ka`, press <kbd>Ctrl+U</kbd>, then <kbd>Enter</kbd>.
    ⇒ <kbd>Ctrl+U</kbd> does nothing while composing; the line becomes `:abcか`.
@@ -446,7 +446,7 @@ Sources* first.
 
 - **On:** macos
 - **Launch:** normal
-- **Areas:** util/PressAndHold*.java, util/MarkedTextInput.java, editor/CommandLineBox*.java, /pom.xml
+- **Areas:** editor/NeovimEditorController.java, editor/FloatingWindows.java, /pom.xml
 
 1. ABC input, press-and-hold on (macOS's default). `:` `echo "`, hold <kbd>E</kbd> until the accent
    menu shows, let go, press <kbd>2</kbd>, type `"`, <kbd>Enter</kbd>.

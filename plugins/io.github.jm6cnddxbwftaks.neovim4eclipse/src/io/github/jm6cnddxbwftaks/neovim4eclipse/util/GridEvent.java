@@ -127,6 +127,16 @@ public sealed interface GridEvent {
         }
     }
 
+    /**
+     * {@code win_viewport}: where the cursor of the window on {@code grid} is, 0-based line and
+     * byte column. Read for one thing: while a search is typed with {@code 'incsearch'}, Neovim
+     * moves the window's cursor to the match it previews, and the editor follows
+     * ({@code NeovimSession}). Example: {@code ["win_viewport", [2, win 1000, 0, 23, 41, 4, 60, 0]]}
+     * gives {@code Viewport(2, 41, 4)}.
+     */
+    record Viewport(int grid, int curline, int curcol) implements GridEvent {
+    }
+
     /** {@code win_hide} or {@code win_close}: {@code grid} shows no window now. */
     record WinGone(int grid) implements GridEvent {
     }
@@ -215,7 +225,8 @@ public sealed interface GridEvent {
             case "win_hide", "win_close" -> a.isEmpty() ? null : new WinGone(number(a, 0));
             case "hl_attr_define" -> a.size() < 2 ? null : hlAttr(number(a, 0), a.get(1));
             case "default_colors_set" -> a.size() < 2 ? null : new DefaultColors(color(a.get(0)), color(a.get(1)));
-            default -> null; // cmdline_show, msg_show, mode_change, win_viewport ...
+            case "win_viewport" -> a.size() < 6 ? null : new Viewport(number(a, 0), numberOr(a, 4, 0), numberOr(a, 5, 0));
+            default -> null; // mode_change, msg_set_pos ...
         };
     }
 

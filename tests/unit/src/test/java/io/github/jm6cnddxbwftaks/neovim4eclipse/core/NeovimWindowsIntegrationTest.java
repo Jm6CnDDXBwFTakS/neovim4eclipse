@@ -115,24 +115,13 @@ class NeovimWindowsIntegrationTest {
                 + " vim.api.nvim_open_win(b, true, {relative = 'editor', row = 1, col = 1, width = 20, height = 3})";
         try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "-c", openFloat))) {
             assertEquals(0, number(s, "return #vim.tbl_filter(function(w) return vim.api.nvim_win_get_config(w).relative ~= '' end,"
-                    + " vim.api.nvim_list_wins())"), "the float is closed");
+                    + " vim.tbl_filter(function(w) return not vim.w[w].neovim4eclipse_ui2 end, vim.api.nvim_list_wins()))"), "the float is closed (ui2's own windows aside)");
             assertEquals("", s.lua("return vim.api.nvim_win_get_config(0).relative"), "a plain window is current");
             assertEquals(currentWin(s), s.getAttachedWinid(), "and it is the home window");
             assertEquals(number(s, "return package.loaded['neovim4eclipse.windows'].home_buffer()"),
                     number(s, "return vim.api.nvim_get_current_buf()"), "it shows the home buffer");
-            waitFor(() -> s.currentStatus().message().startsWith("Closed the floating window of lazy: "),
-                    "the message about the float");
-            StatusInfo atStart = s.takeStartStatus();
-            assertTrue(atStart != null && atStart.error() && atStart.message().contains("floating windows"),
-                    "the first editor is told, as an error: " + atStart);
-            assertNull(s.takeStartStatus(), "a later editor is not");
-        }
-    }
-
-    @Test
-    void withoutAFloatAtTheStartTheFirstEditorHasNoMessage() throws Exception {
-        try (NeovimSession s = start()) {
-            assertEquals("", s.takeStartStatus().message());
+            waitFor(() -> Ui2Text.shown(s).contains("Closed the floating window of lazy: "),
+                    "the message about the float, shown by Neovim: " + Ui2Text.shown(s));
         }
     }
 

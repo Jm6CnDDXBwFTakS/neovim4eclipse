@@ -55,22 +55,6 @@ class OverlayOverPageTest {
     }
 
     @Test
-    void aMessageShowsAlongTheBottomOfThePage() {
-        MessageLine line = new MessageLine(page, () -> false);
-        try {
-            line.show("3 lines yanked", false);
-            assertTrue(line.isShowing());
-            assertEquals("3 lines yanked", line.frame().content().getText());
-            Rectangle bounds = line.frame().control().getBounds();
-            Rectangle area = page.getClientArea();
-            assertTrue(bounds.y + bounds.height <= area.y + area.height, "inside the page: " + bounds);
-            assertTrue(bounds.y > area.height / 2, "along its bottom: " + bounds);
-        } finally {
-            line.dispose();
-        }
-    }
-
-    @Test
     void aFloatOverThePageTakesThePagesLook() {
         assertEquals(CELL_HEIGHT, GridCanvas.lookOf(page).lineHeight());
     }

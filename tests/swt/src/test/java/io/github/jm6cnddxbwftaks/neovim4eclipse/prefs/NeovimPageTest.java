@@ -122,7 +122,6 @@ class NeovimPageTest {
         List<String> labels = all(page.groups()[1], Button.class, b -> (b.getStyle() & SWT.CHECK) != 0).stream()
                 .map(Button::getText).toList();
         assertEquals(List.of("Show the Neovim button on the main toolbar", "Show Neovim menu in the menu bar",
-                "Flash the editor on errors",
                 "Show a welcome after installing, and a note after updates to a new minor version"), labels);
         Button menu = find(page.groups()[1], Button.class, b -> b.getText().equals("Show Neovim menu in the menu bar"));
         assertEquals(PreferenceConstants.SHOW_MENU_DEFAULT, menu.getSelection(), "the default, as nothing is stored");

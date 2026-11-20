@@ -5194,6 +5194,16 @@ final class LuaScripts {
             """;
 
     /**
+     * A message of the plug-in's own, shown as Neovim shows its own: {@code (message, error)};
+     * ui2 draws it, {@code :messages} keeps it, an error is in {@code ErrorMsg}. Example:
+     * {@code ("E37: No write since last change (add ! to override)", true)}.
+     */
+    static final String ECHO = """
+            local message, err = ...
+            vim.api.nvim_echo({ { message } }, true, { err = err })
+            """;
+
+    /**
      * Sets Neovim's {@code 'background'} to the argument, {@code "dark"} or {@code "light"}, unless
      * it is that already: from Eclipse's theme, so a colorscheme with both variants picks the one
      * that matches the editor, whose colors the command-line window takes for its default ones
@@ -5250,7 +5260,22 @@ final class LuaScripts {
      *   <li>The windows' ids sent to Eclipse ({@code eclipse_ui2_windows}: cmd, msg, pager,
      *       dialog), at start and each time ui2 makes one again: the editor draws these even with
      *       the cursor in them and even with plug-ins' floats turned off.</li>
+     *   <li>{@code :messages} shown in its page editor, not in ui2's pager: the history goes to
+     *       Eclipse ({@code eclipse_messages}, each entry as {@code {kind, text}}), whose page
+     *       keeps it open, searchable and copyable with the mouse (docs/USER_GUIDE.md, "The page
+     *       editors"). ui2's handler of the history is wrapped for that; {@code g<}, which shows the
+     *       last command's output through the same event, still opens ui2's pager. An empty
+     *       history shows nothing, as in Vim.</li>
+     *   <li>The type of each command line as it opens and closes ({@code eclipse_cmdline}: {@code :},
+     *       {@code /}, {@code ?} ..., then {@code ""}): while a search is typed the editor follows
+     *       the preview Neovim scrolls to ({@code 'incsearch'}).</li>
      * </ul>
+     *
+     * <p>Neovim's popup menu (the {@code :} line's Tab list, insert-mode completion) is Neovim's own
+     * too: the UI is attached without {@code ext_popupmenu} ({@code NeovimConnection}), so Neovim
+     * draws it into a grid of its own, which the editor draws as a float. So the setting that once
+     * turned off the plug-in's own completion list, {@code vim.g.neovim4eclipse_completion_menu},
+     * has no effect from 0.3.0; its name stays accepted (README, "Settings").
      *
      * <p>Returns {@code true}, or the error's text when ui2 cannot be loaded or turned on (a Neovim
      * without it: the session then logs it and shows Neovim's line nowhere).
@@ -5301,116 +5326,37 @@ final class LuaScripts {
             if not enabled then
               return 'ui2 not turned on: ' .. tostring(err)
             end
+
+            -- :messages to its page editor; g< (prev_cmd) to ui2's pager as before.
+            local messages = ui2.msg
+            local history_show = messages.msg_history_show
+            messages.msg_history_show = function(entries, prev_cmd, ...)
+              if prev_cmd then
+                return history_show(entries, prev_cmd, ...)
+              end
+              if #entries == 0 then
+                return
+              end
+              local sent = {}
+              for _, entry in ipairs(entries) do
+                local text = {}
+                for _, chunk in ipairs(entry[2] or {}) do
+                  text[#text + 1] = chunk[2]
+                end
+                sent[#sent + 1] = { entry[1], table.concat(text) }
+              end
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_messages', sent)
+            end
+
+            vim.api.nvim_create_autocmd({ 'CmdlineEnter', 'CmdlineLeave' }, {
+              group = group,
+              callback = function(ev)
+                local kind = ev.event == 'CmdlineEnter' and vim.fn.getcmdtype() or ''
+                vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_cmdline', kind)
+              end,
+            })
             vim.o.cmdheight = 1
             send()
-            return true
-            """;
-
-    /**
-     * Neovim's insert-mode completion list drawn in the editor ({@code util/CompletionMenu},
-     * docs/ARCHITECTURE.md, "The completion list"): returns {@code false} when the user's config
-     * sets {@code vim.g.neovim4eclipse_completion_menu = 0} (or {@code false}), and then installs
-     * nothing. Run once at start, after the user's config.
-     *
-     * <p><b>What it sends.</b> The list's entries come with the redraw ({@code popupmenu_show}),
-     * but not all the editor needs to draw them. So at each {@code CompleteChanged} (the list
-     * shows, or its selection moves) it notifies {@code eclipse_complete} with:
-     * <ol>
-     *   <li>the cursor's line (1-based) and byte column (0-based), and its cell in the window
-     *       ({@code wincol()}): the list's own column is a cell too, so the difference is how far
-     *       before the cursor the completed word starts, whatever number or sign columns there are;</li>
-     *   <li>{@code 'pumheight'}, the user's limit on the list's rows;</li>
-     *   <li>the colors of the eight {@code Pmenu} groups, each as
-     *       {@code { fg, bg, bold, italic, underline, reverse }}, -1 for a color left open;</li>
-     *   <li>how many cells of text a row of the window holds while {@code 'wrap'} is on, else 0:
-     *       a word Neovim wraps starts on the screen row before the cursor's, and the difference
-     *       of the two cells is then short by one row ({@code CompletionMenu.Anchor.cellsBack}).</li>
-     * </ol>
-     *
-     * <p><b>The colors are worked out here</b>, so that the editor only paints them. Links are
-     * followed ({@code link = false}). A group that sets no color of its own takes it from the
-     * group it is drawn over, as Neovim's own list does: {@code PmenuKind} and {@code PmenuExtra}
-     * from {@code Pmenu}, their {@code Sel} forms from {@code PmenuSel}, {@code Pmenu} itself from
-     * {@code Normal}. {@code reverse} is passed on, and the canvas swaps the two when it paints.
-     * Example: the default colorscheme's {@code PmenuSel} is only {@code reverse}; it is sent with
-     * {@code Pmenu}'s colors and the flag, so the selected row shows them swapped. A color that not
-     * even {@code Normal} sets is the editor's own. They are looked up again after a
-     * {@code ColorScheme} change.
-     */
-    static final String COMPLETION_MENU = """
-            local enabled = vim.g.neovim4eclipse_completion_menu
-            if enabled == 0 or enabled == false then
-              return false
-            end
-
-            -- name -> the group whose colors fill in what it leaves open
-            local under = {
-              Pmenu = 'Normal', PmenuSel = 'Pmenu', PmenuKind = 'Pmenu', PmenuKindSel = 'PmenuSel',
-              PmenuExtra = 'Pmenu', PmenuExtraSel = 'PmenuSel', PmenuSbar = 'Pmenu', PmenuThumb = 'PmenuSel',
-            }
-            local order = { 'Pmenu', 'PmenuSel', 'PmenuKind', 'PmenuKindSel', 'PmenuExtra', 'PmenuExtraSel',
-              'PmenuSbar', 'PmenuThumb' }
-
-            -- { fg, bg, bold, italic, underline, reverse } of a group; a color nobody sets stays nil
-            local function resolve(name)
-              local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
-              if not ok then
-                hl = {}
-              end
-              local fg, bg, reverse = hl.fg, hl.bg, hl.reverse == true
-              local base = under[name]
-              if base and (fg == nil or bg == nil) then
-                -- Attributes add up, as when Neovim draws one group over another: a color left open
-                -- is the lower group's, and reverse is on if either has it (it is a flag, not a
-                -- toggle: PmenuExtraSel linked to a PmenuSel that is only "reverse" is reversed once).
-                local below = resolve(base)
-                fg, bg, reverse = fg or below[1], bg or below[2], reverse or below[6]
-              end
-              return { fg, bg, hl.bold == true, hl.italic == true, hl.underline == true, reverse }
-            end
-
-            local colors
-            local function all_colors()
-              if not colors then
-                colors = {}
-                for i, name in ipairs(order) do
-                  local c = resolve(name)
-                  colors[i] = { c[1] or -1, c[2] or -1, c[3], c[4], c[5], c[6] }
-                end
-              end
-              return colors
-            end
-
-            local group = vim.api.nvim_create_augroup('neovim4eclipse_completion_menu', { clear = true })
-            vim.api.nvim_create_autocmd('ColorScheme', {
-              group = group,
-              callback = function()
-                colors = nil
-              end,
-            })
-            vim.api.nvim_create_autocmd('CompleteChanged', {
-              group = group,
-              callback = function()
-                local ok, err = pcall(function()
-                  local cursor = vim.api.nvim_win_get_cursor(0)
-                  local text_width = 0
-                  if vim.wo.wrap then
-                    -- the window's width without its number, sign and fold columns
-                    local info = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
-                    text_width = info and (info.width - info.textoff) or 0
-                  end
-                  vim.rpcnotify(0, 'eclipse_complete', cursor[1], cursor[2], vim.fn.wincol(), vim.o.pumheight,
-                    all_colors(), text_width)
-                end)
-                if not ok then
-                  vim.schedule(function()
-                    vim.notify('neovim4eclipse: completion list: ' .. tostring(err), vim.log.levels.WARN)
-                  end)
-                end
-              end,
-            })
-            -- For the Lua spec and for a look from the command line.
-            package.loaded['neovim4eclipse.completion_menu'] = { colors = all_colors, resolve = resolve }
             return true
             """;
 

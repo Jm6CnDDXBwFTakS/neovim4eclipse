@@ -53,7 +53,11 @@ public final class PreferenceConstants {
 
     /** Show the mode ({@code INSERT}, {@code INSERT rec @q}). */
     public static final String STATUS_MODE = "statusMode";
-    /** Show the pending command ({@code showcmd}, e.g. {@code 2d}). */
+    /**
+     * Once: show the pending command ({@code showcmd}, e.g. {@code 2d}). No effect from 0.3.0:
+     * Neovim shows it itself, in its command line (ui2). The name is kept so that a saved setting
+     * still loads (README, "Settings").
+     */
     public static final String STATUS_SHOWCMD = "statusShowcmd";
     /** Show Neovim's own {@code 'statusline'}. */
     public static final String STATUS_STATUSLINE = "statusStatusline";
@@ -88,8 +92,9 @@ public final class PreferenceConstants {
     // ---- Messages in the editor ----
 
     /**
-     * Whether an error also flashes the editor briefly, like Vim's {@code 'visualbell'}, so that it is
-     * noticed while the eyes are on the cursor. Messages always appear in the editor's message line.
+     * Once: whether an error also flashed the editor briefly, like Vim's {@code 'visualbell'}. No
+     * effect from 0.3.0: Neovim shows its messages itself (ui2). The name is kept so that a saved
+     * setting still loads (README, "Settings").
      */
     public static final String FLASH_ON_ERROR = "flashOnError";
 
@@ -143,9 +148,9 @@ public final class PreferenceConstants {
         return key != null && (key.startsWith(CTRL_KEY_NORMAL_PREFIX) || key.startsWith(CTRL_KEY_INSERT_PREFIX));
     }
 
-    /** Whether the key is one of the status bar preferences: the three parts, the widths. */
+    /** Whether the key is one of the status bar preferences: the two parts, the widths. */
     public static boolean isStatusItemKey(String key) {
-        return STATUS_MODE.equals(key) || STATUS_SHOWCMD.equals(key) || STATUS_STATUSLINE.equals(key)
+        return STATUS_MODE.equals(key) || STATUS_STATUSLINE.equals(key)
                 || STATUS_STATUSLINE_WIDTH.equals(key) || STATUS_MAX_WIDTH_PERCENT.equals(key);
     }
 }

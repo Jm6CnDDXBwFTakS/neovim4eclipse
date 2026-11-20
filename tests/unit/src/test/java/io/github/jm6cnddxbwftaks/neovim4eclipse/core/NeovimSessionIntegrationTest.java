@@ -26,7 +26,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.RpcChannel;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
@@ -171,39 +170,19 @@ class NeovimSessionIntegrationTest {
     // ---- status bar parts ----
 
     @Test
-    void statusInfoReportsPendingCommandMessageAndStatusline() throws Exception {
+    void statusInfoReportsTheStatusline() throws Exception {
         try (NeovimSession s = start()) {
             s.setStatusItems(java.util.EnumSet.allOf(io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem.class));
             s.setStatuslineColumns(60); // as the status bar does once its statusline label is laid out
             s.setBufferLines(List.of("one", "two"));
             List<StatusInfo> seen = new CopyOnWriteArrayList<>();
             s.addStatusListener(seen::add);
-
-            keys(s, "2", "d");
-            assertTrue(seen.stream().anyMatch(i -> i.cmd().contains("2d")), "pending command: " + seen);
-            keys(s, "d");
-
-            keys(s, "/", "n", "o", "p", "e", "<CR>"); // a search that fails: E486
-            assertTrue(seen.stream().anyMatch(i -> i.message().contains("E486")), "error message: " + seen);
-            assertTrue(seen.stream().anyMatch(i -> !i.statusline().isBlank()), "statusline: " + seen);
+            keys(s, "j");
+            waitFor(() -> seen.stream().anyMatch(i -> !i.statusline().isBlank()), "statusline: " + seen);
         }
     }
 
-    @Test
-    void waitingForACharacterShowsTheKeyInTheCommandArea() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setStatusItems(java.util.EnumSet.of(io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem.CMD));
-            s.setBufferLines(List.of("abc"));
-            List<StatusInfo> seen = new CopyOnWriteArrayList<>();
-            s.addStatusListener(seen::add);
-            keys(s, "2", "f");
-            assertTrue(seen.stream().anyMatch(i -> i.cmd().equals("2f")), "pending 2f: " + seen);
-            keys(s, "c");
-            assertEquals("", seen.get(seen.size() - 1).cmd(), "the command completed");
-        }
-    }
-
-    /** The status bar parts are only shown when chosen; messages always reach the message line. */
+    /** The statusline is only evaluated when the status bar shows it. */
     @Test
     void nothingOptionalIsEvaluatedWhenOnlyTheModeIsShown() throws Exception {
         try (NeovimSession s = start()) {
@@ -212,9 +191,8 @@ class NeovimSessionIntegrationTest {
             List<StatusInfo> seen = new CopyOnWriteArrayList<>();
             s.addStatusListener(seen::add);
             keys(s, "2", "d", "d", "/", "n", "o", "<CR>");
-            assertTrue(seen.stream().allMatch(i -> i.statusline().isEmpty() && i.cmd().isEmpty()),
-                    "unrequested parts must stay empty: " + seen);
-            assertTrue(seen.stream().anyMatch(i -> i.error() && i.message().contains("E486")), "the error: " + seen);
+            NeovimBarrier.pass(s);
+            assertTrue(seen.stream().allMatch(i -> i.statusline().isEmpty()), "unrequested parts must stay empty: " + seen);
         }
     }
 
@@ -257,18 +235,17 @@ class NeovimSessionIntegrationTest {
 
     /**
      * Neovim's own {@code gd} with nothing under the cursor fails as it does when typed: the error
-     * ({@code E349: No identifier under cursor}) reaches the message line as an error, and Neovim
+     * ({@code E349: No identifier under cursor}) is shown by Neovim as an error, and Neovim
      * keeps it in {@code :messages}, because the script echoes it with {@code err = true}.
      */
     @Test
     void anErrorOfNeovimsOwnKeyIsShownAsAnError() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of(""));
-            List<StatusInfo> seen = new CopyOnWriteArrayList<>();
-            s.addStatusListener(seen::add);
             s.normalAsync("gd");
-            waitFor(() -> seen.stream().anyMatch(i -> i.error() && i.message().equals("E349: No identifier under cursor")),
-                    "E349 as an error in the message line, without the \"Vim:\" prefix pcall adds");
+            waitFor(() -> Ui2Text.shown(s).contains("E349: No identifier under cursor"),
+                    "E349 shown by Neovim, without the \"Vim:\" prefix pcall adds");
+            assertFalse(Ui2Text.shown(s).contains("Vim:E349"));
             String history = (String) s.lua("return vim.api.nvim_exec2('messages', { output = true }).output");
             assertTrue(history.contains("E349: No identifier under cursor"), "kept in :messages: " + history);
         }
@@ -277,152 +254,77 @@ class NeovimSessionIntegrationTest {
     // Commands Eclipse carries out (LuaScripts.HOST_COMMANDS) are tested in Lua, without the session:
     // src/test/lua/host_commands_spec.lua (run by LuaScriptsInNeovimTest).
 
-    // ---- messages (ext_messages): the message line and the output popup ----
-
-    /** What a session shows: the message line's messages and the popup's output, in order. */
-    private static final class Shown {
-        final List<StatusInfo> lines = new CopyOnWriteArrayList<>();
-        final List<CommandOutput> outputs = new CopyOnWriteArrayList<>();
-
-        Shown(NeovimSession s) {
-            s.addStatusListener(info -> {
-                if (!info.message().isEmpty()) {
-                    lines.add(info);
-                }
-            });
-            s.addOutputListener(outputs::add);
-        }
-
-        boolean line(String message, boolean error) {
-            return lines.stream().anyMatch(i -> i.message().equals(message) && i.error() == error);
-        }
-    }
+    // ---- messages: Neovim shows them itself, in ui2's windows (LuaScripts.UI2) ----
 
     /**
-     * A typed command's one-line output and its errors go to the message line, a one-line listing
-     * ({@code :set tabstop?}) too, as on Neovim's own screen; a command that prints nothing shows
-     * nothing. The command is typed as written, so the history has it without {@code :silent}.
+     * A typed command's output and its errors are shown by Neovim; the command is typed as written,
+     * so the history has it without {@code :silent}.
      */
     @Test
     void typedCommandsShowWhatTheyPrint() throws Exception {
         try (NeovimSession s = start()) {
-            Shown shown = new Shown(s);
             s.commandAsync("echo 'hello from' 'neovim'");
-            s.commandAsync("set tabstop?");
+            waitFor(() -> Ui2Text.shown(s).contains("hello from neovim"), "the echo");
             s.commandAsync("nosuchcommand");
+            waitFor(() -> Ui2Text.shown(s).contains("E492: Not an editor command: nosuchcommand"), "the error");
             s.commandAsync("let g:x = 1");
             s.commandAsync("echo 'done'");
-            waitFor(() -> shown.line("done", false), "the last command's message");
-            assertTrue(shown.line("hello from neovim", false), "one-line echo: " + shown.lines);
-            assertTrue(shown.line("E492: Not an editor command: nosuchcommand", true), "the error: " + shown.lines);
-            assertTrue(shown.line("tabstop=8", false), "one-line listing: " + shown.lines);
-            assertEquals(List.of(), shown.outputs, "no popup");
+            waitFor(() -> Ui2Text.shown(s).contains("done"), "the last command's message");
             assertEquals("1", String.valueOf(s.lua("return vim.g.x")));
             assertEquals("echo 'done'", String.valueOf(s.lua("return vim.fn.histget(':', -1)")),
                     "the command is typed, so it is in the history as written");
         }
     }
 
-    /**
-     * A listing of more than one line opens the popup, titled with its command line. Listings are
-     * typed like every other command, so {@code @:} repeats them. ({@code :ls!}: the session's
-     * scratch buffer is unlisted; two more buffers make the listing longer than one line.)
-     */
+    /** A listing is typed like every other command, so {@code @:} repeats it; Neovim shows it. */
     @Test
-    void aListingOpensThePopupAndIsInTheHistory() throws Exception {
+    void aListingIsShownAndIsInTheHistory() throws Exception {
         try (NeovimSession s = start()) {
             s.lua("vim.api.nvim_create_buf(true, true); vim.api.nvim_create_buf(true, true)");
-            Shown shown = new Shown(s);
             s.commandAsync("ls!");
-            waitFor(() -> !shown.outputs.isEmpty(), "the listing");
-            assertEquals(":ls!", shown.outputs.get(0).title());
-            assertTrue(shown.outputs.get(0).text().contains("line 1"), "a buffer list: " + shown.outputs);
+            waitFor(() -> Ui2Text.shown(s).contains("line 1"), "the buffer list");
             assertEquals("ls!", String.valueOf(s.lua("return vim.fn.histget(':', -1)")));
         }
     }
 
-    @Test
-    void aSubstitutionsCountIsShownOnTheMessageLine() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setBufferLines(List.of("alpha", "data"));
-            Shown shown = new Shown(s);
-            s.commandAsync("%s/a/b/g");
-            waitFor(() -> shown.line("4 substitutions on 2 lines", false), "the count");
-            assertEquals(List.of("blphb", "dbtb"), s.getBufferLines());
-            assertTrue(shown.outputs.isEmpty(), "no popup: " + shown.outputs);
-        }
-    }
-
-    /** A message of two lines is shown as Vim shows it before a "Press ENTER": in the popup. */
-    @Test
-    void aMessageOfSeveralLinesOpensThePopup() throws Exception {
-        try (NeovimSession s = start()) {
-            Shown shown = new Shown(s);
-            s.commandAsync("echo \"one\\ntwo\"");
-            waitFor(() -> !shown.outputs.isEmpty(), "the popup");
-            assertEquals(new CommandOutput(":echo \"one\\ntwo\"", "one\ntwo"), shown.outputs.get(0));
-        }
-    }
-
-    @Test
-    void shellCommandOutputIsShownWithoutTheEchoedCommand() throws Exception {
-        try (NeovimSession s = start()) {
-            Shown shown = new Shown(s);
-            s.commandAsync("!echo shellout");
-            waitFor(() -> !shown.outputs.isEmpty(), "the shell command's output");
-            assertEquals(new CommandOutput(":!echo shellout", "shellout"), shown.outputs.get(shown.outputs.size() - 1));
-        }
-    }
-
     /**
-     * A shell command that prints several lines ({@code :!dir} on Windows, {@code :!ls} elsewhere)
-     * shows one line per entry: no {@code \r} left from Windows' {@code \r\n}, which the popup
-     * would show as stray {@code ^M} characters or double spacing.
-     *
-     * <p>The output can arrive in pieces (on a loaded machine the first is often one line), and the
-     * popup is sent the whole output again after each, so the test waits for one with several lines.
+     * A shell command's output is shown by Neovim, one line per line: no {@code \r} left from
+     * Windows' {@code \r\n}.
      */
     @Test
-    void multiLineShellCommandOutputHasNoCarriageReturns() throws Exception {
+    void shellCommandOutputIsShownWithoutCarriageReturns() throws Exception {
         try (NeovimSession s = start()) {
-            Shown shown = new Shown(s);
-            s.commandAsync(PlatformUtil.isWindows() ? "!dir" : "!ls -a");
-            waitFor(() -> !shown.outputs.isEmpty() && shown.outputs.get(shown.outputs.size() - 1).text().contains("\n"),
-                    "the shell command's output, several lines");
-            String output = shown.outputs.get(shown.outputs.size() - 1).text();
-            assertFalse(output.contains("\r"), "no carriage return: " + output.replace("\r", "\\r"));
+            s.commandAsync(PlatformUtil.isWindows() ? "!echo shellout& echo second" : "!echo shellout; echo second");
+            waitFor(() -> Ui2Text.shown(s).contains("second"), "the shell command's output");
+            assertFalse(Ui2Text.shown(s).contains("\r"), "no carriage return");
         }
     }
 
     /**
-     * Long output leaves Neovim ready for the next key: with {@code ext_messages} there is no
-     * "Press ENTER" or "-- More --" prompt to wait at, so nothing dismisses one.
+     * Long output leaves Neovim ready for the next key: ui2 has no "Press ENTER" or "-- More --"
+     * prompt to wait at; what does not fit is collapsed, and {@code g<} shows it whole.
      */
     @Test
     void longOutputLeavesNoPrompt() throws Exception {
         try (NeovimSession s = start()) {
-            Shown shown = new Shown(s);
             s.commandAsync("echo join(range(300), \"\\n\")");
-            waitFor(() -> !shown.outputs.isEmpty(), "the output");
-            assertEquals(300, shown.outputs.get(0).text().split("\n").length);
+            waitFor(() -> Ui2Text.shown(s).contains("299"), "the output");
             String mode = String.valueOf(s.lua("return vim.api.nvim_get_mode().mode"));
             assertEquals("n", mode, "no hit-enter (r) or more (rm) prompt");
         }
     }
 
     /**
-     * The plug-in no longer redirects anything itself, so the user's {@code :redir} simply works.
-     * {@code g:mine} is set only by {@code :redir END}, the last queued command, which may still be
-     * waiting when the echo shows, so the test waits for the variable too.
+     * The plug-in redirects nothing itself, so the user's {@code :redir} simply works.
+     * {@code g:mine} is set only by {@code :redir END}, the last queued command, so the test waits
+     * for the variable.
      */
     @Test
     void aTypedRedirCollectsWhatIsPrinted() throws Exception {
         try (NeovimSession s = start()) {
-            Shown shown = new Shown(s);
             s.commandAsync("redir => g:mine");
             s.commandAsync("echo 'kept'");
             s.commandAsync("redir END");
-            waitFor(() -> shown.line("kept", false), "the echo, shown as well, as in Vim");
             waitFor(() -> String.valueOf(uncheckedLua(s, "return vim.g.mine")).contains("kept"),
                     "the user's :redir to collect the echo");
         }
@@ -437,13 +339,12 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * {@code :messages} arrives as its own event (msg_history_show) and goes to a page editor,
-     * its errors marked; the output popup gets nothing.
+     * {@code :messages} goes to a page editor, its errors marked ({@code LuaScripts.UI2} takes it
+     * from ui2), and ui2's pager is not entered.
      */
     @Test
     void theMessageHistoryGoesToTheViewWithItsErrorsMarked() throws Exception {
         try (NeovimSession s = start()) {
-            Shown shown = new Shown(s);
             List<ViewText> texts = new CopyOnWriteArrayList<>();
             s.addViewContentListener(c -> {
                 if (c instanceof ViewText t) {
@@ -462,7 +363,8 @@ class NeovimSessionIntegrationTest {
             assertTrue(text.highlights().contains(new ViewText.LineHighlight(error, "ErrorMsg")), text.highlights().toString());
             assertTrue(text.highlights().stream().noneMatch(h -> h.line() == remembered), "a plain message stays plain");
             NeovimBarrier.pass(s);
-            assertTrue(shown.outputs.isEmpty(), "nothing for the popup: " + shown.outputs);
+            assertTrue(Boolean.TRUE.equals(s.lua("return vim.api.nvim_get_current_win() ~= require('vim._core.ui2').wins.pager")),
+                    "ui2's pager not entered");
         }
     }
 
@@ -566,15 +468,14 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * A message no command waits for, from a timer, still reaches the message line: the case of the
-     * diagnostics plan's jump message, which Neovim echoes later, with vim.schedule.
+     * A message no command waits for, from a timer, is still shown: the case of the diagnostics'
+     * jump message, which Neovim echoes later, with vim.schedule.
      */
     @Test
     void aLaterMessageFromATimerIsShown() throws Exception {
         try (NeovimSession s = start()) {
-            Shown shown = new Shown(s);
             s.lua("vim.defer_fn(function() vim.api.nvim_echo({ { 'from a timer' } }, false, {}) end, 50)");
-            waitFor(() -> shown.line("from a timer", false), "the timer's message");
+            waitFor(() -> Ui2Text.shown(s).contains("from a timer"), "the timer's message");
         }
     }
 
@@ -881,7 +782,7 @@ class NeovimSessionIntegrationTest {
             assertEquals(40L, ui.get("height"));
             for (String option : List.of("rgb", "override", "ext_cmdline", "ext_hlstate", "ext_linegrid",
                     "ext_messages", "ext_multigrid", "ext_popupmenu", "ext_tabline", "ext_termcolors")) {
-                boolean on = List.of("rgb", "ext_cmdline", "ext_messages", "ext_linegrid", "ext_multigrid", "ext_popupmenu")
+                boolean on = List.of("rgb", "ext_cmdline", "ext_messages", "ext_linegrid", "ext_multigrid")
                     .contains(option);
                 assertEquals(on, ui.get(option), option); // see TERMINAL_UI
             }
@@ -1431,60 +1332,59 @@ class NeovimSessionIntegrationTest {
         }
     }
 
-    /** The views the command-line listener heard, in order. */
-    private static List<CmdlineState.View> cmdlineViews(NeovimSession s) {
-        List<CmdlineState.View> views = new CopyOnWriteArrayList<>();
-        s.addCmdlineListener(views::add);
-        return views;
-    }
-
-    private static CmdlineState.View last(List<CmdlineState.View> views) {
-        return views.isEmpty() ? CmdlineState.View.CLOSED : views.get(views.size() - 1);
+    /**
+     * The command line Neovim has open, as {@code getcmdtype()} and {@code getcmdline()} together
+     * ({@code ":echo"}), with its cursor's byte position after a {@code |}; {@code null} while none
+     * is open or the call fails. Neovim draws it itself (ui2).
+     */
+    private static String cmdline(NeovimSession s) {
+        Object line = luaOrNull(s, "return vim.fn.mode() == 'c' and (vim.fn.getcmdtype() .. vim.fn.getcmdline()"
+                + " .. '|' .. vim.fn.getcmdpos()) or vim.NIL");
+        return line instanceof String text ? text : null;
     }
 
     @Test
-    void typingOnTheCommandLineIsReportedWithItsCursor() throws Exception {
+    void typingOnTheCommandLineIsNeovimsWithItsCursor() throws Exception {
         try (NeovimSession s = start()) {
-            List<CmdlineState.View> views = cmdlineViews(s);
             keys(s, ":", "e", "c", "h", "o", "<Left>");
-            waitFor(() -> last(views).caret() == 4, "the caret after <Left>: " + views);
-            assertEquals(":echo", last(views).text());
+            waitFor(() -> ":echo|4".equals(cmdline(s)), "the line and the cursor after <Left>: " + cmdline(s));
             keys(s, "<Esc>");
-            waitFor(() -> !last(views).open(), "the line closed: " + views);
+            waitFor(() -> cmdline(s) == null, "the line closed");
         }
     }
 
-    /** Neovim's own history: Up recalls the last command, typed through the box or anywhere. */
+    /** Neovim's own history: Up recalls the last command. */
     @Test
     void upRecallsNeovimsHistory() throws Exception {
         try (NeovimSession s = start()) {
-            List<CmdlineState.View> views = cmdlineViews(s);
             keys(s, ":", "l", "e", "t", " ", "g", ":", "x", "=", "1", "<CR>");
             keys(s, ":", "<Up>");
-            waitFor(() -> last(views).text().equals(":let g:x=1"), "the history entry: " + views);
+            waitFor(() -> String.valueOf(cmdline(s)).startsWith(":let g:x=1|"), "the history entry: " + cmdline(s));
         }
     }
 
-    /** Tab is Neovim's completion; the candidates come as the menu of the command line. */
+    /** Tab is Neovim's completion; the candidates are Neovim's popup menu, drawn as a float. */
     @Test
-    void tabCompletesAndListsTheCandidates() throws Exception {
+    void tabCompletesAndNeovimsMenuListsTheCandidates() throws Exception {
         try (NeovimSession s = start()) {
-            List<CmdlineState.View> views = cmdlineViews(s);
+            List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
+            s.addFloatingWindowListener(reports::add);
             keys(s, ":", "c", "o", "l", "o", " ", "<Tab>");
-            waitFor(() -> last(views).candidates().size() > 1, "colorscheme candidates: " + views);
-            assertTrue(last(views).candidates().contains("default"), last(views).candidates().toString());
-            assertTrue(last(views).text().startsWith(":colo "), last(views).text());
+            waitFor(() -> !reports.isEmpty() && reports.get(reports.size() - 1).stream()
+                    .anyMatch(f -> f.grid().window() == -1 && rows(f.grid()).stream().anyMatch(r -> r.contains("default"))),
+                    "colorscheme candidates in the popup menu: " + reports);
+            assertTrue(String.valueOf(cmdline(s)).startsWith(":colo "), cmdline(s));
+            keys(s, "<Esc>");
         }
     }
 
-    /** A line a mapping opens is shown like any other: it is Neovim's line. */
+    /** A line a mapping opens is Neovim's like any other. */
     @Test
-    void aLineOpenedByAMappingIsShown() throws Exception {
+    void aLineOpenedByAMappingIsNeovims() throws Exception {
         try (NeovimSession s = start()) {
             s.command("nnoremap ; :%s/");
-            List<CmdlineState.View> views = cmdlineViews(s);
             keys(s, ";");
-            waitFor(() -> last(views).text().equals(":%s/"), "the mapping's line: " + views);
+            waitFor(() -> String.valueOf(cmdline(s)).startsWith(":%s/|"), "the mapping's line: " + cmdline(s));
         }
     }
 
@@ -1493,19 +1393,17 @@ class NeovimSessionIntegrationTest {
     void colonInVisualModeGetsNeovimsRange() throws Exception {
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("a", "b"));
-            List<CmdlineState.View> views = cmdlineViews(s);
             keys(s, "V", "j", ":");
-            waitFor(() -> last(views).text().equals(":'<,'>"), "the visual range: " + views);
+            waitFor(() -> String.valueOf(cmdline(s)).startsWith(":'<,'>|"), "the visual range: " + cmdline(s));
         }
     }
 
+    /** A prompt ({@code input()}) is a command line too: its text is Neovim's line. */
     @Test
-    void aPromptIsShownWithItsText() throws Exception {
+    void aPromptIsNeovimsLine() throws Exception {
         try (NeovimSession s = start()) {
-            List<CmdlineState.View> views = cmdlineViews(s);
             s.inputAsync(":call input('Name: ', 'def')<CR>");
-            waitFor(() -> last(views).text().equals("Name: def"), "the prompt: " + views);
-            assertEquals("", last(views).firstc());
+            waitFor(() -> "@def|4".equals(cmdline(s)), "the prompt's line: " + cmdline(s));
             keys(s, "<Esc>");
         }
     }
@@ -1514,10 +1412,10 @@ class NeovimSessionIntegrationTest {
     @Test
     void aPasteGoesIntoTheLine() throws Exception {
         try (NeovimSession s = start()) {
-            List<CmdlineState.View> views = cmdlineViews(s);
             keys(s, ":");
             s.pasteAsync("echo \"<x>\"");
-            waitFor(() -> last(views).text().equals(":echo \"<x>\""), "the pasted text: " + views);
+            waitFor(() -> String.valueOf(cmdline(s)).startsWith(":echo \"<x>\"|"), "the pasted text: " + cmdline(s));
+            keys(s, "<Esc>");
         }
     }
 
@@ -1535,27 +1433,12 @@ class NeovimSessionIntegrationTest {
         }
     }
 
-    /** The plug-in's own typed lines ({@code commandAsync}) do not open the box. */
-    @Test
-    void thePluginsOwnLinesAreNotReported() throws Exception {
-        try (NeovimSession s = start()) {
-            List<CmdlineState.View> views = cmdlineViews(s);
-            s.commandAsync("let g:own = 1");
-            waitFor(() -> Long.valueOf(1).equals(luaOrNull(s, "return vim.g.own")), "the command ran");
-            keys(s, ":");
-            waitFor(() -> last(views).open(), "the user's line");
-            assertEquals(":", views.get(0).text(), "the first view is the user's line, not :let: " + views);
-        }
-    }
-
     /** {@code q:} would open a window Eclipse cannot show: it closes at once, with a message. */
     @Test
     void theCommandLineWindowIsDrawnAndEnterRunsItsLine() throws Exception {
         try (NeovimSession s = start()) {
             List<CommandWindowView> views = new CopyOnWriteArrayList<>();
             s.addCommandWindowListener(views::add);
-            List<StatusInfo> seen = new CopyOnWriteArrayList<>();
-            s.addStatusListener(seen::add);
             s.lua("vim.fn.histadd(':', 'echo \"from the history\"')");
             keys(s, "q", ":");
             waitFor(() -> views.stream().anyMatch(v -> v.open() && v.grid() != null
@@ -1568,8 +1451,8 @@ class NeovimSessionIntegrationTest {
             assertEquals(":", String.valueOf(s.lua("return vim.fn.getcmdwintype()")));
             keys(s, "k", "<CR>"); // up to the history line, and run it
             waitFor(() -> !views.get(views.size() - 1).open(), "closed after Enter: " + views);
-            waitFor(() -> seen.stream().anyMatch(i -> i.message().contains("from the history")), "the line ran: " + seen);
-            assertEquals(1L, ((Number) s.lua("return #vim.api.nvim_list_wins()")).longValue());
+            waitFor(() -> Ui2Text.shown(s).contains("from the history"), "the line ran");
+            assertEquals(1L, ((Number) s.lua("return #vim.tbl_filter(function(w) return not vim.w[w].neovim4eclipse_ui2 end, vim.api.nvim_list_wins())")).longValue());
             assertFalse(s.isCommandWindowOpen());
         }
     }
@@ -1620,6 +1503,23 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
+     * {@code floats} without Neovim's own command line and messages (ui2's windows, always drawn;
+     * {@code NeovimUi2IntegrationTest}) and its popup menu: the plug-ins' floats alone.
+     */
+    private static List<FloatWindow> plugInFloats(NeovimSession s, List<FloatWindow> floats) {
+        List<Long> ui2 = new ArrayList<>();
+        try {
+            Object ids = s.lua("local w = require('vim._core.ui2').wins return { w.cmd, w.msg, w.pager, w.dialog }");
+            if (ids instanceof List<?> list) {
+                list.forEach(id -> ui2.add(((Number) id).longValue()));
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        return floats.stream().filter(f -> f.grid().window() != -1 && !ui2.contains((long) f.grid().window())).toList();
+    }
+
+    /**
      * A floating window a plug-in opens without entering it (key hints, hover text) reaches the
      * listeners with its cells and its place, moves when the text it hangs on scrolls, and is gone
      * when it closes. Example: a float at line 10 of a window showing lines 1 to 23 is on row 10
@@ -1633,10 +1533,10 @@ class NeovimSessionIntegrationTest {
             List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
             s.addFloatingWindowListener(reports::add);
             s.lua(OPEN_FLOAT);
-            waitFor(() -> !reports.isEmpty() && reports.get(reports.size() - 1).size() == 1
-                    && rows(reports.get(reports.size() - 1).get(0).grid()).get(0).startsWith("float text"),
-                    "the float drawn: " + reports);
-            FloatWindow drawn = reports.get(reports.size() - 1).get(0);
+            waitFor(() -> !reports.isEmpty() && plugInFloats(s, reports.get(reports.size() - 1)).size() == 1
+                    && rows(plugInFloats(s, reports.get(reports.size() - 1)).get(0).grid()).get(0).startsWith("float text"),
+                    "the float drawn");
+            FloatWindow drawn = plugInFloats(s, reports.get(reports.size() - 1)).get(0);
             assertEquals(number(s, "return vim.g.float"), drawn.grid().window());
             assertEquals(14, drawn.grid().width());
             assertEquals(2, drawn.grid().height());
@@ -1648,18 +1548,20 @@ class NeovimSessionIntegrationTest {
             assertEquals(number(s, "return vim.api.nvim_win_get_height(0)"), drawn.hostRows(),
                     "the editor's window, whose place Neovim said once, right after the UI attached");
             keys(s, "<C-e>");
-            waitFor(() -> reports.get(reports.size() - 1).size() == 1 && reports.get(reports.size() - 1).get(0).row() == row - 1,
-                    "the float one row up after the text scrolled a line: " + reports);
+            waitFor(() -> plugInFloats(s, reports.get(reports.size() - 1)).size() == 1
+                    && plugInFloats(s, reports.get(reports.size() - 1)).get(0).row() == row - 1,
+                    "the float one row up after the text scrolled a line");
             s.lua("vim.api.nvim_win_close(vim.g.float, true)");
-            waitFor(() -> reports.get(reports.size() - 1).isEmpty(), "gone when closed: " + reports);
-            assertEquals(List.of(), s.floatingWindows());
+            waitFor(() -> plugInFloats(s, reports.get(reports.size() - 1)).isEmpty(), "gone when closed");
+            assertEquals(List.of(), plugInFloats(s, s.floatingWindows()));
         }
     }
 
     /**
      * {@code vim.g.neovim4eclipse_floating_windows = 0} turns the drawing off, and so does the
      * viewport being off: a float's place is a cell of Neovim's screen, which is then not the
-     * editor's size. The float still opens in Neovim; no listener hears of it.
+     * editor's size. The float still opens in Neovim; no listener hears of it. (Neovim's own
+     * command line and messages, ui2's windows, are drawn all the same: they are left out here.)
      */
     @Test
     void floatingWindowsAreNotReportedWhenTurnedOffOrWithoutTheViewport() throws Exception {
@@ -1674,8 +1576,8 @@ class NeovimSessionIntegrationTest {
                 waitFor(() -> number(s, "return vim.fn.line('.')") == 2, "the key handled");
                 NeovimBarrier.pass(s);
                 assertEquals(1L, number(s, "return vim.api.nvim_win_is_valid(vim.g.float) and 1 or 0"), "the float is there");
-                assertEquals(List.of(), reports, off);
-                assertEquals(List.of(), s.floatingWindows(), off);
+                assertTrue(reports.stream().allMatch(r -> plugInFloats(s, r).isEmpty()), off + ": " + reports);
+                assertEquals(List.of(), plugInFloats(s, s.floatingWindows()), off);
             }
         }
     }
@@ -1702,7 +1604,7 @@ class NeovimSessionIntegrationTest {
             int gone = s.commandWindowGrid();
             keys(s, "<C-c>", "<C-c>"); // out of the window, nothing run
             waitFor(() -> !s.isCommandWindowOpen() && s.commandWindowGrid() == -1, "closed");
-            String cursors = "return vim.inspect(vim.tbl_map(vim.api.nvim_win_get_cursor, vim.api.nvim_list_wins()))"
+            String cursors = "return vim.inspect(vim.tbl_map(vim.api.nvim_win_get_cursor, vim.tbl_filter(function(w) return not vim.w[w].neovim4eclipse_ui2 end, vim.api.nvim_list_wins())))"
                     + " .. vim.fn.mode() .. vim.fn.getcmdwintype()";
 
             clickRows(s, gone); // with only the editor's window open
@@ -1746,7 +1648,7 @@ class NeovimSessionIntegrationTest {
             waitFor(() -> !s.isCommandWindowOpen(), "closed");
             s.lua("return 1"); // the keys typed by the close have been handled
             assertEquals(Boolean.TRUE, s.lua("return vim.g.quit_seen == nil"), "no :quit ran outside the window");
-            assertEquals(1L, ((Number) s.lua("return #vim.api.nvim_list_wins()")).longValue());
+            assertEquals(1L, ((Number) s.lua("return #vim.tbl_filter(function(w) return not vim.w[w].neovim4eclipse_ui2 end, vim.api.nvim_list_wins())")).longValue());
         }
     }
 
@@ -1790,16 +1692,13 @@ class NeovimSessionIntegrationTest {
         try (NeovimSession s = start()) {
             List<CommandWindowView> views = new CopyOnWriteArrayList<>();
             s.addCommandWindowListener(views::add);
-            List<CmdlineState.View> lines = new CopyOnWriteArrayList<>();
-            s.addCmdlineListener(lines::add);
             keys(s, ":", "e", "c", "h", "o", " ", "4", "2", "<C-f>");
             waitFor(() -> views.stream().anyMatch(v -> v.open() && v.grid() != null
                     && rows(v.grid()).stream().anyMatch(r -> r.contains("echo 42"))), "the window with the line: " + views);
-            waitFor(() -> !lines.get(lines.size() - 1).open(), "the line hidden while the window is open: " + lines);
             // Ctrl-C in the window: back to the command line, with the line under the cursor.
             keys(s, "<C-c>");
-            waitFor(() -> !s.isCommandWindowOpen() && lines.get(lines.size() - 1).open()
-                    && lines.get(lines.size() - 1).text().equals(":echo 42"), "back on the line: " + lines);
+            waitFor(() -> !s.isCommandWindowOpen() && String.valueOf(cmdline(s)).startsWith(":echo 42|"),
+                    "back on the line: " + cmdline(s));
             keys(s, "<Esc>");
         }
     }

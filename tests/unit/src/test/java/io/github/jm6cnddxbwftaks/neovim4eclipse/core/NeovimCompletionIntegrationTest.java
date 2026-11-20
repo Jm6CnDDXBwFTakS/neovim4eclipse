@@ -16,17 +16,16 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
- * Neovim's insert-mode completion through a real session with its UI attached
- * (docs/ARCHITECTURE.md, "The completion list"): the keys reach Neovim after the text Eclipse
- * typed, Neovim types on while it completes, and the list reaches the listeners with its entries
- * and the place of the word. How the list is laid out is {@code CompletionMenuTest}; what the Lua
- * sends, {@code completion_menu_spec.lua}; the hand-back's steps with a fake Neovim,
- * {@code KeyInputTest}. Here: that Neovim's events and modes are what those tests assume.
+ * Neovim's insert-mode completion through a real session with its UI attached: the keys reach
+ * Neovim after the text Eclipse typed, Neovim types on while it completes, and Neovim's popup menu
+ * (the float with no window, -1) reaches the floats' listeners to be drawn. The hand-back's steps
+ * with a fake Neovim are {@code KeyInputTest}; which floats are drawn, {@code GridsTest}. Here:
+ * that Neovim's events and modes are what those tests assume.
  *
  * <p>The buffer is three words and two empty lines; "Eclipse typed {@code al}" is the document
  * push a sync point makes, as the editor's is.
@@ -101,8 +100,37 @@ class NeovimCompletionIntegrationTest {
                 LINE_4 + typed.length());
     }
 
-    private static List<String> words(CompletionMenu.View view) {
-        return view.items().stream().map(CompletionMenu.Item::word).toList();
+    /** Neovim's popup menu as last reported to be drawn, or null while none is. */
+    private static FloatWindow menu(NeovimSession s) {
+        for (FloatWindow f : s.floatingWindows()) {
+            if (f.grid().window() == -1) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    private static boolean menuShown(NeovimSession s) {
+        return menu(s) != null;
+    }
+
+    /** The words of the popup menu drawn now, its rows' text stripped. */
+    private static List<String> words(NeovimSession s) {
+        FloatWindow menu = menu(s);
+        List<String> words = new ArrayList<>();
+        for (int r = 0; menu != null && r < menu.grid().height(); r++) {
+            words.add(menu.grid().row(r).strip());
+        }
+        return words;
+    }
+
+    /** The entry selected in Neovim's completion, 0-based; -1 for none. */
+    private static long selected(NeovimSession s) {
+        try {
+            return ((Number) s.lua("return vim.fn.complete_info({ 'selected' }).selected")).longValue();
+        } catch (Exception e) {
+            return -2;
+        }
     }
 
     /**
@@ -114,34 +142,30 @@ class NeovimCompletionIntegrationTest {
     void ctrlNCompletesWhatEclipseTypedAndTheListIsReported() throws Exception {
         try (NeovimSession s = start()) {
             assertTrue(s.completesInNeovim());
-            List<CompletionMenu.View> reports = new CopyOnWriteArrayList<>();
-            s.addCompletionMenuListener(reports::add);
+            List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
+            s.addFloatingWindowListener(reports::add);
 
             s.completeInNeovimAsync(eclipseTyped(s, "al"), "<C-n>");
             assertTrue(s.isCompleting(), "from the moment the key is routed");
-            waitFor(() -> s.completionMenu().isShowing(), "the list");
-            CompletionMenu.View list = s.completionMenu();
-            assertEquals(List.of("alpha", "alphabet", "alpine"), words(list));
-            assertEquals(0, list.selected());
-            assertEquals(4, list.line1());
-            assertEquals(5, list.col0(), "the cursor after the inserted match");
-            assertEquals(5, list.cellsBack(), "the word starts five cells before it");
+            waitFor(() -> menuShown(s), "the list");
+            assertEquals(List.of("alpha", "alphabet", "alpine"), words(s));
+            assertEquals(0, selected(s));
             assertEquals("alpha", line(s, 4));
             assertEquals("ic", mode(s));
             assertTrue(s.isNeovimDrivenInsert(), "Neovim types while it completes");
             assertTrue(s.isCompleting());
 
             s.inputAsync("<C-n>");
-            waitFor(() -> s.completionMenu().selected() == 1, "the second entry selected");
+            waitFor(() -> selected(s) == 1, "the second entry selected");
             waitFor(() -> "alphabet".equals(line(s, 4)), "the second match inserted");
             assertTrue(s.isCompleting(), "still: the next key is the completion's too");
 
             s.inputAsync("(");
-            waitFor(() -> !s.completionMenu().isShowing(), "the list closed by the typed character");
+            waitFor(() -> !menuShown(s), "the list closed by the typed character");
             waitFor(() -> "alphabet(".equals(line(s, 4)), "Neovim inserted the character");
             waitFor(() -> !s.isCompleting(), "the completion over");
             assertEquals("i", mode(s));
-            assertEquals(CompletionMenu.View.HIDDEN, reports.get(reports.size() - 1));
+            assertTrue(reports.get(reports.size() - 1).stream().noneMatch(f -> f.grid().window() == -1));
         }
     }
 
@@ -150,17 +174,17 @@ class NeovimCompletionIntegrationTest {
     void ctrlETakesTheMatchBackAndCtrlYKeepsIt() throws Exception {
         try (NeovimSession s = start()) {
             s.completeInNeovimAsync(eclipseTyped(s, "al"), "<C-n>");
-            waitFor(() -> s.completionMenu().isShowing(), "the list");
+            waitFor(() -> menuShown(s), "the list");
             s.inputAsync("<C-e>");
-            waitFor(() -> !s.completionMenu().isShowing(), "the list closed");
+            waitFor(() -> !menuShown(s), "the list closed");
             waitFor(() -> "al".equals(line(s, 4)), "the typed text back");
             waitFor(() -> !s.isCompleting(), "the completion over");
 
             s.inputAsync("<C-p>"); // in the same insert, now Neovim's until it hands back: the last match
-            waitFor(() -> s.completionMenu().isShowing(), "the list again");
-            assertEquals(2, s.completionMenu().selected(), "Ctrl-P starts at the end");
+            waitFor(() -> menuShown(s), "the list again");
+            assertEquals(2, selected(s), "Ctrl-P starts at the end");
             s.inputAsync("<C-y>");
-            waitFor(() -> !s.completionMenu().isShowing(), "the list closed");
+            waitFor(() -> !menuShown(s), "the list closed");
             waitFor(() -> !s.isCompleting(), "the completion over");
             assertEquals("alpine", line(s, 4));
             assertEquals("i", mode(s));
@@ -179,7 +203,7 @@ class NeovimCompletionIntegrationTest {
             waitFor(() -> "alpine".equals(line(s, 4)), "the only match inserted");
             waitFor(() -> "ic".equals(mode(s)), "completion mode");
             NeovimBarrier.pass(s);
-            assertFalse(s.completionMenu().isShowing(), "no list for a single match");
+            assertFalse(menuShown(s), "no list for a single match");
             assertTrue(s.isCompleting());
             assertTrue(s.isNeovimDrivenInsert());
 
@@ -202,25 +226,13 @@ class NeovimCompletionIntegrationTest {
         }
     }
 
-    /** With a number column both the list's column and the cursor's cell move right: the word's start does not. */
-    @Test
-    void aNumberColumnDoesNotMoveTheWord() throws Exception {
-        try (NeovimSession s = start()) {
-            s.lua("vim.wo.number = true vim.wo.numberwidth = 6");
-            s.completeInNeovimAsync(eclipseTyped(s, "  al"), "<C-n>");
-            waitFor(() -> s.completionMenu().isShowing(), "the list");
-            assertEquals(7, s.completionMenu().col0(), "two spaces and alpha");
-            assertEquals(5, s.completionMenu().cellsBack());
-        }
-    }
-
     /** Ctrl-X Ctrl-L, Vim's whole-line completion, sent as one: the lines that begin as this one does. */
     @Test
     void ctrlXCtrlLCompletesWholeLines() throws Exception {
         try (NeovimSession s = start()) {
             s.completeInNeovimAsync(eclipseTyped(s, "alph"), "<C-x><C-l>");
-            waitFor(() -> s.completionMenu().isShowing(), "the list of lines");
-            assertEquals(List.of("alpha", "alphabet"), words(s.completionMenu()));
+            waitFor(() -> menuShown(s), "the list of lines");
+            assertEquals(List.of("alpha", "alphabet"), words(s));
             assertTrue(s.isCompleting());
         }
     }
@@ -233,9 +245,9 @@ class NeovimCompletionIntegrationTest {
     void endingTheCompletionKeepsTheTextAndClosesTheList() throws Exception {
         try (NeovimSession s = start()) {
             s.completeInNeovimAsync(eclipseTyped(s, "al"), "<C-n>");
-            waitFor(() -> s.completionMenu().isShowing(), "the list");
+            waitFor(() -> menuShown(s), "the list");
             s.endCompletionAsync();
-            waitFor(() -> !s.completionMenu().isShowing(), "the list closed");
+            waitFor(() -> !menuShown(s), "the list closed");
             waitFor(() -> "i".equals(mode(s)), "plain insert mode");
             assertEquals("alpha", line(s, 4));
             s.endCompletionAsync(); // none going on: nothing happens
@@ -253,7 +265,7 @@ class NeovimCompletionIntegrationTest {
     void dotRepeatsTheTypedTextWithTheCompletedWordAndUndoTakesItBack() throws Exception {
         try (NeovimSession s = start()) {
             s.completeInNeovimAsync(eclipseTyped(s, "al"), "<C-n>");
-            waitFor(() -> s.completionMenu().isShowing(), "the list");
+            waitFor(() -> menuShown(s), "the list");
             s.inputAsync("<C-y>");
             waitFor(() -> !s.isCompleting(), "the completion over");
             keys(s, "<Esc>");
@@ -279,8 +291,8 @@ class NeovimCompletionIntegrationTest {
             keys(s, "4", "G", "q", "q", "i");
             assertTrue(s.isNeovimDrivenInsert());
             keys(s, "a", "l", "<C-n>");
-            waitFor(() -> s.completionMenu().isShowing(), "the list");
-            assertEquals(List.of("alpha", "alphabet", "alpine"), words(s.completionMenu()));
+            waitFor(() -> menuShown(s), "the list");
+            assertEquals(List.of("alpha", "alphabet", "alpine"), words(s));
             assertFalse(s.isCompleting(), "Neovim owns this insert");
             s.endCompletionAsync();
             NeovimBarrier.pass(s);
@@ -305,55 +317,36 @@ class NeovimCompletionIntegrationTest {
             s.lua("vim.fn.complete(1, { 'alpha', 'alphabet' })");
             waitFor(() -> "ic".equals(mode(s)), "Neovim's completion going on");
             NeovimBarrier.pass(s);
-            assertFalse(s.completionMenu().isShowing());
+            assertFalse(menuShown(s), "not drawn where Neovim's cursor is: Eclipse types elsewhere");
             assertFalse(s.isCompleting(), "Eclipse types: the keys stay its own");
         }
     }
 
     /**
-     * {@code vim.g.neovim4eclipse_completion_menu = 0} gives the keys back to Eclipse's Word
-     * Completion and draws nothing.
+     * {@code vim.g.neovim4eclipse_completion_menu = 0}, once the switch for the plug-in's own list,
+     * has no effect: Neovim draws its popup menu, and the keys are its completion's.
      */
     @Test
-    void theListIsOffWhenTurnedOff() throws Exception {
+    void theOldSwitchHasNoEffect() throws Exception {
         try (NeovimSession s = start("--cmd", "let g:neovim4eclipse_completion_menu = 0")) {
-            assertFalse(s.completesInNeovim());
-            s.setBufferLines(WORDS);
-            keys(s, "4", "G", "q", "q", "i", "a", "l", "<C-n>"); // recorded: Neovim types and completes
-            waitFor(() -> "ic".equals(mode(s)), "Neovim's completion going on");
-            NeovimBarrier.pass(s);
-            assertFalse(s.completionMenu().isShowing());
+            assertTrue(s.completesInNeovim());
+            s.completeInNeovimAsync(eclipseTyped(s, "al"), "<C-n>");
+            waitFor(() -> menuShown(s), "the list");
         }
     }
 
     /**
      * The list does not need the viewport ({@code vim.g.neovim4eclipse_viewport = 0}: Neovim keeps
-     * a screen of its own, 120 cells wide). Neovim keeps the cursor's line on that screen, so the
-     * list is reported as with it: on a line far down, and for a word Neovim wraps, which starts
-     * on the screen row before the cursor's.
+     * a screen of its own): Neovim's popup menu is drawn whatever the switches for floats say.
      */
     @Test
     void theListIsDrawnWithoutTheViewportToo() throws Exception {
         try (NeovimSession s = start("--cmd", "let g:neovim4eclipse_viewport = 0")) {
             assertFalse(s.viewportEnabled());
-            assertTrue(s.completesInNeovim());
-            List<String> lines = new ArrayList<>(List.of("alpha", "alphabet", "alpine"));
-            for (int i = 0; i < 300; i++) {
-                lines.add("");
-            }
-            s.setBufferLines(lines);
-            keys(s, "2", "2", "0", "G", "q", "q", "i", "a", "l", "<C-n>"); // recorded: Neovim types and completes
-            waitFor(() -> s.completionMenu().isShowing(), "the list on line 220");
-            assertEquals(220, s.completionMenu().line1());
-            assertEquals(5, s.completionMenu().cellsBack());
-
-            keys(s, "<C-e>", "<Esc>", "q", "u");
-            lines.set(3, "x".repeat(117) + " "); // the word starts in cell 118 of 120
-            s.setBufferLines(lines);
-            keys(s, "4", "G", "q", "q", "A", "a", "l", "<C-n>");
-            waitFor(() -> s.completionMenu().isShowing() && s.completionMenu().line1() == 4, "the list on the long line");
-            assertEquals(123, s.completionMenu().col0());
-            assertEquals(5, s.completionMenu().cellsBack(), "one screen row's width added: the word starts on the row before");
+            s.setBufferLines(WORDS);
+            keys(s, "4", "G", "q", "q", "i", "a", "l", "<C-n>"); // recorded: Neovim types and completes
+            waitFor(() -> menuShown(s), "the list");
+            assertEquals(List.of("alpha", "alphabet", "alpine"), words(s));
         }
     }
 }

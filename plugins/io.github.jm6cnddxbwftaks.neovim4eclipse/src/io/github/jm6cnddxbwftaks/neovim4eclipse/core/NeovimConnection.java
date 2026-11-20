@@ -71,34 +71,31 @@ final class NeovimConnection implements AutoCloseable {
     private static final int UI_HEIGHT = 40;
     /**
      * The UI the plug-in attaches as: 24-bit color ({@code rgb}: the highlights of the grids it draws
-     * come as {@code 0xRRGGBB}), and parts of Neovim's screen sent as events instead of drawn into
-     * the grid:
+     * come as {@code 0xRRGGBB}), and:
      * <ul>
-     *   <li>{@code ext_cmdline}: every command line Neovim opens, as {@code cmdline_show},
-     *       {@code cmdline_pos} ... ({@code util/CmdlineEvent}), which the editor's {@code :} box
-     *       draws: the command line is Neovim's own.</li>
-     *   <li>{@code ext_messages}: every message, with its kind ({@code msg_show}), the pending
-     *       command ({@code msg_showcmd}) and {@code :messages} ({@code msg_history_show}); see
-     *       {@code util/MessageEvent}. Neovim then never waits at a "Press ENTER" prompt: there is
-     *       no message area to fill (checked on Neovim 0.12.6).</li>
-     *   <li>{@code ext_popupmenu}: completion candidates as {@code popupmenu_show}; on grid -1 they
-     *       belong to the command line, and the box lists them. A menu of an insert Neovim drives
-     *       ({@code <C-n>} in a block {@code I}) comes on grid 1 and is ignored, as it was drawn into
-     *       a grid nobody saw before.</li>
-     *   <li>{@code ext_linegrid}, which {@code ext_messages} needs (Neovim turns it on anyway): the
-     *       screen as {@code grid_line} events, fewer per key than the old cell-by-cell ones.</li>
      *   <li>{@code ext_multigrid}: each window drawn into a grid of its own, with {@code win_pos}
-     *       saying which window a grid shows ({@code util/GridEvent}, {@code util/Grids}). The
-     *       editors' windows' grids are not drawn: the editors show the documents. The command-line
-     *       window's is ({@code editor/NeovimWindowPanel}). Turning it on sends about the same
-     *       events per key as before (measured on Neovim 0.12.6).</li>
+     *       and {@code win_float_pos} saying which window a grid shows and where
+     *       ({@code util/GridEvent}, {@code util/Grids}). The editors' windows' grids are not drawn:
+     *       the editors show the documents. The command-line window's is
+     *       ({@code editor/NeovimWindowPanel}), and so are the floats: Neovim's command line,
+     *       prompts, pager and messages (ui2, {@code LuaScripts.UI2}), its popup menu, and
+     *       plug-ins' windows.</li>
+     *   <li>{@code ext_linegrid}, which {@code ext_multigrid} needs: the screen as
+     *       {@code grid_line} events.</li>
+     *   <li>{@code ext_cmdline} and {@code ext_messages}, though the plug-in draws neither from
+     *       events: Neovim attaches this UI before it reads the user's {@code init.lua}, and ui2
+     *       starts only after it. An error message in between, with no UI taking messages, would
+     *       make Neovim wait at a "Press ENTER" prompt nobody sees, and the start would time out.
+     *       Once ui2 is on, its Lua UI takes these events and this UI gets none.</li>
      * </ul>
-     * The other {@code ext_*} options stay off: the tabline and cterm colors are not used.
+     * {@code ext_popupmenu} stays off: Neovim draws its popup menu (the {@code :} line's Tab list,
+     * insert-mode completion) into a grid of its own, drawn as a float. The other {@code ext_*}
+     * options stay off too: the tabline and cterm colors are not used.
      */
     static final Map<String, Object> TERMINAL_UI = terminalUi();
 
     private static Map<String, Object> terminalUi() {
-        return uiOptions(List.of("rgb", "ext_cmdline", "ext_messages", "ext_linegrid", "ext_multigrid", "ext_popupmenu"));
+        return uiOptions(List.of("rgb", "ext_cmdline", "ext_messages", "ext_linegrid", "ext_multigrid"));
     }
 
     /** Every {@code nvim_ui_attach} option the plug-in names, those in {@code on} true, in a fixed order. */

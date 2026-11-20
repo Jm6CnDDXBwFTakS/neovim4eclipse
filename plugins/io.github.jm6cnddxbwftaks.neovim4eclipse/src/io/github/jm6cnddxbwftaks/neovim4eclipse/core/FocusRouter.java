@@ -9,9 +9,7 @@ import java.util.function.BiPredicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
@@ -83,7 +81,6 @@ public final class FocusRouter {
     final Consumer<String> mode = m -> pass("mode", t -> t.onMode(m));
     final Consumer<String> recording = r -> pass("recording", t -> t.onRecording(r));
     final Consumer<StatusInfo> status = s -> pass("status", t -> t.onStatus(s));
-    final Consumer<CommandOutput> output = o -> pass("output", t -> t.onOutput(o));
     final Consumer<IdeAction> ideAction = a -> pass("IDE action", t -> t.onIdeAction(a));
     /**
      * A host command goes to the target with the focus only if it belongs to that very target,
@@ -106,10 +103,9 @@ public final class FocusRouter {
             LOG.log(Level.WARNING, "The host command event failed in " + target, e);
         }
     };
-    final Consumer<CmdlineState.View> cmdline = v -> pass("command line", t -> t.onCmdline(v));
+    final Consumer<String> cmdlineType = v -> pass("command line", t -> t.onCmdlineType(v));
     final Consumer<CommandWindowView> commandWindow = v -> pass("command-line window", t -> t.onCommandWindow(v));
     final Consumer<List<FloatWindow>> floatingWindows = w -> pass("floating windows", t -> t.onFloatingWindows(w));
-    final Consumer<CompletionMenu.View> completionMenu = v -> pass("completion list", t -> t.onCompletionMenu(v));
 
     private void pass(String what, Consumer<FocusTarget> event) {
         FocusTarget target = current;

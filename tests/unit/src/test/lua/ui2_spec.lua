@@ -121,3 +121,27 @@ t.test("the safety net leaves ui2's window open while the cursor is in it", func
   t.eq(ui2.wins.pager, vim.api.nvim_get_current_win(), 'and still has the cursor')
   vim.api.nvim_win_close(other, true)
 end)
+
+t.test(':messages goes to Eclipse, each message with its kind, and not to the pager', function()
+  local ui2 = start()
+  vim.api.nvim_echo({ { 'a note' } }, true, {})
+  vim.api.nvim_echo({ { 'it broke' } }, true, { err = true })
+  t.forget()
+  t.type(':messages<CR>')
+  t.wait_for('the history sent', function()
+    return #t.sent('eclipse_messages') > 0
+  end)
+  local entries = t.sent('eclipse_messages')[1][1]
+  local last = entries[#entries]
+  t.eq('it broke', last[2])
+  t.eq('echoerr', last[1])
+  t.ok(vim.api.nvim_get_current_win() ~= ui2.wins.pager, 'the pager was not entered')
+end)
+
+t.test('the type of each command line goes to Eclipse as it opens and closes', function()
+  start()
+  t.forget()
+  t.type('/abc<Esc>')
+  t.type(':echo<CR>')
+  t.eq({ { '/' }, { '' }, { ':' }, { '' } }, t.sent('eclipse_cmdline'))
+end)

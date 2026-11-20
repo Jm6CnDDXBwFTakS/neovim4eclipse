@@ -213,7 +213,7 @@ class StateSyncTest {
      */
     @Test
     void theStatuslineIsRequestedOnlyWhenShownAtTheLabelsWidth() {
-        status.setItems(Set.of(StatusItem.CMD));
+        status.setItems(Set.of(StatusItem.MODE));
         state.publishState();
         assertEquals(List.of(0, false), nvim.snapshotFlags);
 

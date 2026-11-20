@@ -63,7 +63,7 @@ class StatusBarLabelsTest {
     }
 
     private static StatusBarLabels.Widths widths(int statuslineChars, int maxWidthPercent) {
-        return new StatusBarLabels.Widths(MODE_TEXTS, 10, statuslineChars, maxWidthPercent);
+        return new StatusBarLabels.Widths(MODE_TEXTS, statuslineChars, maxWidthPercent);
     }
 
     private StatusBarLabels create(Set<StatusItem> parts, StatusBarLabels.Widths widths) {
@@ -111,8 +111,10 @@ class StatusBarLabelsTest {
     @Test
     void oneLeftAlignedLabelPerChosenPartInDisplayOrder() {
         create(EnumSet.of(StatusItem.STATUSLINE, StatusItem.MODE), widths(60, 90));
+        create(EnumSet.of(StatusItem.MODE), widths(60, 90));
+        assertNull(labels.label(StatusItem.STATUSLINE), "statusline not chosen: no label");
+        create(EnumSet.of(StatusItem.STATUSLINE, StatusItem.MODE), widths(60, 90));
         assertEquals(EnumSet.of(StatusItem.MODE, StatusItem.STATUSLINE), labels.parts());
-        assertNull(labels.label(StatusItem.CMD), "cmd not chosen: no label");
         List<Control> children = List.of(bar.getChildren());
         assertTrue(children.indexOf(labels.label(StatusItem.MODE)) < children.indexOf(labels.label(StatusItem.STATUSLINE)),
                 "mode before statusline: " + children);
@@ -122,15 +124,14 @@ class StatusBarLabelsTest {
     }
 
     /**
-     * The mode as wide as its widest text as drawn (capitals overflow an average-width count), cmd
-     * and statusline in characters of their fonts.
+     * The mode as wide as its widest text as drawn (capitals overflow an average-width count), the
+     * statusline in characters of its font.
      */
     @Test
     void eachLabelIsSizedToItsContentAndFont() {
         create(EnumSet.allOf(StatusItem.class), widths(60, 90));
         int widest = MODE_TEXTS.stream().mapToInt(text -> textWidth(StatusItem.MODE, text)).max().orElseThrow();
         assertEquals(widest + margins(), width(StatusItem.MODE));
-        assertEquals(StatusBarWidths.pixels(10, charWidth(StatusItem.CMD)) + margins(), width(StatusItem.CMD));
         assertEquals(StatusBarWidths.pixels(60, charWidth(StatusItem.STATUSLINE)) + margins(), width(StatusItem.STATUSLINE));
         assertEquals(List.of(60), columns, "the statusline's columns, once");
     }
@@ -140,7 +141,7 @@ class StatusBarLabelsTest {
     void theCapShrinksTheStatuslineAndTellsNeovim() {
         create(EnumSet.allOf(StatusItem.class), widths(60, 40));
         double cw = charWidth(StatusItem.STATUSLINE);
-        int fixed = width(StatusItem.MODE) + width(StatusItem.CMD);
+        int fixed = width(StatusItem.MODE);
         resizeBar((int) ((fixed + StatusBarWidths.pixels(30, cw) + margins()) / 0.40) + 1);
         int statusline = width(StatusItem.STATUSLINE);
         assertTrue(statusline < StatusBarWidths.pixels(60, cw) + margins(), "shrunk: " + statusline);
@@ -204,8 +205,8 @@ class StatusBarLabelsTest {
         assertEquals("-VR- = VREPLACE", labels.label(StatusItem.MODE).getToolTipText());
         labels.show(StatusItem.STATUSLINE, "a.txt   1,1", null, null);
         assertEquals("a.txt   1,1", labels.label(StatusItem.STATUSLINE).getToolTipText(), "the whole text on hover");
-        labels.show(StatusItem.CMD, "", "unused", null);
-        assertNull(labels.label(StatusItem.CMD).getToolTipText(), "no tooltip for an empty label");
+        labels.show(StatusItem.STATUSLINE, "", "unused", null);
+        assertNull(labels.label(StatusItem.STATUSLINE).getToolTipText(), "no tooltip for an empty label");
     }
 
     /** Eclipse disposes the labels when it rebuilds the bar; the bar's resize must not reach them. */

@@ -163,9 +163,6 @@ public class Activator extends AbstractUIPlugin {
         if (store.getBoolean(PreferenceConstants.STATUS_MODE)) {
             items.add(StatusItem.MODE);
         }
-        if (store.getBoolean(PreferenceConstants.STATUS_SHOWCMD)) {
-            items.add(StatusItem.CMD);
-        }
         if (store.getBoolean(PreferenceConstants.STATUS_STATUSLINE)) {
             items.add(StatusItem.STATUSLINE);
         }

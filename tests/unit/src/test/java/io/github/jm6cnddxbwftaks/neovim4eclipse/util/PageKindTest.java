@@ -15,7 +15,7 @@ class PageKindTest {
     @Test
     void eachContentGoesToTheEditorOfItsKind() {
         assertEquals(PageKind.HELP, PageKind.of(new PageBuffer(PageBuffer.HELP, 7, 27)));
-        assertEquals(PageKind.MESSAGES, PageKind.of(ViewText.messages(new MessageEvent.History(List.of()))));
+        assertEquals(PageKind.MESSAGES, PageKind.of(ViewText.messages(List.of())));
         assertEquals(PageKind.CHECKHEALTH, PageKind.of(new PageBuffer(PageBuffer.CHECKHEALTH, 9, 1)));
     }
 

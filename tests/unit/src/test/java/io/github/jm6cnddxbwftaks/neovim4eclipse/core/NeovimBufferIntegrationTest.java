@@ -409,14 +409,12 @@ class NeovimBufferIntegrationTest {
                     String.valueOf(failed.getMessage()));
             assertEquals(Boolean.TRUE, s.lua("return vim.bo.modified"), ":update tries again");
 
-            // Typed (or from a mapping) rather than through the API: the error is a message, two
-            // lines with Neovim's header for an error in an autocommand, so it opens the popup.
-            // Through :execute, since a typed :write is handed to Eclipse (LuaScripts.HOST_COMMANDS).
-            List<CommandOutput> outputs = new CopyOnWriteArrayList<>();
-            s.addOutputListener(outputs::add);
+            // Typed (or from a mapping) rather than through the API: the error is a message, with
+            // Neovim's header for an error in an autocommand, which Neovim shows (ui2). Through
+            // :execute, since a typed :write is handed to Eclipse (LuaScripts.HOST_COMMANDS).
             s.input(":execute 'write'<CR>");
-            waitFor(() -> outputs.stream().anyMatch(o -> o.text().equals("Error in BufWriteCmd Autocommands for \"<buffer="
-                    + a.bufnr() + ">\":\nEclipse could not save A.txt: read-only")), "the error in the popup: " + outputs);
+            waitFor(() -> Ui2Text.shown(s).contains("Error in BufWriteCmd Autocommands for \"<buffer=" + a.bufnr() + ">\":")
+                    && Ui2Text.shown(s).contains("Eclipse could not save A.txt: read-only"), "the error: " + Ui2Text.shown(s));
         }
     }
 
@@ -467,15 +465,13 @@ class NeovimBufferIntegrationTest {
                         + (request.target().isEmpty() ? "" : " " + request.target()));
                 return DocumentWrite.Result.saved("\"A.txt\" 1L, 2B written");
             });
-            List<String> messages = new CopyOnWriteArrayList<>();
-            s.addStatusListener(info -> messages.add(info.message()));
             Path dir = Files.createTempDirectory("neovim4eclipse-write");
             DocumentBuffer a = new DocumentBuffer(dir.resolve("A.txt").toString());
             s.showBuffer(a);
             s.setBufferLines(List.of("a"));
 
             s.input(":w ++p<CR>");
-            waitFor(() -> messages.contains("\"A.txt\" 1L, 2B written"), "the written message: " + messages);
+            waitFor(() -> Ui2Text.shown(s).contains("\"A.txt\" 1L, 2B written"), "the written message: " + Ui2Text.shown(s));
             assertEquals(List.of(a.name() + " OWN ++p"), asked);
 
             // A copy names its file in full: Neovim resolves the name typed in its current folder.
@@ -557,26 +553,16 @@ class NeovimBufferIntegrationTest {
         }
     }
 
-    /**
-     * A listing shows the document buffers (one line: on the message line, as on Neovim's own screen);
-     * a listing's error is an error on the message line.
-     */
+    /** A listing shows the document buffers, and a listing's error is shown, by Neovim (ui2). */
     @Test
     void listingsShowTheDocumentBuffersAndTheirErrors() throws Exception {
         try (NeovimSession s = start()) {
             DocumentBuffer a = new DocumentBuffer(System.getProperty("java.io.tmpdir") + "/neovim4eclipse-test/A.txt");
             s.showBuffer(a);
-            List<CommandOutput> outputs = new CopyOnWriteArrayList<>();
-            List<StatusInfo> lines = new CopyOnWriteArrayList<>();
-            s.addOutputListener(outputs::add);
-            s.addStatusListener(lines::add);
             s.commandAsync("ls");
+            waitFor(() -> Ui2Text.shown(s).contains("A.txt"), "the one-line :ls: " + Ui2Text.shown(s));
             s.commandAsync("marks q");
-            waitFor(() -> lines.stream().anyMatch(i -> i.error() && i.message().startsWith("E283:")),
-                    "no marks matching \"q\": " + lines);
-            assertTrue(lines.stream().anyMatch(i -> !i.error() && i.message().contains("A.txt")
-                    && i.message().startsWith(String.valueOf(a.bufnr()))), "the one-line :ls: " + lines);
-            assertEquals(List.of(), outputs, "no popup for one line");
+            waitFor(() -> Ui2Text.shown(s).contains("E283:"), "no marks matching \"q\": " + Ui2Text.shown(s));
         }
     }
 

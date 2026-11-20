@@ -19,28 +19,29 @@ import org.eclipse.ui.handlers.IHandlerActivation;
 import org.eclipse.ui.handlers.IHandlerService;
 
 /**
- * Makes Eclipse's Copy, Paste, Cut and Select All commands act on the {@code :} box while it is open,
- * not on the editor behind it.
+ * Makes Eclipse's Paste act on Neovim's command line while one is open, and Copy, Cut and Select
+ * All do nothing then, instead of acting on the document behind the line.
  *
  * <h2>Why</h2>
- * Eclipse turns a key such as {@code Ctrl+V} (Cmd+V on macOS, also Shift+Insert) into the command
- * {@code org.eclipse.ui.edit.paste} before any widget sees the key, and runs the command's
- * <em>handler</em>: for an editor, the editor's Paste action, which pastes into the document. The box
- * is a child of the editor's text widget, so its keys would paste into the file.
+ * Neovim draws its command line itself (ui2, {@code LuaScripts.UI2}), over the editor's last row;
+ * the editor's text widget keeps the keyboard, and the keys go to Neovim. But Eclipse turns a key
+ * such as {@code Cmd+V} (on macOS; {@code Shift+Insert}, or {@code Ctrl+V} where the Ctrl Keys page
+ * leaves it to Eclipse) into the command {@code org.eclipse.ui.edit.paste} before any widget sees
+ * the key, and runs the command's <em>handler</em>: for an editor, the editor's Paste action, which
+ * would paste into the document while the user is typing {@code :e }.
  *
  * <h2>How</h2>
- * While the box is open, a handler of our own is activated for each of the four commands in the
+ * While the line is open, a handler of our own is activated for each of the four commands in the
  * editor site's {@link IHandlerService}. When several handlers are active for one command, the
  * workbench picks the one whose activation expression depends on the most specific variable; the
  * editor's handlers depend on the active part. Ours, {@link #WHILE_OPEN}, says it depends on the
  * focus control, which ranks above everything except menus ({@code ISources}), so ours wins; it is
- * always true, because it is activated only while the box is open and deactivated when it closes.
+ * always true, because it is activated only while the line is open and deactivated when it closes.
  *
- * <p>Example: {@code :e } typed, then Cmd+V: the workbench runs our paste handler,
- * {@link CommandLineBox#paste} pastes into the box, the box refuses the edit and sends the text to
- * Neovim as a paste, and Neovim's line shows {@code :e src/Main.java}.
- *
- * <p>Cut copies only: the line is Neovim's, and the box deletes nothing itself. UI thread only.
+ * <p>Example: {@code :e } typed, then Cmd+V: the workbench runs our paste handler, which sends
+ * the clipboard's text to Neovim as a paste ({@code nvim_paste}), and Neovim's line shows
+ * {@code :e src/Main.java}. Copy and Cut copy nothing: the line's text is Neovim's, and a yank
+ * there ({@code Ctrl-R}) is the Vim way. UI thread only.
  */
 final class CommandLineEditHandlers {
 
@@ -63,27 +64,29 @@ final class CommandLineEditHandlers {
     };
 
     private final IHandlerService service;
-    private final CommandLineBox box;
+    private final Runnable paste;
     private final List<IHandlerActivation> activations = new ArrayList<>();
 
-    /** @param service the editor site's handler service; {@code null} (no workbench) does nothing */
-    CommandLineEditHandlers(IHandlerService service, CommandLineBox box) {
+    /**
+     * @param service the editor site's handler service; {@code null} (no workbench) does nothing
+     * @param paste   sends the clipboard's text to Neovim's line
+     */
+    CommandLineEditHandlers(IHandlerService service, Runnable paste) {
         this.service = service;
-        this.box = box;
+        this.paste = paste;
     }
 
-    /** Activates the handlers while the box is open, deactivates them when it is closed. UI thread. */
-    void update() {
-        boolean wanted = box.isOpen();
-        if (service == null || wanted == !activations.isEmpty()) {
+    /** Activates the handlers while a command line is {@code open}, deactivates them when it is not. UI thread. */
+    void update(boolean open) {
+        if (service == null || open == !activations.isEmpty()) {
             return;
         }
         try {
-            if (wanted) {
-                activate("org.eclipse.ui.edit.paste", box::paste);
-                activate("org.eclipse.ui.edit.copy", box::copy);
-                activate("org.eclipse.ui.edit.cut", box::copy);
-                activate("org.eclipse.ui.edit.selectAll", box::selectAll);
+            if (open) {
+                activate("org.eclipse.ui.edit.paste", paste);
+                activate("org.eclipse.ui.edit.copy", () -> { });
+                activate("org.eclipse.ui.edit.cut", () -> { });
+                activate("org.eclipse.ui.edit.selectAll", () -> { });
             } else {
                 deactivate();
             }

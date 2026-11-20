@@ -15,9 +15,7 @@ import java.util.logging.Level;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
@@ -103,15 +101,8 @@ class NotificationBridgeTest {
             @Override public void onShowView(QuickfixEntries.Kind kind) {
                 events.add("view:" + kind);
             }
-            @Override public void onCmdline(List<CmdlineEvent> cmdline) {
-                for (CmdlineEvent event : cmdline) {
-                    events.add(event instanceof CmdlineEvent.Show show ? "cmdline" + show.firstc() + show.content()
-                            : "cmdline:" + event);
-                }
-            }
-            @Override public void onMessageEvent(MessageEvent event) {
-                events.add("message:" + event);
-            }
+            @Override public void onCmdlineType(String type) { events.add("cmdline:" + type); }
+            @Override public void onMessages(List<ViewText.Message> history) { events.add("messages:" + history); }
             @Override public void onViewContent(ViewContent content) {
                 events.add(switch (content) {
                     case ViewText text -> "view:" + text.title() + ":" + text.lines();
@@ -121,10 +112,6 @@ class NotificationBridgeTest {
             @Override public void onGridEvents(List<GridEvent> grid) { events.add("grid:" + grid); }
             @Override public void onCommandWindow(int winid, String type) { events.add("cmdwin:" + winid + ":" + type); }
             @Override public void onCommandWindowClosed() { events.add("cmdwin closed"); }
-            @Override public void onCompletionAnchor(io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu.Anchor anchor) {
-                events.add("complete:" + anchor.line1() + ":" + anchor.col0() + ":" + anchor.winCol() + ":"
-                        + anchor.pumHeight() + ":" + Integer.toHexString(anchor.colors().groups().get(0).background()));
-            }
         });
     }
 
@@ -483,24 +470,22 @@ class NotificationBridgeTest {
         assertTrue(events.isEmpty(), events.toString());
     }
 
-    /**
-     * The completion list's cursor and colors, told by the plug-in's Lua at each change of the list:
-     * line, byte column, the cursor's cell in its window, 'pumheight', the Pmenu groups' colors.
-     */
+    /** LuaScripts.UI2: each command line's type as it opens, and "" as it closes. */
     @Test
-    void theCompletionListsCursorAndColors() {
-        notify("eclipse_complete", 5, 8, 9, 10, List.of(List.of(0xC0C0C0, 0x202020, false, false, false, false)));
-        assertEquals(List.of("complete:5:8:9:10:202020"), events);
+    void aCommandLinesTypeAndItsEnd() {
+        notify("eclipse_cmdline", "/");
+        notify("eclipse_cmdline", "");
+        notify("eclipse_cmdline");
+        assertEquals(List.of("cmdline:/", "cmdline:", "cmdline:"), events);
     }
 
-    /** Without colors the list is still placed; a report that names no line is dropped. */
+    /** LuaScripts.UI2: :messages, each message as {kind, text}; an entry that is no pair is skipped. */
     @Test
-    void aCompletionReportWithoutColorsCountsAndAMalformedOneIsDropped() {
-        notify("eclipse_complete", 5, 8, 9, 0);
-        notify("eclipse_complete", "x", 8, 9, 0);
-        notify("eclipse_complete", 5, 8);
-        notify("eclipse_complete", 0, 8, 9, 0);
-        assertEquals(List.of("complete:5:8:9:0:" + Integer.toHexString(GridEvent.NO_COLOR)), events);
+    void theMessageHistoryForItsPage() {
+        notify("eclipse_messages", List.of(List.of("", "3 lines yanked"), List.of("emsg", "E486: x"), "junk"));
+        notify("eclipse_messages");
+        assertEquals(List.of("messages:[" + new ViewText.Message("", "3 lines yanked") + ", "
+                + new ViewText.Message("emsg", "E486: x") + "]"), events);
     }
 
     /** The command-line window: told by the plug-in's Lua; its grid comes with the redraws. */
@@ -511,22 +496,10 @@ class NotificationBridgeTest {
                 List.of("win_pos", List.of(4, io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle.window(1004), 31, 0, 120, 7)),
                 List.of("flush"));
         notify("eclipse_cmdwin_closed");
-        assertEquals(List.of("cmdwin:1004::", "message:" + new MessageEvent.Flush(),
+        assertEquals(List.of("cmdwin:1004::",
                 "grid:[" + new GridEvent.Line(4, 0, 0, List.of(new GridEvent.Cell("x", 0))) + ", "
                         + new GridEvent.WinPos(4, 1004, false, 31, 0, 120, 7, 0) + ", " + new GridEvent.Flush() + "]",
                 "cmdwin closed"), events, "the window's handle read as its ID");
-    }
-
-    /** The command line first: the output of a command is titled with it, from the same redraw. */
-    @Test
-    void aRedrawsCommandLineEventsGoBeforeItsMessageEvents() {
-        notify("redraw",
-                List.of("msg_show", List.of("list_cmd", List.of(List.of(0, "x", 0)), false, false, false, 1, "typed_cmd")),
-                List.of("cmdline_show", List.of(List.of(List.of(0, "ls", 0)), 2, ":", "", 0, 1)),
-                List.of("flush"));
-        assertEquals(List.of("cmdline:ls",
-                "message:" + new MessageEvent.Show("list_cmd", "x", false, false, "1", "typed_cmd", false),
-                "message:" + new MessageEvent.Flush()), events);
     }
 
     @Test

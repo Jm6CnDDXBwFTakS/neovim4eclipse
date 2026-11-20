@@ -10,14 +10,13 @@ import java.util.Set;
  * The parts of Vim's status information that can be shown in the Eclipse status bar (preference
  * <em>Window → Preferences → Neovim</em>), named as in the Visual Studio Code Neovim extension.
  * The declaration order is the display order.
- * Messages and errors are not among them: they appear in the editor ({@code editor/MessageLine}).
+ * Messages, errors and the pending command ({@code showcmd}) are not among them: Neovim draws them
+ * itself, in ui2's windows over the editor ({@code LuaScripts.UI2}).
  */
 public enum StatusItem {
 
     /** The mode, e.g. {@code INSERT}, with {@code rec @q} while a macro is recorded. */
     MODE("mode"),
-    /** The pending command as Vim's {@code showcmd} shows it, e.g. {@code 2d} or {@code "a}. */
-    CMD("cmd"),
     /** Neovim's own {@code 'statusline'} (file, cursor position, ...), evaluated by Neovim. */
     STATUSLINE("statusline");
 
@@ -34,13 +33,13 @@ public enum StatusItem {
 
     /** What is shown out of the box: everything except the (long) statusline. */
     public static Set<StatusItem> defaults() {
-        return EnumSet.of(MODE, CMD);
+        return EnumSet.of(MODE);
     }
 
     /**
      * The parts the status bar shows: the ones the user chose ({@code chosen}, from the Status Bar
      * preference page), or, while Eclipse handles the keys ({@code eclipseMode}), the mode alone,
-     * whatever was chosen. In Eclipse mode Neovim's command and statusline say nothing about the
+     * whatever was chosen. In Eclipse mode Neovim's statusline says nothing about the
      * editor, and the mode part, which then reads {@code ECLIPSE}, is how one sees where keys go.
      * Example: with only the statusline chosen, Neovim mode shows the statusline, Eclipse mode
      * {@code ECLIPSE}.

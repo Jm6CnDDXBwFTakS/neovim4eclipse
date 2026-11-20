@@ -17,28 +17,23 @@ import org.eclipse.swt.events.TraverseEvent;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
-import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.ui.IEditorSite;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CommandOutput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.FocusTarget;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.KeyMapping;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageRows;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
@@ -58,13 +53,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  * <h2>The focus</h2>
  * When the pane's canvas gets the keyboard, the page takes the focus as Neovim sees it: Neovim
  * enters the page's window ({@link NeovimSession#focusPageAsync}), Neovim's screen takes the page's
- * size, and the focus events ({@link FocusTarget}: the mode, the {@code :} line, messages, floats,
- * the commands a key asks for) come here. Below the page's text, as Neovim lays out its screen, the
- * pane draws the window's status line (the screen's row below the window, with its colors) and
- * the command line ({@link PageRows}): every key stays the canvas's, so Neovim edits the line
- * itself, Ctrl-W, Ctrl-R and history included. Messages, output and floats are drawn over the
- * page with the same overlays as over code; the mode and the pending command go to Eclipse's
- * status bar ({@link PageStatus}).
+ * size, and the focus events ({@link FocusTarget}: the mode, the floats, the commands a key asks
+ * for) come here. Below the page's text, as Neovim lays out its screen, the pane draws the window's
+ * status line (the screen's row below the window, with its colors). Neovim's command line, prompts,
+ * pager and messages are its own floats (ui2, {@code LuaScripts.UI2}), drawn over the page as over
+ * code ({@link FloatingWindows}); every key stays the canvas's, so Neovim edits the line itself,
+ * Ctrl-W, Ctrl-R and history included. The mode goes to Eclipse's status bar ({@link PageStatus}).
  * The text editor it came from stays attached: its document and caret are untouched. Clicking back
  * into the code gives the focus back ({@code EditorAttachManager}). A page in the background keeps
  * its last cells: Neovim does not redraw a window of a tabpage that is not current.
@@ -93,9 +87,7 @@ final class WindowPane {
     private final GridCanvas canvas;
     /** Neovim's status line for the page's window, a row below the text, as Neovim draws it. */
     private final GridCanvas statusRow;
-    /** Neovim's command line, a row along the bottom, while a {@code :}, {@code /} or {@code ?} line is open. */
-    private final GridCanvas commandRow;
-    /** The three, one above the other. */
+    /** The two, one above the other. */
     private final Composite rows;
     private final NeovimSession session;
     /** The page's Neovim window; {@link EditorWindow#UNKNOWN} until the first page was shown. */
@@ -108,24 +100,12 @@ final class WindowPane {
     /** Whether this page has Neovim's focus ({@link #takeFocus}). */
     private boolean focused;
     private boolean disposed;
-    private final MessageLine messageLine;
-    /**
-     * The Tab completion candidates of an open line ({@link PageRows#candidateRow}), over the
-     * window's last row, as Neovim's own wildmenu covers a row: hidden while there are none. An
-     * overlay, not a row of the layout, so that Tab does not change the window's height.
-     */
-    private final GridCanvas candidateRow;
-    /** The command line as last said, drawn again when the row changes size. */
-    private CmdlineState.View lastView = CmdlineState.View.CLOSED;
-    /** Output of several lines (a listing, a long message), over the page. */
-    private final OutputPopup output;
     private final FloatingWindows floats;
     /** Neovim's command-line window ({@code q:} typed in the page), drawn over the page's bottom. */
     private final NeovimWindowPanel commandWindowPanel;
     private final Consumer<Integer> closedListener = this::onPageClosed;
-    /** The mode and pending command in Eclipse's status bar, one item for all messages editors ({@link PageStatus}). */
+    /** The mode and statusline in Eclipse's status bar, one item for all messages editors ({@link PageStatus}). */
     private final PageStatus status;
-    private String shownMessage = "";
     private final Consumer<GridSnapshot> gridListener = this::onGrid;
     private final Consumer<GridSnapshot> statusListener = this::onStatusRow;
     /** Eclipse's text font changed: the cells change size, so Neovim is asked for the cells that fit now. */
@@ -145,24 +125,7 @@ final class WindowPane {
 
         @Override
         public void onStatus(StatusInfo info) {
-            StatusInfo status = info;
-            onUi(() -> WindowPane.this.status.setStatusInfo(status));
-            onUi(() -> {
-                if (!status.message().equals(shownMessage)) {
-                    shownMessage = status.message();
-                    messageLine.show(status.message(), status.error());
-                }
-            });
-        }
-
-        @Override
-        public void onOutput(CommandOutput shown) {
-            onUi(() -> output.showOverEditor(shown.title(), shown.text(), false)); // the keys stay Neovim's
-        }
-
-        @Override
-        public void onCmdline(CmdlineState.View view) {
-            onUi(() -> showCommandLine(view));
+            onUi(() -> WindowPane.this.status.setStatusInfo(info));
         }
 
         @Override
@@ -233,19 +196,8 @@ final class WindowPane {
         };
         canvas = new GridCanvas(rows, look, SWT.NONE);
         canvas.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
-        candidateRow = new GridCanvas(canvas, look, SWT.NO_FOCUS);
-        candidateRow.setVisible(false);
         statusRow = new GridCanvas(rows, look, SWT.NO_FOCUS);
-        statusRow.setLayoutData(rowData(false));
-        commandRow = new GridCanvas(rows, look, SWT.NO_FOCUS);
-        commandRow.setLayoutData(rowData(true));
-        commandRow.setInsertCursor(true); // the command line's cursor is a bar, as Neovim's
-        commandRow.addControlListener(new ControlAdapter() {
-            @Override
-            public void controlResized(ControlEvent e) {
-                showCommandLine(lastView); // the row's cells changed: the open line is fitted again
-            }
-        });
+        statusRow.setLayoutData(hiddenRow());
         canvas.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -263,12 +215,10 @@ final class WindowPane {
             @Override
             public void controlResized(ControlEvent e) {
                 sendSize();
-                showCommandLine(lastView); // the candidates lie over the canvas's last row
             }
         });
         fontListener = event -> {
             if (JFaceResources.TEXT_FONT.equals(event.getProperty()) && !canvas.isDisposed()) {
-                ((GridData) commandRow.getLayoutData()).heightHint = lineHeight();
                 if (((GridData) statusRow.getLayoutData()).heightHint > 0) {
                     ((GridData) statusRow.getLayoutData()).heightHint = lineHeight();
                 }
@@ -278,8 +228,6 @@ final class WindowPane {
             }
         };
         JFaceResources.getFontRegistry().addListener(fontListener);
-        messageLine = new MessageLine(canvas, () -> false);
-        output = new OutputPopup(canvas, () -> session.inputAsync(":"));
         floats = new FloatingWindows(canvas);
         commandWindowPanel = new NeovimWindowPanel(canvas, new NeovimEditorController.PanelCommands(session), () -> {
             // nothing to update: a page has no Ctrl-key context of its own
@@ -289,58 +237,11 @@ final class WindowPane {
         session.addPageClosedListener(closedListener);
     }
 
-    /** A row's layout: one text line high; the status row starts hidden, until Neovim draws a status line. */
-    private GridData rowData(boolean shown) {
+    /** The status row's layout: one text line high once Neovim draws a status line, hidden until then. */
+    private GridData hiddenRow() {
         GridData data = new GridData(SWT.FILL, SWT.BOTTOM, true, false);
-        data.heightHint = shown ? lineHeight() : 0;
+        data.heightHint = 0;
         return data;
-    }
-
-    /**
-     * Neovim's command line, drawn along the bottom ({@link PageRows#commandRow}): Neovim edits the
-     * line, every key being Neovim's here; this only paints what it says. Blank while closed.
-     */
-    private void showCommandLine(CmdlineState.View view) {
-        if (commandRow.isDisposed()) {
-            return;
-        }
-        lastView = view;
-        GridSnapshot grid = canvas.grid();
-        GridEvent.DefaultColors colors = grid == null ? new GridEvent.DefaultColors(GridEvent.NO_COLOR, GridEvent.NO_COLOR)
-                : grid.defaultColors();
-        int columns = ScreenInput.cells(commandRow.getSize().x, commandRow.cellWidth());
-        commandRow.show(PageRows.commandRow(view, columns, window, colors));
-        showCandidates(PageRows.candidateRow(view, columns, window, colors));
-        // The line takes the row, as Neovim's : takes its message's. Not in Ex mode (gQ), where the
-        // line opens again after each command, below that command's output: there a one-line
-        // :echo stays, as Neovim scrolls it up instead of covering it.
-        if (view.open() && !VimModes.isExMode(session.getMode())) {
-            messageLine.hide();
-        }
-    }
-
-    /** The candidates over the canvas's last row, or nothing ({@code row} null). */
-    private void showCandidates(GridSnapshot row) {
-        if (row == null) {
-            candidateRow.setVisible(false);
-            return;
-        }
-        int height = lineHeight();
-        Rectangle area = canvas.getClientArea();
-        candidateRow.setBounds(0, Math.max(0, area.height - height), area.width, height);
-        candidateRow.show(row);
-        candidateRow.moveAbove(null);
-        candidateRow.setVisible(true);
-    }
-
-    /** The message line's text while it shows, else {@code ""}; for tests. */
-    String messageTextForTests() {
-        return messageLine.isShowing() ? messageLine.text() : "";
-    }
-
-    /** The drawn Tab candidates row, for tests. */
-    GridCanvas candidateRowForTests() {
-        return candidateRow;
     }
 
     /**
@@ -370,11 +271,6 @@ final class WindowPane {
 
     public GridCanvas canvas() {
         return canvas;
-    }
-
-    /** The drawn command-line row, for tests. */
-    GridCanvas commandRowForTests() {
-        return commandRow;
     }
 
     /** The drawn status line row, for tests. */
@@ -489,7 +385,6 @@ final class WindowPane {
         if (focused) {
             focused = false;
             session.releaseFocus(target);
-            showCommandLine(CmdlineState.View.CLOSED);
             floats.show(List.of());
         }
     }
@@ -564,10 +459,10 @@ final class WindowPane {
                 grid.cursorRow() * canvas.cellHeight() + canvas.cellHeight() / 2);
     }
 
-    /** Shows a message of the plug-in's own over the page (an error of a refused command). */
+    /** Shows a message of the plug-in's own as Neovim shows its own (an error of a refused command). */
     void showMessage(String message, boolean error) {
         if (!disposed) {
-            messageLine.show(message, error);
+            session.echoAsync(message, error);
         }
     }
 
@@ -598,8 +493,6 @@ final class WindowPane {
         session.releaseFocus(target);
         commandWindowPanel.dispose();
         status.release();
-        output.close(false);
-        messageLine.dispose();
         floats.dispose();
         if (window != EditorWindow.UNKNOWN) {
             session.closePageWindowAsync(window);

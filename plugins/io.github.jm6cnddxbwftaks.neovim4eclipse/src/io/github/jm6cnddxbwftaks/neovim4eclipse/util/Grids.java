@@ -86,6 +86,8 @@ public final class Grids {
      * thread.
      */
     private Set<Integer> ui2Windows = Set.of();
+    /** Whether Eclipse types the insert now ({@link #eclipseTypes}): Neovim's popup menu is then not drawn. */
+    private boolean eclipseTypes;
     private boolean floatsChanged;
     private List<FloatWindow> lastFloats = List.of();
     /** Whether a float left out for the limits was logged: once is enough to explain a missing window. */
@@ -176,6 +178,20 @@ public final class Grids {
         }
     }
 
+    /**
+     * Whether Eclipse types the current insert, not Neovim (the session says so before each
+     * redraw). Neovim's popup menu is then left out: Neovim's cursor is not where the user types
+     * (Eclipse hands the typed text over at the next sync point), so a list a config opened as text
+     * arrives would hang in the wrong place. A list the user asked for ({@code Ctrl-N}) is typed by
+     * Neovim, and drawn. Example: {@code vim.fn.complete()} from an autocmd while Eclipse types.
+     */
+    public void eclipseTypes(boolean on) {
+        if (on != eclipseTypes) {
+            eclipseTypes = on;
+            floatsChanged = true;
+        }
+    }
+
     /** The window drawn, -1 for none. */
     public int drawnWindow() {
         return drawnWindow;
@@ -246,6 +262,9 @@ public final class Grids {
             }
             case GridEvent.Flush e -> {
                 // the caller asks for the snapshot
+            }
+            case GridEvent.Viewport e -> {
+                // the session's (a search's preview), not the grids'
             }
         }
     }
@@ -400,6 +419,9 @@ public final class Grids {
         for (Map.Entry<Integer, GridEvent.WinPos> e : placeOfGrid.entrySet()) {
             GridEvent.WinPos place = e.getValue();
             boolean always = alwaysDrawn(e.getKey());
+            if (place.win() == -1 && eclipseTypes && !inCommandLine) {
+                continue; // Neovim's popup menu in an insert Eclipse types: see eclipseTypes
+            }
             if (place.floating() && grids.containsKey(e.getKey()) && (drawFloats || always)
                     && (e.getKey() != cursorGrid || always) && (drawnWindow == -1 || place.win() != drawnWindow)) {
                 candidates.add(e);

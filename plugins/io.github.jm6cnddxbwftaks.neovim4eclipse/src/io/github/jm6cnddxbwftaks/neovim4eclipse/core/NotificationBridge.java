@@ -10,12 +10,10 @@ import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
@@ -200,17 +198,17 @@ final class NotificationBridge implements Incoming {
         void onShowView(QuickfixEntries.Kind kind);
 
         /**
-         * The command-line, completion-menu and view events of one {@code redraw} notification, in
-         * order (the UI is attached with {@code ext_cmdline} and {@code ext_popupmenu}; see
-         * {@link CmdlineEvent}). Passed together so that the box is redrawn once for them.
+         * A command line opened, of type {@code ":"}, {@code "/"}, {@code "?"} ... ({@code getcmdtype()}),
+         * or closed ({@code ""}), from {@link LuaScripts#UI2}. Neovim draws the line itself (ui2); the
+         * session only needs to know a search is being typed, whose preview the editor follows.
          */
-        void onCmdline(List<CmdlineEvent> events);
+        void onCmdlineType(String type);
 
         /**
-         * Neovim showed a message, the pending command changed, or a redraw ended (the UI is
-         * attached with {@code ext_messages}; see {@link MessageEvent}).
+         * {@code :messages}: the message history, oldest first, for its page editor
+         * ({@link LuaScripts#UI2}). Example: {@code [Message("", "a note"), Message("echoerr", "it broke")]}.
          */
-        void onMessageEvent(MessageEvent event);
+        void onMessages(List<ViewText.Message> history);
 
         /**
          * Content for a page editor that is no message, which the {@code WinNew} net of
@@ -232,13 +230,6 @@ final class NotificationBridge implements Incoming {
          * line): window {@code winid}, of type {@code ":"}, {@code "/"} or {@code "?"}.
          */
         void onCommandWindow(int winid, String type);
-
-        /**
-         * Neovim's completion list shows or its selection moved: where the cursor is and how the
-         * list is to look ({@link LuaScripts#COMPLETION_MENU}). The list's entries come with the
-         * redraw ({@link #onCmdline}, a {@code MenuShow} whose grid is a window's).
-         */
-        void onCompletionAnchor(CompletionMenu.Anchor anchor);
 
         /** The command-line window closed. */
         void onCommandWindowClosed();
@@ -287,14 +278,10 @@ final class NotificationBridge implements Incoming {
             case "eclipse_echo" -> onEcho(args);
             case "eclipse_cmdwin" -> onCommandWindow(args);
             case "eclipse_cmdwin_closed" -> sink.onCommandWindowClosed();
-            case "eclipse_complete" -> onCompletion(args);
+            case "eclipse_cmdline" -> sink.onCmdlineType(args.isEmpty() ? "" : String.valueOf(args.get(0)));
+            case "eclipse_messages" -> onMessages(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
-                List<CmdlineEvent> cmdline = CmdlineEvent.fromRedraw(args);
-                if (!cmdline.isEmpty()) {
-                    sink.onCmdline(cmdline);
-                }
-                MessageEvent.fromRedraw(args).forEach(sink::onMessageEvent);
                 // A redraw that changed no grid still ends in a flush: nothing to pass on then.
                 List<GridEvent> grid = GridEvent.fromRedraw(args, NotificationBridge::windowId, sink::wantsGridLines);
                 if (grid.stream().anyMatch(e -> !(e instanceof GridEvent.Flush))) {
@@ -362,21 +349,20 @@ final class NotificationBridge implements Incoming {
     }
 
     /**
-     * {@code eclipse_complete}: line, byte column, window cell, {@code 'pumheight'}, the groups'
-     * colors, and the cells of text in a row of a window that wraps (0 or left out: it does not).
+     * {@code eclipse_messages}: one argument, the history as a list of {@code {kind, text}}. An
+     * entry that is not such a pair is skipped.
      */
-    private void onCompletion(List<?> args) {
-        Integer line = args.size() > 3 ? toInt(args.get(0)) : null;
-        Integer col = line == null ? null : toInt(args.get(1));
-        Integer winCol = col == null ? null : toInt(args.get(2));
-        Integer height = winCol == null ? null : toInt(args.get(3));
-        if (height == null || line < 1 || col < 0) {
-            return; // not ours to guess: the list then waits for the next report
+    private void onMessages(List<?> args) {
+        if (args.isEmpty() || !(args.get(0) instanceof List<?> entries)) {
+            return;
         }
-        List<?> colors = args.size() > 4 && args.get(4) instanceof List<?> sent ? sent : List.of();
-        Integer textWidth = args.size() > 5 ? toInt(args.get(5)) : null;
-        sink.onCompletionAnchor(new CompletionMenu.Anchor(line, col, winCol, height, CompletionMenu.Colors.from(colors),
-                textWidth == null ? 0 : Math.max(0, textWidth)));
+        List<ViewText.Message> history = new ArrayList<>();
+        for (Object entry : entries) {
+            if (entry instanceof List<?> pair && pair.size() >= 2) {
+                history.add(new ViewText.Message(String.valueOf(pair.get(0)), String.valueOf(pair.get(1))));
+            }
+        }
+        sink.onMessages(List.copyOf(history));
     }
 
     /**

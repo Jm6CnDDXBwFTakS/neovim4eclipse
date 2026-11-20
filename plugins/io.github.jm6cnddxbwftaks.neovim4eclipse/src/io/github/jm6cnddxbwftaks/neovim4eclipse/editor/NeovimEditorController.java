@@ -13,7 +13,6 @@ import java.util.logging.Logger;
 import org.eclipse.core.commands.ParameterizedCommand;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
-import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.ITextOperationTarget;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.ITextViewerExtension;
@@ -34,8 +33,6 @@ import org.eclipse.ui.texteditor.ITextEditorActionDefinitionIds;
 import org.eclipse.ui.texteditor.ITextEditorExtension6;
 import org.eclipse.ui.texteditor.IUpdate;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CommandOutput;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.CursorPos;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
@@ -48,13 +45,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SearchPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.VisualSelection;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ViewportPort;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DocumentPush;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CellWidth;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
@@ -75,7 +68,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
  *   <li>{@link CaretSync}: caret and cursor, both directions;</li>
  *   <li>{@link EditorKeyContext}: when the Vim Ctrl-key bindings are active;</li>
  *   <li>{@link VisualSelectionView}, {@link CursorStyleController}, {@link ModeStatusContribution},
- *       {@link CommandLineBox}, {@link MessageLine}: what is drawn;</li>
+ *       {@link FloatingWindows}: what is drawn (Neovim's command line and messages among the floats);</li>
  *   <li>{@link InsertTracker}: what was typed in insert mode, for {@code .}.</li>
  *   <li>{@link FoldMirror}: the editor's folds and Neovim's, kept the same (when the editor folds
  *       and the user has not turned it off with {@code vim.g.neovim4eclipse_folds = 0}).</li>
@@ -107,16 +100,12 @@ public final class NeovimEditorController implements AutoCloseable {
     private final DocumentPush documentPush;
     /** Remembers the text before an Eclipse-driven insert so "." can repeat what was typed. */
     private final InsertTracker insertTracker;
-    /** The inline {@code :} / {@code /} / {@code ?} command line along the bottom of the editor. */
-    private final CommandLineBox commandLine;
-    /** Eclipse's Copy, Paste, Cut and Select All, pointed at {@link #commandLine} while it is open. */
+    /** Eclipse's Copy, Paste, Cut and Select All, pointed at Neovim's command line while one is open. */
     private final CommandLineEditHandlers commandLineEdits;
     /** Neovim's command-line window ({@code q:}), drawn over the bottom of the editor while it is open. */
     private final NeovimWindowPanel commandWindowPanel;
     /** Neovim's floating windows without the focus, drawn over the text. */
     private final FloatingWindows floatingWindows;
-    /** Neovim's insert-mode completion list, drawn at the word being completed. */
-    private final CompletionMenuPopup completionMenu;
     /**
      * Whether the command-line window is open, set on the RPC thread as the session reports it:
      * its mode, which is Neovim's in that window, then does not reach the editor
@@ -132,10 +121,6 @@ public final class NeovimEditorController implements AutoCloseable {
     private Boolean darkSent;
     /** The left mouse button, handed to Neovim in normal and visual mode. */
     private final NeovimMouse mouse;
-    /** Neovim's messages and errors, and the plug-in's own, along the bottom of the editor. */
-    private final MessageLine messageLine;
-    /** The message last handed to {@link #messageLine}, so that other status changes do not show it again. */
-    private String shownMessage = "";
     private final ModeStatusContribution modeStatus;
     /** How long the statusline's width must stay the same before Neovim is asked again; see {@link #onStatuslineColumns}. */
     private static final int STATUSLINE_SETTLE_MS = 200;
@@ -203,13 +188,11 @@ public final class NeovimEditorController implements AutoCloseable {
         @Override public void onMode(String mode) { onModeChanged(mode); }
         @Override public void onRecording(String register) { onRecordingChanged(register); }
         @Override public void onStatus(StatusInfo status) { onStatusChanged(status); }
-        @Override public void onOutput(CommandOutput output) { NeovimEditorController.this.onOutput(output); }
         @Override public void onIdeAction(IdeAction action) { NeovimEditorController.this.onIdeAction(action); }
         @Override public void onHostCommand(HostCommand command) { NeovimEditorController.this.onHostCommand(command); }
-        @Override public void onCmdline(CmdlineState.View view) { NeovimEditorController.this.onCmdline(view); }
+        @Override public void onCmdlineType(String type) { NeovimEditorController.this.onCmdlineType(type); }
         @Override public void onCommandWindow(CommandWindowView view) { NeovimEditorController.this.onCommandWindow(view); }
         @Override public void onFloatingWindows(List<FloatWindow> windows) { NeovimEditorController.this.onFloatingWindows(windows); }
-        @Override public void onCompletionMenu(CompletionMenu.View view) { NeovimEditorController.this.onCompletionMenu(view); }
         @Override public String toString() { return "focus of " + NeovimEditorController.this; }
     };
     private final Consumer<CursorPos> cursorListener = this::onCursorChanged;
@@ -307,17 +290,13 @@ public final class NeovimEditorController implements AutoCloseable {
         // a completion and Ctrl-X waits for its second key, and then every Ctrl letter is Neovim's;
         // an insert becomes Neovim-driven. Look after each key.
         keyInterceptor.setAfterKey(keyContext::update);
-        this.messageLine = new MessageLine(styledText, NeovimEditorController::flashOnError);
-        this.commandLine = new CommandLineBox(styledText, new SessionCommands(session), messageLine,
-                this::onCommandLineStateChanged);
         this.commandLineEdits = new CommandLineEditHandlers(
-                editor.getSite().getService(IHandlerService.class), commandLine);
+                editor.getSite().getService(IHandlerService.class), this::pasteIntoCommandLine);
         this.commandWindowPanel = new NeovimWindowPanel(styledText, new PanelCommands(session),
                 this::onCommandLineStateChanged);
         this.floatingWindows = new FloatingWindows(styledText);
-        this.completionMenu = new CompletionMenuPopup(styledText, this::completionWordStart);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
-                this::neovimHandlesMouse, session::mouseAsync, messageLine::hide);
+                this::neovimHandlesMouse, session::mouseAsync, () -> { });
         this.wheel = viewport == null ? null
                 : new NeovimWheel(styledText, this::neovimHandlesMouse, viewport::rows,
                         lines -> session.scrollLinesAsync(buffer, lines));
@@ -858,21 +837,21 @@ public final class NeovimEditorController implements AutoCloseable {
                 session.resendSearchAsync(buffer); // cleared in Eclipse mode
             }
             floatingWindows.show(session.floatingWindows()); // cleared in Eclipse mode too
-            completionMenu.show(session.completionMenu()); // likewise: a list of an insert Neovim owns is still open
             LOG.info("Mode → NEOVIM (keys to nvim)");
         } else {
             modeStatus.setHostEclipseMode();
-            messageLine.hide(); // Neovim's messages are about keys it no longer gets
-            // Neovim's command line views are no longer passed on (onCmdline), so an open box
-            // would never hear that its line closed: it closes now, and the line is abandoned.
-            commandLine.closeForEclipseMode();
+            // Neovim's command line, if one is open, would wait for keys it no longer gets: it is
+            // abandoned, as a click away from it does.
+            if (VimModes.isCmdline(session.getMode()) && !VimModes.isExMode(session.getMode())) {
+                session.inputAsync("<C-c>");
+            }
+            commandLineEdits.update(false);
             if (commandWindowPanel.isOpen()) { // the same for the command-line window
                 session.closeCommandWindowAsync();
                 commandWindowShown = false;
                 commandWindowPanel.show(CommandWindowView.CLOSED);
             }
             floatingWindows.clear(); // Neovim's windows are not shown in Eclipse mode; they come back with Neovim mode
-            completionMenu.hide();
             session.endCompletionAsync(); // Neovim would wait for the list's next key, which it no longer gets
             cursorStyle.updateForMode("i"); // thin caret for normal typing
             selectionView.clearBlock();
@@ -915,25 +894,46 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Neovim's command line changed: the box shows it (opens, redraws, closes) if Neovim drives
-     * this editor. Every command line is Neovim's, whoever opened it: {@code :} typed here, a
-     * mapping, a count, {@code input()}. RPC thread.
+     * A command line opened ({@code ":"}, {@code "/"} ...) or closed ({@code ""}): Neovim draws it
+     * (ui2, as a float). The editor lets Eclipse's Paste reach it while it is open
+     * ({@link CommandLineEditHandlers}), gives a typed search's match the current-match color, and
+     * puts the keys back into the command-line window when a line typed there ends. RPC thread.
      */
-    private void onCmdline(CmdlineState.View view) {
+    private void onCmdlineType(String type) {
         if (closed || !neovimModeActive) {
             return;
         }
         HostCommands.runOnUi(() -> {
             if (!closed && !styledText.isDisposed()) {
-                commandLine.show(view);
+                boolean open = !type.isEmpty();
+                commandLineEdits.update(open);
                 if (searchHighlighter != null) {
-                    searchHighlighter.setSearchTyped(view.isSearch()); // the match Neovim jumped to gets the box
+                    searchHighlighter.setSearchTyped("/".equals(type) || "?".equals(type));
                 }
-                if (!view.open() && commandWindowPanel.isOpen()) {
+                if (!open && commandWindowPanel.isOpen()) {
                     commandWindowPanel.focus(); // a : typed in the command-line window ended: back to the window
                 }
             }
         });
+    }
+
+    /**
+     * Eclipse's Paste while a command line is open: the clipboard's text goes to Neovim's line as a
+     * paste ({@code nvim_paste}), whatever it holds. UI thread.
+     */
+    private void pasteIntoCommandLine() {
+        if (closed || styledText.isDisposed()) {
+            return;
+        }
+        org.eclipse.swt.dnd.Clipboard clipboard = new org.eclipse.swt.dnd.Clipboard(styledText.getDisplay());
+        try {
+            Object text = clipboard.getContents(org.eclipse.swt.dnd.TextTransfer.getInstance());
+            if (text instanceof String pasted && !pasted.isEmpty()) {
+                session.pasteAsync(pasted);
+            }
+        } finally {
+            clipboard.dispose();
+        }
     }
 
     /**
@@ -966,53 +966,12 @@ public final class NeovimEditorController implements AutoCloseable {
         commandWindowShown = view.open();
         HostCommands.runOnUi(() -> {
             if (!closed && !styledText.isDisposed()) {
-                if (view.open()) {
-                    commandLine.closeForCommandWindow(); // Ctrl-F on the : line; its line is not abandoned
-                }
                 commandWindowPanel.setInsertMode(VimModes.isTyping(session.getMode()));
                 commandWindowPanel.show(view);
             }
         });
         if (!view.open()) {
             onModeChanged(session.getMode());
-        }
-    }
-
-    /**
-     * Neovim's completion list shows, changed or closed: it is drawn at the word being completed
-     * in this editor, whose insert Neovim is typing. Not in Eclipse mode. RPC thread.
-     */
-    private void onCompletionMenu(CompletionMenu.View view) {
-        if (closed || !neovimModeActive) {
-            return;
-        }
-        HostCommands.runOnUi(() -> {
-            if (!closed && neovimModeActive && !styledText.isDisposed()) {
-                // The newest view, not this one: a list that closed meanwhile must not come back.
-                completionMenu.show(session.completionMenu());
-            }
-        });
-    }
-
-    /**
-     * Where the word being completed starts, as a widget offset, for the list's place
-     * ({@link CompletionMenuPopup}): Neovim's cursor in the document, and from there back as many
-     * cells as Neovim says the word is long ({@link CompletionMenu.View#cellsBack}). -1 when the
-     * line is not in the document (any more) or is folded away.
-     */
-    private int completionWordStart(CompletionMenu.View view) {
-        try {
-            IDocument document = documentOf(editor);
-            int cursor = DocumentPositions.byteColToOffset(document, view.line1(), view.col0());
-            IRegion line = document.getLineInformation(view.line1() - 1);
-            // Only the stretch the word can be in, not the whole line: this runs at each paint, and
-            // a line can be megabytes long. A cell is at least one char, a few with marks on it.
-            int from = Math.max(line.getOffset(), cursor - (view.cellsBack() * 8 + 16));
-            int to = Math.min(cursor, line.getOffset() + line.getLength());
-            String text = to > from ? document.get(from, to - from) : "";
-            return offsets.toWidget(from + CellWidth.charsBack(text, text.length(), view.cellsBack()));
-        } catch (BadLocationException | RuntimeException e) {
-            return -1;
         }
     }
 
@@ -1029,7 +988,6 @@ public final class NeovimEditorController implements AutoCloseable {
             keyContext.update(); // the letters are Eclipse's again where they are not ticked
         }
         if (!closed && session.isCompleting()) {
-            completionMenu.hide(); // at once; Neovim's own report of the list's end follows
             session.endCompletionAsync();
         }
     }
@@ -1053,7 +1011,7 @@ public final class NeovimEditorController implements AutoCloseable {
     /**
      * Whether a left click goes to Neovim's mouse ({@link NeovimMouse}): in Neovim mode, except in
      * insert and replace mode, where Eclipse types and so places the caret itself, and in Ex mode,
-     * where Neovim would take it as a click on its command line ({@link CommandLineBox}, "Ex mode").
+     * where Neovim would take it as a click on its command line.
      */
     private boolean neovimHandlesMouse() {
         String mode = session.getMode();
@@ -1061,39 +1019,27 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Whether the {@code :} box or the command-line window has the keyboard focus (the Vim Ctrl keys
-     * then go to its line).
+     * Whether the command-line window ({@code q:}) has the keyboard focus (the Vim Ctrl keys then go
+     * to its line).
      */
     private boolean commandLineHasFocus() {
-        return commandLine != null && commandLine.hasFocus() || commandWindowPanel != null && commandWindowPanel.hasFocus();
+        return commandWindowPanel != null && commandWindowPanel.hasFocus();
     }
 
     /**
-     * The {@code :} box opened, closed, gained or lost the focus: Eclipse's Copy and Paste act on it
-     * while it is open ({@link CommandLineEditHandlers}), and the Vim Ctrl keys reach its line while it
+     * The command-line window gained or lost the focus: the Vim Ctrl keys reach its line while it
      * has the focus ({@link EditorKeyContext}). UI thread.
      */
     private void onCommandLineStateChanged() {
-        if (closed || commandLineEdits == null) {
-            return; // the editor is going away, or the box reports while the controller is being built
+        if (closed || keyContext == null) {
+            return; // the editor is going away, or the panel reports while the controller is being built
         }
-        commandLineEdits.update();
         keyContext.update();
     }
 
-    /**
-     * Command, message or statusline text changed: the command and statusline go to the status bar
-     * item, the message to the message line. Called on the session's thread.
-     */
+    /** The statusline changed: it goes to the status bar item. Called on the session's thread. */
     private void onStatusChanged(StatusInfo info) {
         modeStatus.setStatusInfo(info);
-        HostCommands.runOnUi(() -> {
-            if (closed || styledText.isDisposed() || !isNeovimModeActive() || info.message().equals(shownMessage)) {
-                return;
-            }
-            shownMessage = info.message();
-            messageLine.show(info.message(), info.error());
-        });
     }
 
     /** Whether this editor has the focus events now (no page took them; {@link #takeFocusBack}). Any thread. */
@@ -1129,43 +1075,18 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Output for the popup (a listing, shell output, messages of more than one line): shown over
-     * this editor if Neovim drives it. The message line is cleared, as the popup replaces it. Called
-     * on the session's thread.
-     */
-    private void onOutput(CommandOutput output) {
-        HostCommands.runOnUi(() -> {
-            if (closed || styledText.isDisposed() || !isNeovimModeActive()) {
-                return;
-            }
-            commandLine.showOutput(output.title(), output.text());
-        });
-    }
-
-    /**
-     * Shows a message of the plug-in's own in the message line, e.g. {@code E37: No write since last
-     * change} from {@code :e}. It goes away with the next key, like Neovim's messages. UI thread.
+     * Shows a message of the plug-in's own as Neovim shows its own (ui2, {@link NeovimSession#echoAsync}),
+     * e.g. {@code E37: No write since last change} from {@code :e}. Any thread.
      */
     void showMessage(String message, boolean error) {
-        if (!closed && !styledText.isDisposed()) {
-            messageLine.show(message, error);
+        if (!closed) {
+            session.echoAsync(message, error);
         }
     }
 
     /** A jump plug-in's labels as they would be painted now, for tests; empty without the highlighter. UI thread. */
     List<JumpLabelPainter.Painted> jumpLabelsForTests() {
         return neovimHighlighter == null ? List.of() : neovimHighlighter.paintedLabels();
-    }
-
-    /** The message line, for tests. */
-    MessageLine messageLine() {
-        return messageLine;
-    }
-
-    /** The preference <em>Flash the editor on errors</em>. */
-    private static boolean flashOnError() {
-        Activator activator = Activator.getDefault();
-        return activator != null && activator.getPreferenceStore().getBoolean(PreferenceConstants.FLASH_ON_ERROR);
     }
 
     /** Redraws the status bar item and re-reads Neovim's side of it (a preference changed). */
@@ -1272,10 +1193,6 @@ public final class NeovimEditorController implements AutoCloseable {
      * In an insert Eclipse types, the typed text goes to Neovim first (a sync point, {@link KeyRouter}).
      */
     public void sendKey(String nvimKey) {
-        if (!closed && neovimModeActive && commandLine.isOpen()) {
-            commandLine.ctrlKey(nvimKey); // the : box has the focus: its line, or its paste and copy
-            return;
-        }
         if (!closed && neovimModeActive && commandWindowPanel.isOpen()) {
             commandWindowPanel.ctrlKey(nvimKey); // the command-line window's, in every mode
             return;
@@ -1435,15 +1352,12 @@ public final class NeovimEditorController implements AutoCloseable {
                 wheel.dispose();
             }
             commandLineEdits.dispose();
-            commandLine.dispose();
             commandWindowPanel.dispose();
             floatingWindows.dispose();
-            completionMenu.dispose();
             if (!styledText.isDisposed()) {
                 styledText.removeListener(SWT.MouseDown, endCompletionListener);
                 styledText.removeListener(SWT.FocusOut, endCompletionListener);
             }
-            messageLine.dispose();
             selectionView.dispose();
             if (searchHighlighter != null) {
                 searchColors.dispose();
@@ -1495,29 +1409,6 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * {@link CommandLineBox.Commands} on the session: keys and pastes go to Neovim's command line, in
-     * order with the editor's own keys (one input thread). File and tab commands still reach this
-     * editor, through the session's host handler on Enter.
-     */
-
-    private record SessionCommands(NeovimSession session) implements CommandLineBox.Commands {
-        @Override
-        public void type(String keys) {
-            session.inputAsync(keys);
-        }
-
-        @Override
-        public void paste(String text) {
-            session.pasteAsync(text);
-        }
-
-        @Override
-        public boolean cancellable() {
-            return !VimModes.isExMode(session.getMode());
-        }
-    }
-
-    /**
      * {@link DocumentPush.Neovim} on the session, for this editor's buffer in its own window.
      *
      * @param folder the window's folder, or {@code null} (see {@link #windowFolder})
@@ -1559,4 +1450,5 @@ public final class NeovimEditorController implements AutoCloseable {
             return buffer.isOpenIn(session) && buffer.isInSyncAt(stamp);
         }
     }
+
 }

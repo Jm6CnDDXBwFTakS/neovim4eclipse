@@ -30,12 +30,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimApi;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.NeovimErrorException;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.WinCursor;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineState;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandOrigin;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions;
@@ -47,7 +43,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LatestValue;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
@@ -183,23 +178,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private volatile boolean floatingWindowsEnabled;
     /** The floating windows last reported to the listeners, lowest in the stack first. */
     private volatile List<FloatWindow> floatingWindows = List.of();
-    /**
-     * Whether Neovim's completion list is drawn ({@link #completesInNeovim()}): the answer of
-     * {@link LuaScripts#COMPLETION_MENU}, run once at start after the user's config. Written once,
-     * before the session is handed out.
-     */
-    private volatile boolean completionMenuEnabled;
-    /** The completion list last passed to the listeners; {@link CompletionMenu.View#HIDDEN} for none. */
-    private volatile CompletionMenu.View completionMenu = CompletionMenu.View.HIDDEN;
-    /**
-     * The two halves of a completion list, which Neovim sends apart: the entries with the redraw
-     * ({@code popupmenu_show}), the cursor and colors as a notification
-     * ({@link LuaScripts#COMPLETION_MENU}). The list is shown once both are here, whichever comes
-     * first; both are forgotten when the list closes, so that a later list never takes the cursor
-     * of an earlier one. RPC reader thread only.
-     */
-    private CmdlineEvent.MenuShow completionEntries;
-    private CompletionMenu.Anchor completionAnchor;
     /** Editor sizes not sent yet: only the newest counts (a window being dragged larger). */
     private final LatestValue<int[]> pendingEditorSize = new LatestValue<>();
     /** Wheel lines not sent yet, added up ({@link #scrollLinesAsync}); and the buffer they are for. */
@@ -265,12 +243,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final LatestValue<MouseInput> pendingDrag = new LatestValue<>();
     /** Runs submitted {@code :} commands, listings, searches and {@code :normal!}. */
     private final CommandRunner commands = new CommandRunner(new CommandRunnerNeovim());
-    /** Tells Neovim's command lines the user opened from the ones the plug-in types. */
-    private final CmdlineWatcher cmdlineWatcher = new CmdlineWatcher();
-    /** Neovim's command line, from its UI events; read and written on the RPC reader thread only. */
-    private final CmdlineState cmdline = new CmdlineState();
-    /** The view last passed to the command-line listeners. */
-    private CmdlineState.View lastCmdline = CmdlineState.View.CLOSED;
+    /**
+     * Whether a search is being typed ({@code /} or {@code ?}), from ui2's command-line type
+     * ({@link LuaScripts#UI2}): the editor then follows the match Neovim previews
+     * ({@code 'incsearch'}, a {@code win_viewport}). RPC reader thread only.
+     */
+    private boolean searching;
     /** Neovim's screen grids, from its UI events ({@code ext_multigrid}); RPC reader thread only. */
     private final Grids grids = new Grids();
     /**
@@ -318,13 +296,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         events.addModeListener(focus.mode);
         status.addRecordingListener(focus.recording);
         status.addStatusListener(focus.status);
-        status.addOutputListener(focus.output);
         events.addIdeActionListener(focus.ideAction);
         events.addHostCommandListener(focus.hostCommand);
-        events.addCmdlineListener(focus.cmdline);
+        events.addCmdlineTypeListener(focus.cmdlineType);
         events.addCommandWindowListener(focus.commandWindow);
         events.addFloatingWindowListener(focus.floatingWindows);
-        events.addCompletionMenuListener(focus.completionMenu);
     }
 
     // ---- focus ----
@@ -541,6 +517,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             // Asked as a plain RPC call, channel 0 is the caller: this is Eclipse's channel number.
             int channel = await(api.getChannelId());
             await(api.execLua(LuaScripts.SETUP, List.of(String.valueOf(channel))));
+            // Neovim draws its own command line, prompts, pager and messages (LuaScripts.UI2): always,
+            // and before anything the plug-in echoes, so that ui2 shows it.
+            Object ui2 = await(api.execLua(LuaScripts.UI2, List.of()));
+            if (!Boolean.TRUE.equals(ui2)) {
+                LOG.warning(() -> "Neovim's command line is not shown: " + ui2);
+            }
             if (closedFloat instanceof String name && !name.isEmpty()) {
                 await(api.execLua(LuaScripts.SHOW_START_FLOAT_CLOSED, List.of(name))); // the messages reach us now
             }
@@ -574,15 +556,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             LOG.info(() -> "Neovim's floating windows " + (session.floatingWindowsDrawn() ? "drawn in the editor"
                     : session.floatingWindowsEnabled ? "not drawn: the viewport is off (g:neovim4eclipse_viewport)"
                             : "off (g:neovim4eclipse_floating_windows)"));
-            // Neovim draws its own command line, prompts, pager and messages (LuaScripts.UI2): always.
-            Object ui2 = await(api.execLua(LuaScripts.UI2, List.of()));
-            if (!Boolean.TRUE.equals(ui2)) {
-                LOG.warning(() -> "Neovim's command line is not shown: " + ui2);
-            }
-            // And for the completion list (docs/ARCHITECTURE.md, "The completion list").
-            session.completionMenuEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.COMPLETION_MENU, List.of())));
-            LOG.info(() -> "Neovim's completion list " + (session.completesInNeovim() ? "drawn in the editor"
-                    : "off (g:neovim4eclipse_completion_menu)"));
             // Always: the Ctrl-X completions that could run a file's text are refused in Neovim itself.
             await(api.execLua(LuaScripts.CTRL_X_GUARD, List.of()));
             // And no file's modeline sets options (LuaScripts.NO_MODELINES).
@@ -761,17 +734,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Whether insert-mode {@code Ctrl-N}, {@code Ctrl-P} and the {@code Ctrl-X} modes are Neovim's
-     * own completion, with its list drawn in the editor ({@code util/CompletionMenu}), and not
-     * Eclipse's Word Completion: unless the user's config says
-     * {@code vim.g.neovim4eclipse_completion_menu = 0}. Fixed for the session.
-     *
-     * <p>Unlike the floating windows it does not need Neovim's window to follow the editor
-     * ({@link #viewportEnabled()}): the list hangs on the cursor's line, which Neovim always keeps
-     * on its own screen, and its place in the editor is taken from Eclipse's text, with one number
-     * from Neovim that no scrolling changes (how many cells before the cursor the word starts).
+     * own completion, and not Eclipse's Word Completion: always. Neovim draws its popup menu
+     * itself, as a float the editor copies ({@code util/Grids}); the setting that once turned the
+     * plug-in's own list off ({@code vim.g.neovim4eclipse_completion_menu}) has no effect.
      */
     public boolean completesInNeovim() {
-        return completionMenuEnabled;
+        return true;
     }
 
     /**
@@ -781,24 +749,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public boolean isCompleting() {
         return keyInput.isCompleting();
-    }
-
-    /** The completion list to draw now, {@link CompletionMenu.View#HIDDEN} for none. */
-    public CompletionMenu.View completionMenu() {
-        return completionMenu;
-    }
-
-    /**
-     * Hears the completion list each time it shows, changes or closes
-     * ({@link CompletionMenu.View#HIDDEN}); on the RPC reader thread. Nothing is ever reported
-     * unless {@link #completesInNeovim()}.
-     */
-    public void addCompletionMenuListener(Consumer<CompletionMenu.View> listener) {
-        events.addCompletionMenuListener(listener);
-    }
-
-    public void removeCompletionMenuListener(Consumer<CompletionMenu.View> listener) {
-        events.removeCompletionMenuListener(listener);
     }
 
     /**
@@ -856,21 +806,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Notified (on a session thread) of output for the popup: a listing, shell output, or messages
-     * of more than one line ({@code util/MessageRoute}). Passed again, whole, while it grows.
-     */
-    public void addOutputListener(Consumer<CommandOutput> listener) {
-        status.addOutputListener(listener);
-    }
-
-    public void removeOutputListener(Consumer<CommandOutput> listener) {
-        status.removeOutputListener(listener);
-    }
-
-    /**
      * Notified (on the RPC reader thread) of what a page editor shows: {@code :messages} with
      * its errors marked ({@code util/ViewText}), and the buffer of a {@code :help} page or a
-     * {@code :checkhealth} report ({@code util/PageBuffer}). None goes to the output popup.
+     * {@code :checkhealth} report ({@code util/PageBuffer}).
      */
     public void addViewContentListener(Consumer<ViewContent> listener) {
         status.addViewContentListener(listener);
@@ -1017,19 +955,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         events.removeIdeActionListener(listener);
     }
 
-    /**
-     * Notified (on an RPC thread) whenever Neovim's command line changes: opened (by {@code :},
-     * {@code /}, a mapping, a count, {@code input()}), typed in, completed, or closed. The editor's
-     * box draws the {@link CmdlineState.View}. The plug-in's own typed lines are not reported
-     * ({@link CmdlineWatcher}).
-     */
-    public void addCmdlineListener(Consumer<CmdlineState.View> listener) {
-        events.addCmdlineListener(listener);
-    }
-
-    public void removeCmdlineListener(Consumer<CmdlineState.View> listener) {
-        events.removeCmdlineListener(listener);
-    }
 
     /**
      * Hears the command-line window open, change and close ({@link CommandWindowView}), on the RPC
@@ -1085,6 +1010,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * {@code dark} for a dark editor background. Example: the editor attaches in the dark theme;
      * the user then switches Eclipse to the light one.
      */
+    /**
+     * Shows a message of the plug-in's own as Neovim shows its own ({@link LuaScripts#ECHO}): in
+     * ui2's line, kept in {@code :messages}, an error in {@code ErrorMsg}. Example: {@code :e} with
+     * changes gives {@code E37: No write since last change (add ! to override)}.
+     */
+    public void echoAsync(String message, boolean error) {
+        submit("a message", Level.FINE, () -> await(api.execLua(LuaScripts.ECHO, List.of(message, error))));
+    }
+
     public void setBackgroundAsync(boolean dark) {
         String background = dark ? "dark" : "light";
         submit("'background' " + background, Level.FINE,
@@ -2082,8 +2016,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Types {@code :cmd<CR>}, then refreshes buffer, mode and cursor in Eclipse. What the command
-     * prints reaches the status and output listeners ({@link #addOutputListener}). See
-     * {@link CommandRunner#run}.
+     * prints, Neovim shows itself (ui2, {@link LuaScripts#UI2}). See {@link CommandRunner#run}.
      */
     public void commandAsync(String cmd) {
         // No command line in the label, as for a key (inputAsync): a failure logs the label at
@@ -2564,112 +2497,23 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             }
         }
 
+        /** {@code :messages}: to the page editor; an empty history shows nothing, as in Vim. */
         @Override
-        public void onMessageEvent(MessageEvent event) {
-            status.onMessageEvent(event);
+        public void onMessages(List<ViewText.Message> history) {
+            if (!history.isEmpty()) {
+                status.onViewContent(ViewText.messages(history));
+            }
+        }
+
+        @Override
+        public void onCmdlineType(String type) {
+            searching = "/".equals(type) || "?".equals(type);
+            events.cmdlineType(type);
         }
 
         @Override
         public void onViewContent(ViewContent content) {
             status.onViewContent(content);
-        }
-
-        /**
-         * Feeds the command-line state and passes a changed view on once per notification. While a
-         * search is typed, Neovim's view follows the match ({@code 'incsearch'}); its cursor goes
-         * to the editor's caret as any cursor from Neovim does, and Esc or Enter then sets it for
-         * good through the state read after that key.
-         */
-        @Override
-        public void onCmdline(List<CmdlineEvent> cmdlineEvents) {
-            long now = System.currentTimeMillis();
-            boolean changed = false;
-            for (CmdlineEvent event : cmdlineEvents) {
-                if (event instanceof CmdlineEvent.Show show && show.level() == 1) {
-                    status.commandLine(show.firstc() + show.content()); // the title of its output
-                }
-                // Before the filter below: a list's end must be heard whatever else goes on, or the
-                // list would stay drawn. (An insert's list names a window's grid; a line's, none.)
-                completionEvent(event);
-                if (cmdlineWatcher.isOwn(event, now)) {
-                    continue;
-                }
-                if (event instanceof CmdlineEvent.Viewport viewport) {
-                    if (cmdline.view().isSearch()) {
-                        state.dispatchCursor(viewport.curline() + 1, viewport.curcol());
-                    }
-                    continue;
-                }
-                changed |= cmdline.apply(event);
-            }
-            CmdlineState.View view = cmdline.view();
-            if (changed && !view.equals(lastCmdline)) {
-                lastCmdline = view;
-                events.cmdline(view);
-            }
-        }
-
-        /**
-         * The completion list's half of a redraw event: an insert's entries (a
-         * {@code popupmenu_show} whose grid is a window's), a move of the selection, the end.
-         * The command line's own menu ({@code :e <Tab>}, grid -1) is none of its business, but
-         * {@code popupmenu_select} and {@code popupmenu_hide} name no grid: they are applied to
-         * the list only while there is one.
-         */
-        private void completionEvent(CmdlineEvent event) {
-            switch (event) {
-                case CmdlineEvent.MenuShow menu when !menu.forCmdline() -> {
-                    completionEntries = menu;
-                    showCompletionMenu();
-                }
-                case CmdlineEvent.MenuSelect select -> {
-                    CompletionMenu.View shown = completionMenu;
-                    if (completionEntries != null) {
-                        completionEntries = new CmdlineEvent.MenuShow(completionEntries.items(), select.selected(),
-                                completionEntries.grid(), completionEntries.row(), completionEntries.col(),
-                                completionEntries.kinds(), completionEntries.menus());
-                    }
-                    if (shown.isShowing()) {
-                        publishCompletionMenu(shown.select(select.selected()));
-                    }
-                }
-                case CmdlineEvent.MenuHide hide -> {
-                    completionEntries = null;
-                    completionAnchor = null;
-                    publishCompletionMenu(CompletionMenu.View.HIDDEN);
-                }
-                default -> { }
-            }
-        }
-
-        @Override
-        public void onCompletionAnchor(CompletionMenu.Anchor anchor) {
-            completionAnchor = anchor;
-            showCompletionMenu();
-        }
-
-        /**
-         * Shows the list once its entries and its cursor are both here, and only a list the user
-         * asked for: Neovim types the insert ({@link #isNeovimDrivenInsert()}: after
-         * {@code Ctrl-N}, while recording, after a block-visual {@code I}), the plug-in is not
-         * handing typed text over ({@link #isLeavingInsertMode()}; a config that completes as text
-         * arrives would pop a list up for the re-typing), and the command-line window is closed
-         * (its insert is drawn in a panel of its own). Otherwise the halves wait; the list's end
-         * forgets them.
-         */
-        private void showCompletionMenu() {
-            if (completionEntries == null || completionAnchor == null || !completesInNeovim()
-                    || !isNeovimDrivenInsert() || isLeavingInsertMode() || commandWindow.open()) {
-                return;
-            }
-            publishCompletionMenu(CompletionMenu.View.of(completionEntries, completionAnchor));
-        }
-
-        private void publishCompletionMenu(CompletionMenu.View view) {
-            if (!view.equals(completionMenu)) {
-                completionMenu = view;
-                events.completionMenu(view);
-            }
         }
 
         /**
@@ -2679,7 +2523,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public void onGridEvents(List<GridEvent> gridEvents) {
             grids.drawFloats(floatingWindowsDrawn()); // here, on the grids' own thread; false until the start has read it
+            grids.eclipseTypes(isTypingMode() && !isNeovimDrivenInsert());
             for (GridEvent event : gridEvents) {
+                // While a search is typed, Neovim's view follows the match ('incsearch'); its cursor
+                // goes to the editor's caret as any cursor from Neovim does, and Esc or Enter then
+                // sets it for good through the state read after that key.
+                if (event instanceof GridEvent.Viewport viewport && searching) {
+                    state.dispatchCursor(viewport.curline() + 1, viewport.curcol());
+                }
                 grids.apply(event);
                 if (event instanceof GridEvent.Flush) {
                     grids.snapshotIfChanged().ifPresent(this::commandWindowDrawn);
@@ -2743,22 +2594,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final class CommandRunnerNeovim implements CommandRunner.Neovim {
         @Override
         public void type(String keys) throws Exception {
-            // :cmd<CR> and /pattern<CR> open a command line of the plug-in's own: tell the
-            // watcher, so that Neovim's report of it is not taken for one the user opened.
-            if (keys.startsWith(":") || keys.startsWith("/") || keys.startsWith("?")) {
-                cmdlineWatcher.expectOwn(keys.substring(0, 1), System.currentTimeMillis());
-            }
             await(api.input(keys));
         }
 
         @Override
         public void awaitIdle(Duration timeout) throws Exception {
             api.execLua("return 0", List.of()).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        }
-
-        @Override
-        public void clearMessages() {
-            status.clearMessage();
         }
 
         @Override

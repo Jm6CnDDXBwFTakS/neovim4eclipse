@@ -11,14 +11,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimKeys;
 
 /**
  * Runs {@code :} commands for the plug-in and its tests ({@link NeovimSession#commandAsync}) and
- * {@code :normal!} keys, then refreshes Eclipse from Neovim. (What the user types in the {@code :} box
- * goes to Neovim's own command line key by key; see {@code CmdlineState}.)
+ * {@code :normal!} keys, then refreshes Eclipse from Neovim. (What the user types on the {@code :}
+ * line goes to Neovim's own command line key by key.)
  *
  * <p>Commands are <em>typed</em> ({@code :ls<CR>}), not run with
  * {@code nvim_command}: Neovim then records them in a macro being recorded, keeps them in its
  * history and knows the last one for {@code @:}, as when typed in Vim. What they print does not pass
- * through here: Neovim sends every message as a UI event ({@code ext_messages}), and
- * {@link StatusTracker} shows it on the message line or in the output popup.
+ * through here: Neovim shows it itself, in ui2's windows ({@link LuaScripts#UI2}), which the
+ * editor draws.
  *
  * <p>Every method blocks and must run on the session's input thread; {@link NeovimSession} queues
  * them there. Neovim is reached only through the small {@link Neovim} interface, so tests use a fake.
@@ -45,9 +45,6 @@ final class CommandRunner {
 
         /** Runs {@code keys} with {@code :normal!} ({@link LuaScripts#NORMAL_WITHOUT_MAPPINGS}). */
         void normalWithoutMappings(String keys) throws Exception;
-
-        /** A new command starts: the previous command's messages are hidden ({@link StatusTracker#clearMessage}). */
-        void clearMessages();
 
         /** Applies Neovim's buffer to the Eclipse document. */
         void syncBuffer();
@@ -91,13 +88,12 @@ final class CommandRunner {
     }
 
     /**
-     * Clears the last command's messages, types {@code keys}, waits until Neovim has run them and
+     * Types {@code keys}, waits until Neovim has run them and
      * refreshes Eclipse. A command still running after {@code commandTimeout} is not waited for
      * any longer; the refresh then waits its own (short) time and may fail, and the next key or
      * Neovim's own events bring Eclipse up to date.
      */
     private void typeAndRefresh(String keys) throws Exception {
-        nvim.clearMessages();
         nvim.type(keys);
         try {
             nvim.awaitIdle(commandTimeout);

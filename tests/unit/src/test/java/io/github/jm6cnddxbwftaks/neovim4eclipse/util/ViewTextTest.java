@@ -9,7 +9,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent.History;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText.LineHighlight;
 
 /** The text a page editor shows for {@code :messages}. */
@@ -17,11 +16,11 @@ class ViewTextTest {
 
     @Test
     void messagesKeepTheirOrderAndMarkErrorsAndWarnings() {
-        ViewText text = ViewText.messages(new History(List.of(
-                new History.Entry("", "3 lines yanked"),
-                new History.Entry("emsg", "E486: Pattern not found: x"),
-                new History.Entry("wmsg", "W10: Warning: Changing a readonly file"),
-                new History.Entry("lua_error", "E5108: Lua: boom\nstack traceback:"))));
+        ViewText text = ViewText.messages(List.of(
+                new ViewText.Message("", "3 lines yanked"),
+                new ViewText.Message("emsg", "E486: Pattern not found: x"),
+                new ViewText.Message("wmsg", "W10: Warning: Changing a readonly file"),
+                new ViewText.Message("lua_error", "E5108: Lua: boom\nstack traceback:")));
         assertEquals(ViewText.MESSAGES, text.title());
         assertEquals(List.of("3 lines yanked", "E486: Pattern not found: x", "W10: Warning: Changing a readonly file",
                 "E5108: Lua: boom", "stack traceback:"), text.lines());
@@ -32,19 +31,19 @@ class ViewTextTest {
 
     @Test
     void anEmptyHistoryIsNoText() {
-        ViewText text = ViewText.messages(new History(List.of()));
+        ViewText text = ViewText.messages(List.of());
         assertEquals(List.of(), text.lines());
         assertEquals(List.of(), text.highlights());
     }
 
     @Test
     void aCarriageReturnInAMessageIsNoLineOfItsOwn() {
-        assertEquals(List.of("a", "b"), ViewText.messages(new History(List.of(new History.Entry("", "a\r\nb")))).lines());
+        assertEquals(List.of("a", "b"), ViewText.messages(List.of(new ViewText.Message("", "a\r\nb"))).lines());
     }
 
     @Test
-    void theErrorKindsAreTheMessageLines() {
-        for (String kind : MessageRoute.ERROR_KINDS) {
+    void theErrorKindsAreDrawnAsErrors() {
+        for (String kind : ViewText.ERROR_KINDS) {
             assertEquals("ErrorMsg", ViewText.groupOf(kind), kind);
         }
         assertEquals("", ViewText.groupOf("echo"));

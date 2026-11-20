@@ -19,9 +19,9 @@ import org.eclipse.swt.widgets.Shell;
  * <p>Why tests need this: SWT counts focus only inside the active window. A test's shell is not
  * active when the developer is typing in another window, or on {@code xvfb-run} (no window manager)
  * after another shell that had the focus closed. Then {@code setFocus()} does nothing visible, and
- * code that reacts to focus behaves differently: the {@code :} box ({@link CommandLineBox}) closes
- * as soon as it loses focus, so the test's next call on it fails with an unexplained "Widget is
- * disposed".
+ * code that reacts to focus behaves differently: the command-line window's panel
+ * ({@link NeovimWindowPanel}) hands its keys back as soon as it loses focus, so the test's next
+ * key goes elsewhere, unexplained.
  *
  * <p>The UI test fragment has {@link #require}'s counterpart in {@code UiTestSupport}; the two
  * modules cannot share test code (one is plain JUnit, the other an OSGi fragment), and this one is

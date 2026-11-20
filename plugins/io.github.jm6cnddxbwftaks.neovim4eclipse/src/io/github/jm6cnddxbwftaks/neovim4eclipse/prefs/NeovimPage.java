@@ -74,12 +74,6 @@ class NeovimPage extends FieldEditorPreferencePage {
                 "Show Neovim menu in the menu bar",
                 workbench));
 
-        // Messages and errors always appear in a line at the bottom of the editor; this adds a flash.
-        addField(new BooleanFieldEditor(
-                PreferenceConstants.FLASH_ON_ERROR,
-                "Flash the editor on errors",
-                workbench));
-
         // The welcome after installing, and the short note after an update to a new minor version.
         addField(new BooleanFieldEditor(
                 PreferenceConstants.SHOW_WELCOME,
