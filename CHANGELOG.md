@@ -28,7 +28,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   only: its *statusline*, *Statusline width* and *share of the status bar* settings are gone, and
   their names (`statusStatusline`, `statusStatuslineWidth`, `statusMaxWidthPercent`) have no
   effect.
-- **A `:` line left open is cancelled when the keyboard goes to another part of Eclipse**, as a
+- **A `:` line left open is cancelled when the keyboard goes to another part of Eclipse** (switching
+  to another application keeps it), as a
   click in the text cancels it: before, it stayed open unseen, and the next `:` went on its end.
 - **Completion uses Neovim's own popup menu**: Tab on the `:` line and `Ctrl-N`, `Ctrl-P` and the
   `Ctrl-X` modes in insert mode show Neovim's list as Neovim draws it (your `Pmenu` colors,

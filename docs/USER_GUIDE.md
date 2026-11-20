@@ -323,7 +323,7 @@ Neovim's screen has a row of its own for the line (`'cmdheight'` 1), and so does
 the status line ([Status line](#status-line)). The last message stays on that row until another
 replaces it, as in Neovim, and covers no text. Turning Neovim mode off cancels the line, and so does a click in the text, as clicking away
 from a field does, and so does the keyboard going to another part of Eclipse (a view, another
-editor): coming back, `:` starts a new line, and the old one is in the history (`Up`). Switching
+editor, a dialog): coming back, `:` starts a new line, and the old one is in the history (`Up`). Switching
 to another application keeps the line, to paste into it on your return. In Ex mode (`gQ`), where
 Vim cannot cancel a line, it stays; `:vi` leaves Ex mode.
 

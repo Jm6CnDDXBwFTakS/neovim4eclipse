@@ -23,12 +23,11 @@ import org.eclipse.swt.widgets.Listener;
  * Abandoned, the line is in Neovim's history ({@code Up} brings it back), and the next {@code :}
  * starts clean.
  *
- * <h2>Not when the window itself loses the keyboard</h2>
- * Switching to another application (or another of Eclipse's windows) keeps the line, as in a
- * terminal: one may come back with something to paste into it. The widget's shell says so: it
- * gets {@code SWT.Deactivate} when another window takes the keyboard, and nothing when the
- * keyboard only moves to another part of the same window. The check runs after the focus has moved
- * ({@code asyncExec}), when both events are in.
+ * <h2>Not when another application takes the keyboard</h2>
+ * Switching to another application keeps the line, as in a terminal: one may come back with
+ * something to paste into it. One check, after the focus has moved ({@code asyncExec}): Eclipse
+ * then has no active shell. Any of Eclipse's own windows taking the keyboard (a detached view, a
+ * dialog) counts as another part, so its line is abandoned too: it would be as invisible.
  *
  * <p>UI thread only. Tested in {@code tests/swt} ({@code LineOnFocusLossTest}).
  */
@@ -38,9 +37,6 @@ final class LineOnFocusLoss {
     private final BooleanSupplier lineOpen;
     private final Runnable abandon;
     private final Listener onFocusOut = e -> later();
-    private final Listener onShell = e -> windowLeft = e.type == SWT.Deactivate;
-    /** Whether the widget's window lost the keyboard to another window (Deactivate, not yet Activate). */
-    private boolean windowLeft;
 
     /**
      * @param widget   the widget keys are typed into (the editor's text, a page's canvas)
@@ -52,8 +48,6 @@ final class LineOnFocusLoss {
         this.lineOpen = lineOpen;
         this.abandon = abandon;
         widget.addListener(SWT.FocusOut, onFocusOut);
-        widget.getShell().addListener(SWT.Deactivate, onShell);
-        widget.getShell().addListener(SWT.Activate, onShell);
     }
 
     private void later() {
@@ -62,7 +56,7 @@ final class LineOnFocusLoss {
             if (widget.isDisposed() || widget.isFocusControl()) {
                 return; // back already, or never really left (a transient focus change)
             }
-            if (!windowLeft && lineOpen.getAsBoolean()) {
+            if (display.getActiveShell() != null && lineOpen.getAsBoolean()) { // null: another application
                 abandon.run();
             }
         });
@@ -72,8 +66,6 @@ final class LineOnFocusLoss {
     void dispose() {
         if (!widget.isDisposed()) {
             widget.removeListener(SWT.FocusOut, onFocusOut);
-            widget.getShell().removeListener(SWT.Deactivate, onShell);
-            widget.getShell().removeListener(SWT.Activate, onShell);
         }
     }
 }

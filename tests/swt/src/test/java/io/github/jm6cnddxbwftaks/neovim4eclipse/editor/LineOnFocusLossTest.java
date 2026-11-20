@@ -22,7 +22,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 /**
  * {@link LineOnFocusLoss} on real widgets: the keyboard going from the editor's widget to another
  * control of Eclipse abandons an open line, once; with no line open, or the focus back at once,
- * nothing is abandoned; the window losing the keyboard to another window (Deactivate) keeps it.
+ * nothing is abandoned. Another application taking the keyboard, which keeps the line, needs a
+ * window manager and a person: the {@code ime-keys} card, step 3.
  */
 class LineOnFocusLossTest {
 
@@ -97,18 +98,19 @@ class LineOnFocusLossTest {
         assertEquals(0, abandoned.get());
     }
 
-    /** Another window took the keyboard (another application): the line waits for the user. */
+    /** Another of Eclipse's windows took the keyboard (a detached view, a dialog): the line is abandoned too. */
     @Test
-    void theWindowLosingTheKeyboardKeepsTheLine() {
+    void anotherEclipseWindowTakingTheKeyboardAbandonsTheLine() {
         Shell another = new Shell(Display.getDefault());
         another.setLayout(new FillLayout());
         Text field = new Text(another, SWT.SINGLE);
         another.setSize(200, 100);
         another.open();
         try {
-            KeyboardFocus.require(field, TIMEOUT_MS); // the editor's window deactivated
-            drain();
-            assertEquals(0, abandoned.get());
+            KeyboardFocus.require(field, TIMEOUT_MS);
+            text.notifyListeners(SWT.FocusOut, new org.eclipse.swt.widgets.Event()); // as in the test above
+            awaitAbandoned(1);
+            assertEquals(true, abandoned.get() >= 1, "abandoned");
         } finally {
             another.dispose();
         }
