@@ -258,13 +258,14 @@ picture is still to be judged.
    the others without hiding its text. In the picture of Neovim's own highlights, the flash and the
    `:match` read in both themes, in Neovim's colors. In the picture of the command-line window,
    its history reads in both themes, on the editor's own background. In the picture of the floating
-   windows, the panel lies on the editor's bottom edge and the note above it, both readable in both
+   windows, the panel lies on the bottom of the text, right above the status line, and the note
+   above it, both readable in both
    themes, with the editor's text showing around them. In the picture of Neovim's popup menu, the
    list hangs under the word being completed, every entry reads, and the selected one stands out
    in both themes. In the two pictures of the page editors, the text reads on the editor's
    background in both themes, the error of `:messages` in Neovim's error color and the WARNING of
    `:checkhealth` in its warning color. In the two pictures of which-key, its panel
-   lies on the editor's bottom edge from the left edge on, its lines read in both themes, and no
+   lies right above the status line from the left edge on, its lines read in both themes, and no
    icon is cut off at the cell after it.
 
    On macOS the block caret inverts the cell under it: SWT's Cocoa `Canvas` draws a `Caret` as a
