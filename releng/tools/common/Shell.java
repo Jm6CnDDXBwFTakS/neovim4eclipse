@@ -406,6 +406,21 @@ public final class Shell {
         return String.join(" ", words);
     }
 
+    /**
+     * The path the option {@code option} names on a tool's command line; a word that is no path on
+     * this system stops the tool with the option's name, not with Java's stack trace. Example: on
+     * Linux a word with a NUL character, {@code --root $'a\\0b'}, gives "--root does not name a
+     * file or folder: ..." and the reason. A tool that keeps the word as text (a program's name it
+     * looks up later, {@code --eclipse eclipse}) calls this for the check alone.
+     */
+    public static Path path(String option, String given) {
+        try {
+            return Path.of(given);
+        } catch (java.nio.file.InvalidPathException e) {
+            throw new ToolFailure(option + " does not name a file or folder: " + given + " (" + e.getReason() + ")");
+        }
+    }
+
     private static String read(java.io.InputStream in) {
         try (in) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);

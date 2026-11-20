@@ -44,7 +44,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   right-to-left override) is shown as a marker that stops the pasted line before it runs. The
   Maven, Neovim, Eclipse, Dependencies and Release tools printed their `--yes` lines, and the
   Release tool its LikeCi line for macOS and Windows, unquoted, so a folder with a space split into
-  two words.
+  two words. The Java and Eclipse tools print a `--java` folder as a full path, so the line works
+  from another folder too, and a `--root`, `--eclipse`, `--zip` or `--java` that is no path stops
+  the tool with that option's name instead of Java's stack trace.
 
 ## [0.2.30] - 2026-11-19
 

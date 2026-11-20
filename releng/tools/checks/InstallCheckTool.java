@@ -138,11 +138,12 @@ public final class InstallCheckTool {
             for (int i = 0; i < args.length; i++) {
                 switch (args[i]) {
                     case "--root" -> {
-                        root = Path.of(value(args, ++i));
+                        root = Shell.path("--root", value(args, ++i));
                         named.addAll(List.of("--root", args[i]));
                     }
                     case "--eclipse" -> {
                         eclipse = value(args, ++i);
+                        Shell.path("--eclipse", eclipse); // a program's name or its path: checked here, looked up later
                         named.addAll(List.of("--eclipse", args[i]));
                     }
                     case "--yes" -> mode = Ask.Mode.YES;

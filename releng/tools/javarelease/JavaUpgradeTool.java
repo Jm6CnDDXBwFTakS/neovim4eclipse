@@ -105,7 +105,7 @@ public final class JavaUpgradeTool {
                         if (i + 1 >= args.length) {
                             throw new ToolFailure("--java needs a JDK's home folder\n" + USAGE);
                         }
-                        java = args[++i];
+                        java = JavaFiles.home(args[++i]).toString();
                         rerun.add(a);
                         a = java;
                     }
@@ -126,7 +126,7 @@ public final class JavaUpgradeTool {
             rerun.add("--yes");
             // Shell.display quotes a word with a space for a POSIX shell: /opt/my jdk (or Git Bash's
             // C:\Program Files\Eclipse Adoptium\jdk-25) stays one argument when the line is pasted back.
-            new JavaUpgradeTool(root, new Ask(mode, Shell.display(rerun)), release, Path.of(java).toAbsolutePath(), tests).run();
+            new JavaUpgradeTool(root, new Ask(mode, Shell.display(rerun)), release, Path.of(java), tests).run();
         } catch (ToolFailure f) {
             System.err.println();
             System.err.println("JavaUpgrade: " + f.getMessage());

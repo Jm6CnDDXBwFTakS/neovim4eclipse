@@ -134,7 +134,8 @@ public final class EclipseUpgradeTool {
                         if (i + 1 >= args.length) {
                             throw new ToolFailure("--java needs a Java home folder\n" + USAGE);
                         }
-                        java = args[++i];
+                        // Absolute, so the printed rerun line works from any folder.
+                        java = Shell.path("--java", args[++i]).toAbsolutePath().toString();
                         rerun.add(a);
                         a = java;
                     }

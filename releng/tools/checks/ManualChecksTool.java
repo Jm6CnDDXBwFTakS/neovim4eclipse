@@ -563,9 +563,12 @@ public final class ManualChecksTool {
                 switch (args[i]) {
                     case "--since" -> since = value(args, ++i);
                     case "--all" -> all = true;
-                    case "--root" -> root = Path.of(value(args, ++i));
-                    case "--eclipse" -> eclipse = value(args, ++i);
-                    case "--zip" -> zip = Path.of(value(args, ++i)).toAbsolutePath();
+                    case "--root" -> root = Shell.path("--root", value(args, ++i));
+                    case "--eclipse" -> {
+                        eclipse = value(args, ++i);
+                        Shell.path("--eclipse", eclipse); // a program's name or its path: checked here, looked up later
+                    }
+                    case "--zip" -> zip = Shell.path("--zip", value(args, ++i)).toAbsolutePath();
                     case "--own-eclipse" -> ownEclipse = true;
                     case "--workspace" -> workspace = value(args, ++i);
                     case "--yes" -> yes = true;

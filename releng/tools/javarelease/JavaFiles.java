@@ -3,10 +3,12 @@
 
 package javarelease;
 
+import java.nio.file.Path;
 import java.util.OptionalInt;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import common.Shell;
 import common.ToolFailure;
 
 /**
@@ -64,6 +66,17 @@ public final class JavaFiles {
     public static String withRelease(String pom, int release) {
         releaseIn(pom); // exactly one, or a clear failure
         return POM_RELEASE.matcher(pom).replaceFirst("<java.release>" + release + "</java.release>");
+    }
+
+    /**
+     * The JDK home named with {@code --java}, as the tool uses it and prints it in the command that
+     * runs it again: absolute, so that the printed line works from any folder, and without the
+     * separator a shell's Tab key puts at a folder's end. Example: {@code jdk-25/} run in
+     * {@code /opt} gives {@code /opt/jdk-25}. A word that is no path stops the tool
+     * ({@code Shell.path}).
+     */
+    public static Path home(String given) {
+        return Shell.path("--java", given).toAbsolutePath();
     }
 
     /**

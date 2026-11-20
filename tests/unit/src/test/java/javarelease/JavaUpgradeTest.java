@@ -93,4 +93,14 @@ class JavaUpgradeTest {
                     copy.file() + ": only the numbers change");
         }
     }
+
+    /** The --java folder as the tool prints it again: absolute, without the separator Tab leaves at its end. */
+    @Test
+    void theHomeIsAbsoluteWithoutTheLastSeparator() {
+        org.junit.jupiter.api.Assumptions.assumeFalse(common.Shell.WINDOWS, "a POSIX path");
+        java.nio.file.Path home = JavaFiles.home("jdk-25/");
+        assertTrue(home.isAbsolute(), home.toString());
+        assertEquals(java.nio.file.Path.of("").toAbsolutePath().resolve("jdk-25"), home);
+        assertFalse(home.toString().endsWith("/"));
+    }
 }

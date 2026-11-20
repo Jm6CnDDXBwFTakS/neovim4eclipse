@@ -79,6 +79,59 @@ class ShellDisplayTest {
         assertEquals("git push origin '/opt/my dir'", Shell.ran(List.of("git", "push", "origin", "/opt/my dir")));
     }
 
+    /** Words that have tripped a quoting rule somewhere: a shell character, a path, a non-ASCII letter, a control or invisible one. */
+    private static final List<String> TRYING = List.of("", "plain", "-Pall", "-Dnvim.path=C:\\nvim", "--format=%H", "C:\\jdk-25\\",
+            "/opt/my jdk", "a b", "a&b", "a|b", "a;b", "a,b", "<in", ">out", "(x)", "a^b", "it's", "$HOME", "$(calc)", "`calc`", "%PATH%",
+            "@args", "@{a}", "~", "~/x", "#x", "a!b", "a*b", "a?b", "[x]", "{a,b}", "=ls", "a=b", "caf\u00e9", "x\u2028&calc",
+            "x\u0085&calc", "\u201cx\u201d&calc", "a\u00a0b", "a\nb", "a\r\n&calc", "a\tb", "\"", "a\"&calc&\"b", "a\\\"b", "\\",
+            "a b\\", "\\\\server\\my share\\", "50%", "x%CMDCMDLINE:~0,1%&calc", "\u202eexe.txt", "a\u200bb",
+            // a letter with its vowel sign (Thai: a mark that takes no room; Hindi: one that does), a letter and a picture
+            // beyond the first 65536 characters
+            "jdk\u0e01\u0e34", "\u0915\u093e", "\ud801\udc00x", "\ud83d\ude00");
+
+    /** Each word is bare and plain, in single quotes with nothing left to end them early, or the marker. */
+    @Test
+    void everyWordIsPlainOrInSingleQuotesOrTheMarker() {
+        for (String word : TRYING) {
+            String shown = Shell.display(List.of("echo", word)).substring("echo ".length());
+            String about = "[" + word + "] shown as [" + shown + "]";
+            if (word.codePoints().anyMatch(c -> Character.isISOControl(c) || Character.getType(c) == Character.FORMAT
+                    || c == 0x2028 || c == 0x2029)) {
+                assertEquals(Shell.WORD_NOT_SHOWN, shown, about);
+            } else if (shown.startsWith("'")) {
+                // 'it'\''s': quoted parts joined by \' ; inside a part nothing is special.
+                assertTrue(shown.endsWith("'"), about);
+                String inside = shown.substring(1, shown.length() - 1);
+                assertEquals(word, inside.replace("'\\''", "'"), about);
+                assertEquals(-1, inside.replace("'\\''", "").indexOf('\''), "no single quote left to end the part early, " + about);
+            } else {
+                assertEquals(word, shown, about);
+                assertTrue(shown.matches("[A-Za-z0-9_./:@%+,-][A-Za-z0-9_./:@%+,=-]*"), "bare, so plain: " + about);
+            }
+        }
+    }
+
+    /** The shell itself gives each shown word back as it was: sh runs {@code printf '%s\0' <the words>}. */
+    @Test
+    void shGivesEveryShownWordBack() throws Exception {
+        assumeTrue(!Shell.WINDOWS && Files.isExecutable(Path.of("/bin/sh")), "needs a POSIX sh");
+        List<String> shown = TRYING.stream().filter(w -> !Shell.display(List.of("echo", w)).endsWith(Shell.WORD_NOT_SHOWN)).toList();
+        List<String> command = new ArrayList<>(List.of("printf", "%s\\0"));
+        command.addAll(shown);
+        Process p = new ProcessBuilder("/bin/sh", "-c", Shell.display(command)).redirectErrorStream(true).start();
+        String out = new String(p.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, p.waitFor(), out);
+        assertEquals(shown, List.of(out.split("\0", -1)).subList(0, shown.size()));
+    }
+
+    @Test
+    void aWordThatIsNoPathStopsTheToolByTheOptionsName() {
+        assumeTrue(!Shell.WINDOWS, "a NUL is no path on Linux and macOS");
+        var failure = org.junit.jupiter.api.Assertions.assertThrows(common.ToolFailure.class, () -> Shell.path("--root", "a\0b"));
+        assertTrue(failure.getMessage().startsWith("--root does not name a file or folder: "), failure.getMessage());
+        assertEquals(Path.of("/opt/x"), Shell.path("--root", "/opt/x"));
+    }
+
     @Test
     void cmdAndPowerShellAreRefusedGitBashAndOtherSystemsAreNot() {
         assertEquals("Release: runs on Linux, macOS and in Git Bash on Windows, not from cmd or PowerShell. Run it from Git Bash.",
