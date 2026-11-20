@@ -275,7 +275,8 @@ class SearchGalleryTest extends EndToEndTestBase {
                     settle();
                     int drawn = 0;
                     for (org.eclipse.swt.widgets.Control child : javaWidget.getChildren()) {
-                        if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas) && canvas.grid() != null) {
+                        if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas) && canvas.grid() != null
+                                && !isNeovimsOwnFloat(canvas)) { // ui2's command line is always drawn too
                             drawn++;
                         }
                     }
@@ -288,7 +289,8 @@ class SearchGalleryTest extends EndToEndTestBase {
                 waitUntil("the floats gone", TIMEOUT_MS, () -> {
                     settle();
                     for (org.eclipse.swt.widgets.Control child : javaWidget.getChildren()) {
-                        if (child instanceof GridCanvas && !StatusLineRow.isRow(child)) {
+                        if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas)
+                                && !isNeovimsOwnFloat(canvas)) {
                             return false;
                         }
                     }
@@ -520,10 +522,14 @@ class SearchGalleryTest extends EndToEndTestBase {
                 name + " (" + theme + ")");
     }
 
-    /** The command-line window's canvas below the editor's widget, or {@code null} when it is closed. */
-    private static GridCanvas canvasOf(org.eclipse.swt.widgets.Composite parent) {
+    /**
+     * The command-line window's canvas below the editor's widget, or {@code null} when it is closed.
+     * Neovim's own floats (ui2's command line, always drawn, and the popup menu) are skipped.
+     */
+    private GridCanvas canvasOf(org.eclipse.swt.widgets.Composite parent) {
         for (org.eclipse.swt.widgets.Control child : parent.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas)) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas)
+                    && !isNeovimsOwnFloat(canvas)) {
                 return canvas;
             }
             if (child instanceof org.eclipse.swt.widgets.Composite composite) {
@@ -603,11 +609,12 @@ class SearchGalleryTest extends EndToEndTestBase {
         }
     }
 
-    /** How many floating windows are drawn over {@code widget} with their cells there. */
-    private static int floatsDrawn(StyledText widget) {
+    /** How many plug-ins' floating windows are drawn over {@code widget} with their cells there (not ui2's or the popup menu). */
+    private int floatsDrawn(StyledText widget) {
         int drawn = 0;
         for (org.eclipse.swt.widgets.Control child : widget.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas) && canvas.grid() != null) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas) && canvas.grid() != null
+                    && !isNeovimsOwnFloat(canvas)) {
                 drawn++;
             }
         }
