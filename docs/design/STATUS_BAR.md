@@ -1,10 +1,14 @@
 # Design note: the status bar: the mode's names, widths and the cap
 
-Since 0.3.0 the Eclipse status bar shows two parts, Vim's mode and Neovim's statusline. The pending
-command (`showcmd`) left it: Neovim shows it on its own line (ui2, docs/ARCHITECTURE.md, "Messages
-and output"), and the preference `statusShowcmd` has no effect, its name kept (README, "Settings").
-What follows says "three labels" where it was written for the three parts of before; the rules for
-the mode and the statusline are unchanged.
+Since 0.3.0 the Eclipse status bar shows one part, Vim's mode. The pending command (`showcmd`)
+left it: Neovim shows it on its own line (ui2, docs/ARCHITECTURE.md, "Messages and output"). So
+did Neovim's statusline: each editor draws its window's under its text, as Neovim lays out its
+screen (docs/ARCHITECTURE.md, "The status line in the editor"). With the mode alone, which keeps its
+size, the cap has nothing to shrink. The preferences `statusShowcmd`, `statusStatusline`,
+`statusStatuslineWidth` and `statusMaxWidthPercent` have no effect, their names kept (README,
+"Settings"). What follows was written for the three parts of before; the mode's names and its
+width (sections on the mode) are unchanged, the statusline's label, its width and the cap are
+history.
 
 Before 0.3.0 the Eclipse status bar showed Vim's mode, the pending command and Neovim's statusline in three
 labels. A single bold, centered label 420 pixels wide, holding all three joined, did not work:

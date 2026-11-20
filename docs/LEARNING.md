@@ -681,7 +681,7 @@ Every column crossing the boundary goes through `util/Utf8Columns`.
   Neovim's clipboard provider (`g:clipboard`, see `:help clipboard`), whose functions are Lua
   closures that notify or ask Eclipse.
 - **Snapshots**: `STATE_SNAPSHOT` returns cursor, visual selection, mode, recording register and
-  statusline in one round trip, instead of many separate requests per key. (Messages and the pending
+  the current window's status line in one round trip, instead of many separate requests per key. (Messages and the pending
   command are not in it: they arrive as UI events, see 2.4.)
 
 **Testing a chunk.** A script is tested in Lua, inside a headless Neovim, not through the session

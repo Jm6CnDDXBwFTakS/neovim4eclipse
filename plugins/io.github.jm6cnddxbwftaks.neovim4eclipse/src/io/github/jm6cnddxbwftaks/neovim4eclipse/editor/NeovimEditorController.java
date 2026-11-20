@@ -43,10 +43,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.KeyRouter;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SearchPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.VisualSelection;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.ViewportPort;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.BufferSynchronizer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DocumentPush;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
@@ -124,10 +124,10 @@ public final class NeovimEditorController implements AutoCloseable {
     /** The left mouse button, handed to Neovim in normal and visual mode. */
     private final NeovimMouse mouse;
     private final ModeStatusContribution modeStatus;
-    /** How long the statusline's width must stay the same before Neovim is asked again; see {@link #onStatuslineColumns}. */
-    private static final int STATUSLINE_SETTLE_MS = 200;
-    /** Reads the status again after the statusline's width settled. */
-    private final Runnable statuslineSettled = this::refreshStatusIfOpen;
+    /** Neovim's status line of this editor's window, under the text ({@link StatusLineRow}). */
+    private final StatusLineRow statusLineRow;
+    /** This editor's Neovim window, whose status line {@link #statusLineRow} shows. */
+    private final EditorWindow window;
     private final CursorStyleController cursorStyle;
     /** Paints Neovim's search matches; {@code null} when search highlighting is off or the viewer cannot. */
     private final SearchHighlighter searchHighlighter;
@@ -189,7 +189,6 @@ public final class NeovimEditorController implements AutoCloseable {
     private final FocusTarget focusTarget = new FocusTarget() {
         @Override public void onMode(String mode) { onModeChanged(mode); }
         @Override public void onRecording(String register) { onRecordingChanged(register); }
-        @Override public void onStatus(StatusInfo status) { onStatusChanged(status); }
         @Override public void onIdeAction(IdeAction action) { NeovimEditorController.this.onIdeAction(action); }
         @Override public void onHostCommand(HostCommand command) { NeovimEditorController.this.onHostCommand(command); }
         @Override public void onCmdlineType(String type) { NeovimEditorController.this.onCmdlineType(type); }
@@ -210,6 +209,8 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<ViewportPort.TopLine> topLineListener = this::onNeovimTopLine;
     private final Consumer<SearchPort.Matches> searchListener = this::onSearchMatches;
     private final Consumer<SearchPort.Highlights> highlightsListener = this::onHighlights;
+    /** Every window's status line, from any session thread; this editor's row picks its own. */
+    private final Consumer<GridSnapshot> statusLineListener = this::onStatusLine;
     /** The mode last logged: Neovim reports the mode again after every key, which is not a change. */
     private volatile String loggedMode;
 
@@ -260,7 +261,8 @@ public final class NeovimEditorController implements AutoCloseable {
                 });
         this.synchronizer.setRepairReporting(new RepairNotice(editor, session));
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
-        this.modeStatus = new ModeStatusContribution(this::onStatuslineColumns);
+        this.modeStatus = new ModeStatusContribution();
+        this.window = window;
         this.cursorStyle = new CursorStyleController(styledText);
         ITextViewer textViewer = viewerOf(editor);
         if (session.searchEnabled() && textViewer != null && SearchHighlighter.supports(textViewer)) {
@@ -297,6 +299,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.commandWindowPanel = new NeovimWindowPanel(styledText, new PanelCommands(session),
                 this::onCommandLineStateChanged);
         this.floatingWindows = new FloatingWindows(styledText);
+        this.statusLineRow = new StatusLineRow(styledText, window::winid,
+                (win, columns) -> session.setStatusLineWidthAsync(win, columns));
         this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, session::pasteAsync);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
                 this::neovimHandlesMouse, session::mouseAsync, this::abandonLine);
@@ -387,6 +391,7 @@ public final class NeovimEditorController implements AutoCloseable {
         }
 
         modeStatus.addTo(editor.getEditorSite());
+        session.addStatusLineListener(statusLineListener);
 
         int[] lineCol = DocumentPositions.offsetToCursor(documentOf(editor), offsets.caretModelOffset());
 
@@ -406,7 +411,13 @@ public final class NeovimEditorController implements AutoCloseable {
         }
 
         onModeChanged(session.getMode());
-        onStatusChanged(session.currentStatus()); // the statusline as it stands, until the next one
+        // The line as last evaluated, until Neovim sends this window's again (it may be a window
+        // that travelled here, or one opened just now: then every window's line is asked for).
+        GridSnapshot line = session.statusLine(window.winid());
+        if (line != null) {
+            statusLineRow.show(line);
+        }
+        session.refreshStatusLinesAsync();
         Consumer<NeovimEditorController> hook = startedHookForTests;
         if (hook != null) {
             hook.accept(this);
@@ -1050,9 +1061,16 @@ public final class NeovimEditorController implements AutoCloseable {
         keyContext.update();
     }
 
-    /** The statusline changed: it goes to the status bar item. Called on the session's thread. */
-    private void onStatusChanged(StatusInfo info) {
-        modeStatus.setStatusInfo(info);
+    /** A window's status line changed (any window's): this editor's row shows its own. Any thread. */
+    private void onStatusLine(GridSnapshot line) {
+        if (line.window() != window.winid()) {
+            return; // another window's: not a task on the UI thread per editor per line
+        }
+        SwtUiExecutor.INSTANCE.asyncExec(() -> {
+            if (!closed) {
+                statusLineRow.show(line);
+            }
+        });
     }
 
     /** Whether this editor has the focus events now (no page took them; {@link #takeFocusBack}). Any thread. */
@@ -1085,16 +1103,6 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Shows Neovim's status as it stands ({@link NeovimSession#currentStatus()}): used when Neovim
-     * moved into this editor by itself ({@code :b}), so that its status bar item shows the statusline
-     * of the window Neovim is in now. Neovim's messages need nothing: ui2 draws them, over whichever
-     * editor has the focus. UI thread.
-     */
-    void showNeovimsCurrentStatus() {
-        onStatusChanged(session.currentStatus());
-    }
-
-    /**
      * Shows a message of the plug-in's own as Neovim shows its own (ui2, {@link NeovimSession#echoAsync}),
      * e.g. {@code E37: No write since last change} from {@code :e}. Any thread.
      */
@@ -1113,27 +1121,6 @@ public final class NeovimEditorController implements AutoCloseable {
     void refreshStatusLine() {
         modeStatus.refreshNow();
         session.refreshStatusAsync();
-    }
-
-    /**
-     * The status bar's statusline label is {@code columns} characters wide: Neovim fits the
-     * {@code 'statusline'} into that many from now on, and the status is read again once the width
-     * has settled, so a resized window shows the new fit without waiting for a key. Settled: no
-     * change for {@link #STATUSLINE_SETTLE_MS}, so dragging a window's edge (a new width at almost
-     * every step) asks Neovim once, not forty times. UI thread.
-     */
-    private void onStatuslineColumns(int columns) {
-        session.setStatuslineColumns(columns);
-        Display display = styledText.getDisplay();
-        display.timerExec(-1, statuslineSettled); // a newer width restarts the wait
-        display.timerExec(STATUSLINE_SETTLE_MS, statuslineSettled);
-    }
-
-    /** {@link #statuslineSettled}: reads the status again, unless the editor closed meanwhile. */
-    private void refreshStatusIfOpen() {
-        if (!closed) {
-            session.refreshStatusAsync();
-        }
     }
 
     /** Shows (or clears) {@code rec @a} after the mode in the status bar; called when a macro recording starts or stops. */
@@ -1353,6 +1340,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeTopLineListener(topLineListener);
             session.removeSearchListener(searchListener);
             session.removeHighlightsListener(highlightsListener);
+            session.removeStatusLineListener(statusLineListener);
             if (viewport != null) {
                 session.setLeaveInsertView(null); // the next editor's attach sets its own
             }
@@ -1375,6 +1363,7 @@ public final class NeovimEditorController implements AutoCloseable {
             lineInput.dispose();
             commandWindowPanel.dispose();
             floatingWindows.dispose();
+            statusLineRow.dispose();
             if (!styledText.isDisposed()) {
                 styledText.removeListener(SWT.MouseDown, endCompletionListener);
                 styledText.removeListener(SWT.FocusOut, endCompletionListener);

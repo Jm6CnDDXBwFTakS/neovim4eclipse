@@ -111,7 +111,8 @@ extends, `'mouse'`, `'mousetime'` and `<2-LeftMouse>` mappings apply, and a clic
 
 ### 4. UI chrome
 
-- **Mode status**: `ModeStatusContribution` on the editor status line.
+- **Mode status**: `ModeStatusContribution` in Eclipse's status bar; Neovim's status line under the
+  text (`StatusLineRow`).
 - **Caret**: block vs thin via SWT `Caret` size (`CursorStyleController`); Eclipse's own width comes back when Neovim leaves the editor.
 - **Ex / search**: Neovim draws its own command line, prompts, pager and messages (its ui2, in
   floating windows), and the editor copies their cells over its last row like any float's (see
@@ -643,27 +644,60 @@ matches (`:match`), take the same way (`LuaScripts.HIGHLIGHTS`, `eclipse_highlig
 
 ## Status bar items
 
-`ModeStatusContribution` shows the parts selected by the `statusMode` and `statusStatusline` preferences (`util/StatusItem`),
-one label each: `editor/StatusBarLabels` owns the widgets and sizes them to their content (the mode's
-widest text as drawn; the statusline in characters of the editor's fixed-width font family at the bar's size, so
-Neovim's columns are exact) under the cap (`util/StatusBarWidths`; why a cap: JFace cuts the rightmost items, the plug-in's, once
-its message area is down to a third of the bar). Design and the mode table:
-[design/STATUS_BAR.md](design/STATUS_BAR.md).
+`ModeStatusContribution` shows the mode when the `statusMode` preference asks for it
+(`util/StatusItem`), and `ECLIPSE` while Neovim mode is off: `editor/StatusBarLabels` owns the
+label and sizes it to the mode's widest text as drawn. `util/ModeLabels` is one table of every
+Neovim mode string with its label (`V-REPLACE`), its tooltip in Vim's wording
+(`-- VREPLACE --`) and its group, which picks the color. Design and the mode table:
+[design/STATUS_BAR.md](design/STATUS_BAR.md). A preference change reaches the item through
+`Activator.applyStatusItems` and redraws via `EditorAttachManager.refreshStatusLine`.
 
-- **mode:** `util/ModeLabels`, one table of every Neovim mode string with its label (`V-REPLACE`),
-  its tooltip in Vim's wording (`-- VREPLACE --`) and its group, which picks the color.
-- **statusline:** from the per-key `STATE_SNAPSHOT` call, `nvim_eval_statusline(vim.o.statusline or a
-  Vim-like default, { maxwidth = <the label's columns> })`, so a user's `%!` expressions and plugins
-  such as lualine are honored, and Neovim fits the text to the label. Its first argument is that width
-  (0: not evaluated); the label reports it through `NeovimSession.setStatuslineColumns` whenever it is
-  fitted again.
+The pending command (`showcmd`), the message text, the error flash and Neovim's `'statusline'`
+left the status bar in 0.3.0: Neovim shows the first three on its own line (ui2, "Messages and
+output"), and the status line is drawn under each editor's text ("The status line in the
+editor"). Their preferences (`statusShowcmd`, `flashOnError`, `statusStatusline`,
+`statusStatuslineWidth`, `statusMaxWidthPercent`) are still read and stored, as names the README
+promises, and change nothing.
 
-The pending command (`showcmd`), the message text and the error flash left the status bar in 0.3.0:
-Neovim shows them on its own line (ui2, "Messages and output"). Their preferences (`statusShowcmd`,
-`flashOnError`) are still read and stored, as names the README promises, and change nothing.
+## The status line in the editor
 
-`NeovimSession` publishes a `StatusInfo` to listeners only when it changes. A preference change reaches the
-session through `Activator.applyStatusItems` and redraws via `EditorAttachManager.refreshStatusLine`.
+Each attached code editor draws its Neovim window's status line in a row under its text
+(`editor/StatusLineRow`), as Neovim lays out its screen and as a page editor's pane does.
+
+- **Where:** the `StyledText`'s bottom margin, one line higher while a line is shown, with a
+  `GridCanvas` over it as the widget's child. A margin is not text: Eclipse draws and scrolls no
+  text into it, and another editor's composite (rulers, overview ruler) is not touched.
+  `ViewportFollower.cells` counts rows without the margin, so Neovim's window is exactly the rows
+  shown and its status line is the row under them; `VIEWPORT_OVERHEAD` already counts that row in
+  the screen's size. The widget's own margin is kept and restored at detach.
+- **What:** `LuaScripts.STATUS_LINE`'s `line(win)`, `nvim_eval_statusline` with `winid`,
+  `maxwidth` the window's width and `highlights`, turned into cells and the groups' colors
+  (`nvim_get_hl` with `link = false`), read by `util/StatusLines` into a one-row `GridSnapshot`.
+  The `'laststatus'` rule is Neovim's: 0 none, 1 only with another window in the tabpage (so none
+  for an editor's window alone), 2 always, 3 the current window's only.
+- **Why evaluated, not the screen's row (as the pages):** each editor's window is alone in a
+  hidden tabpage, and Neovim redraws only the current tabpage. The screen (grid 1) holds the
+  focused editor's line only, and a background editor's would stay in the colors of the window
+  with the cursor. Evaluated for a window that is not current, Neovim uses `StatusLineNC`; the script
+  sets `g:statusline_winid` around the call (Neovim's drawing sets it, the call does not), by which
+  lualine and its like choose their inactive sections. One source for every editor also keeps
+  them drawn alike.
+- **When:** the current window's line with each key's `STATE_SNAPSHOT` (its first argument `"1"`);
+  every window's as `eclipse_status_lines` on `WinEnter` (the window left turns `StatusLineNC`),
+  `BufEnter`, `BufModifiedSet`, `BufWritePost`, `BufFilePost`, `ColorScheme`, `VimResized`,
+  `WinResized`, `DirChanged`, `FileType`, `DiagnosticChanged` and `OptionSet` of `laststatus` or
+  `statusline`, scheduled once per moment; on each attach (`NeovimSession.refreshStatusLinesAsync`);
+  and when an editor's width in columns changes.
+- **Width:** every tabpage shares Neovim's one screen, sized to the focused editor, so a background
+  editor's window is as wide as that editor, not its own. Each row reports its editor's columns
+  (`NeovimSession.setStatusLineWidthAsync`, Lua `set_width`), and a window that is not current is
+  fitted to them; the current window to its own width.
+- **Colors:** a group that leaves a color unset (`%#Identifier#`, a text color only) takes it from
+  `StatusLine` or `StatusLineNC`, as Neovim draws it over the status line.
+- **A modeline's line is not evaluated:** with `'modelineexpr'` on a modeline can set
+  `'statusline'`, which Neovim then evaluates in its sandbox; `nvim_eval_statusline` cannot know
+  where its string came from, so such a line (`last_set_sid` -1) is replaced by the default. `core/StatusTracker` passes a window's line
+  on only when it changed, to every editor's listener; each row keeps its own window's.
 
 ## Messages and output
 
@@ -671,8 +705,8 @@ Neovim shows its messages itself. `LuaScripts.UI2` turns on Neovim's **ui2** (`v
 Lua UI that ships with Neovim 0.12, experimental), which draws the command line and every message
 into floating windows of its own, and the editor copies their cells as it does any float's
 ("Neovim's windows drawn from their grids"). The plug-in reads no `msg_show` event, routes
-nothing, and keeps no message state of its own (`core/StatusTracker` holds only the statusline,
-the recording register and the pages' content).
+nothing, and keeps no message state of its own (`core/StatusTracker` holds only the windows' status
+lines, the recording register and the pages' content).
 
 Why the UI is still attached with `ext_cmdline` and `ext_messages` (`NeovimConnection.TERMINAL_UI`),
 though nothing is drawn from those events: Neovim attaches the UI before it reads the user's

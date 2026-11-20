@@ -44,10 +44,6 @@ public interface FocusTarget {
     default void onRecording(String register) {
     }
 
-    /** The status bar's text changed: the pending command, a message, the status line. */
-    default void onStatus(StatusInfo status) {
-    }
-
     /** A key mapped in Neovim asks the IDE to act ({@code gd}, {@code gr*}). */
     default void onIdeAction(IdeAction action) {
     }

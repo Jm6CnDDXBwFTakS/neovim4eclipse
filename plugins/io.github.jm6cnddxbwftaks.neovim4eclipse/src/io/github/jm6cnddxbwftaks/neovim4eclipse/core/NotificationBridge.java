@@ -10,6 +10,8 @@ import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
@@ -106,6 +108,14 @@ final class NotificationBridge implements Incoming {
          * Example: {@code [1002, 1003, 1004, 1005]}.
          */
         void onUi2Windows(List<Integer> wins);
+
+        /**
+         * Every window's status line ({@link LuaScripts#STATUS_LINE}), sent when one that is not
+         * the current window's may have changed: the cursor went to another window, a buffer was
+         * modified or written, the colorscheme or {@code 'laststatus'} changed. Each editor draws
+         * its own window's ({@code editor/StatusLineRow}).
+         */
+        void onStatusLines(List<GridSnapshot> lines);
 
         /**
          * Neovim deleted document buffer {@code bufnr}, or is quitting its window, by itself
@@ -274,6 +284,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_highlights" -> onHighlights(args);
             case "eclipse_window_closed" -> onWindowClosed(args);
             case "eclipse_ui2_windows" -> onUi2Windows(args);
+            case "eclipse_status_lines" -> sink.onStatusLines(StatusLines.all(args.isEmpty() ? null : args.get(0)));
             case "eclipse_view_page" -> onViewPage(args);
             case "eclipse_echo" -> onEcho(args);
             case "eclipse_cmdwin" -> onCommandWindow(args);

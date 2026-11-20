@@ -14,18 +14,16 @@ class StatusItemTest {
     @Test
     void keysAreStable() {
         assertEquals("mode", StatusItem.MODE.key());
-        assertEquals("statusline", StatusItem.STATUSLINE.key());
     }
 
     @Test
-    void defaultsShowEverythingExceptTheLongStatusline() {
+    void defaultsShowTheMode() {
         assertEquals(EnumSet.of(StatusItem.MODE), StatusItem.defaults());
     }
 
     @Test
     void neovimModeShowsThePartsChosen() {
-        assertEquals(EnumSet.of(StatusItem.STATUSLINE),
-                StatusItem.shown(EnumSet.of(StatusItem.STATUSLINE), false));
+        assertEquals(EnumSet.of(StatusItem.MODE), StatusItem.shown(EnumSet.of(StatusItem.MODE), false));
         assertEquals(EnumSet.noneOf(StatusItem.class), StatusItem.shown(EnumSet.noneOf(StatusItem.class), false),
                 "nothing chosen, nothing shown");
     }
@@ -33,20 +31,21 @@ class StatusItemTest {
     /** The indicator says where keys go, so it shows even with the mode part turned off. */
     @Test
     void eclipseModeShowsTheModeAloneWhateverWasChosen() {
-        assertEquals(EnumSet.of(StatusItem.MODE), StatusItem.shown(EnumSet.of(StatusItem.STATUSLINE), true));
+        assertEquals(EnumSet.of(StatusItem.MODE), StatusItem.shown(EnumSet.noneOf(StatusItem.class), true));
         assertEquals(EnumSet.of(StatusItem.MODE), StatusItem.shown(EnumSet.noneOf(StatusItem.class), true));
         assertEquals(EnumSet.of(StatusItem.MODE), StatusItem.shown(EnumSet.allOf(StatusItem.class), true));
     }
 
     @Test
     void theSetShownIsTheCallersOwn() {
-        EnumSet<StatusItem> chosen = EnumSet.of(StatusItem.STATUSLINE);
+        EnumSet<StatusItem> chosen = EnumSet.noneOf(StatusItem.class);
         StatusItem.shown(chosen, false).add(StatusItem.MODE);
-        assertEquals(EnumSet.of(StatusItem.STATUSLINE), chosen, "the chosen set is not changed through the result");
+        assertEquals(EnumSet.noneOf(StatusItem.class), chosen, "the chosen set is not changed through the result");
     }
 
     @Test
-    void thereAreExactlyTwoItems() {
-        assertEquals(2, StatusItem.values().length);
+    void theModeIsTheOnlyItem() {
+        // Neovim's 'statusline' left the status bar: each editor draws its window's (editor/StatusLineRow)
+        assertEquals(1, StatusItem.values().length);
     }
 }

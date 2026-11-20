@@ -7,6 +7,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.BlockSelection;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines;
 
 /**
  * Reads the answer of {@link LuaScripts#STATE_SNAPSHOT}, the one request made after each key.
@@ -42,15 +44,13 @@ final class StateSnapshot {
     }
 
     /**
-     * The evaluated statusline for the status bar; "" when it was not asked for, or for missing or
-     * malformed data. (Messages and {@code showcmd} are not in the snapshot: Neovim sends them as
-     * UI events, see {@code StatusTracker}.)
+     * The current window's status line ({@code LuaScripts.STATUS_LINE}), for the row under the
+     * focused editor's text; no rows when there is none, or for missing or malformed data. (Messages
+     * and {@code showcmd} are not in the snapshot: Neovim draws them itself, ui2.)
      */
-    static String statusline(Object raw) {
-        if (raw instanceof List<?> list && list.size() > STATUSLINE) {
-            return text(list.get(STATUSLINE));
-        }
-        return "";
+    static GridSnapshot statusLine(Object raw) {
+        Object line = raw instanceof List<?> list && list.size() > STATUSLINE ? list.get(STATUSLINE) : null;
+        return StatusLines.of(window(raw), line);
     }
 
     /**

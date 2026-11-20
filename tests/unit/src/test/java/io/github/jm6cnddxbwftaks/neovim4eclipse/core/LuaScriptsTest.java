@@ -81,10 +81,10 @@ class LuaScriptsTest {
     }
 
     @Test
-    void snapshotOnlyEvaluatesTheStatuslineAndReadsFoldsWhenRequested() {
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("statusline_width, want_folds = tonumber(statusline_width) or 0, want_folds == '1'"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if statusline_width > 0 then"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("{ maxwidth = statusline_width }"), "at the label's width");
+    void snapshotOnlyAddsTheStatusLineAndReadsFoldsWhenRequested() {
+        // The line itself is STATUS_LINE's (status_line_spec.lua); the snapshot asks it for the current window.
+        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("want_line, want_folds = want_line == '1', want_folds == '1'"));
+        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_line and lines then"));
         assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_folds and package.loaded['neovim4eclipse.folds'] then"));
     }
 
@@ -95,9 +95,10 @@ class LuaScriptsTest {
      */
     @Test
     void messagesAndShowcmdAreNotPolled() {
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("nvim_eval_statusline"));
+        assertTrue(LuaScripts.STATUS_LINE.contains("nvim_eval_statusline"));
         for (String gone : new String[] { "statusmsg", "errmsg", "'%S'" }) {
             assertFalse(LuaScripts.STATE_SNAPSHOT.contains(gone), gone);
+            assertFalse(LuaScripts.STATUS_LINE.contains(gone), gone);
         }
         assertFalse(LuaScripts.SETUP.contains("showcmdloc"));
     }

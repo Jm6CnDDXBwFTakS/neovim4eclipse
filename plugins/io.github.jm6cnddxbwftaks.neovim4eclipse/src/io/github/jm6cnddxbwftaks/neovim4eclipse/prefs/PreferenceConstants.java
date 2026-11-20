@@ -59,35 +59,25 @@ public final class PreferenceConstants {
      * still loads (README, "Settings").
      */
     public static final String STATUS_SHOWCMD = "statusShowcmd";
-    /** Show Neovim's own {@code 'statusline'}. */
-    public static final String STATUS_STATUSLINE = "statusStatusline";
-
-    public static final boolean STATUS_MODE_DEFAULT = true;
-    public static final boolean STATUS_SHOWCMD_DEFAULT = true;
-    /** Off by default: it is long and mostly repeats what Eclipse already shows (file, position). */
-    public static final boolean STATUS_STATUSLINE_DEFAULT = false;
-
     /**
-     * How wide the statusline part is, in characters of the status bar's font. Neovim fits its
-     * {@code 'statusline'} into that many columns ({@code %<} cuts, {@code %=} fills), so the
-     * statusline is never cut by Eclipse instead.
+     * Once: show Neovim's {@code 'statusline'} in the status bar. No effect from 0.3.0: each editor
+     * draws its window's status line under its text ({@code editor/StatusLineRow}), as Neovim lays
+     * out its screen. The name is kept so that a saved setting still loads (README, "Settings").
+     */
+    public static final String STATUS_STATUSLINE = "statusStatusline";
+    /**
+     * Once: the status bar statusline's width, in characters. No effect from 0.3.0: Neovim fits the
+     * line in the editor to the editor's width. The name is kept (README, "Settings").
      */
     public static final String STATUS_STATUSLINE_WIDTH = "statusStatuslineWidth";
-
-    public static final int STATUS_STATUSLINE_WIDTH_DEFAULT = 60;
-    /** The range the preference page accepts. */
-    public static final int STATUS_STATUSLINE_WIDTH_MIN = 10;
-    public static final int STATUS_STATUSLINE_WIDTH_MAX = 300;
-
     /**
-     * The most the plug-in's labels may take of the status bar's width, in percent, so Eclipse's own
-     * message area keeps room ({@code util/StatusBarWidths}).
+     * Once: the most the plug-in's labels might take of the status bar, in percent. No effect from
+     * 0.3.0: the mode, the one label left, keeps its size. The name is kept (README, "Settings").
      */
     public static final String STATUS_MAX_WIDTH_PERCENT = "statusMaxWidthPercent";
 
-    public static final int STATUS_MAX_WIDTH_PERCENT_DEFAULT = 40;
-    public static final int STATUS_MAX_WIDTH_PERCENT_MIN = 10;
-    public static final int STATUS_MAX_WIDTH_PERCENT_MAX = 90;
+    public static final boolean STATUS_MODE_DEFAULT = true;
+    public static final boolean STATUS_SHOWCMD_DEFAULT = true;
 
     // ---- Messages in the editor ----
 
@@ -148,9 +138,8 @@ public final class PreferenceConstants {
         return key != null && (key.startsWith(CTRL_KEY_NORMAL_PREFIX) || key.startsWith(CTRL_KEY_INSERT_PREFIX));
     }
 
-    /** Whether the key is one of the status bar preferences: the two parts, the widths. */
+    /** Whether the key is one of the status bar preferences: the mode, the one part left. */
     public static boolean isStatusItemKey(String key) {
-        return STATUS_MODE.equals(key) || STATUS_STATUSLINE.equals(key)
-                || STATUS_STATUSLINE_WIDTH.equals(key) || STATUS_MAX_WIDTH_PERCENT.equals(key);
+        return STATUS_MODE.equals(key);
     }
 }

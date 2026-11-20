@@ -145,21 +145,29 @@ class StateSnapshotTest {
         assertEquals("", StateSnapshot.recording("junk"));
     }
 
-    // ---- statusline ----
+    // ---- status line ----
 
+    /** Slot 9 holds the current window's line as {@code util/StatusLines} reads it, for that window. */
     @Test
-    void theStatuslineIsTheNinthElement() {
-        assertEquals("[No Name] 1,1", StateSnapshot.statusline(List.of(1, 0, 1, 1, 1, 1, "n", "", "[No Name] 1,1", 1)));
+    void theStatusLineIsTheNinthElementForTheSnapshotsWindow() {
+        List<Object> raw = new java.util.ArrayList<>(java.util.Collections.nCopies(StateSnapshot.WINID + 1, (Object) ""));
+        raw.set(StateSnapshot.WINID, 1000);
+        raw.set(StateSnapshot.STATUSLINE, List.of(true, List.of("a", " "), List.of(1, 1),
+                List.of(List.of(-1, -1, false, false, false, false, false))));
+        io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot line = StateSnapshot.statusLine(raw);
+        assertEquals(1000, line.window());
+        assertEquals(1, line.height());
+        assertEquals("a ", line.row(0));
     }
 
     @Test
-    void theStatuslineIsEmptyWhenMissingOrNotUnderstood() {
-        assertEquals("", StateSnapshot.statusline(List.of(1, 0, 1, 1, 1, 1, "n", "")));
-        assertEquals("", StateSnapshot.statusline(null));
-        assertEquals("", StateSnapshot.statusline("junk"));
+    void theStatusLineHasNoRowsWhenMissingOrNotUnderstood() {
+        assertEquals(0, StateSnapshot.statusLine(List.of(1, 0, 1, 1, 1, 1, "n", "")).height());
+        assertEquals(0, StateSnapshot.statusLine(null).height());
+        assertEquals(0, StateSnapshot.statusLine("junk").height());
         java.util.List<Object> withNull = new java.util.ArrayList<>(List.of(1, 0, 1, 1, 1, 1, "n", "", "", 1));
         withNull.set(StateSnapshot.STATUSLINE, null);
-        assertEquals("", StateSnapshot.statusline(withNull));
+        assertEquals(0, StateSnapshot.statusLine(withNull).height());
     }
 
     // ---- buffer ----

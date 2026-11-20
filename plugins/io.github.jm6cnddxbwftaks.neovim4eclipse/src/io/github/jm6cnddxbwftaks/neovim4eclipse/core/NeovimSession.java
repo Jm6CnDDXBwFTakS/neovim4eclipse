@@ -294,7 +294,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private void listenForFocus() {
         events.addModeListener(focus.mode);
         status.addRecordingListener(focus.recording);
-        status.addStatusListener(focus.status);
         events.addIdeActionListener(focus.ideAction);
         events.addHostCommandListener(focus.hostCommand);
         events.addCmdlineTypeListener(focus.cmdlineType);
@@ -534,6 +533,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             await(api.execLua(LuaScripts.QUICKFIX, List.of())); // :Eproblems, :Etasks; :copen through WINDOWS
             // Once, here: the opt-out then costs nothing per key (docs/design/FOLDING.md, 3.6).
             session.foldsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.FOLDS, List.of())));
+            // Each editor's status line, drawn under its text (LuaScripts.STATUS_LINE).
+            await(api.execLua(LuaScripts.STATUS_LINE, List.of()));
             session.state.setFoldsEnabled(session.foldsEnabled);
             LOG.info(() -> "folds " + (session.foldsEnabled ? "mirrored into Neovim" : "off (g:neovim4eclipse_folds)"));
             // The same for the problems (docs/design/DIAGNOSTICS.md, "Turning it off").
@@ -827,21 +828,45 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * What Neovim shows now: the message of the last command (until the next key) and the status
-     * line items. An editor that Neovim moved into by itself ({@code :b}) shows it, as the message
-     * may have arrived while the editor it left was still attached. Any thread.
+     * Window {@code window}'s status line as last evaluated ({@code util/StatusLines}), or
+     * {@code null} before the first: an editor shows it as it attaches, until the next one comes.
+     * Any thread.
      */
-    public StatusInfo currentStatus() {
-        return status.current();
+    public GridSnapshot statusLine(int window) {
+        return status.statusLine(window);
     }
 
-    /** Notified (on a session thread) when the statusline text changes. */
-    public void addStatusListener(Consumer<StatusInfo> listener) {
-        status.addStatusListener(listener);
+    /**
+     * Notified (on a session thread) with a window's status line each time it changes, for every
+     * window: each editor draws its own window's ({@code editor/StatusLineRow}).
+     */
+    public void addStatusLineListener(Consumer<GridSnapshot> listener) {
+        status.addStatusLineListener(listener);
     }
 
-    public void removeStatusListener(Consumer<StatusInfo> listener) {
-        status.removeStatusListener(listener);
+    public void removeStatusLineListener(Consumer<GridSnapshot> listener) {
+        status.removeStatusLineListener(listener);
+    }
+
+    /**
+     * Asks Neovim for every window's status line again ({@code eclipse_status_lines}): an editor
+     * that attaches, or whose size changed, shows its line without waiting for a key.
+     */
+    /**
+     * Window {@code window}'s editor is {@code columns} wide: its status line is fitted to that
+     * width, not to the window's (every tabpage shares one screen, the focused editor's size), and
+     * every line is sent again when it changed ({@code LuaScripts.STATUS_LINE}'s {@code set_width}).
+     */
+    public void setStatusLineWidthAsync(int window, int columns) {
+        submit("status line width", Level.FINE, () -> await(api.execLua(
+                "local m = package.loaded['neovim4eclipse.statusline'] if m then m.set_width(...) end",
+                List.of(window, columns))));
+    }
+
+    public void refreshStatusLinesAsync() {
+        submit("status lines", Level.FINE,
+                () -> await(api.execLua("local m = package.loaded['neovim4eclipse.statusline'] if m then m.send_all() end",
+                        List.of())));
     }
 
     /**
@@ -851,14 +876,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public void setStatusItems(Set<StatusItem> items) {
         status.setItems(items);
-    }
-
-    /**
-     * The status bar's statusline label is {@code columns} characters wide: Neovim fits the
-     * {@code 'statusline'} into that many from the next key on ({@link LuaScripts#STATE_SNAPSHOT}).
-     */
-    public void setStatuslineColumns(int columns) {
-        status.setStatuslineColumns(columns);
     }
 
     /** Re-reads mode, cursor and status bar parts from Neovim (e.g. after the preference changed). */
@@ -2368,6 +2385,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
+        public void onStatusLines(List<GridSnapshot> lines) {
+            lines.forEach(status::publishStatusLine);
+        }
+
+        @Override
         public void onWindowClosed(int winid) {
             if (!closed) {
                 // On the input thread, where the windows change: in order with the shows queued there.
@@ -2618,9 +2640,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public Object stateSnapshot(int statuslineWidth, boolean folds) throws Exception {
+        public Object stateSnapshot(boolean statusLine, boolean folds) throws Exception {
             // Short timeout: see STATE_TIMEOUT_MS.
-            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(String.valueOf(statuslineWidth), flag(folds)))
+            return api.execLua(LuaScripts.STATE_SNAPSHOT, List.of(flag(statusLine), flag(folds)))
                     .get(STATE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
 

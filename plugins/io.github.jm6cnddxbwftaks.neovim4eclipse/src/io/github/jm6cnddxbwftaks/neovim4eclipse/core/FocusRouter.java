@@ -80,7 +80,6 @@ public final class FocusRouter {
 
     final Consumer<String> mode = m -> pass("mode", t -> t.onMode(m));
     final Consumer<String> recording = r -> pass("recording", t -> t.onRecording(r));
-    final Consumer<StatusInfo> status = s -> pass("status", t -> t.onStatus(s));
     final Consumer<IdeAction> ideAction = a -> pass("IDE action", t -> t.onIdeAction(a));
     /**
      * A host command goes to the target with the focus only if it belongs to that very target,

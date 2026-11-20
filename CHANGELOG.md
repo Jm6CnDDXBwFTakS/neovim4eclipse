@@ -22,6 +22,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   page editor. The text no longer moves when `:` opens with the cursor on the editor's last row.
   The plug-in's own messages (`E37` from `:e`, a refused write) are Neovim messages too, so
   `:messages` keeps them.
+- **Neovim's status line is in the editor**, under its text, as in Neovim: each editor shows its
+  window's `'statusline'` (lualine's too) in your colors, the editor you type in in `StatusLine`,
+  the others in `StatusLineNC`; `'laststatus'` 0 takes it away. The status bar keeps the mode
+  only: its *statusline*, *Statusline width* and *share of the status bar* settings are gone, and
+  their names (`statusStatusline`, `statusStatuslineWidth`, `statusMaxWidthPercent`) have no
+  effect.
 - **Completion uses Neovim's own popup menu**: Tab on the `:` line and `Ctrl-N`, `Ctrl-P` and the
   `Ctrl-X` modes in insert mode show Neovim's list as Neovim draws it (your `Pmenu` colors,
   `'pumheight'`, `'completeopt'`).

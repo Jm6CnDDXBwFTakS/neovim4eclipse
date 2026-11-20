@@ -47,8 +47,8 @@ class StateSyncTest {
         }
 
         @Override
-        public Object stateSnapshot(int statuslineWidth, boolean folds) {
-            snapshotFlags = List.of(statuslineWidth, folds);
+        public Object stateSnapshot(boolean statusLine, boolean folds) {
+            snapshotFlags = List.of(statusLine, folds);
             if (snapshot == null) {
                 throw new IllegalStateException("timed out");
             }
@@ -208,22 +208,18 @@ class StateSyncTest {
     }
 
     /**
-     * The statusline is evaluated only when the status bar shows it, at the label's width in
-     * characters; not before the status bar has said how wide that is.
+     * The current window's status line is asked for with every snapshot: each editor draws its own
+     * window's under its text, whatever the status bar shows.
      */
     @Test
-    void theStatuslineIsRequestedOnlyWhenShownAtTheLabelsWidth() {
+    void theStatusLineIsRequestedWithEverySnapshot() {
         status.setItems(Set.of(StatusItem.MODE));
         state.publishState();
-        assertEquals(List.of(0, false), nvim.snapshotFlags);
+        assertEquals(List.of(true, false), nvim.snapshotFlags);
 
-        status.setItems(Set.of(StatusItem.STATUSLINE));
+        status.setItems(Set.of());
         state.publishState();
-        assertEquals(List.of(0, false), nvim.snapshotFlags, "no label laid out yet");
-
-        status.setStatuslineColumns(42);
-        state.publishState();
-        assertEquals(List.of(42, false), nvim.snapshotFlags);
+        assertEquals(List.of(true, false), nvim.snapshotFlags, "not tied to the status bar's parts");
     }
 
     // ---- folds ----
@@ -245,7 +241,7 @@ class StateSyncTest {
 
         state.publishState();
 
-        assertEquals(List.of(0, true), nvim.snapshotFlags);
+        assertEquals(List.of(true, true), nvim.snapshotFlags);
         assertEquals(List.of("onModeChanged n", "mode n", "folds 1 [0, 2]", "cursor 3:0", "no selection"),
                 listeners.heard);
     }
@@ -270,7 +266,7 @@ class StateSyncTest {
 
         state.publishState();
 
-        assertEquals(List.of(0, false), nvim.snapshotFlags);
+        assertEquals(List.of(true, false), nvim.snapshotFlags);
         assertFalse(listeners.heard.stream().anyMatch(h -> h.startsWith("folds")), listeners.heard.toString());
     }
 

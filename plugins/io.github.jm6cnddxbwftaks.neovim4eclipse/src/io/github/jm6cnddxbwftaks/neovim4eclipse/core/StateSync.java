@@ -4,14 +4,12 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import java.util.List;
-import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Mode;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 
 /**
@@ -48,10 +46,10 @@ final class StateSync {
          * Runs {@link LuaScripts#STATE_SNAPSHOT} (with a short timeout) and returns its raw answer,
          * read by {@link StateSnapshot}.
          *
-         * @param statuslineWidth the statusline's width in columns, 0 for none (not evaluated)
+         * @param statusLine whether to add the current window's status line ({@code LuaScripts.STATUS_LINE})
          * @param folds           whether to read the closed folds
          */
-        Object stateSnapshot(int statuslineWidth, boolean folds) throws Exception;
+        Object stateSnapshot(boolean statusLine, boolean folds) throws Exception;
 
         /** The attached buffer's lines. */
         List<String> bufferLines() throws Exception;
@@ -252,7 +250,7 @@ final class StateSync {
     }
 
     /**
-     * Publishes mode, cursor, visual selection, the statusline and the closed folds from one request
+     * Publishes mode, cursor, visual selection, the current window's status line and the closed folds from one request
      * ({@link LuaScripts#STATE_SNAPSHOT}). Must only be called when Neovim is not blocked.
      *
      * <p>Cursor and selection are only published when Neovim's current buffer is the attached one:
@@ -261,9 +259,8 @@ final class StateSync {
      */
     void publishState() {
         try {
-            Set<StatusItem> items = status.items();
             boolean folds = foldsEnabled;
-            Object raw = nvim.stateSnapshot(items.contains(StatusItem.STATUSLINE) ? status.statuslineColumns() : 0, folds);
+            Object raw = nvim.stateSnapshot(true, folds);
             // The mode in the answer, not one read before the request. Example: Eclipse runs :w, the
             // plug-in closes Neovim's command line with Esc and publishes. The mode read before was
             // "c"; Neovim's ModeChanged notice "n" can arrive while the request is out, and publishing
@@ -288,7 +285,7 @@ final class StateSync {
                         : VisualSelection.none());
             }
             status.updateRecording(StateSnapshot.recording(raw));
-            status.publishStatusline(StateSnapshot.statusline(raw));
+            status.publishStatusLine(StateSnapshot.statusLine(raw));
         } catch (Exception e) {
             LOG.log(Level.FINE, "state snapshot failed", e);
         }

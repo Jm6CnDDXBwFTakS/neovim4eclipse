@@ -3,280 +3,127 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.function.IntConsumer;
 
 import org.eclipse.jface.action.StatusLineLayoutData;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
-import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
-import org.eclipse.swt.widgets.Listener;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LabelText;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusBarWidths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
 /**
- * The widgets of the plug-in's part of the Eclipse status bar: one label per part the user chose
- * (mode, statusline; {@link StatusItem}), each after a separator, left-aligned, sized to its
- * content and fitted under the cap ({@link StatusBarWidths}). Only SWT and JFace, no workbench, so
- * {@code tests/swt} can test it; {@code ModeStatusContribution} decides what the labels say.
+ * The widgets of the plug-in's part of the Eclipse status bar: the mode's label ({@link StatusItem}),
+ * after a separator, left-aligned. Only SWT and JFace, no workbench, so {@code tests/swt} can test
+ * it; {@code ModeStatusContribution} decides what the label says.
  *
- * <h2>How each label is sized</h2>
- * A width in pixels means fewer characters with a larger font or on a high-resolution screen, so
- * the widths follow the fonts:
- * <ul>
- *   <li>Mode: the widest of its texts as the font draws them ({@code GC.textExtent}). Mode
- *       texts are nearly all capitals, wider than the font's average character, so counting
- *       characters would cut the longest ones ("(S) V-BLO...").</li>
- *   <li>Cmd: characters of the font's average width, as Eclipse's own status items
- *       ({@code StatusLineContributionItem}).</li>
- *   <li>Statusline: characters of a fixed-width font (the editor's family at the bar's size,
- *       {@link #statuslineFontData}), because Neovim fits the {@code 'statusline'} to a number of
- *       <em>columns</em>: in a fixed-width font 60 columns are exactly 60 characters wide, so
- *       {@code %=} puts the position at the label's right edge and nothing is cut. In the bar's
- *       proportional font, wide letters would push the end out.</li>
- * </ul>
+ * <h2>How the label is sized</h2>
+ * As wide as the widest of the mode's texts as the font draws them ({@code GC.textExtent}), so that
+ * the label keeps its size from mode to mode and the items right of it do not move. Mode texts are
+ * nearly all capitals, wider than the font's average character, so counting characters would cut
+ * the longest ones ("(S) V-BLO..."). Example: {@code NORMAL} and {@code (S) V-BLOCK} share the width
+ * of the second.
  *
- * <p>The bar's width changes with the window, and with it the cap, so the labels are fitted again on
- * every resize of the bar. The statusline label's width in characters goes to {@code columns}, the
- * {@code maxwidth} Neovim fits its {@code 'statusline'} into.
+ * <p>Neovim's status line is not here: each editor draws its own window's under its text
+ * ({@link StatusLineRow}), as Neovim lays out its screen.
  *
  * <p>UI thread only.
  */
 final class StatusBarLabels {
 
-    /** The least the statusline label is shrunk to under the cap, in characters. */
-    static final int STATUSLINE_MIN_CHARS = 10;
+    private final CLabel label;
+    private final Set<StatusItem> parts;
+    private List<String> modeTexts;
 
     /**
-     * What the labels are sized for.
+     * Creates the mode's label at the end of {@code bar}, the status bar's composite, if
+     * {@code parts} holds it.
      *
-     * @param modeTexts       every text the mode label may show in the chosen style; it is as wide as
-     *                        the widest
-     * @param statuslineChars the statusline label, in characters, before the cap
-     * @param maxWidthPercent the most all labels may take of the bar, in percent (the
-     *                        {@code statusMaxWidthPercent} preference)
+     * @param font      the label's font (bold); {@code null} keeps the bar's
+     * @param modeTexts every text the label may show; it is as wide as the widest
      */
-    record Widths(List<String> modeTexts, int statuslineChars, int maxWidthPercent) {
-    }
-
-    /** The gap JFace's status bar layout leaves after every item, in pixels. */
-    private static final int GAP = 3;
-
-    /**
-     * How many of the bar's first children are JFace's own: the message area, the progress bar's
-     * cancel button ({@code ToolBar}) and the progress bar ({@code Composite}). {@code StatusLine}
-     * creates them first, before any contribution's {@code fill} (read from its bytecode 2026-10-29),
-     * and its layout keeps them first; the last two take space only while a job runs.
-     */
-    private static final int JFACE_OWN = 3;
-
-    private final Composite bar;
-    private final Map<StatusItem, CLabel> labels = new EnumMap<>(StatusItem.class);
-    private final IntConsumer columns;
-    private final Listener onResize = event -> fit();
-    private Widths widths;
-    /** The statusline's columns last passed to {@link #columns}; -1 before the first. */
-    private int columnsSent = -1;
-
-    /**
-     * Creates the labels of {@code parts} at the end of {@code bar}, the status bar's composite.
-     *
-     * @param font           the mode label's font (bold, as before); {@code null} keeps the bar's
-     * @param statuslineFont the statusline label's font, fixed-width (see the class comment);
-     *                       {@code null} keeps the bar's
-     * @param columns        hears the statusline label's width in characters whenever it changes
-     */
-    StatusBarLabels(Composite bar, Set<StatusItem> parts, Font font, Font statuslineFont, Widths widths,
-            IntConsumer columns) {
-        this.bar = bar;
-        this.widths = widths;
-        this.columns = columns;
-        for (StatusItem part : StatusItem.values()) { // the declaration order is the display order
-            if (!parts.contains(part)) {
-                continue;
-            }
-            Label separator = new Label(bar, SWT.SEPARATOR);
-            StatusLineLayoutData separatorData = new StatusLineLayoutData();
-            separatorData.heightHint = bar.getSize().y;
-            separator.setLayoutData(separatorData);
-            CLabel label = new CLabel(bar, SWT.LEFT);
-            Font own = part == StatusItem.STATUSLINE ? statuslineFont : font;
-            if (own != null) {
-                label.setFont(own);
-            }
-            label.setLayoutData(new StatusLineLayoutData());
-            labels.put(part, label);
+    StatusBarLabels(Composite bar, Set<StatusItem> parts, Font font, List<String> modeTexts) {
+        this.parts = Set.copyOf(parts);
+        this.modeTexts = List.copyOf(modeTexts);
+        if (!parts.contains(StatusItem.MODE)) {
+            label = null;
+            return;
         }
-        if (labels.isEmpty()) {
-            return; // nothing to fit, and no label to take the listener away again
+        Label separator = new Label(bar, SWT.SEPARATOR);
+        StatusLineLayoutData separatorData = new StatusLineLayoutData();
+        separatorData.heightHint = bar.getSize().y;
+        separator.setLayoutData(separatorData);
+        label = new CLabel(bar, SWT.LEFT);
+        if (font != null) {
+            label.setFont(font);
         }
-        // The bar outlives these labels (Eclipse disposes and refills them on every rebuild of the bar),
-        // so the listener goes with them.
-        bar.addListener(SWT.Resize, onResize);
-        labels.values().iterator().next().addDisposeListener(event -> {
-            if (!bar.isDisposed()) {
-                bar.removeListener(SWT.Resize, onResize);
-            }
-        });
+        label.setLayoutData(new StatusLineLayoutData());
         fit();
     }
 
     /** The parts that have a label. */
     Set<StatusItem> parts() {
-        return labels.keySet();
+        return parts;
     }
 
-    /** Whether the labels are gone (the bar was rebuilt or closed). */
+    /** Whether the label is gone (the bar was rebuilt or closed). */
     boolean isDisposed() {
-        return labels.values().stream().anyMatch(CLabel::isDisposed);
+        return label != null && label.isDisposed();
     }
 
     /** The label of {@code part}, or {@code null} when it has none; for tests. */
     CLabel label(StatusItem part) {
-        return labels.get(part);
-    }
-
-    /** The statusline label's width in characters as last fitted; -1 without one, or before the first fit. */
-    int statuslineColumns() {
-        return columnsSent;
+        return part == StatusItem.MODE ? label : null;
     }
 
     /**
      * Shows {@code text} in {@code part}'s label, with {@code tooltip} (or the text itself when
-     * {@code null}: a text cut with "..." is then readable whole on hover) and {@code foreground}
-     * ({@code null}: the bar's own color). Does nothing for a part without a label.
+     * {@code null}) and {@code foreground} ({@code null}: the bar's own color). Does nothing for a
+     * part without a label.
      */
     void show(StatusItem part, String text, String tooltip, Color foreground) {
-        CLabel label = labels.get(part);
-        if (label == null || label.isDisposed()) {
+        CLabel shownIn = label(part);
+        if (shownIn == null || shownIn.isDisposed()) {
             return;
         }
         String shown = text == null ? "" : text;
-        String literal = LabelText.literal(shown); // a file named R&D.txt keeps its & (no mnemonic)
-        if (!literal.equals(label.getText())) {
-            label.setText(literal);
+        String literal = LabelText.literal(shown); // an & stays an & (no mnemonic)
+        if (!literal.equals(shownIn.getText())) {
+            shownIn.setText(literal);
         }
-        label.setToolTipText(shown.isEmpty() ? null : tooltip != null ? tooltip : shown);
-        label.setForeground(foreground);
+        shownIn.setToolTipText(shown.isEmpty() ? null : tooltip != null ? tooltip : shown);
+        shownIn.setForeground(foreground);
     }
 
     /**
-     * New sizes (a preference changed, or recording started): fits the labels again. The same sizes
-     * do nothing, so this can be called with every status update without measuring the font each key.
+     * New texts to size for (recording started or stopped: {@code rec @a} widens the label). The
+     * same texts do nothing, so this can be called with every status update.
      */
-    void setWidths(Widths newWidths) {
-        if (newWidths.equals(widths)) {
+    void setModeTexts(List<String> texts) {
+        if (texts.equals(modeTexts)) {
             return;
         }
-        widths = newWidths;
+        modeTexts = List.copyOf(texts);
         fit();
     }
 
-    /**
-     * Sets each label's width from {@link #widths} under the cap, lays the bar out, and passes the
-     * statusline's columns on when they changed.
-     */
+    /** Sets the label's width from the widest text and lays the bar out when it changed. */
     void fit() {
-        if (labels.isEmpty() || isDisposed()) {
+        if (label == null || label.isDisposed()) {
             return;
         }
-        StatusItem[] order = labels.keySet().toArray(StatusItem[]::new);
-        int[] wanted = new int[order.length];
-        int[] minimum = new int[order.length];
-        double statuslineCharWidth = 0;
-        for (int i = 0; i < order.length; i++) {
-            CLabel label = labels.get(order[i]);
-            int margins = label.getLeftMargin() + label.getRightMargin();
-            switch (order[i]) {
-                case MODE -> {
-                    wanted[i] = widestText(label, widths.modeTexts()) + margins;
-                    minimum[i] = wanted[i]; // the mode keeps its size: it is short, and the first to read
-                }
-                case STATUSLINE -> {
-                    statuslineCharWidth = averageCharWidth(label);
-                    wanted[i] = StatusBarWidths.pixels(widths.statuslineChars(), statuslineCharWidth) + margins;
-                    minimum[i] = StatusBarWidths.pixels(Math.min(widths.statuslineChars(), STATUSLINE_MIN_CHARS),
-                            statuslineCharWidth) + margins;
-                }
-            }
+        int width = widestText(label, modeTexts) + label.getLeftMargin() + label.getRightMargin();
+        StatusLineLayoutData data = (StatusLineLayoutData) label.getLayoutData();
+        if (data.widthHint != width) {
+            data.widthHint = width;
+            label.getParent().layout(true);
         }
-        int barWidth = bar.getClientArea().width;
-        int cap = Math.min(StatusBarWidths.cap(barWidth, widths.maxWidthPercent()), StatusBarWidths.free(barWidth, othersWidth()));
-        int[] fitted = StatusBarWidths.fit(wanted, minimum, cap);
-        boolean changed = false;
-        for (int i = 0; i < order.length; i++) {
-            CLabel label = labels.get(order[i]);
-            StatusLineLayoutData data = (StatusLineLayoutData) label.getLayoutData();
-            if (data.widthHint != fitted[i]) {
-                data.widthHint = fitted[i];
-                changed = true;
-            }
-            if (order[i] == StatusItem.STATUSLINE) {
-                int cols = StatusBarWidths.columns(fitted[i] - label.getLeftMargin() - label.getRightMargin(),
-                        statuslineCharWidth);
-                if (cols != columnsSent) {
-                    columnsSent = cols;
-                    columns.accept(cols);
-                }
-            }
-        }
-        if (changed) {
-            bar.layout(true);
-        }
-    }
-
-    /**
-     * What everything in the bar but the labels takes, as JFace's layout counts it: every other item
-     * (Eclipse's Writable, Insert and cursor position, the heap status, other plug-ins' items) and
-     * every separator with its gap, this class's included; not JFace's own first children
-     * ({@link #JFACE_OWN}).
-     */
-    private int othersWidth() {
-        Control[] children = bar.getChildren();
-        int width = 0;
-        for (int i = JFACE_OWN; i < children.length; i++) {
-            Control child = children[i];
-            if (labels.containsValue(child)) {
-                continue;
-            }
-            int hint = child.getLayoutData() instanceof StatusLineLayoutData data ? data.widthHint : SWT.DEFAULT;
-            width += child.computeSize(hint, SWT.DEFAULT).x + GAP;
-        }
-        return width + labels.size() * GAP;
-    }
-
-    /**
-     * The statusline label's font: the editor's fixed-width family ({@code textFont}, Eclipse's
-     * <em>Text Font</em>) at the status bar's size ({@code barFont}), so it fits the bar's height like
-     * the other labels and does not follow the editor's text size. Only the family matters here: the
-     * fixed width is what keeps Neovim's columns exact. Example: Monospace 14 in the editor and
-     * Sans 10 in the bar give Monospace 10.
-     *
-     * @return {@code textFont}'s data with {@code barFont}'s height; {@code textFont} unchanged when
-     *         either is empty
-     */
-    static FontData[] statuslineFontData(FontData[] textFont, FontData[] barFont) {
-        if (textFont == null || textFont.length == 0 || barFont == null || barFont.length == 0) {
-            return textFont;
-        }
-        // Whole points: FontData's API has no fractional size (a 10.5 point bar gives 10).
-        int height = barFont[0].getHeight();
-        FontData[] sized = new FontData[textFont.length];
-        for (int i = 0; i < textFont.length; i++) {
-            sized[i] = new FontData(textFont[i].getName(), height, textFont[i].getStyle());
-        }
-        return sized;
     }
 
     /** The widest of {@code texts} in {@code label}'s font, in pixels. */
@@ -289,17 +136,6 @@ final class StatusBarLabels {
                 widest = Math.max(widest, gc.textExtent(text).x);
             }
             return widest;
-        } finally {
-            gc.dispose();
-        }
-    }
-
-    /** The average character width of {@code label}'s font, in pixels. */
-    private static double averageCharWidth(CLabel label) {
-        GC gc = new GC(label);
-        try {
-            gc.setFont(label.getFont());
-            return gc.getFontMetrics().getAverageCharacterWidth();
         } finally {
             gc.dispose();
         }

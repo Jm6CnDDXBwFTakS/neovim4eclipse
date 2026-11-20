@@ -27,7 +27,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.FocusTarget;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.IdeAction;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CommandWindowView;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
@@ -104,7 +103,7 @@ final class WindowPane {
     /** Neovim's command-line window ({@code q:} typed in the page), drawn over the page's bottom. */
     private final NeovimWindowPanel commandWindowPanel;
     private final Consumer<Integer> closedListener = this::onPageClosed;
-    /** The mode and statusline in Eclipse's status bar, one item for all messages editors ({@link PageStatus}). */
+    /** The mode in Eclipse's status bar, one item for all page editors ({@link PageStatus}). */
     private final PageStatus status;
     private final Consumer<GridSnapshot> gridListener = this::onGrid;
     private final Consumer<GridSnapshot> statusListener = this::onStatusRow;
@@ -121,11 +120,6 @@ final class WindowPane {
         @Override
         public void onRecording(String register) {
             onUi(() -> status.setRecording(register));
-        }
-
-        @Override
-        public void onStatus(StatusInfo info) {
-            onUi(() -> WindowPane.this.status.setStatusInfo(info));
         }
 
         @Override

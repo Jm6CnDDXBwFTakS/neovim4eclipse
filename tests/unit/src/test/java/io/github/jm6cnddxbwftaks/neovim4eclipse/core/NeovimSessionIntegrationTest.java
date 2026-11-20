@@ -169,30 +169,20 @@ class NeovimSessionIntegrationTest {
 
     // ---- status bar parts ----
 
+    /**
+     * Each key's snapshot brings the current window's status line ({@code LuaScripts.STATUS_LINE}),
+     * Neovim's default format with the buffer's name; {@code :set laststatus=0} takes it away.
+     */
     @Test
-    void statusInfoReportsTheStatusline() throws Exception {
+    void theCurrentWindowsStatusLineComesWithTheKeys() throws Exception {
         try (NeovimSession s = start()) {
-            s.setStatusItems(java.util.EnumSet.allOf(io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem.class));
-            s.setStatuslineColumns(60); // as the status bar does once its statusline label is laid out
             s.setBufferLines(List.of("one", "two"));
-            List<StatusInfo> seen = new CopyOnWriteArrayList<>();
-            s.addStatusListener(seen::add);
-            keys(s, "j");
-            waitFor(() -> seen.stream().anyMatch(i -> !i.statusline().isBlank()), "statusline: " + seen);
-        }
-    }
-
-    /** The statusline is only evaluated when the status bar shows it. */
-    @Test
-    void nothingOptionalIsEvaluatedWhenOnlyTheModeIsShown() throws Exception {
-        try (NeovimSession s = start()) {
-            s.setStatusItems(java.util.EnumSet.of(io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem.MODE));
-            s.setBufferLines(List.of("one"));
-            List<StatusInfo> seen = new CopyOnWriteArrayList<>();
-            s.addStatusListener(seen::add);
-            keys(s, "2", "d", "d", "/", "n", "o", "<CR>");
-            NeovimBarrier.pass(s);
-            assertTrue(seen.stream().allMatch(i -> i.statusline().isEmpty()), "unrequested parts must stay empty: " + seen);
+            List<GridSnapshot> seen = new CopyOnWriteArrayList<>();
+            s.addStatusLineListener(seen::add);
+            keys(s, ":", "s", "e", "t", " ", "l", "s", "=", "2", "<CR>", "j");
+            waitFor(() -> seen.stream().anyMatch(l -> l.height() == 1 && l.row(0).contains("2,1")), "status line: " + seen);
+            keys(s, ":", "s", "e", "t", " ", "l", "s", "=", "0", "<CR>", "k");
+            waitFor(() -> !seen.isEmpty() && seen.get(seen.size() - 1).height() == 0, "no status line: " + seen);
         }
     }
 

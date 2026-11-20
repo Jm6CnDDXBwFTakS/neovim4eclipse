@@ -52,7 +52,7 @@ import common.ToolFailure;
  *
  * <h2>How {@code due} decides</h2>
  * A card is due when a file one of its area globs matches changed since the last release tag, or
- * when its areas say {@code always}. Example: a release that changed only {@code util/StatusLineFormat.java}
+ * when its areas say {@code always}. Example: a release that changed only {@code util/ModeLabels.java}
  * needs the release cards and nothing about Get Neovim or the {@code :} box. The changed files are
  * {@code git diff --name-only <tag>}: the commits since the tag and what is not committed yet.
  * A build file whose only change is the version number does not count

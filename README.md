@@ -278,9 +278,9 @@ which an administrator can set for everyone in the product's `plugin_customizati
 | Show a welcome after installing, and a note after updates to a new minor version | `showWelcome` |
 | Status Bar: *mode* | `statusMode` |
 | No effect since 0.3.0 (was: Status Bar: *cmd*, the pending command; Neovim shows it in its own line) | `statusShowcmd` |
-| Status Bar: *statusline* (Neovim's `'statusline'`) | `statusStatusline` |
-| Status Bar: *Statusline width (characters)* | `statusStatuslineWidth` |
-| Status Bar: *At most this share of the status bar (%)* | `statusMaxWidthPercent` |
+| No effect since 0.3.0 (was: Status Bar: *statusline*; each editor shows Neovim's status line under its text) | `statusStatusline` |
+| No effect since 0.3.0 (was: Status Bar: *Statusline width (characters)*; the line fits the editor's width) | `statusStatuslineWidth` |
+| No effect since 0.3.0 (was: Status Bar: *At most this share of the status bar (%)*; only the mode is left there) | `statusMaxWidthPercent` |
 | Ctrl Keys: `Ctrl+letter` to Neovim in normal and visual mode | `ctrlKeyNormal.<letter>`, e.g. `ctrlKeyNormal.v` |
 | Ctrl Keys: `Ctrl+letter` to Neovim in insert mode | `ctrlKeyInsert.<letter>`, e.g. `ctrlKeyInsert.w` |
 

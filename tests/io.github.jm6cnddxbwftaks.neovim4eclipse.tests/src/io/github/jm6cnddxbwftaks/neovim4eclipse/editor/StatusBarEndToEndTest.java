@@ -7,16 +7,20 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.wait
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.widgets.Control;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 
 /**
- * The status bar in a real window (docs/design/STATUS_BAR.md): the mode's name, a label
- * per part, Neovim's statusline fitted to its label, and {@code ECLIPSE} when keys go to
- * Eclipse. The texts are {@code ModeLabelsTest}; the widths {@code StatusBarLabelsTest}.
+ * The status bar in a real window (docs/design/STATUS_BAR.md): the mode's name and
+ * {@code ECLIPSE} when keys go to Eclipse; and Neovim's status line, which is no longer in the bar
+ * but in a row under each editor's text. The texts are {@code ModeLabelsTest}; the label's width
+ * {@code StatusBarLabelsTest}.
  */
 class StatusBarEndToEndTest extends EndToEndTestBase {
 
@@ -26,10 +30,7 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
 
     @AfterEach
     void restorePreferences() {
-        for (String key : new String[] { PreferenceConstants.STATUS_MODE,
-                PreferenceConstants.STATUS_STATUSLINE, PreferenceConstants.STATUS_STATUSLINE_WIDTH }) {
-            store().setToDefault(key);
-        }
+        store().setToDefault(PreferenceConstants.STATUS_MODE);
         // No controller when the test failed with the editor gone: the preferences are restored
         // anyway, and the test's own failure is the one reported.
         NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
@@ -67,18 +68,51 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
         waitForLabel("NORMAL");
     }
 
-    /** Neovim fits its statusline into the label: at most the columns asked for, its end (the position) kept. */
+    /**
+     * The status row under the editor's text ({@link StatusLineRow}): the visible canvas child of the
+     * widget that lies on the client area's last line and shows window {@code window}'s grid;
+     * {@code null} when none is shown. The window tells it from ui2's floats, which can lie on the
+     * same line (with {@code 'laststatus'} 0 the ruler moves to ui2's command-line window).
+     */
+    private String statusRowText(int window) {
+        Rectangle area = widget.getClientArea();
+        for (Control child : widget.getChildren()) {
+            if (child instanceof GridCanvas canvas && canvas.isVisible() && canvas.grid() != null && canvas.grid().window() == window
+                    && canvas.grid().height() == 1 && canvas.getBounds().y + canvas.getBounds().height == area.height) {
+                return canvas.grid().row(0);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Neovim's status line is drawn under the editor's text, evaluated by Neovim for this editor's
+     * window (its default format names the file), and {@code :set laststatus=0} takes the row away,
+     * the text widget's margin with it. The cells are {@code status_line_spec.lua}, the row's
+     * placement {@code StatusLineRowTest}; here the session, the notifications and the row together.
+     */
     @Test
-    void theStatuslineFitsItsLabel() {
-        store().setValue(PreferenceConstants.STATUS_STATUSLINE_WIDTH, 24);
-        store().setValue(PreferenceConstants.STATUS_STATUSLINE, true);
+    void theEditorShowsItsWindowsStatusLineUnderItsText() throws Exception {
+        SessionProbe.lua(session, "vim.cmd('set laststatus=2') return 0");
         typeSlowly("l");
-        waitUntil("a statusline ending in Neovim's position", TIMEOUT_MS,
-                () -> statusLineTexts(editor).stream().anyMatch(t -> t.endsWith("All") || t.endsWith("Top")),
-                () -> "; the bar shows " + statusLineTexts(editor));
-        String statusline = statusLineTexts(editor).stream().filter(t -> t.endsWith("All") || t.endsWith("Top"))
-                .findFirst().orElseThrow();
-        assertTrue(statusline.length() <= 24, "at most 24 columns: \"" + statusline + "\"");
+        int window = ((Number) SessionProbe.lua(session, "return vim.api.nvim_get_current_win()")).intValue();
+        waitUntil("a status row naming test.txt", TIMEOUT_MS, () -> {
+            settle();
+            String row = statusRowText(window);
+            return row != null && row.contains("test.txt");
+        }, () -> "; the row reads " + statusRowText(window));
+        // The row's margin is one line high; the editor's own margin is what is left without it.
+        int margin = widget.getBottomMargin() - widget.getLineHeight();
+        assertTrue(margin >= 0, "the row takes a line of margin under the text: " + widget.getBottomMargin());
+        try {
+            SessionProbe.lua(session, "vim.cmd('set laststatus=0') return 0");
+            waitUntil("the status row gone", TIMEOUT_MS, () -> {
+                settle();
+                return statusRowText(window) == null && widget.getBottomMargin() == margin;
+            }, () -> "; the row reads " + statusRowText(window) + ", margin " + widget.getBottomMargin());
+        } finally {
+            SessionProbe.lua(session, "vim.cmd('set laststatus=2') return 0");
+        }
     }
 
     /**

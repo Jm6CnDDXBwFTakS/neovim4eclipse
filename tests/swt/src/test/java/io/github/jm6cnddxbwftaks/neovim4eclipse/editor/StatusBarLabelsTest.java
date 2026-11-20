@@ -4,11 +4,10 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -18,33 +17,30 @@ import org.eclipse.jface.action.StatusLineManager;
 import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
-import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusBarWidths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 
 /**
  * {@link StatusBarLabels} in a real JFace status bar ({@code StatusLineManager.createControl}, the
- * composite Eclipse puts at the bottom of a window, with its own layout): one label per chosen part,
- * each sized to its content and font, the cap, and the statusline's columns passed on.
+ * composite Eclipse puts at the bottom of a window, with its own layout): the mode label, as wide
+ * as its widest text. Neovim's status line is not here: each editor draws it under its text
+ * ({@code StatusLineRowTest}).
  */
 class StatusBarLabelsTest {
 
-    /** Mode texts as the Full style has them, the widest last (capitals, wider than average). */
+    /** Mode texts, the widest last (capitals, wider than average). */
     private static final List<String> MODE_TEXTS = List.of("NORMAL", "INSERT", "(S) V-BLOCK");
 
     private Shell shell;
     private Composite bar;
-    private final List<Integer> columns = new ArrayList<>();
     private StatusBarLabels labels;
 
     @BeforeEach
@@ -62,173 +58,80 @@ class StatusBarLabelsTest {
         shell.dispose();
     }
 
-    private static StatusBarLabels.Widths widths(int statuslineChars, int maxWidthPercent) {
-        return new StatusBarLabels.Widths(MODE_TEXTS, statuslineChars, maxWidthPercent);
-    }
-
-    private StatusBarLabels create(Set<StatusItem> parts, StatusBarLabels.Widths widths) {
-        labels = new StatusBarLabels(bar, parts, null, JFaceResources.getTextFont(), widths, columns::add);
+    private StatusBarLabels create(Set<StatusItem> parts) {
+        labels = new StatusBarLabels(bar, parts, JFaceResources.getTextFont(), MODE_TEXTS);
         return labels;
     }
 
-    /**
-     * Resizes the bar itself, as the window's layout would: synchronous, unlike a shell resize, which
-     * the window manager may apply later.
-     */
-    private void resizeBar(int width) {
-        bar.setSize(width, bar.getSize().y);
+    private int width() {
+        return ((StatusLineLayoutData) labels.label(StatusItem.MODE).getLayoutData()).widthHint;
     }
 
-    private int width(StatusItem part) {
-        return ((StatusLineLayoutData) labels.label(part).getLayoutData()).widthHint;
-    }
-
-    private double charWidth(StatusItem part) {
-        GC gc = new GC(labels.label(part));
-        try {
-            gc.setFont(labels.label(part).getFont());
-            return gc.getFontMetrics().getAverageCharacterWidth();
-        } finally {
-            gc.dispose();
-        }
-    }
-
-    private int textWidth(StatusItem part, String text) {
-        GC gc = new GC(labels.label(part));
-        try {
-            gc.setFont(labels.label(part).getFont());
-            return gc.textExtent(text).x;
-        } finally {
-            gc.dispose();
-        }
-    }
-
-    private int margins() {
+    private int widest(List<String> texts) {
         CLabel label = labels.label(StatusItem.MODE);
-        return label.getLeftMargin() + label.getRightMargin();
-    }
-
-    @Test
-    void oneLeftAlignedLabelPerChosenPartInDisplayOrder() {
-        create(EnumSet.of(StatusItem.STATUSLINE, StatusItem.MODE), widths(60, 90));
-        create(EnumSet.of(StatusItem.MODE), widths(60, 90));
-        assertNull(labels.label(StatusItem.STATUSLINE), "statusline not chosen: no label");
-        create(EnumSet.of(StatusItem.STATUSLINE, StatusItem.MODE), widths(60, 90));
-        assertEquals(EnumSet.of(StatusItem.MODE, StatusItem.STATUSLINE), labels.parts());
-        List<Control> children = List.of(bar.getChildren());
-        assertTrue(children.indexOf(labels.label(StatusItem.MODE)) < children.indexOf(labels.label(StatusItem.STATUSLINE)),
-                "mode before statusline: " + children);
-        assertEquals(SWT.LEFT, labels.label(StatusItem.MODE).getAlignment());
-        assertEquals(JFaceResources.getTextFont(), labels.label(StatusItem.STATUSLINE).getFont(),
-                "the statusline in the editor's fixed-width font, so its columns are exact");
-    }
-
-    /**
-     * The mode as wide as its widest text as drawn (capitals overflow an average-width count), the
-     * statusline in characters of its font.
-     */
-    @Test
-    void eachLabelIsSizedToItsContentAndFont() {
-        create(EnumSet.allOf(StatusItem.class), widths(60, 90));
-        int widest = MODE_TEXTS.stream().mapToInt(text -> textWidth(StatusItem.MODE, text)).max().orElseThrow();
-        assertEquals(widest + margins(), width(StatusItem.MODE));
-        assertEquals(StatusBarWidths.pixels(60, charWidth(StatusItem.STATUSLINE)) + margins(), width(StatusItem.STATUSLINE));
-        assertEquals(List.of(60), columns, "the statusline's columns, once");
-    }
-
-    /** A narrow window: the statusline gives up its width first, and Neovim hears the new columns. */
-    @Test
-    void theCapShrinksTheStatuslineAndTellsNeovim() {
-        create(EnumSet.allOf(StatusItem.class), widths(60, 40));
-        double cw = charWidth(StatusItem.STATUSLINE);
-        int fixed = width(StatusItem.MODE);
-        resizeBar((int) ((fixed + StatusBarWidths.pixels(30, cw) + margins()) / 0.40) + 1);
-        int statusline = width(StatusItem.STATUSLINE);
-        assertTrue(statusline < StatusBarWidths.pixels(60, cw) + margins(), "shrunk: " + statusline);
-        assertEquals(StatusBarWidths.columns(statusline - margins(), cw), columns.get(columns.size() - 1),
-                "Neovim fits the statusline to what is left: " + columns);
-        assertTrue(columns.get(columns.size() - 1) < 60);
-        assertEquals(columns.get(columns.size() - 1), labels.statuslineColumns(), "kept for the window's next editor");
-
-        resizeBar(4000);
-        assertEquals(60, columns.get(columns.size() - 1), "a wider window gives the full width back");
-    }
-
-    /**
-     * Another item in the bar (Eclipse's heap status is a {@code Composite}) takes space too: what is
-     * free shrinks by its width, so JFace does not have to cut the plug-in's labels.
-     *
-     * <p>The item is 800 px of a 1500 px bar, where about 1000 px are free (JFace keeps a third for
-     * its message area): too wide for the labels to keep their room on any platform's fonts. A 400 px
-     * item stopped forcing a shrink when the mode's texts got short (2026-11-01, seen on Windows): the
-     * labels then fit beside it.
-     */
-    @Test
-    void otherItemsInTheBarAreCounted() {
-        resizeBar(1500);
-        create(EnumSet.allOf(StatusItem.class), widths(60, 90));
-        int alone = width(StatusItem.STATUSLINE);
-        Control[] children = bar.getChildren();
-        for (int i = 3; i < children.length; i++) { // the labels and separators; JFace's own three stay
-            children[i].dispose();
+        GC gc = new GC(label);
+        try {
+            gc.setFont(label.getFont());
+            return texts.stream().mapToInt(text -> gc.textExtent(text).x).max().orElseThrow()
+                    + label.getLeftMargin() + label.getRightMargin();
+        } finally {
+            gc.dispose();
         }
-        Composite heapStatus = new Composite(bar, SWT.NONE);
-        StatusLineLayoutData data = new StatusLineLayoutData();
-        data.widthHint = 800;
-        heapStatus.setLayoutData(data);
-        create(EnumSet.allOf(StatusItem.class), widths(60, 90));
-        assertTrue(width(StatusItem.STATUSLINE) < alone,
-                "the 800 px item left the statusline less room: " + width(StatusItem.STATUSLINE) + " < " + alone);
     }
 
-    /**
-     * The statusline's font is the editor's fixed-width family at the bar's size: it fits the bar
-     * like the other labels and does not follow the editor's text size.
-     */
     @Test
-    void theStatuslineFontIsTheEditorsFamilyAtTheBarsSize() {
-        FontData[] text = { new FontData("Monospace", 14, SWT.NORMAL) };
-        FontData[] barFont = { new FontData("Sans", 9, SWT.BOLD) };
-        FontData[] sized = StatusBarLabels.statuslineFontData(text, barFont);
-        assertEquals(1, sized.length);
-        assertEquals("Monospace", sized[0].getName());
-        assertEquals(9, sized[0].getHeight());
-        assertEquals(SWT.NORMAL, sized[0].getStyle(), "the editor's style, not the bar's bold");
-        assertSame(text, StatusBarLabels.statuslineFontData(text, new FontData[0]), "no bar font: the editor's");
+    void theModeIsALeftAlignedLabelInTheFontGiven() {
+        create(EnumSet.of(StatusItem.MODE));
+        assertEquals(EnumSet.of(StatusItem.MODE), labels.parts());
+        assertEquals(SWT.LEFT, labels.label(StatusItem.MODE).getAlignment());
+        assertEquals(JFaceResources.getTextFont(), labels.label(StatusItem.MODE).getFont());
+    }
+
+    @Test
+    void noModeNoLabel() {
+        int children = bar.getChildren().length;
+        create(EnumSet.noneOf(StatusItem.class));
+        assertNull(labels.label(StatusItem.MODE));
+        assertEquals(children, bar.getChildren().length, "nothing added to the bar");
+        assertFalse(labels.isDisposed());
+    }
+
+    /** As wide as its widest text as drawn (capitals overflow an average-width count). */
+    @Test
+    void theLabelIsAsWideAsItsWidestText() {
+        create(EnumSet.of(StatusItem.MODE));
+        assertEquals(widest(MODE_TEXTS), width());
+    }
+
+    /** New mode texts (another set of names) refit the label; the same texts change nothing. */
+    @Test
+    void newModeTextsRefitTheLabel() {
+        create(EnumSet.of(StatusItem.MODE));
+        List<String> longer = List.of("NORMAL", "VISUAL BLOCK REPLACE PENDING");
+        labels.setModeTexts(longer);
+        assertEquals(widest(longer), width());
+        assertTrue(width() > widest(MODE_TEXTS));
     }
 
     @Test
     void textsAndTooltips() {
-        create(EnumSet.allOf(StatusItem.class), widths(60, 90));
+        create(EnumSet.of(StatusItem.MODE));
         labels.show(StatusItem.MODE, "-VR-", "-VR- = VREPLACE", null);
         assertEquals("-VR-", labels.label(StatusItem.MODE).getText());
         assertEquals("-VR- = VREPLACE", labels.label(StatusItem.MODE).getToolTipText());
-        labels.show(StatusItem.STATUSLINE, "a.txt   1,1", null, null);
-        assertEquals("a.txt   1,1", labels.label(StatusItem.STATUSLINE).getToolTipText(), "the whole text on hover");
-        labels.show(StatusItem.STATUSLINE, "", "unused", null);
-        assertNull(labels.label(StatusItem.STATUSLINE).getToolTipText(), "no tooltip for an empty label");
+        labels.show(StatusItem.MODE, "a & b", null, null);
+        assertEquals("a & b", labels.label(StatusItem.MODE).getToolTipText(), "the text itself when no tooltip is given");
+        labels.show(StatusItem.MODE, "", "unused", null);
+        assertNull(labels.label(StatusItem.MODE).getToolTipText(), "no tooltip for an empty label");
     }
 
-    /** Eclipse disposes the labels when it rebuilds the bar; the bar's resize must not reach them. */
+    /** Eclipse disposes the labels when it rebuilds the bar; showing then does nothing. */
     @Test
-    void disposedLabelsStopListeningToTheBar() {
-        int before = bar.getListeners(SWT.Resize).length;
-        create(EnumSet.allOf(StatusItem.class), widths(60, 40));
-        for (StatusItem part : StatusItem.values()) {
-            labels.label(part).dispose();
-        }
+    void disposedLabelsAreLeftAlone() {
+        create(EnumSet.of(StatusItem.MODE));
+        labels.label(StatusItem.MODE).dispose();
         assertTrue(labels.isDisposed());
-        assertEquals(before, bar.getListeners(SWT.Resize).length, "the listener left with the labels");
-        int heard = columns.size();
-        resizeBar(900);
-        assertEquals(heard, columns.size(), "nothing fitted after disposal");
-    }
-
-    /** With every part turned off there is no label to take a listener away again: none is added. */
-    @Test
-    void noPartsAddNoListener() {
-        int before = bar.getListeners(SWT.Resize).length;
-        create(EnumSet.noneOf(StatusItem.class), widths(60, 40));
-        assertEquals(before, bar.getListeners(SWT.Resize).length);
+        labels.show(StatusItem.MODE, "INSERT", null, null);
+        labels.setModeTexts(List.of("X"));
     }
 }

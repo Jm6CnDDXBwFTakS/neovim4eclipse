@@ -132,7 +132,7 @@ public final class ReportProblemHandler extends AbstractHandler {
 
     /**
      * The README's Settings preferences that differ from their defaults, as {@code key = value}.
-     * Example: {@code statusStatusline = true}, {@code ctrlKeyNormal.v = false}.
+     * Example: {@code statusMode = false}, {@code ctrlKeyNormal.v = false}.
      */
     static List<String> changedPreferences(IPreferenceStore store) {
         List<String> keys = new ArrayList<>(List.of(PreferenceConstants.SHOW_TOGGLE_BUTTON, PreferenceConstants.SHOW_MENU,

@@ -3,19 +3,13 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
-import java.util.function.IntConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.jface.action.ContributionItem;
-import org.eclipse.jface.action.IContributionItem;
-import org.eclipse.jface.action.IContributionManager;
 import org.eclipse.jface.action.IStatusLineManager;
-import org.eclipse.jface.action.SubContributionItem;
-import org.eclipse.jface.action.SubContributionManager;
-import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.FontData;
@@ -24,17 +18,14 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorSite;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ModeLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLineFormat;
 
 /**
- * Vim's status information in the Eclipse status bar: the mode (with the macro being recorded), the
- * pending command and Neovim's {@code 'statusline'}, each in a label of its own
- * ({@link StatusBarLabels}), as the user chose them (<em>Window → Preferences → Neovim → Status
- * Bar</em>).
+ * Vim's mode in the Eclipse status bar, with the macro being recorded ({@link StatusBarLabels}), as
+ * the user chose it (<em>Window → Preferences → Neovim → Status Bar</em>). Neovim's status line is
+ * drawn by each editor under its text ({@link StatusLineRow}), and its pending command by Neovim
+ * itself (ui2).
  *
  * <p>The status line at the bottom of the window is managed by an {@code IStatusLineManager}, which
  * each editor reaches through its site ({@code getEditorSite().getActionBars()}). Anything shown
@@ -45,8 +36,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLineFormat;
  * class decides what the labels say; {@link StatusBarLabels} owns the widgets and their widths.
  *
  * <p>Which labels exist changes in two ways: a preference (a part turned on or off), and the
- * {@code ECLIPSE} indicator, which shows alone (Neovim's command and statusline mean nothing
- * while keys go to Eclipse), even when the mode part is off, because it says where keys go. Either
+ * {@code ECLIPSE} indicator, which shows even when the mode part is off, because it says where keys
+ * go. Either
  * rebuilds the bar ({@link #refresh}); every other change only sets texts.
  *
  * <p>The preferences are read once and again only when one changes ({@link #refreshNow}), not with
@@ -58,28 +49,17 @@ public final class ModeStatusContribution extends ContributionItem {
 
     private static final Logger LOG = Logger.getLogger(ModeStatusContribution.class.getName());
 
-    /** Hears the statusline label's width in characters (Neovim's {@code maxwidth} for it). */
-    private final IntConsumer statuslineColumns;
-
     private IStatusLineManager manager;
     private StatusBarLabels labels;
     private Font boldFont;
-    /** The statusline's font: the editor's fixed-width family at the bar's size (StatusBarLabels). */
-    private Font statuslineFont;
     /** The parts the user chose (preferences, read by {@link #readPreferences}). UI thread. */
     private Set<StatusItem> chosen = StatusItem.defaults();
-    /** The statusline's width in characters (preference). UI thread. */
-    private int statuslineChars = PreferenceConstants.STATUS_STATUSLINE_WIDTH_DEFAULT;
-    /** The most of the bar the labels may take, in percent (preference). UI thread. */
-    private int maxWidthPercent = PreferenceConstants.STATUS_MAX_WIDTH_PERCENT_DEFAULT;
     /** Neovim's mode string ({@code nvim_get_mode().mode}); "" before Neovim said. */
     private String mode = "";
     /** Keys go to Eclipse: the mode label says {@code ECLIPSE}. */
     private boolean eclipse;
     /** Register being recorded into ("" when not recording); shown after the mode, as Vim does. */
     private String recording = "";
-    /** The statusline as reported by Neovim. */
-    private StatusInfo info = StatusInfo.EMPTY;
 
     /**
      * The item's id while a page editor shown from the editing Neovim is in front
@@ -88,23 +68,14 @@ public final class ModeStatusContribution extends ContributionItem {
      */
     public static final String PAGE_ID = ID + ".page";
 
-    /** Whether this item has the statusline label: a page draws its status line itself. */
-    private final boolean withStatusline;
-
-    /** @param statuslineColumns hears the statusline label's width in characters whenever it changes */
-    public ModeStatusContribution(IntConsumer statuslineColumns) {
-        this(ID, statuslineColumns, true);
+    /** The text editors' item ({@link #ID}). */
+    public ModeStatusContribution() {
+        this(ID);
     }
 
-    /**
-     * An item of id {@code id}; without the statusline label when {@code withStatusline} is false
-     * (the pages', {@link #PAGE_ID}: the mode and the pending command only, the page drawing its
-     * status line below its text, as Neovim does).
-     */
-    ModeStatusContribution(String id, IntConsumer statuslineColumns, boolean withStatusline) {
+    /** An item of id {@code id}: the pages' is {@link #PAGE_ID}. */
+    ModeStatusContribution(String id) {
         super(id);
-        this.statuslineColumns = statuslineColumns;
-        this.withStatusline = withStatusline;
         readPreferences();
     }
 
@@ -125,34 +96,9 @@ public final class ModeStatusContribution extends ContributionItem {
                 statusLine.add(this);
                 statusLine.update(true);
             }
-            // Each window has its own status bar, of its own width, and one Neovim serves them all:
-            // the editor becoming active brings its window's statusline width along. Example: a wide
-            // and a narrow window; switching editors between them switches the statusline's columns.
-            ModeStatusContribution shown = shownIn(statusLine, getId());
-            int columns = shown == null || shown.labels == null ? -1 : shown.labels.statuslineColumns();
-            if (columns > 0) {
-                statuslineColumns.accept(columns);
-            }
         } catch (Exception e) {
             LOG.log(Level.FINE, "Could not install mode status line", e);
         }
-    }
-
-    /**
-     * The item of this id in {@code statusLine}'s window, whichever editor put it there: an editor's
-     * manager is a {@link SubContributionManager} that adds items to the window's own manager wrapped
-     * in a {@link SubContributionItem}.
-     */
-    private static ModeStatusContribution shownIn(IStatusLineManager statusLine, String id) {
-        IContributionManager window = statusLine;
-        while (window instanceof SubContributionManager sub) {
-            window = sub.getParent();
-        }
-        IContributionItem item = window.find(id);
-        if (item instanceof SubContributionItem wrapper) {
-            item = wrapper.getInnerItem();
-        }
-        return item instanceof ModeStatusContribution contribution ? contribution : null;
     }
 
     /** Removes the item with this id from the status line of the editor's window. */
@@ -179,12 +125,7 @@ public final class ModeStatusContribution extends ContributionItem {
             }
             boldFont = new Font(parent.getDisplay(), fds);
         }
-        if (statuslineFont == null && parent.getFont() != null) {
-            statuslineFont = new Font(parent.getDisplay(), StatusBarLabels.statuslineFontData(
-                    JFaceResources.getTextFont().getFontData(), parent.getFont().getFontData()));
-        }
-        labels = new StatusBarLabels(parent, partsShown(), boldFont,
-                statuslineFont != null ? statuslineFont : JFaceResources.getTextFont(), widths(), statuslineColumns);
+        labels = new StatusBarLabels(parent, partsShown(), boldFont, modeTexts());
         showTexts();
     }
 
@@ -192,7 +133,6 @@ public final class ModeStatusContribution extends ContributionItem {
     public void setHostEclipseMode() {
         eclipse = true;
         recording = "";
-        info = StatusInfo.EMPTY; // Neovim is not driving the editor, so its command/message/statusline are moot
         refresh();
     }
 
@@ -206,12 +146,6 @@ public final class ModeStatusContribution extends ContributionItem {
     /** @param register register being recorded into, or {@code null}/"" when not recording */
     public void setRecording(String register) {
         recording = register == null ? "" : register;
-        refresh();
-    }
-
-    /** The statusline text from Neovim. */
-    public void setStatusInfo(StatusInfo statusInfo) {
-        info = statusInfo == null ? StatusInfo.EMPTY : statusInfo;
         refresh();
     }
 
@@ -230,27 +164,19 @@ public final class ModeStatusContribution extends ContributionItem {
             return;
         }
         chosen = activator.getStatusItems();
-        statuslineChars = activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_STATUSLINE_WIDTH);
-        maxWidthPercent = activator.getPreferenceStore().getInt(PreferenceConstants.STATUS_MAX_WIDTH_PERCENT);
     }
 
     /** The parts the user chose; only the mode while it says {@code ECLIPSE} ({@link StatusItem#shown}). */
     private Set<StatusItem> partsShown() {
-        Set<StatusItem> shown = StatusItem.shown(chosen, eclipse);
-        if (!withStatusline && shown.contains(StatusItem.STATUSLINE)) {
-            shown = EnumSet.copyOf(shown);
-            shown.remove(StatusItem.STATUSLINE);
-        }
-        return shown;
+        return StatusItem.shown(chosen, eclipse);
     }
 
     /**
-     * The labels' sizes: the mode as wide as its widest text, with room for
-     * {@code rec @a} only while recording (the label widens then, rather than always).
+     * The texts the mode's label is sized for: room for {@code rec @a} only while recording (the
+     * label widens then, rather than always).
      */
-    private StatusBarLabels.Widths widths() {
-        return new StatusBarLabels.Widths(ModeLabels.texts(!eclipse && !recording.isEmpty()),
-                statuslineChars, maxWidthPercent);
+    private List<String> modeTexts() {
+        return ModeLabels.texts(!eclipse && !recording.isEmpty());
     }
 
     /** Applies the state on the UI thread; callers are on any thread. */
@@ -272,17 +198,16 @@ public final class ModeStatusContribution extends ContributionItem {
             }
             return;
         }
-        labels.setWidths(widths());
+        labels.setModeTexts(modeTexts());
         showTexts();
     }
 
-    /** Sets the two labels' texts, tooltips and the mode's color. UI thread. */
+    /** Sets the mode label's text, tooltip and color. UI thread. */
     private void showTexts() {
         ModeLabels.Label label = eclipse ? ModeLabels.ECLIPSE : ModeLabels.of(mode);
         String register = eclipse ? "" : recording;
         labels.show(StatusItem.MODE, ModeLabels.text(label, register), ModeLabels.tooltip(label, register),
                 Display.getDefault().getSystemColor(foregroundColorId(label, register)));
-        labels.show(StatusItem.STATUSLINE, StatusLineFormat.oneLine(info.statusline()), null, null);
     }
 
     /**
@@ -308,10 +233,6 @@ public final class ModeStatusContribution extends ContributionItem {
         if (boldFont != null && !boldFont.isDisposed()) {
             boldFont.dispose();
             boldFont = null;
-        }
-        if (statuslineFont != null && !statuslineFont.isDisposed()) {
-            statuslineFont.dispose();
-            statuslineFont = null;
         }
         labels = null;
         super.dispose();

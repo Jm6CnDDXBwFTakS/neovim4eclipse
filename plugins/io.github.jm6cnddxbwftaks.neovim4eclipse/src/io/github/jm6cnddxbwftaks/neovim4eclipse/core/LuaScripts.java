@@ -929,26 +929,23 @@ final class LuaScripts {
      * {@code j}, {@code l} from the start of {@code "abc"} and {@code "def"} gives
      * {@code {1, 1, 2, 2, 1, 2}}. 5000 lines take about 3 ms (Neovim 0.12.6).
      *
-     * <p>The first argument is the status bar's statusline width in columns, {@code "0"} when it shows
-     * no statusline (then nothing is evaluated). Neovim evaluates the {@code 'statusline'} (a Vim-like
-     * default if the user has none) at that width ({@code maxwidth}), so {@code %<} shortens and
-     * {@code %=} fills to the label's size. Example: {@code "60"} gives at most 60 columns. The second, {@code "1"} when folding is on ({@link #FOLDS}), adds {@code folds}:
+     * <p>The first argument, {@code "1"}, adds the current window's status line, as
+     * {@link #STATUS_LINE}'s {@code line} answers it, for the row under the focused editor's text;
+     * with {@code "0"}, or before that module is loaded, it is {@code {false}} (no line). The second, {@code "1"} when folding is on ({@link #FOLDS}), adds {@code folds}:
      * the indexes of the outermost closed folds, from the fold module's {@code poll} (the per-key
      * trigger); with {@code "0"} it is an empty list that nothing reads. Messages and the pending command ({@code showcmd}) are not read here: Neovim
      * sends them as UI events ({@code ext_messages}; see {@code StatusTracker}).
      */
     static final String STATE_SNAPSHOT = """
-            local statusline_width, want_folds = ...
-            statusline_width, want_folds = tonumber(statusline_width) or 0, want_folds == '1'
+            local want_line, want_folds = ...
+            want_line, want_folds = want_line == '1', want_folds == '1'
             local c = vim.api.nvim_win_get_cursor(0)
             local s = vim.fn.getpos('v')
             local e = vim.fn.getpos('.')
-            local statusline = ''
-            if statusline_width > 0 then
-              local fmt = vim.o.statusline
-              if fmt == nil or fmt == '' then fmt = '%<%f %h%m%r%=%-14.(%l,%c%V%) %P' end
-              local ok, res = pcall(vim.api.nvim_eval_statusline, fmt, { maxwidth = statusline_width })
-              if ok and type(res) == 'table' then statusline = res.str or '' end
+            local statusline = { false }
+            local lines = package.loaded['neovim4eclipse.statusline']
+            if want_line and lines then
+              statusline = lines.line(vim.api.nvim_get_current_win())
             end
             local mode = vim.fn.mode()
             local block = {}
@@ -6441,6 +6438,179 @@ final class LuaScripts {
               end
             end
             package.loaded['neovim4eclipse.health'] = M
+            return true
+            """;
+    /**
+     * Neovim's status line of each editor's window, for the row the editor draws under its text
+     * ({@code editor/StatusLineRow}; docs/ARCHITECTURE.md, "The status line in the editor").
+     *
+     * <h2>Why Neovim evaluates it, and not the screen</h2>
+     * Each editor's window is alone in a hidden tabpage ({@link #WINDOWS}), and Neovim redraws only
+     * the current tabpage: its screen holds the focused editor's status line only, and a background
+     * editor's would stay as it was, in the colors of the window with the cursor. So each window's
+     * line is evaluated ({@code nvim_eval_statusline} with {@code winid}): Neovim then draws a window
+     * that is not current in {@code StatusLineNC}; and {@code g:statusline_winid}, which the call
+     * does not set but Neovim's own drawing does, is set around it, so that lualine and its like
+     * choose their inactive sections, as on Neovim's own screen.
+     *
+     * <h2>What {@code line(win)} answers</h2>
+     * {@code {shown, cells, hl, attrs}}: whether the window has a status line ({@code 'laststatus'}:
+     * 0 none; 1 only with another window in its tabpage, so none for an editor's window alone;
+     * 2 always; 3 one for the screen, the current window's); the line's cells, one string per screen
+     * cell, a wide character's second cell {@code ""}, padded with spaces to the editor's width (sent
+     * by the editor's row, {@code set_width}; the current window's own width for the focused one); the
+     * index into {@code attrs} of each cell's highlight (1-based); and per highlight
+     * {@code {fg, bg, reverse, bold, italic, underline, strikethrough}}, colors as {@code 0xRRGGBB},
+     * a color the group leaves unset taken from {@code StatusLine} or {@code StatusLineNC} (as
+     * Neovim draws it), -1 when that leaves it too.
+     *
+     * <p>A {@code 'statusline'} that a modeline set (with {@code 'modelineexpr'} on) is not
+     * evaluated: Neovim runs such a one in its sandbox, and {@code nvim_eval_statusline} cannot tell
+     * where its string came from. The default line is drawn instead. Example: {@code notes.txt} in a window 12
+     * columns wide: cells {@code n, o, t, e, s, ., t, x, t, " ", " ", " "}, every hl 1, attrs
+     * {@code StatusLine}'s colors.
+     *
+     * <h2>When it is sent</h2>
+     * The focused editor's line comes with each key's state snapshot ({@link #STATE_SNAPSHOT}).
+     * Every window's line comes as {@code eclipse_status_lines} ({@code {{win, line}, ...}}) when
+     * what a background line shows may have changed: the cursor entered another window (the left
+     * one turns {@code StatusLineNC}), a buffer's modified flag, name or file changed, the
+     * colorscheme, {@code 'laststatus'} or {@code 'statusline'}, a window's size. Several events in
+     * one moment send once ({@code vim.schedule}); so does the current directory, a filetype or the
+     * diagnostics changing, and an editor's width ({@code set_width}).
+     */
+    static final String STATUS_LINE = """
+            local M = {}
+            local DEFAULT = '%<%f %h%m%r%=%-14.(%l,%c%V%) %P'
+            -- Each editor's width in columns, sent by its row (set_width): every tabpage shares one
+            -- screen, sized to the focused editor, so a background editor's window is that wide,
+            -- not as wide as its own editor.
+            M.widths = {}
+
+            function M.set_width(win, cols)
+              if M.widths[win] ~= cols then
+                M.widths[win] = cols
+                M.send_all()
+              end
+            end
+
+            local function shown(win)
+              if vim.api.nvim_win_get_config(win).relative ~= '' then return false end -- a float has none
+              local ls = vim.o.laststatus
+              if ls == 0 then return false end
+              if ls == 3 then return win == vim.api.nvim_get_current_win() end
+              if ls == 2 then return true end
+              local others = 0 -- 1: only with another (not floating) window in its tabpage
+              for _, w in ipairs(vim.api.nvim_tabpage_list_wins(vim.api.nvim_win_get_tabpage(win))) do
+                if vim.api.nvim_win_get_config(w).relative == '' then others = others + 1 end
+              end
+              return others > 1
+            end
+
+            -- A group's colors; what it leaves unset is the fill group's (StatusLine or StatusLineNC),
+            -- as Neovim draws %#Identifier# (a text color only) over the status line's background.
+            local function attr(group, fill)
+              local h = vim.api.nvim_get_hl(0, { name = group, link = false })
+              local f = group == fill and {} or vim.api.nvim_get_hl(0, { name = fill, link = false })
+              return { h.fg or f.fg or -1, h.bg or f.bg or -1, (h.reverse or f.reverse) == true,
+                       h.bold == true, h.italic == true, h.underline == true or h.undercurl == true,
+                       h.strikethrough == true }
+            end
+
+            function M.line(win)
+              if not vim.api.nvim_win_is_valid(win) or not shown(win) then
+                return { false }
+              end
+              local current = win == vim.api.nvim_get_current_win()
+              local width = (not current and M.widths[win]) or vim.api.nvim_win_get_width(win)
+              local fmt = vim.api.nvim_get_option_value('statusline', { win = win })
+              -- A 'statusline' a modeline set (last_set_sid -1, possible with 'modelineexpr' on):
+              -- Neovim evaluates such a one in the sandbox, nvim_eval_statusline does not know where
+              -- its string came from. So a file's own line is not evaluated: the default is.
+              local set_by = vim.api.nvim_get_option_info2('statusline', { win = win }).last_set_sid
+              if fmt == '' or set_by == -1 then fmt = DEFAULT end
+              -- Neovim sets these two while it draws a status line, and nvim_eval_statusline does
+              -- not: lualine and its like read g:statusline_winid to know which window they draw
+              -- (its inactive sections for one that is not current), Neovim's default line reads
+              -- g:actual_curwin. Set as Neovim does, put back after.
+              local old_winid, old_curwin = vim.g.statusline_winid, vim.g.actual_curwin
+              vim.g.statusline_winid, vim.g.actual_curwin = win, vim.api.nvim_get_current_win()
+              local ok, res = pcall(vim.api.nvim_eval_statusline, fmt,
+                { winid = win, maxwidth = width, highlights = true })
+              vim.g.statusline_winid, vim.g.actual_curwin = old_winid, old_curwin
+              if not ok or type(res) ~= 'table' then
+                res = { str = '', highlights = {} }
+              end
+              local marks = res.highlights or {}
+              local fill = current and 'StatusLine' or 'StatusLineNC'
+              if #marks == 0 then marks = { { start = 0, group = fill } } end
+              local attrs, index = {}, {}
+              local function id(group)
+                if not index[group] then
+                  attrs[#attrs + 1] = attr(group, fill)
+                  index[group] = #attrs
+                end
+                return index[group]
+              end
+              local cells, hl = {}, {}
+              local str, byte, mark = res.str or '', 0, 1
+              local group = marks[1].group
+              for _, ch in ipairs(vim.fn.split(str, [[\\zs]])) do
+                while marks[mark + 1] and marks[mark + 1].start <= byte do
+                  mark = mark + 1
+                  group = marks[mark].group
+                end
+                byte = byte + #ch
+                local w = vim.fn.strdisplaywidth(ch)
+                if w > 0 and #cells + w <= width then
+                  cells[#cells + 1] = ch
+                  hl[#hl + 1] = id(group)
+                  for _ = 2, w do
+                    cells[#cells + 1] = ''
+                    hl[#hl + 1] = id(group)
+                  end
+                elseif w == 0 and #cells > 0 then
+                  cells[#cells] = cells[#cells] .. ch -- a combining mark joins its character
+                end
+              end
+              while #cells < width do -- Neovim fills the rest of the row in the last group
+                cells[#cells + 1] = ' '
+                hl[#hl + 1] = id(group)
+              end
+              return { true, cells, hl, attrs }
+            end
+
+            function M.all()
+              local lines = {}
+              for _, win in ipairs(vim.api.nvim_list_wins()) do
+                if vim.api.nvim_win_get_config(win).relative == '' then
+                  lines[#lines + 1] = { win, M.line(win) }
+                end
+              end
+              return lines
+            end
+
+            local pending = false
+            function M.send_all()
+              if pending then return end
+              pending = true
+              vim.schedule(function()
+                pending = false
+                vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_status_lines', M.all())
+              end)
+            end
+
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_status_line', { clear = true })
+            vim.api.nvim_create_autocmd({ 'WinEnter', 'BufModifiedSet', 'BufWritePost', 'BufFilePost',
+                                          'BufEnter', 'ColorScheme', 'VimResized', 'WinResized',
+                                          'DirChanged', 'FileType', 'DiagnosticChanged' },
+              { group = group, callback = M.send_all })
+            vim.api.nvim_create_autocmd('WinClosed', { group = group, callback = function(ev)
+              M.widths[tonumber(ev.match)] = nil -- window ids are not reused: only a closed one's width goes
+            end })
+            vim.api.nvim_create_autocmd('OptionSet', { group = group,
+              pattern = { 'laststatus', 'statusline' }, callback = M.send_all })
+            package.loaded['neovim4eclipse.statusline'] = M
             return true
             """;
 }

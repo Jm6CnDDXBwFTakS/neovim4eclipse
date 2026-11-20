@@ -9,7 +9,6 @@ import java.util.Map;
 import org.eclipse.jface.action.IStatusLineManager;
 import org.eclipse.ui.IEditorSite;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.core.StatusInfo;
 
 /**
  * The one Neovim item in Eclipse's status bar for the page editors shown from the editing Neovim
@@ -47,9 +46,7 @@ final class PageStatus {
         IStatusLineManager statusLine = site.getActionBars().getStatusLineManager();
         Shared found = SHARED.get(statusLine);
         if (found == null) {
-            found = new Shared(new ModeStatusContribution(ModeStatusContribution.PAGE_ID, columns -> {
-                // nothing: the pages' item has no statusline label
-            }, false));
+            found = new Shared(new ModeStatusContribution(ModeStatusContribution.PAGE_ID));
             SHARED.put(statusLine, found);
             found.item.addTo(site);
         }
@@ -63,10 +60,6 @@ final class PageStatus {
 
     void setRecording(String register) {
         shared.item.setRecording(register);
-    }
-
-    void setStatusInfo(StatusInfo info) {
-        shared.item.setStatusInfo(info);
     }
 
     /** This page is done with the item; the last one removes it from the bar and frees its fonts. */

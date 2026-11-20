@@ -15,17 +15,15 @@ editor, are Eclipse's own, as in an editor without Neovim.
 
 ## Status bar
 
-*Window → Preferences → Neovim → Status Bar* chooses which parts of Vim's status information appear in the
-Eclipse status bar; changes apply immediately:
+*Window → Preferences → Neovim → Status Bar* chooses whether the Eclipse status bar shows Vim's
+mode; the change applies immediately:
 
 | Item | Shows | Default |
 |------|-------|---------|
 | `mode` | `INSERT`, `V-BLOCK`, `INSERT rec @q` while a macro records | on |
-| `statusline` | Neovim's own `'statusline'` (your config's, or Vim's default: file, line,col, position) | off |
 
-Each part has a label of its own, in that order. Hovering one shows its whole text. `ECLIPSE`
-shows while Neovim mode is off, even with `mode` turned off. Only the enabled parts are requested from
-Neovim.
+`ECLIPSE` shows while Neovim mode is off, even with `mode` turned off. Hovering the mode shows
+Vim's own wording.
 
 The mode uses the names of lualine and most Neovim statuslines: `NORMAL`, `INSERT`, `VISUAL`,
 `V-LINE`, `V-BLOCK`, `SELECT`, `S-LINE`, `S-BLOCK`, `O-PENDING` (after `d`), `REPLACE`, `V-REPLACE`
@@ -34,14 +32,24 @@ The mode uses the names of lualine and most Neovim statuslines: `NORMAL`, `INSER
 command, then Select block again. Hovering the mode shows Vim's own wording (`-- VISUAL BLOCK --`).
 The full table is in [docs/design/STATUS_BAR.md](design/STATUS_BAR.md).
 
-*Statusline width* (characters, default 60) is how wide the statusline is; it is drawn in the
-editor's fixed-width font, as in Vim, at the status bar's size (it does not follow the editor's text size). Neovim fits your `'statusline'` into exactly that many columns: `%<` shortens the file name and `%=` pushes the
-position to the right. *At most this share of the status bar* (default 40%) keeps room for Eclipse's
-own messages: in a narrow window the statusline gets narrower first.
+Neovim's status line, messages, errors and the pending command (`2d`, `"a`) are not in the status
+bar: Neovim shows them in the editor (the next two sections). The preferences that once showed the
+pending command and the status line here (`statusShowcmd`, `statusStatusline`, with
+`statusStatuslineWidth` and `statusMaxWidthPercent`) have no effect since 0.3.0.
 
-Messages, errors and the pending command (`2d`, `"a`) are not in the status bar: Neovim shows them
-in the editor, on its own line (next section). The preference that once showed the pending command
-here (`statusShowcmd`) has no effect since 0.3.0.
+## Status line
+
+Each editor shows its Neovim window's status line in a row under its text, as Neovim lays out its
+screen: your `'statusline'` (lualine's, or Neovim's default with the file name, `[+]` when
+modified, and the cursor's line and column), in your colors, fitted to the editor's width. The
+editor with the keyboard shows it in `StatusLine`, the others in `StatusLineNC`, and a statusline
+plug-in shows its inactive sections there, as in Neovim's own windows. Example: two editors side
+by side, `notes.txt [+]` in the one you type in, `ideas.txt` dimmed in the other.
+
+The row is the editor's own: it takes one line of the editor's height, Neovim's window is one line
+shorter, and no text hides behind it. `'laststatus'` decides as in Neovim: `0` and `1` (one window
+per editor) show none, `2` (the default) shows one in every editor, and `3`, Neovim's global
+status line, shows one in the editor with the keyboard only.
 
 ## Messages and errors
 
