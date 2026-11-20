@@ -223,8 +223,24 @@ public final class Grids {
         return drawnWindow;
     }
 
+    /**
+     * Whether the events applied so far end in the middle of a redraw (no {@code flush} yet): the
+     * grids are then half drawn, and nothing should be sent until the flush.
+     */
+    private boolean midRedraw;
+
+    /**
+     * Whether the last event applied ended a redraw ({@code flush}), or none came yet: the grids are
+     * whole, so what changed outside a redraw ({@link #ui2Windows}) can be sent at once. Example: ui2
+     * makes its line's window anew in a redraw, and the plug-in names it after that redraw's flush.
+     */
+    public boolean betweenRedraws() {
+        return !midRedraw;
+    }
+
     /** Applies one event; a {@link GridEvent.Flush} only ends a redraw, see {@link #snapshotIfChanged}. */
     public void apply(GridEvent event) {
+        midRedraw = !(event instanceof GridEvent.Flush);
         switch (event) {
             case GridEvent.Resize e -> {
                 GridCells grid = grids.get(e.grid());

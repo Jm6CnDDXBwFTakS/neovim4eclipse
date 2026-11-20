@@ -6,6 +6,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Rectangle;
@@ -165,6 +167,61 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
             }
             settle();
         }
+    }
+
+    /**
+     * With the user's {@code 'cmdheight'} 0, output of several lines rises over the status line and
+     * stays until a key; that key takes it all away, and the status line shows again, not a line
+     * of the output left on its row.
+     */
+    @Test
+    void withCmdheight0OneKeyTakesTheOutputAwayAndTheStatusLineIsBack() throws Exception {
+        SessionProbe.lua(session, "vim.cmd('set laststatus=2') return 0");
+        int window = ((Number) SessionProbe.lua(session, "return vim.api.nvim_get_current_win()")).intValue();
+        typeSlowly(":set ch=0\r");
+        try {
+            waitUntil("the status row on the editor's bottom edge", TIMEOUT_MS, () -> {
+                settle();
+                return statusRowBounds(window) != null && session.commandLineRows() == 0;
+            });
+            typeSlowly(":echo \"one\\ntwo\\nthree\"\r");
+            waitUntil("the output drawn over the status line", TIMEOUT_MS, () -> {
+                settle();
+                return !floatsOver(statusRowBounds(window)).isEmpty();
+            }, () -> "; floats " + floatsOver(statusRowBounds(window)));
+            typeSlowly("j");
+            waitUntil("nothing left over the status line after one key", TIMEOUT_MS, () -> {
+                settle();
+                return floatsOver(statusRowBounds(window)).isEmpty();
+            }, () -> "; over it: " + floatsOver(statusRowBounds(window)));
+        } finally {
+            typeSlowly(":set ch=1\r");
+            settle();
+        }
+    }
+
+    /** The visible status row's bounds for {@code window}, or {@code null}. */
+    private Rectangle statusRowBounds(int window) {
+        for (Control child : widget.getChildren()) {
+            if (child instanceof GridCanvas canvas && StatusLineRow.isRow(canvas) && canvas.isVisible()
+                    && canvas.grid() != null && canvas.grid().window() == window) {
+                return canvas.getBounds();
+            }
+        }
+        return null;
+    }
+
+    /** The visible floats (not the row) that cover {@code row}, with what they show. */
+    private List<String> floatsOver(Rectangle row) {
+        List<String> over = new java.util.ArrayList<>();
+        for (Control child : widget.getChildren()) {
+            if (row != null && child instanceof GridCanvas canvas && !StatusLineRow.isRow(canvas) && canvas.isVisible()
+                    && canvas.getBounds().intersects(row)) {
+                over.add(canvas.getBounds() + " " + (canvas.grid() == null ? null
+                        : canvas.grid().height() + " rows, last " + canvas.grid().row(canvas.grid().height() - 1).strip()));
+            }
+        }
+        return over;
     }
 
     /**

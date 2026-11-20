@@ -537,6 +537,33 @@ class GridsTest {
         assertEquals(List.of(), grids.floatsIfChanged().orElseThrow(), "gone with the key");
     }
 
+    /**
+     * With {@code 'cmdheight'} 0, after expanded output ui2 makes its line's window anew, and the
+     * plug-in names it after the redraw that made it: until then the new window is an ordinary
+     * float, over the status line. Named between redraws, the floats are sent again at once
+     * ({@code NeovimSession}), and the line, one row, is gone.
+     */
+    @Test
+    void withCmdheightZeroUi2sLineMadeAnewGoesWhenItIsNamed() {
+        grids.drawFloats(true);
+        screenWithUi2Line();
+        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, 1011, true);
+        grids.apply(new GridEvent.CursorGoto(2, 3, 0));
+        grids.apply(new GridEvent.Flush());
+        grids.floatsIfChanged();
+        // The key's redraw: the old line's window goes, a new one (1020) shows the output's first line.
+        grids.apply(new GridEvent.Destroy(8));
+        grids.apply(new GridEvent.Resize(10, 80, 1));
+        grids.apply(new GridEvent.Line(10, 0, 0, text("one", 0)));
+        assertFalse(grids.betweenRedraws(), "in the redraw: nothing is sent yet");
+        grids.apply(new GridEvent.WinPos(10, 1020, true, 24, 0, 0, 0, 200));
+        grids.apply(new GridEvent.Flush());
+        assertTrue(grids.betweenRedraws());
+        assertEquals(1, grids.floatsIfChanged().orElseThrow().size(), "not named yet: drawn as any float");
+        grids.ui2Windows(List.of(1020, 1011, 1012, 1013), 1020, 1011, true);
+        assertEquals(List.of(), grids.floatsIfChanged().orElseThrow(), "named: one row, no line open, gone");
+    }
+
     /** The {@code :} line being typed: the cursor is in ui2's line, which is drawn with it. */
     @Test
     void ui2sLineIsDrawnWithTheCursorInItOnTheCommandLinesRow() {

@@ -489,6 +489,16 @@ class NotificationBridgeTest {
         assertTrue(events.isEmpty(), events.toString());
     }
 
+    /**
+     * A large redraw comes in several notifications; the last may hold only what the plug-in
+     * leaves out and the flush. The flush is passed on: it ends the redraw (Grids.betweenRedraws).
+     */
+    @Test
+    void aRedrawsLastPartWithOnlyItsFlushIsPassedOn() {
+        notify("redraw", List.of("mode_change", List.of("normal", 0)), List.of("flush"));
+        assertEquals(List.of("grid:[" + new GridEvent.Flush() + "]"), events);
+    }
+
     /** LuaScripts.UI2: each command line's type as it opens, and "" as it closes. */
     @Test
     void aCommandLinesTypeAndItsEnd() {

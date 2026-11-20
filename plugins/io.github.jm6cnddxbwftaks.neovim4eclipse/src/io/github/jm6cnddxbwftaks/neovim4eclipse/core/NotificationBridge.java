@@ -298,9 +298,12 @@ final class NotificationBridge implements Incoming {
             case "eclipse_messages" -> onMessages(args);
             case "nvim_buf_lines_event" -> onBufLines(args);
             case "redraw" -> {
-                // A redraw that changed no grid still ends in a flush: nothing to pass on then.
+                // A flush alone is passed on too: a large redraw comes in several notifications,
+                // and its last may hold only lines of grids the plug-in does not draw (left out
+                // above) and the flush, which ends the redraw: what changed in the earlier ones
+                // is sent then (util/Grids.betweenRedraws).
                 List<GridEvent> grid = GridEvent.fromRedraw(args, NotificationBridge::windowId, sink::wantsGridLines);
-                if (grid.stream().anyMatch(e -> !(e instanceof GridEvent.Flush))) {
+                if (!grid.isEmpty()) {
                     sink.onGridEvents(grid);
                 }
             }

@@ -2408,8 +2408,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             grids.ui2Windows(wins, cmd, msg, overlay); // on the reader thread, as the grids' redraws
             int rows = overlay ? 0 : 1;
             if (rows != commandLineRows) {
-                commandLineRows = rows;
+                commandLineRows = rows; // before the floats: the editor places them by its rows
                 events.commandLineRows(rows);
+            }
+            // A new ui2 window (ui2 makes its line's window anew after expanded output, and the
+            // plug-in names it only once the redraw that made it has ended): until now it was an
+            // ordinary float, drawn over the status line with the overlay. Between redraws no
+            // flush is coming to send the floats again, so they go now; in a redraw, at its flush.
+            if (grids.betweenRedraws()) {
+                sendFloatsIfChanged();
             }
         }
 
@@ -2587,12 +2594,17 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                     for (GridSnapshot status : grids.pageStatusIfChanged()) {
                         events.pageStatus(status);
                     }
-                    grids.floatsIfChanged().ifPresent(floats -> {
-                        floatingWindows = floats;
-                        events.floatingWindows(floats);
-                    });
+                    sendFloatsIfChanged();
                 }
             }
+        }
+
+        /** The floats to the listeners, if they changed since the last time. Reader thread. */
+        private void sendFloatsIfChanged() {
+            grids.floatsIfChanged().ifPresent(floats -> {
+                floatingWindows = floats;
+                events.floatingWindows(floats);
+            });
         }
 
         @Override

@@ -774,6 +774,11 @@ What the plug-in adds, all in `LuaScripts.UI2`, the one place it talks to ui2:
   them; a multigrid UI is sent the full width, past the editor's limit on a float's cells.
 - **The windows' ids** go to Eclipse (`eclipse_ui2_windows`) at start and whenever ui2 makes one
   again; `util/Grids.ui2Windows` draws those always ("Neovim's windows drawn from their grids").
+  The ids come after the redraw that made the window (ui2 makes its line's window anew when
+  expanded output goes), and until then the new window is an ordinary float; so when they arrive
+  between redraws the session sends the floats again at once (`NeovimSession`'s `onUi2Windows`).
+  Example: with `'cmdheight'` 0, `:ls` and a key; without this, the collapsed line's window
+  stayed over the status line until the next redraw.
 - **ui2's own buffers left to it** (`ui2.bufs`): `SETUP`'s `BufEnter` sends Eclipse nothing for
   one, so entering the pager is not undone (`util/EnterDecision`), and `WINDOWS`' safety net never
   closes a window that shows one, also with the cursor in it. The buffer, not the window: a file
