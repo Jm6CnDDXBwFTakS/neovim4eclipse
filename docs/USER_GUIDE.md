@@ -632,7 +632,10 @@ the cursor into it.
   character), it can sit one row from where Neovim meant it.
 - **Icons:** a plug-in that draws icons from a Nerd Font shows boxes unless Eclipse's text font
   (*Preferences › General › Appearance › Colors and Fonts › Text Font*) has them, or a font the
-  system falls back to does (on Linux, an installed *Symbols Nerd Font*). An icon wider than a
+  system falls back to does (on Linux, an installed *Symbols Nerd Font*). On macOS the fallback
+  reaches only the newer icons (code points U+F0000 and up), never the older ones in U+E000 to
+  U+F8FF, which come only from the text font itself: there, choose a Nerd Font as the text font,
+  such as *JetBrainsMono Nerd Font Mono*, to see them all. An icon wider than a
   cell reaches into the cell after it, as in a terminal; a text font patched with the icons
   (a "Nerd Font Mono") keeps each in its cell. which-key's `icons` options turn its icons off or
   replace them with plain text (see its documentation).

@@ -241,12 +241,15 @@ java releng/tools/plugins/TestPlugins.java fetch
 A plug-in that is not fetched leaves its pictures out, and the page says so.
 
 which-key draws icons from a Nerd Font. The gallery's Eclipse keeps its data in a folder of its
-own (`/tmp/neovim4eclipse-pictures`; on Windows `neovim4eclipse-pictures` in the Public folder) and does
-not see the fonts of your account, so on Linux copy an icon font, such as
+own (`/tmp/neovim4eclipse-pictures`; on Windows `neovim4eclipse-pictures` in the Public folder). On
+Linux it does not see the fonts of your account, so copy an icon font, such as
 `SymbolsNerdFontMono-Regular.ttf`, into `/tmp/neovim4eclipse-pictures/neovim-home/data/fonts/`
-before the run, or install it for the system; on macOS and Windows install it for the system.
-Without it the icons are boxes, which is what a user without the font sees, and the rest of the
-picture is still to be judged.
+before the run, or install it for the system. On macOS it sees your account's fonts, but the
+system's fallback reaches only the newer icons (U+F0000 and up): with *Symbols Nerd Font* installed
+and the default text font, a mix of icons and boxes is the expected picture (the older icons,
+U+E000 to U+F8FF, come only from the text font). On Windows install it for the system (not
+checked). Without it the icons are boxes, which is what a user without the font sees, and the rest
+of the picture is still to be judged.
 
 1. Open `tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/gallery/search.html` in a
    browser.
