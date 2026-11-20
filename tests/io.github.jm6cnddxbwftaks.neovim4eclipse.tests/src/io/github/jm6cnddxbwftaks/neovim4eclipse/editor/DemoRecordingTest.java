@@ -277,7 +277,9 @@ class DemoRecordingTest extends EndToEndTestBase {
         waitUntil("the file reverted", TIMEOUT_MS, () -> doc.get().equals(SOURCE));
         // The last search's matches stay highlighted ('hlsearch'); the first picture has none, so
         // they go quietly, through the API, for the loop to close without a jump.
-        SessionProbe.lua(session, "vim.cmd.nohlsearch() return 0"); // not typed: see record()
+        // Not typed (see record()); and the ':' row emptied, as in the first picture, where the
+        // :e! that ran stays otherwise.
+        SessionProbe.lua(session, "vim.cmd.nohlsearch() vim.cmd.echo('\"\"') return 0");
         caption.setLength(0);
         picture(folder, STEP_MS); // the same as the first picture
 
