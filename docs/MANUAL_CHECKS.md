@@ -452,7 +452,9 @@ region*.
    shows `:abcか`, once.
 4. Copy `src` to the clipboard. <kbd>Esc</kbd> to close any line; `:`, Japanese, type `kaka`,
    <kbd>Enter</kbd> to keep it, then Eclipse's Paste (<kbd>Cmd+V</kbd> on macOS,
-   <kbd>Shift+Insert</kbd> on Linux and Windows).
+   <kbd>Shift+Insert</kbd> on Linux and Windows, or *Edit › Paste* chosen with the mouse or the
+   arrow keys: with Japanese input on, the input method takes the menu's letter <kbd>P</kbd>).
+   <kbd>Ctrl+V</kbd> is not Eclipse's Paste here: on the line it is Neovim's, and shows `^V`.
    ⇒ The line is `:かかsrc`; `notes.txt` is unchanged.
 5. On macOS: <kbd>Esc</kbd>; in ABC input, `:` `echo "` <kbd>Option+E</kbd> <kbd>E</kbd> `"`
    <kbd>Enter</kbd>.
