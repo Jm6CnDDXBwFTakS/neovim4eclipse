@@ -93,7 +93,7 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "The cursor is a block on the last, empty line."),
             new Picture("float", "Neovim's floating windows without the focus",
                     "Two windows a plug-in could open without entering them, drawn over the text: a panel of key "
-                            + "hints across the editor's bottom edge, and a note with a border and a title higher up. "
+                            + "hints right above the status line, and a note with a border and a title higher up. "
                             + "Both are in Neovim's colors for floating windows (NormalFloat, FloatBorder, FloatTitle), "
                             + "which follow the theme, and their text reads in both; the editor's text shows around "
                             + "them, and the caret stays in the editor."),
@@ -118,7 +118,7 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "(FlashBackdrop) and still readable. The text itself is unchanged."),
             new Picture(WHICH_KEY + "z", "which-key's panel after z",
                     "The real which-key plug-in, in the Java editor, after z: its panel of the keys that can "
-                            + "follow lies on the editor's bottom edge, from the left edge on, and reads in both "
+                            + "follow lies right above the status line, from the left edge on, and reads in both "
                             + "themes. The five fold keys Eclipse does not allow say so (\"Delete all folds: not "
                             + "here, Eclipse defines the folds\"). Icons are whole, not cut at the next cell, "
                             + "where the icon font is installed; boxes where it is not."),
