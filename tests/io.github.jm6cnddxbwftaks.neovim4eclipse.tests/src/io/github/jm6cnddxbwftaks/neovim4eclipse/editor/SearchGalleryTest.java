@@ -98,8 +98,8 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "which follow the theme, and their text reads in both; the editor's text shows around "
                             + "them, and the caret stays in the editor."),
             new Picture("completion", "Neovim's completion list (Ctrl-N)",
-                    "After f and Ctrl-N twice in the Java editor: the list of words hangs under the word being "
-                            + "completed, its entries lined up with it, in Neovim's colors for the list (Pmenu), "
+                    "After f and Ctrl-N twice in the Java editor, with 'pumborder' rounded: the list of words hangs "
+                            + "under the word being completed, inside its border, its entries lined up with it, in Neovim's colors for the list (Pmenu), "
                             + "which follow the theme. The second entry is selected (PmenuSel) and stands out from "
                             + "the others in both themes; all entries read. The caret is after the completed word."),
             new Picture("view-messages", "A page editor after :messages",
@@ -300,8 +300,9 @@ class SearchGalleryTest extends EndToEndTestBase {
 
             // Neovim's completion list in the same editor: f typed on a new line, then Ctrl-N twice.
             // Words of this file only: a match from another file comes with that file's full path,
-            // which names the folder the gallery runs in.
-            SessionProbe.lua(session, "vim.bo.complete = '.'");
+            // which names the folder the gallery runs in. With a border ('pumborder', Neovim 0.12), so
+            // that the picture shows a border drawn in both themes; set back after the picture.
+            SessionProbe.lua(session, "vim.bo.complete = '.' vim.o.pumborder = 'rounded'");
             session.inputAsync("8Go");
             settle();
             waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
@@ -322,7 +323,7 @@ class SearchGalleryTest extends EndToEndTestBase {
                 UiTestSupport.escape(javaWidget);
                 waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
                 settle();
-                SessionProbe.lua(session, "vim.cmd('setlocal complete<')");
+                SessionProbe.lua(session, "vim.cmd('setlocal complete<') vim.cmd('set pumborder&')");
                 session.inputAsync("u"); // the new line with its f: the later pictures show the file as it was
                 waitUntil("the Java file as before", TIMEOUT_MS, () -> {
                     settle();

@@ -261,7 +261,7 @@ picture is still to be judged.
    windows, the panel lies on the bottom of the text, right above the status line, and the note
    above it, both readable in both
    themes, with the editor's text showing around them. In the picture of Neovim's popup menu, the
-   list hangs under the word being completed, every entry reads, and the selected one stands out
+   list hangs under the word being completed, inside its border, every entry reads, and the selected one stands out
    in both themes. In the two pictures of the page editors, the text reads on the editor's
    background in both themes, the error of `:messages` in Neovim's error color and the WARNING of
    `:checkhealth` in its warning color. In the two pictures of which-key, its panel

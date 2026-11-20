@@ -40,7 +40,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   click in the text cancels it: before, it stayed open unseen, and the next `:` went on its end.
 - **Completion uses Neovim's own popup menu**: Tab on the `:` line and `Ctrl-N`, `Ctrl-P` and the
   `Ctrl-X` modes in insert mode show Neovim's list as Neovim draws it (your `Pmenu` colors,
-  `'pumheight'`, `'completeopt'`).
+  `'pumheight'`, `'completeopt'`). It has no border by default; `vim.o.pumborder = 'rounded'` gives it
+  one, as the plug-in's own list had.
 - **Input methods** (Japanese, Chinese, Korean) work on the `:` line on Linux, Windows and macOS:
   the text being composed shows at the line's cursor, and what you commit goes into the line. A
   click or leaving Eclipse while composing drops the composition.

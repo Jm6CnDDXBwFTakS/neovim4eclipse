@@ -515,7 +515,9 @@ taking the keyboard from there. `:messages` and `:checkhealth` open a
 In insert mode `Ctrl-N` and `Ctrl-P` are Vim's own completion, done by Neovim: the word before the
 cursor is completed from the words of the open files (`'complete'`), and Neovim's list of matches,
 its own popup menu, is drawn under the word, as Neovim draws it. Example: after `al`, `Ctrl-N` gives `alpha` and a list of `alpha`,
-`alphabet`, `alpine`.
+`alphabet`, `alpine`. Neovim's list has no border by default; `vim.o.pumborder = 'rounded'` in
+`init.lua` (or `'single'`, `'double'`, `'solid'`) gives it one, as the plug-in's own list had before
+0.3.0.
 
 | Key | With the list open |
 |-----|--------------------|
