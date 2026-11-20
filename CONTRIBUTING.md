@@ -109,10 +109,12 @@ to the eyes: `DialogLayoutTest` and `NeovimPageTest` (both `tests/swt`) check th
 same dialogs and notes with `LayoutCheck` (the fragment's `shared-swt/` folder) on every run. Only `-Pgallery` runs it (`-Pui` and `-Pall` leave it out); take it on each
 platform, since each draws its own fonts and spacing. The windows draw themselves into the
 pictures (`gallery/GalleryCamera`; nothing is read from the screen), so another program's window
-cannot end up in one. The run never asks for the front itself: `-Pgallery` skips the unit, text
-and SWT tests (whose windows would), the camera activates a window only while the test Eclipse is
-already in front, and the search pictures take the editor's keyboard focus only then
-(`UiTestSupport.focusWithoutTakingTheFront`). A test Eclipse may still come forward as it starts
+cannot end up in one. The run asks for the front itself only once per theme, right before the
+two page editors' pictures (`:messages`, `:checkhealth`): a page editor is drawn only once it has
+the focus, which needs its program in front (`SearchGalleryTest.takeTheView`). Otherwise it never
+does: `-Pgallery` skips the unit, text and SWT tests (whose windows would), the camera activates a
+window only while the test Eclipse is already in front, and the search pictures take the editor's
+keyboard focus only then (`UiTestSupport.focusWithoutTakingTheFront`). A test Eclipse may still come forward as it starts
 (on macOS the light one did, for about a second; the dark one and the dialogs did not). Pictures taken while you
 work elsewhere show the windows inactive (a plain default button, no caret): leave the run in
 front for a gallery to keep. With *Show borders* on (*System

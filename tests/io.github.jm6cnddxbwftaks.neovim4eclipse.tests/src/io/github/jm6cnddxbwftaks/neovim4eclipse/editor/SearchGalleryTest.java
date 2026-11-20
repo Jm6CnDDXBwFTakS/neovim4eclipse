@@ -469,6 +469,18 @@ class SearchGalleryTest extends EndToEndTestBase {
      * and the Java editor is active again, for the pictures after these.
      */
     private void takeTheView(ITextEditor java) {
+        // The one place the gallery takes the front: a page editor is drawn only once it has the
+        // focus (WindowPane sends Neovim its size then), and a window gets the focus only while
+        // its program is the active one. On macOS another program in front left the page blank.
+        // Once per theme, right before the two pictures; the rest of the gallery never does.
+        org.eclipse.swt.widgets.Shell shell = java.getSite().getShell();
+        waitUntil("the test Eclipse in front, for the page editors", TIMEOUT_MS, () -> {
+            if (shell.getDisplay().getActiveShell() != shell) {
+                shell.forceActive();
+                settle();
+            }
+            return shell.getDisplay().getActiveShell() == shell;
+        });
         SessionProbe.lua(session, "vim.cmd.messages('clear') vim.cmd.echomsg(\"'3 lines yanked'\")"
                 + " vim.api.nvim_echo({ { 'E486: Pattern not found: wolf' } }, true, { err = true })"
                 + " vim.cmd.echomsg(\"'\\\"Foxes.java\\\" 16L, 371B written'\") return 0");
