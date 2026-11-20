@@ -209,7 +209,7 @@ back, `anInsertFromBlockwiseVisual…`, `anInsertWhileRecording…`).
 - **No switch to Eclipse's Word Completion** since 0.3.0. Before, `vim.g.neovim4eclipse_completion_menu = 0`
   turned the plug-in's own list off and made `Ctrl-N` / `Ctrl-P` run *Word Completion* (Alt+/).
   Neovim now draws its popup menu itself (the UI is attached without `ext_popupmenu`), so there is
-  no list of the plug-in's to turn off; the variable's name stays accepted and does nothing
+  no list of the plug-in's to turn off; the variable was removed in 0.3.0
   (`NeovimSession.completesInNeovim` is always true).
 - Tests: `KeyRouterTest`, `KeyInputTest`, `KeyContextRuleTest`, `PluginXmlConsistencyTest`,
   `NeovimCompletionIntegrationTest`, UI `CompletionMenuEndToEndTest` (the list, the keys, the

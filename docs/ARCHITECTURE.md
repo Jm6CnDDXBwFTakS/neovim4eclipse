@@ -659,8 +659,9 @@ The pending command (`showcmd`), the message text, the error flash and Neovim's 
 left the status bar in 0.3.0: Neovim shows the first three on its own line (ui2, "Messages and
 output"), and the status line is drawn under each editor's text ("The status line in the
 editor"). Their preferences (`statusShowcmd`, `flashOnError`, `statusStatusline`,
-`statusStatuslineWidth`, `statusMaxWidthPercent`) are still read and stored, as names the README
-promises, and change nothing.
+`statusStatuslineWidth`, `statusMaxWidthPercent`) were removed with them: Eclipse keeps a stored
+value of a key no code asks for, unread, so a user's old setting does nothing and fails nothing
+(`SettingsNamesTest.REMOVED` keeps the code from reading one again).
 
 ## The status line in the editor
 
@@ -1198,7 +1199,9 @@ The window Neovim opens beside the list for a match's documentation (`'completeo
 float with a window, drawn as plug-ins' floats are.
 
 `vim.g.neovim4eclipse_completion_menu`, which once turned the plug-in's own list off for Eclipse's
-Word Completion, has no effect since 0.3.0; its name stays accepted (README, "Settings").
+Word Completion, was removed in 0.3.0 (README, "Settings", Removed). The paths it chose are still
+there, unreachable (`NeovimSession.completesInNeovim` is always true): `KeyRouter`'s Word
+Completion branch and the `complete.n`/`complete.p` contexts of `plugin.xml`.
 
 **Three `Ctrl-X` completions are refused in Neovim itself** (`LuaScripts.CTRL_X_GUARD`):
 `Ctrl-X Ctrl-V` and its other name `Ctrl-X Ctrl-Q` complete the text before the cursor as a Vim

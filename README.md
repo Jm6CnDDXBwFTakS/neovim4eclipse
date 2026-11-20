@@ -223,8 +223,10 @@ one, in a `:terminal` too, inherits it.
 
 Nothing here needs changing to get started: this is the reference of every name the plug-in
 reads from you, or sets for your config to read. These names stay: one is
-renamed or removed only after a release that still accepts the old name and warns about it, and the
-[change log](CHANGELOG.md) says so. Anything not listed here (other `neovim4eclipse_*` variables,
+renamed only after a release that still accepts the old name and warns about it, and the
+[change log](CHANGELOG.md) says so. A name goes only with the part of the plug-in it set, once it
+has nothing left to change; it is then listed under *Removed* below, and a value still stored or set
+for it is not read, without an error. Anything not listed here (other `neovim4eclipse_*` variables,
 the plug-in's Lua modules and namespaces, its key-binding contexts) is internal and may change.
 
 **In `init.lua`**, read when Neovim starts (after a change, *Neovim → Restart Neovim...*), except
@@ -240,7 +242,6 @@ where the table says otherwise. `0` or `false` turns a part off:
 | `vim.g.neovim4eclipse_highlights = 0` | The editor does not show the flash after a yank, your `:match` highlights or a jump plug-in's labels ([Command line](docs/USER_GUIDE.md#command-line---)) |
 | `vim.g.neovim4eclipse_jump_label_group_prefixes = { 'Sneak' }` | More jump plug-ins whose labels the editor draws, by the start of their highlight groups' names; added to the built-in `Flash`, `Leap`, `Hop`, `MiniJump2d` ([Jump labels](docs/USER_GUIDE.md#jump-labels)) |
 | `vim.g.neovim4eclipse_floating_windows = 0` | The editor does not draw plug-ins' floating windows, such as a panel of key hints; Neovim's command line, messages, pager and popup menu are drawn all the same ([Floating windows](docs/USER_GUIDE.md#floating-windows)) |
-| `vim.g.neovim4eclipse_completion_menu = 0` | No effect since 0.3.0: `Ctrl-N` and `Ctrl-P` are always Neovim's completion, in Neovim's own popup menu. The name is still accepted ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)) |
 | `vim.g.neovim4eclipse_task_tags = 'TODO,FIXME'` | The comment tags `:Etasks` collects; read each time `:Etasks` runs ([The quickfix list](docs/USER_GUIDE.md#the-quickfix-list-eproblems-q)) |
 
 **Set by the plug-in**, for your config to read:
@@ -274,13 +275,8 @@ which an administrator can set for everyone in the product's `plugin_customizati
 |------------|-----|
 | Show the Neovim button on the main toolbar | `showToggleButton` |
 | Show Neovim menu in the menu bar | `showMenu` |
-| No effect since 0.3.0 (was: flash the editor on errors; Neovim shows its errors itself) | `flashOnError` |
 | Show a welcome after installing, and a note after updates to a new minor version | `showWelcome` |
 | Status Bar: *mode* | `statusMode` |
-| No effect since 0.3.0 (was: Status Bar: *cmd*, the pending command; Neovim shows it in its own line) | `statusShowcmd` |
-| No effect since 0.3.0 (was: Status Bar: *statusline*; each editor shows Neovim's status line under its text) | `statusStatusline` |
-| No effect since 0.3.0 (was: Status Bar: *Statusline width (characters)*; the line fits the editor's width) | `statusStatuslineWidth` |
-| No effect since 0.3.0 (was: Status Bar: *At most this share of the status bar (%)*; only the mode is left there) | `statusMaxWidthPercent` |
 | Ctrl Keys: `Ctrl+letter` to Neovim in normal and visual mode | `ctrlKeyNormal.<letter>`, e.g. `ctrlKeyNormal.v` |
 | Ctrl Keys: `Ctrl+letter` to Neovim in insert mode | `ctrlKeyInsert.<letter>`, e.g. `ctrlKeyInsert.w` |
 
@@ -297,6 +293,17 @@ which an administrator can set for everyone in the product's `plugin_customizati
 
 **The dedicated Neovim's folder**, `neovim4eclipse-plugin` in your data folder
 ([Get Neovim](docs/USER_GUIDE.md#get-neovim) says where).
+
+**Removed**, with the release, and what took the part's place:
+
+- `vim.g.neovim4eclipse_completion_menu` (0.3.0): `Ctrl-N` and `Ctrl-P` are always Neovim's
+  completion, in Neovim's own popup menu
+  ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)).
+- `flashOnError` (0.3.0): Neovim shows its errors itself, on the command line's row.
+- `statusShowcmd` (0.3.0): Neovim shows the pending command itself (`'showcmd'`).
+- `statusStatusline` (0.3.0), `statusStatuslineWidth` (0.3.0), `statusMaxWidthPercent` (0.3.0):
+  each editor shows Neovim's status line under its text, fitted to its width; the status bar keeps
+  only the mode ([Status line](docs/USER_GUIDE.md#status-line)).
 
 ## Using a Neovim of your own
 

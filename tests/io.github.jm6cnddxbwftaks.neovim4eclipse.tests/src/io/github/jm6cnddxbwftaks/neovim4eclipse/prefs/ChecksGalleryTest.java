@@ -213,7 +213,7 @@ class ChecksGalleryTest {
                 "4.41.0.I20260905-1800 (Eclipse IDE for Java Developers)", "21.0.5 (Eclipse Adoptium)",
                 "Linux 6.12 aarch64, SWT gtk",
                 "Found: dedicated Neovim 0.12.6, checked, /home/you/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim",
-                "0.12.6", false, false, Map.of("vim.g.neovim4eclipse_folds", "0"), List.of("statusStatusline = true"),
+                "0.12.6", false, false, Map.of("vim.g.neovim4eclipse_folds", "0"), List.of("statusMode = false"),
                 "a .java file in the Java Editor, Neovim mode on",
                 List.of("14:03:12 WARNING TextRepairs: Neovim's copy of a .java file in the Java Editor differed from"
                         + " Eclipse's, and Eclipse's lines were written into Neovim's: Neovim's line 12 (of 40) differed"

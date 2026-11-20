@@ -336,7 +336,7 @@
             parentId="io.github.jm6cnddxbwftaks.neovim4eclipse.context.normal">
       </context>
       <!-- Insert mode while Eclipse types, with Neovim's completion list turned off
-           (vim.g.neovim4eclipse_completion_menu = 0): Ctrl+N and Ctrl+P run Eclipse's Word
+           (a switch removed in 0.3.0; KeyRouter no longer asks for it): Ctrl+N and Ctrl+P run Eclipse's Word
            Completion itself (VimCtrlKeys.COMPLETION_LETTERS). Bound to Eclipse's command directly, not through the
            plug-in's: Word Completion offers the next word when pressed again only while no other
            command runs in between. -->

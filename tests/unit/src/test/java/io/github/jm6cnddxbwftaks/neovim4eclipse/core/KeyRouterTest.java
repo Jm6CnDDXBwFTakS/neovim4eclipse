@@ -31,7 +31,7 @@ class KeyRouterTest {
         /** Each sync point, as {@code key} after {@code sync}. */
         final List<String> synced = new ArrayList<>();
         final List<InsertReplay.SyncPoint> syncPoints = new ArrayList<>();
-        /** Whether Ctrl-N and its like are Neovim's completion; off as with g:neovim4eclipse_completion_menu = 0. */
+        /** Whether Ctrl-N and its like are Neovim's completion; false for Eclipse's Word Completion, the switch removed in 0.3.0. */
         boolean completesInNeovim;
         /** The keys of each completion started in Neovim. */
         final List<String> completed = new ArrayList<>();

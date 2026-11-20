@@ -50,7 +50,7 @@ public final class VimCtrlKeys {
 
     /**
      * Letters that, with Neovim's completion list turned off
-     * ({@code vim.g.neovim4eclipse_completion_menu = 0}), run Eclipse's Word Completion
+     * (a switch removed in 0.3.0: {@code NeovimSession.completesInNeovim} is always true), run Eclipse's Word Completion
      * ({@link #WORD_COMPLETION_COMMAND_ID}) in an insert Eclipse types, instead of starting
      * Neovim's completion: {@code Ctrl-N} and {@code Ctrl-P}. Each has a second context
      * ({@link #completionContextId}) whose binding runs Eclipse's command itself. Why not the

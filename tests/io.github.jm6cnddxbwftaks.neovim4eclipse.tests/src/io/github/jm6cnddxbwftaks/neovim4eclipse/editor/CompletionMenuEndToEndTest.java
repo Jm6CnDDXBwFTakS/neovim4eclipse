@@ -33,11 +33,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
  * menu is drawn at the word, a float of Neovim's own (window id {@code -1}, {@link #popupMenu}); while it completes every key is Neovim's,
  * the Ctrl letters Eclipse binds too; the key that ends the completion gives typing back to
  * Eclipse. The keys go through the workbench's key bindings, as a keyboard's do.
- *
- * <p>With the list turned off ({@code vim.g.neovim4eclipse_completion_menu = 0}) the keys run
- * Eclipse's Word Completion; that choice is read once at Neovim's start, so it is tested where
- * no workbench is needed ({@code KeyRouterTest}, {@code KeyContextRuleTest},
- * {@code NeovimCompletionIntegrationTest}).
  */
 class CompletionMenuEndToEndTest extends EndToEndTestBase {
 

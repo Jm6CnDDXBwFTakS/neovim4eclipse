@@ -173,10 +173,9 @@ types until the completion has ended:
 | `Ctrl+X` `Ctrl+O` | Eclipse's *Content Assist* (`Ctrl+Space`), in place of Vim's omni completion. `Ctrl+X` then a plain key while Eclipse types: that key, as usual. While the list is open the two go to Neovim together, where `Ctrl+X` `s` is spelling and `Ctrl+X` `Tab` is `Ctrl+X Ctrl+I`. |
 | `Ctrl+C` | Ends the insert, exactly as `Esc` (`.` repeats it). |
 
-With `vim.g.neovim4eclipse_completion_menu = 0` in `init.lua`, `Ctrl+N`, `Ctrl+P` and `Ctrl+X`
-`Ctrl+N` run Eclipse's *Word Completion* (`Alt+/`) instead: the nearest matching word before the
-caret first, then, pressed again, the next one, from all open editors. It shows no list and cannot
-go back, so both keys do the same.
+Before 0.3.0, `vim.g.neovim4eclipse_completion_menu = 0` gave these keys to Eclipse's *Word
+Completion* (`Alt+/`); the switch was removed, and they are always Neovim's completion. Eclipse's
+Word Completion stays on `Alt+/`.
 
 ## Other keys
 

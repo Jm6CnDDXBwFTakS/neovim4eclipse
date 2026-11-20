@@ -744,8 +744,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /**
      * Whether insert-mode {@code Ctrl-N}, {@code Ctrl-P} and the {@code Ctrl-X} modes are Neovim's
      * own completion, and not Eclipse's Word Completion: always. Neovim draws its popup menu
-     * itself, as a float the editor copies ({@code util/Grids}); the setting that once turned the
-     * plug-in's own list off ({@code vim.g.neovim4eclipse_completion_menu}) has no effect.
+     * itself, as a float the editor copies ({@code util/Grids}); the switch that once turned the
+     * plug-in's own list off was removed in 0.3.0.
      */
     public boolean completesInNeovim() {
         return true;

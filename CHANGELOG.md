@@ -25,9 +25,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - **Neovim's status line is in the editor**, under its text, as in Neovim: each editor shows its
   window's `'statusline'` (lualine's too) in your colors, the editor you type in in `StatusLine`,
   the others in `StatusLineNC`; `'laststatus'` 0 takes it away. The status bar keeps the mode
-  only: its *statusline*, *Statusline width* and *share of the status bar* settings are gone, and
-  their names (`statusStatusline`, `statusStatuslineWidth`, `statusMaxWidthPercent`) have no
-  effect.
+  only: its *statusline*, *Statusline width* and *share of the status bar* settings are gone (see
+  Removed).
 - **A `:` line left open is cancelled when the keyboard goes to another part of Eclipse** (switching
   to another application keeps it), as a
   click in the text cancels it: before, it stayed open unseen, and the next `:` went on its end.
@@ -50,11 +49,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   listings and shell output, the plug-in's completion list, the status bar's pending-command part
   (*cmd*) and the error flash. Neovim's own line and popup menu replace them, and there is no
   setting to bring them back.
-- Their settings have no effect: the preferences *Status Bar: cmd* (`statusShowcmd`) and *Flash the
-  editor on errors* (`flashOnError`), which left the preference pages, and
-  `vim.g.neovim4eclipse_completion_menu`, so `Ctrl-N` no longer switches to Eclipse's Word
-  Completion. Their names are still accepted, so a config or `plugin_customization.ini` that sets
-  them does no harm.
+- Their settings: the preferences `statusShowcmd`, `flashOnError`, `statusStatusline`,
+  `statusStatuslineWidth` and `statusMaxWidthPercent`, and `vim.g.neovim4eclipse_completion_menu`
+  (so `Ctrl-N` no longer switches to Eclipse's Word Completion). A value still stored for one, or
+  set in `init.lua` or `plugin_customization.ini`, is not read and does no harm. The README's
+  *Settings* lists them under Removed.
 - On macOS, the press-and-hold accent menu no longer opens on the `:` line (holding `E` offers no
   `é`); dead keys (`Option+E`, then `E`) still work there, and so do input methods.
 

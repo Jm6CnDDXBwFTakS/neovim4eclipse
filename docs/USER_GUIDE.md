@@ -34,8 +34,7 @@ The full table is in [docs/design/STATUS_BAR.md](design/STATUS_BAR.md).
 
 Neovim's status line, messages, errors and the pending command (`2d`, `"a`) are not in the status
 bar: Neovim shows them in the editor (the next two sections). The preferences that once showed the
-pending command and the status line here (`statusShowcmd`, `statusStatusline`, with
-`statusStatuslineWidth` and `statusMaxWidthPercent`) have no effect since 0.3.0.
+pending command and the status line here were removed in 0.3.0 (README, *Settings*, Removed).
 
 ## Status line
 
@@ -72,7 +71,7 @@ errors of the file and tab commands (`E37` from `:e`, a refused write), which Ne
 as its own. `:messages` lists them all in a [page editor](#the-page-editors-help-messages-checkhealth).
 
 The editor no longer flashes on errors: the preference *Flash the editor on errors* (`flashOnError`)
-has no effect since 0.3.0, and left the preference page.
+was removed in 0.3.0.
 
 ## Problems (`]d`, `[d`)
 
@@ -544,8 +543,8 @@ its own popup menu, is drawn under the word, as Neovim draws it. Example: after 
   has nothing to work with. Eclipse's own content assist does that job.
 
 `vim.g.neovim4eclipse_completion_menu = 0`, which once turned this off for Eclipse's *Word
-Completion* (`Alt+/`), has no effect since 0.3.0: Neovim draws its popup menu itself, so `Ctrl-N`
-is always Neovim's. The name is still accepted, so a config that sets it does no harm.
+Completion* (`Alt+/`), was removed in 0.3.0: Neovim draws its popup menu itself, so `Ctrl-N` is
+always Neovim's. A config that still sets it does no harm; nothing reads it.
 
 ## Jump labels
 

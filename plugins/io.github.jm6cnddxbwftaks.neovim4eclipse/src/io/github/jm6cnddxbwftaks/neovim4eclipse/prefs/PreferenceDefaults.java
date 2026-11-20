@@ -40,8 +40,6 @@ final class PreferenceDefaults {
         sink.put(PreferenceConstants.SHOW_MENU, PreferenceConstants.SHOW_MENU_DEFAULT);
         sink.put(PreferenceConstants.ECLIPSE_SPLITS, PreferenceConstants.ECLIPSE_SPLITS_DEFAULT);
         sink.put(PreferenceConstants.STATUS_MODE, PreferenceConstants.STATUS_MODE_DEFAULT);
-        sink.put(PreferenceConstants.STATUS_SHOWCMD, PreferenceConstants.STATUS_SHOWCMD_DEFAULT);
-        sink.put(PreferenceConstants.FLASH_ON_ERROR, PreferenceConstants.FLASH_ON_ERROR_DEFAULT);
         // A plugin_customization.ini (a product's, or -pluginCustomization <file>) can still change this
         // default: Eclipse applies it after the initializer. The UI tests set it to false that way.
         sink.put(PreferenceConstants.SHOW_WELCOME, PreferenceConstants.SHOW_WELCOME_DEFAULT);

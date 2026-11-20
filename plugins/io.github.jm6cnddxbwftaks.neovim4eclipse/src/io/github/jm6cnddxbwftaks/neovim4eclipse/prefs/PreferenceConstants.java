@@ -53,43 +53,7 @@ public final class PreferenceConstants {
 
     /** Show the mode ({@code INSERT}, {@code INSERT rec @q}). */
     public static final String STATUS_MODE = "statusMode";
-    /**
-     * Once: show the pending command ({@code showcmd}, e.g. {@code 2d}). No effect from 0.3.0:
-     * Neovim shows it itself, in its command line (ui2). The name is kept so that a saved setting
-     * still loads (README, "Settings").
-     */
-    public static final String STATUS_SHOWCMD = "statusShowcmd";
-    /**
-     * Once: show Neovim's {@code 'statusline'} in the status bar. No effect from 0.3.0: each editor
-     * draws its window's status line under its text ({@code editor/StatusLineRow}), as Neovim lays
-     * out its screen. The name is kept so that a saved setting still loads (README, "Settings").
-     */
-    public static final String STATUS_STATUSLINE = "statusStatusline";
-    /**
-     * Once: the status bar statusline's width, in characters. No effect from 0.3.0: Neovim fits the
-     * line in the editor to the editor's width. The name is kept (README, "Settings").
-     */
-    public static final String STATUS_STATUSLINE_WIDTH = "statusStatuslineWidth";
-    /**
-     * Once: the most the plug-in's labels might take of the status bar, in percent. No effect from
-     * 0.3.0: the mode, the one label left, keeps its size. The name is kept (README, "Settings").
-     */
-    public static final String STATUS_MAX_WIDTH_PERCENT = "statusMaxWidthPercent";
-
     public static final boolean STATUS_MODE_DEFAULT = true;
-    public static final boolean STATUS_SHOWCMD_DEFAULT = true;
-
-    // ---- Messages in the editor ----
-
-    /**
-     * Once: whether an error also flashed the editor briefly, like Vim's {@code 'visualbell'}. No
-     * effect from 0.3.0: Neovim shows its messages itself (ui2). The name is kept so that a saved
-     * setting still loads (README, "Settings").
-     */
-    public static final String FLASH_ON_ERROR = "flashOnError";
-
-    /** Off by default: a flash is easy to find distracting. */
-    public static final boolean FLASH_ON_ERROR_DEFAULT = false;
 
     // ---- The welcome note (editor/WelcomeNotice, util/WelcomeNote) ----
 

@@ -19,7 +19,7 @@ class ProblemReportTest {
     private static ProblemReport report(String neovim, String running, Map<String, String> init, List<String> warnings) {
         return new ProblemReport("0.2.16.v20261112", "4.41.0 (Eclipse IDE for Java Developers)", "21.0.5 (Eclipse Adoptium)",
                 "Linux 6.12 aarch64, SWT gtk", neovim, running, false, false, init,
-                List.of("statusStatusline = true", "flashOnError = true"), "a .java file in the Java Editor, Neovim mode on",
+                List.of("statusMode = false", "showMenu = false"), "a .java file in the Java Editor, Neovim mode on",
                 warnings);
     }
 
@@ -40,7 +40,7 @@ class ProblemReportTest {
                 - NVIM_APPNAME: not set
                 - Errors in the config at start: none
                 - init.lua settings: vim.g.neovim4eclipse_folds = 0, vim.g.neovim4eclipse_viewport = 0
-                - Preferences changed: flashOnError = true, statusStatusline = true
+                - Preferences changed: showMenu = false, statusMode = false
                 - Active editor: a .java file in the Java Editor, Neovim mode on
 
                 Recent warnings (the last 20 of this run):

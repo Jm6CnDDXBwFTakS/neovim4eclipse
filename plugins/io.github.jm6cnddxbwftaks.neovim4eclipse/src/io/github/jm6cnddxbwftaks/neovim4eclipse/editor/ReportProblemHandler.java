@@ -136,9 +136,7 @@ public final class ReportProblemHandler extends AbstractHandler {
      */
     static List<String> changedPreferences(IPreferenceStore store) {
         List<String> keys = new ArrayList<>(List.of(PreferenceConstants.SHOW_TOGGLE_BUTTON, PreferenceConstants.SHOW_MENU,
-                PreferenceConstants.FLASH_ON_ERROR, PreferenceConstants.SHOW_WELCOME, PreferenceConstants.STATUS_MODE,
-                PreferenceConstants.STATUS_SHOWCMD, PreferenceConstants.STATUS_STATUSLINE,
-                PreferenceConstants.STATUS_STATUSLINE_WIDTH, PreferenceConstants.STATUS_MAX_WIDTH_PERCENT));
+                PreferenceConstants.SHOW_WELCOME, PreferenceConstants.STATUS_MODE));
         for (char letter = 'a'; letter <= 'z'; letter++) {
             keys.add(PreferenceConstants.ctrlKeyNormal(letter));
             keys.add(PreferenceConstants.ctrlKeyInsert(letter));

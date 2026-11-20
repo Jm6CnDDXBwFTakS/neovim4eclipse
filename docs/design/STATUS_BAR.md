@@ -5,8 +5,8 @@ left it: Neovim shows it on its own line (ui2, docs/ARCHITECTURE.md, "Messages a
 did Neovim's statusline: each editor draws its window's under its text, as Neovim lays out its
 screen (docs/ARCHITECTURE.md, "The status line in the editor"). With the mode alone, which keeps its
 size, the cap has nothing to shrink. The preferences `statusShowcmd`, `statusStatusline`,
-`statusStatuslineWidth` and `statusMaxWidthPercent` have no effect, their names kept (README,
-"Settings"). What follows was written for the three parts of before; the mode's names and its
+`statusStatuslineWidth` and `statusMaxWidthPercent` were removed (README, "Settings",
+Removed). What follows was written for the three parts of before; the mode's names and its
 width (sections on the mode) are unchanged, the statusline's label, its width and the cap are
 history.
 

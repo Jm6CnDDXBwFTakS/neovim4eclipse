@@ -323,19 +323,6 @@ class NeovimCompletionIntegrationTest {
     }
 
     /**
-     * {@code vim.g.neovim4eclipse_completion_menu = 0}, once the switch for the plug-in's own list,
-     * has no effect: Neovim draws its popup menu, and the keys are its completion's.
-     */
-    @Test
-    void theOldSwitchHasNoEffect() throws Exception {
-        try (NeovimSession s = start("--cmd", "let g:neovim4eclipse_completion_menu = 0")) {
-            assertTrue(s.completesInNeovim());
-            s.completeInNeovimAsync(eclipseTyped(s, "al"), "<C-n>");
-            waitFor(() -> menuShown(s), "the list");
-        }
-    }
-
-    /**
      * The list does not need the viewport ({@code vim.g.neovim4eclipse_viewport = 0}: Neovim keeps
      * a screen of its own): Neovim's popup menu is drawn whatever the switches for floats say.
      */

@@ -29,7 +29,10 @@ import org.junit.jupiter.api.Test;
  * <ul>
  *   <li>a promised name is no longer in the code, as after a rename: put the old name back, or, if
  *       the change is wanted, follow the promise (a release that still accepts the old name and
- *       warns about it, a changelog entry) and only then change the list;</li>
+ *       warns about it, a changelog entry) and only then change the list. A name whose part of the
+ *       plug-in is gone, so that it had no effect left to keep, moves to {@link #REMOVED};</li>
+ *   <li>a {@link #REMOVED} name is still in the code, or missing from the README's list of
+ *       removed names;</li>
  *   <li>a promised name is missing from the README's <i>Settings</i> section;</li>
  *   <li>the code gains a name of a kind users set (an {@code init.lua} switch, a preference key, a
  *       command of {@code plugin.xml}, an Ex command) that is neither promised nor listed in
@@ -64,7 +67,6 @@ class SettingsNamesTest {
             Map.entry("vim.g.neovim4eclipse_highlights", List.of(LUA, "vim.g.neovim4eclipse_highlights")),
             Map.entry("vim.g.neovim4eclipse_jump_label_group_prefixes", List.of(LUA, "vim.g.neovim4eclipse_jump_label_group_prefixes")),
             Map.entry("vim.g.neovim4eclipse_floating_windows", List.of(LUA, "vim.g.neovim4eclipse_floating_windows")),
-            Map.entry("vim.g.neovim4eclipse_completion_menu", List.of(LUA, "vim.g.neovim4eclipse_completion_menu")),
             Map.entry("vim.g.neovim4eclipse_task_tags", List.of(LUA, "vim.g.neovim4eclipse_task_tags")),
             // set by the plug-in, read by a user's config
             // In backticks: every vim.g.neovim4eclipse_* row of the README contains the bare name.
@@ -81,13 +83,8 @@ class SettingsNamesTest {
             // preference keys
             Map.entry("showToggleButton", List.of(PREFERENCES, "\"showToggleButton\"")),
             Map.entry("showMenu", List.of(PREFERENCES, "\"showMenu\"")),
-            Map.entry("flashOnError", List.of(PREFERENCES, "\"flashOnError\"")),
             Map.entry("showWelcome", List.of(PREFERENCES, "\"showWelcome\"")),
             Map.entry("statusMode", List.of(PREFERENCES, "\"statusMode\"")),
-            Map.entry("statusShowcmd", List.of(PREFERENCES, "\"statusShowcmd\"")),
-            Map.entry("statusStatusline", List.of(PREFERENCES, "\"statusStatusline\"")),
-            Map.entry("statusStatuslineWidth", List.of(PREFERENCES, "\"statusStatuslineWidth\"")),
-            Map.entry("statusMaxWidthPercent", List.of(PREFERENCES, "\"statusMaxWidthPercent\"")),
             Map.entry("ctrlKeyNormal.", List.of(PREFERENCES, "\"ctrlKeyNormal.\"")),
             Map.entry("ctrlKeyInsert.", List.of(PREFERENCES, "\"ctrlKeyInsert.\"")),
             // Eclipse's own settings: key bindings, the color, the dedicated Neovim's folder
@@ -104,6 +101,21 @@ class SettingsNamesTest {
             Map.entry("io.github.jm6cnddxbwftaks.neovim4eclipse.searchMatch",
                     List.of(PLUGIN_XML, "id=\"io.github.jm6cnddxbwftaks.neovim4eclipse.searchMatch\"")),
             Map.entry("neovim4eclipse-plugin", List.of(SRC + "util/PluginFolders.java", "NAME = \"neovim4eclipse-plugin\"")));
+
+    /**
+     * Names removed, with the release that removed them, as the README's <i>Settings</i> lists them
+     * under "Removed". Each had no effect left when it went: a stored value or an {@code init.lua}
+     * line that still holds one is not read, and nothing fails (Eclipse keeps a preference key no
+     * code asks for, unread). Example: {@code flashOnError}, whose flash Neovim's own error message
+     * replaced. The code must not read them again: a user's old value would come back.
+     */
+    private static final Map<String, String> REMOVED = Map.of(
+            "vim.g.neovim4eclipse_completion_menu", "0.3.0",
+            "flashOnError", "0.3.0",
+            "statusShowcmd", "0.3.0",
+            "statusStatusline", "0.3.0",
+            "statusStatuslineWidth", "0.3.0",
+            "statusMaxWidthPercent", "0.3.0");
 
     /**
      * Names of the kinds checked for new ones, deliberately left out of the promise: they may
@@ -177,6 +189,23 @@ class SettingsNamesTest {
         List<String> missing = VimCtrlKeys.LETTERS.chars().mapToObj(c -> VimCtrlKeys.commandId((char) c))
                 .filter(id -> !xml.contains("id=\"" + id + "\"")).toList();
         assertEquals(List.of(), missing, "Ctrl key commands gone from plugin.xml");
+    }
+
+    @Test
+    void aRemovedNameIsGoneFromTheCodeAndListedInTheReadme() throws IOException {
+        String code = read(PREFERENCES) + read(LUA) + read(PLUGIN_XML);
+        String settings = readmeSettings();
+        List<String> wrong = new ArrayList<>();
+        for (Map.Entry<String, String> e : REMOVED.entrySet()) {
+            String bare = e.getKey().startsWith("vim.g.") ? e.getKey().substring("vim.g.".length()) : e.getKey();
+            if (code.contains("\"" + bare + "\"") || code.contains("vim.g." + bare)) {
+                wrong.add(e.getKey() + ": still read by the code");
+            }
+            if (!settings.contains("`" + e.getKey() + "` (" + e.getValue() + ")")) {
+                wrong.add(e.getKey() + ": not listed as `" + e.getKey() + "` (" + e.getValue() + ") in the README");
+            }
+        }
+        assertEquals(List.of(), wrong);
     }
 
     @Test

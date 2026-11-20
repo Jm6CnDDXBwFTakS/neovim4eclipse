@@ -5322,9 +5322,9 @@ final class LuaScripts {
      *
      * <p>Neovim's popup menu (the {@code :} line's Tab list, insert-mode completion) is Neovim's own
      * too: the UI is attached without {@code ext_popupmenu} ({@code NeovimConnection}), so Neovim
-     * draws it into a grid of its own, which the editor draws as a float. So the setting that once
-     * turned off the plug-in's own completion list, {@code vim.g.neovim4eclipse_completion_menu},
-     * has no effect from 0.3.0; its name stays accepted (README, "Settings").
+     * draws it into a grid of its own, which the editor draws as a float. So the switch that once
+     * turned off the plug-in's own completion list was removed in 0.3.0 (README, "Settings",
+     * Removed).
      *
      * <p>Returns {@code true}, or the error's text when ui2 cannot be loaded or turned on (a Neovim
      * without it: the session then logs it and shows Neovim's line nowhere).

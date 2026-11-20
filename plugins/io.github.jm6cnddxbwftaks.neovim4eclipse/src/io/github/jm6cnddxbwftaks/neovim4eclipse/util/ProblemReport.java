@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
  * - NVIM_APPNAME: not set
  * - Errors in the config at start: none
  * - init.lua settings: vim.g.neovim4eclipse_folds = 0
- * - Preferences changed: statusStatusline = true
+ * - Preferences changed: statusMode = false
  * - Active editor: a .java file in the Java Editor, Neovim mode on
  *
  * Recent warnings (the last 20 of this run):
@@ -63,7 +63,7 @@ public record ProblemReport(String plugin, String eclipse, String java, String s
      */
     public static final List<String> INIT_SETTINGS = List.of("neovim4eclipse_ide_keys", "neovim4eclipse_folds",
             "neovim4eclipse_viewport", "neovim4eclipse_problems", "neovim4eclipse_search_highlight",
-            "neovim4eclipse_highlights", "neovim4eclipse_jump_label_group_prefixes", "neovim4eclipse_floating_windows", "neovim4eclipse_completion_menu",
+            "neovim4eclipse_highlights", "neovim4eclipse_jump_label_group_prefixes", "neovim4eclipse_floating_windows",
             "neovim4eclipse_task_tags");
 
     /** The text to paste into an issue, with {@code home} written as {@code ~} throughout. */

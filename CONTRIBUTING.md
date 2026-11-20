@@ -642,8 +642,12 @@ text that tests do not always catch.
   when behavior changes.
 - **The names in the README's [Settings](README.md#settings) stay.** Users' `init.lua`,
   `eclipse.ini`, key bindings and saved preferences hold them, and a renamed one is ignored without
-  a word. Never rename or remove one in passing: a change takes a release that still accepts the old
-  name and warns about it, and a changelog entry. A new name a user sets (an `init.lua` switch, a
+  a word. Never rename one in passing: a rename takes a release that still accepts the old name and
+  warns about it, and a changelog entry. A name goes only with the part of the plug-in it set, once
+  it has no effect left: it moves to the README's *Removed* list, with the release, and to
+  `SettingsNamesTest.REMOVED`, which fails if the code reads it again (a user's old value would come
+  back). A stored value of a removed preference stays in the workspace, unread, and harms nothing.
+  A new name a user sets (an `init.lua` switch, a
   preference key, a `plugin.xml` command, an Ex command) goes into that table, or is marked
   internal. `SettingsNamesTest` fails on a promised name gone from the code and on a new one in
   neither list.
