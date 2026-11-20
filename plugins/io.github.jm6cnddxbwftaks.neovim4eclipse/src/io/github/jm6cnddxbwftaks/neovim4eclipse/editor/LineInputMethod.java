@@ -14,6 +14,7 @@ import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Canvas;
+import org.eclipse.swt.widgets.Caret;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
@@ -38,8 +39,16 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
  *   <li>{@code COMPOSITION_CHANGED}: the composing text is drawn in a small box at the line's
  *       cursor; at the commit the committed text goes to Neovim's line as a paste, and the key
  *       presses that repeat it are dropped by a second filter (measured on GTK, Windows and macOS:
- *       every system delivers the commit as key presses too, on macOS with Enter's key code).</li>
- *   <li>{@code COMPOSITION_OFFSET}: the line's cursor, so the candidate list opens under it.</li>
+ *       every system delivers the commit as key presses too). The event is taken from the widget
+ *       ({@code type} cleared) but not refused ({@code doit} stays true): on macOS a refused
+ *       commit tells Cocoa no key input happened, and Cocoa then sends the raw key that ended the
+ *       composition, the Enter, which would run the line (SWT's Cocoa {@code IME.insertText},
+ *       {@code Composite.keyDown}).</li>
+ *   <li>The candidate list: every system places it at the widget's {@link Caret} (Cocoa's
+ *       {@code firstRectForCharacterRange}, GTK's {@code gtk_im_context_set_cursor_location},
+ *       Windows' {@code ImmSetCompositionWindow}), not where the plug-in answers
+ *       {@code COMPOSITION_OFFSET}. So while a composition goes on, the editor's caret is moved to
+ *       the line's cursor, and put back when the line closes.</li>
  *   <li>{@code COMPOSITION_SELECTION}: no selection. macOS asks for it, and SWT 3.128's Cocoa side
  *       throws without an answer.</li>
  * </ul>
@@ -67,6 +76,8 @@ final class LineInputMethod {
     /** The composing text, drawn over the line; {@code null} until the first composition. */
     private Canvas box;
     private boolean attached;
+    /** Where the editor's caret was before a composition moved it to the line, or {@code null}. */
+    private Point caretBefore;
 
     /**
      * @param widget     the editor's text widget, which keeps the keyboard while the line is open
@@ -93,6 +104,7 @@ final class LineInputMethod {
             widget.addListener(SWT.FocusOut, endFilter);
         } else {
             end();
+            restoreCaret();
             display.removeFilter(SWT.ImeComposition, imeFilter);
             display.removeFilter(SWT.KeyDown, keyFilter);
             display.removeFilter(SWT.MouseDown, endFilter);
@@ -144,11 +156,11 @@ final class LineInputMethod {
             }
         }
         e.type = SWT.None; // the text widget does not see it, so the document is not touched
-        e.doit = false;
     }
 
     /** The composition is now {@code text}, its first {@code committed} characters committed. Also for tests. */
     void composed(String text, int committed) {
+        placeCaret();
         String sent = composition.changed(text, committed);
         if (!sent.isEmpty()) {
             paste.accept(sent);
@@ -182,6 +194,28 @@ final class LineInputMethod {
         if (was && PlatformUtil.isMac()) {
             discardMarkedText(widget);
         }
+    }
+
+    /** Moves the editor's caret to the line's cursor, where the systems open the candidate list. */
+    private void placeCaret() {
+        Caret caret = widget.getCaret();
+        Rectangle cell = cursorCell.get();
+        if (caret == null || cell == null) {
+            return;
+        }
+        if (caretBefore == null) {
+            caretBefore = caret.getLocation();
+        }
+        caret.setLocation(cell.x, cell.y);
+    }
+
+    /** Puts the editor's caret back where it was before a composition moved it. */
+    private void restoreCaret() {
+        Caret caret = widget.getCaret();
+        if (caretBefore != null && caret != null && !caret.isDisposed()) {
+            caret.setLocation(caretBefore);
+        }
+        caretBefore = null;
     }
 
     /** Draws the composing text in a box over the line's cursor, or hides the box when there is none. */

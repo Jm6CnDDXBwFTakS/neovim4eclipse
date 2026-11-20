@@ -1016,7 +1016,8 @@ The user types `:e ` in a text editor, switches the keyboard to Japanese, types 
    filter (SWT runs filters before any listener) takes its `ImeComposition` events first:
    `COMPOSITION_CHANGED` with the text `か`, nothing committed. `util/LineComposition.changed("か", 0)`
    answers "send nothing", and the box at the line's cursor (`FloatingWindows.cursorCell`) shows
-   `か`; `COMPOSITION_OFFSET` puts the candidate list there. The document never sees the text.
+   `か`; the editor's caret is moved there too, since every system opens the candidate list at the
+   widget's caret. The document never sees the text.
 3. Space offers `可`; Enter commits it: `changed("可", 1)` answers `"可"`, sent to Neovim as
    `nvim_paste`, and ui2 draws `:e 可`. The system then also delivers the commit as a key press
    (on macOS with Enter's key code); `LineComposition.dropKey('可')` drops it, so it is neither

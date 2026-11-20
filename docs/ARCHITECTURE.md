@@ -775,9 +775,12 @@ abbreviations all apply, and nothing in Eclipse edits a text of its own.
   `ImeComposition` events first, with a display filter, while a line is open (a filter runs before
   any listener, and an event whose type it clears goes no further): the composing text is drawn in
   a small box at the line's cursor (`FloatingWindows.cursorCell`, from Neovim's cursor in ui2's
-  grid), the candidate list is placed there (`COMPOSITION_OFFSET`), macOS's selection request is
-  answered (SWT 3.128's Cocoa side throws without one), and at the commit the committed text goes to
-  Neovim's line as a paste. Every system also delivers a commit as key presses (on macOS with
+  grid), the editor's `Caret` is moved there while composing and put back when the line closes
+  (every system opens the candidate list at the widget's caret, whatever `COMPOSITION_OFFSET`
+  answers), macOS's selection request is answered (SWT 3.128's Cocoa side throws without one), and
+  at the commit the committed text goes to Neovim's line as a paste. The filter clears the event's
+  type but leaves `doit` true: on macOS a refused commit tells Cocoa no key input happened, and
+  Cocoa then sends the Enter that ended the composition, which would run the line. Every system also delivers a commit as key presses (on macOS with
   Enter's key code, which would run the line), so a second filter drops the presses that repeat a
   commit. The decisions are `util/LineComposition`, plain and unit-tested:
 

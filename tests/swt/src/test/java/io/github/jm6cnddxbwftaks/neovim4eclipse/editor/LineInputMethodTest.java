@@ -12,6 +12,7 @@ import java.util.List;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
@@ -75,6 +76,7 @@ class LineInputMethodTest {
         line.lineOpen(true);
         Event e = composition("か");
         assertEquals(SWT.None, e.type, "the filter took the event");
+        assertTrue(e.doit, "not refused: on macOS a refused commit makes Cocoa send the raw Enter");
         assertEquals("the document", widget.getText());
         assertTrue(line.boxForTests().getVisible(), "the composing text is shown");
         assertEquals(CURSOR.x, line.boxForTests().getBounds().x, "at the line's cursor");
@@ -116,5 +118,20 @@ class LineInputMethodTest {
         widget.notifyListeners(SWT.MouseDown, click);
         assertEquals(List.of(), pasted);
         assertFalse(line.boxForTests().getVisible());
+    }
+
+    /**
+     * The systems open the candidate list at the widget's caret: while composing, the caret sits at
+     * the line's cursor; when the line closes it is back where it was.
+     */
+    @Test
+    void theCaretFollowsTheLineWhileComposing() {
+        Point before = widget.getCaret().getLocation();
+        line.lineOpen(true);
+        line.composed("か", 0);
+        assertEquals(new Point(CURSOR.x, CURSOR.y), widget.getCaret().getLocation(), "at the line's cursor");
+        line.composed("可", 1);
+        line.lineOpen(false);
+        assertEquals(before, widget.getCaret().getLocation(), "back after the line closed");
     }
 }
