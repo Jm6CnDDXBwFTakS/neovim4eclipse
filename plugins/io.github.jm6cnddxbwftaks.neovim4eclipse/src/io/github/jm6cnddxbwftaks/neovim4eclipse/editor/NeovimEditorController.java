@@ -106,6 +106,8 @@ public final class NeovimEditorController implements AutoCloseable {
     private final NeovimWindowPanel commandWindowPanel;
     /** Neovim's floating windows without the focus, drawn over the text. */
     private final FloatingWindows floatingWindows;
+    /** An input method's composition on Neovim's command line, while one is open. */
+    private final LineInputMethod lineInput;
     /**
      * Whether the command-line window is open, set on the RPC thread as the session reports it:
      * its mode, which is Neovim's in that window, then does not reach the editor
@@ -295,6 +297,7 @@ public final class NeovimEditorController implements AutoCloseable {
         this.commandWindowPanel = new NeovimWindowPanel(styledText, new PanelCommands(session),
                 this::onCommandLineStateChanged);
         this.floatingWindows = new FloatingWindows(styledText);
+        this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, session::pasteAsync);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
                 this::neovimHandlesMouse, session::mouseAsync, () -> { });
         this.wheel = viewport == null ? null
@@ -846,6 +849,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 session.inputAsync("<C-c>");
             }
             commandLineEdits.update(false);
+            lineInput.lineOpen(false);
             if (commandWindowPanel.isOpen()) { // the same for the command-line window
                 session.closeCommandWindowAsync();
                 commandWindowShown = false;
@@ -907,6 +911,7 @@ public final class NeovimEditorController implements AutoCloseable {
             if (!closed && !styledText.isDisposed()) {
                 boolean open = !type.isEmpty();
                 commandLineEdits.update(open);
+                lineInput.lineOpen(open);
                 if (searchHighlighter != null) {
                     searchHighlighter.setSearchTyped("/".equals(type) || "?".equals(type));
                 }
@@ -1352,6 +1357,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 wheel.dispose();
             }
             commandLineEdits.dispose();
+            lineInput.dispose();
             commandWindowPanel.dispose();
             floatingWindows.dispose();
             if (!styledText.isDisposed()) {

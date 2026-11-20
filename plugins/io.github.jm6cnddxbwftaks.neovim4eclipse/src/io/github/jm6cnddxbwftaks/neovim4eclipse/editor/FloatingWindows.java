@@ -110,6 +110,25 @@ final class FloatingWindows {
         return !canvases.isEmpty();
     }
 
+    /**
+     * Where Neovim's cursor is, when it is in a drawn window (ui2's command line while a {@code :}
+     * line is typed, an entered pager): its cell, in the host's coordinates; {@code null} when no
+     * drawn window has it. An input method's composition is drawn there, and its candidates listed
+     * under it ({@code LineInputMethod}).
+     */
+    Rectangle cursorCell() {
+        for (FloatWindow window : shown) {
+            GridCanvas canvas = canvases.get(window.grid().window());
+            if (canvas == null || canvas.isDisposed() || window.grid().cursorRow() < 0) {
+                continue;
+            }
+            Rectangle at = canvas.getBounds();
+            return new Rectangle(at.x + window.grid().cursorCol() * canvas.cellWidth(),
+                    at.y + window.grid().cursorRow() * canvas.cellHeight(), canvas.cellWidth(), canvas.cellHeight());
+        }
+        return null;
+    }
+
     /** The canvas of window {@code win}, or {@code null}; for tests. */
     GridCanvas canvas(int win) {
         return canvases.get(win);
