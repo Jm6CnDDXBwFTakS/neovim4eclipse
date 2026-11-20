@@ -5464,6 +5464,15 @@ final class LuaScripts {
             -- without autocommands, while a line is open, so a line opened before the restore
             -- would make it look done, and ui2 would then leave 0 for good.
             local sets = 0
+            -- Neovim's own back to 1, the user's 0 kept as the overlay; Eclipse hears it.
+            local function restore()
+              restoring = true
+              pcall(function()
+                vim.o.cmdheight = 1
+              end)
+              restoring = false
+              send()
+            end
             vim.api.nvim_create_autocmd('OptionSet', {
               group = group,
               pattern = 'cmdheight',
@@ -5483,16 +5492,30 @@ final class LuaScripts {
                     if sets ~= mine then
                       return -- set again meanwhile (:set ch=0 | set ch=2): that one stands
                     end
-                    restoring = true
-                    pcall(function()
-                      vim.o.cmdheight = 1
-                    end)
-                    restoring = false
-                    send()
+                    restore()
                   end)
                 else
                   send()
                 end
+              end,
+            })
+            -- A 0 set where OptionSet does not fire (:noautocmd, an autocommand without `nested`,
+            -- such as a config's RecordingLeave that sets ch=0) is taken the same way, at the next
+            -- moment Neovim waits for input: one check every route passes, not one per route.
+            -- Neovim's own is never 0 otherwise once this script ran (ui2 goes to 0 only after a
+            -- 0 it heard through OptionSet, which the handler above sets back to 1).
+            vim.api.nvim_create_autocmd('SafeState', {
+              group = group,
+              callback = function()
+                if vim.o.cmdheight ~= 0 or restoring then
+                  return
+                end
+                sets = sets + 1 -- a restore still scheduled for an earlier 0 is this one's
+                if not overlay then
+                  overlay = true
+                  place_messages()
+                end
+                restore()
               end,
             })
             send()

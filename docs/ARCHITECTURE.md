@@ -737,7 +737,8 @@ What the plug-in adds, all in `LuaScripts.UI2`, the one place it talks to ui2:
   (0.12) or moves the cursor (0.13). At 1 nothing moves: Neovim's screen is one row taller than the
   editor's window (decision 9, [design/VIEWPORT.md](design/VIEWPORT.md)), and ui2's line lives in
   that row, which the editor keeps under its status line (`editor/StatusLineRow`).
-- **A user's `'cmdheight'` 0** (`init.lua`, or `:set ch=0` later, through `OptionSet`) is kept as a
+- **A user's `'cmdheight'` 0** (`init.lua`, or `:set ch=0` later, through `OptionSet`, or a 0 set
+  without autocommands, seen at the next `SafeState`) is kept as a
   wish: Neovim goes back to 1, for the reason above, and Eclipse is told (`overlay`, the fifth value
   of `eclipse_ui2_windows`; `NeovimSession.commandLineRows` 0). The editor then keeps no row for the
   line (`StatusLineRow`, `WindowPane.rowsBelow`): one more text row, Neovim's window one row

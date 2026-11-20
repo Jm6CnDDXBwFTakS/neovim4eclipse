@@ -212,4 +212,20 @@ class NeovimUi2IntegrationTest {
             s.input("1<CR>");
         }
     }
+
+    /**
+     * A 0 set where no OptionSet fires ({@code :noautocmd}, an autocommand without
+     * {@code nested}) is taken as the user's 0 too, at Neovim's next wait for input: the row goes,
+     * and Neovim's own is back at 1, so its window keeps the editor's rows.
+     */
+    @Test
+    void aZeroSetWithoutAutocommandsIsTakenToo() throws Exception {
+        try (NeovimSession s = start("--clean")) {
+            assertEquals(1, s.commandLineRows());
+            s.lua("vim.cmd('noautocmd set cmdheight=0')");
+            waitFor(() -> s.commandLineRows() == 0 && number(s, "return vim.o.cmdheight") == 1,
+                    "the overlay on and Neovim back at 1");
+            assertEquals("msg", s.lua("return require('vim._core.ui2').cfg.msg.target"));
+        }
+    }
 }
