@@ -610,8 +610,11 @@ class GridsTest {
         List<FloatWindow> typing = grids.floatsIfChanged().orElseThrow();
         assertEquals(List.of(1010, -1), typing.stream().map(f -> f.grid().window()).toList());
         assertEquals(19, typing.get(1).row(), "screen row 19, just above the line, as Neovim put it");
+        assertTrue(typing.get(1).fromBottom(), "the line's list counts from the bottom edge, as the line does");
+        assertTrue(typing.get(0).fromBottom(), "ui2's line too");
         grids.apply(new GridEvent.CursorGoto(2, 4, 0)); // insert-mode completion, by the text
         List<FloatWindow> inserting = grids.floatsIfChanged().orElseThrow();
         assertEquals(19, inserting.get(1).row(), "where Neovim put it");
+        assertFalse(inserting.get(1).fromBottom(), "by the text: counted from the top, as the text is");
     }
 }

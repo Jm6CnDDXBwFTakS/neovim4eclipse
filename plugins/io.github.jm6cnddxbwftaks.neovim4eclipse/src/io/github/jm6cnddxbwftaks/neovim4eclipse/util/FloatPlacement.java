@@ -23,7 +23,16 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  *   <li>Any other float that would stick out is moved back in, as far as it fits. One larger than
  *       the editor keeps its top left corner in view; the rest is cut off by the editor's
  *       edges.</li>
- *   <li>Before both: a float that begins at the window's first row or column stays there,
+ *   <li>ui2's windows and the {@code :} line's list ({@link FloatWindow#fromBottom}) are counted
+ *       from the bottom edge, as the status line and the command line under the text are
+ *       ({@code editor/StatusLineRow}): they lie on those rows or right above them. Example: rows
+ *       of 17 pixels in an editor 407 high, the status line on pixels 390 to 406; ui2's message
+ *       right above it begins at 373, not at row 21's 357, which leaves a strip of text between.
+ *       One from the first row that fits stays at the top; one that does not (the {@code :} line's
+ *       list filling every row above the line) ends on the line's top, and its top row is cut,
+ *       rather than its bottom row lying over the line.</li>
+ *   <li>Before the edge and moved-back-in rules (for a window not counted from the bottom): a
+ *       float that begins at the window's first row or column stays there,
  *       whatever its other end does. Example: the same panel is as wide as Neovim's screen, 80 cells of 10 pixels in
  *       an editor 805 pixels wide. Put on the right edge it would begin at pixel 5, and the
  *       editor's text would show in the strip left of it; it begins at 0, and the 5 pixels that
@@ -57,7 +66,16 @@ public final class FloatPlacement {
         int width = columns * cellWidth;
         int height = rows * cellHeight;
         int x = along(window.col(), columns, window.hostCols(), cellWidth, width, areaWidth);
-        int y = along(window.row(), rows, window.hostRows(), cellHeight, height, areaHeight);
+        int y;
+        if (window.fromBottom() && window.hostRows() > 0) {
+            int up = areaHeight - (window.hostRows() - window.row()) * cellHeight;
+            // From the first row (or above it: lifted with 'cmdheight' 0), a window as high as
+            // every row above the line ends on the line's top, its top row cut if the editor has
+            // no whole row for it; one that fits starts at the top as any other does.
+            y = window.row() <= 0 ? Math.min(0, up) : Math.max(0, Math.min(areaHeight - height, up));
+        } else {
+            y = along(window.row(), rows, window.hostRows(), cellHeight, height, areaHeight);
+        }
         return new Box(x, y, width, height);
     }
 

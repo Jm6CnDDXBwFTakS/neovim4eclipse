@@ -506,7 +506,8 @@ public final class Grids {
                     place.row() - (host == null ? 0 : host.row()) - (lifted ? 1 : 0),
                     place.col() - (host == null ? 0 : host.col()),
                     host == null ? 0 : host.height() + below - (overlay && below > 0 ? 1 : 0),
-                    host == null ? 0 : host.width(), place.zindex()));
+                    host == null ? 0 : host.width(), place.zindex(),
+                    ui2Windows.contains(place.win()) || (place.win() == -1 && inCommandLine)));
         }
         floats.sort(Comparator.comparingInt(FloatWindow::zindex).thenComparingInt(f -> f.grid().window()));
         if (floats.equals(lastFloats)) {

@@ -62,6 +62,29 @@ class FloatPlacementTest {
         assertEquals(new Box(40, 390, 140, 40), box);
     }
 
+    /**
+     * ui2's message window, one row right above the status line (rows 21, 22 of 23 are the status
+     * line's and the command line's): counted from the bottom edge as those rows are, it ends where
+     * the status line begins, 2 rows above the bottom (pixel 430), not at row 21's 440 minus the 10
+     * pixels that belong to no whole row. A window not ui2's stays where its rows put it.
+     */
+    @Test
+    void ui2sWindowsAreCountedFromTheBottomEdge() {
+        GridSnapshot grid = place0(3, 1);
+        assertEquals(new Box(775, 410, 30, 20),
+                FloatPlacement.place(new FloatWindow(grid, 20, 77, 23, 80, 50, true), CELL_W, CELL_H, AREA_W, AREA_H));
+        assertEquals(new Box(775, 400, 30, 20),
+                FloatPlacement.place(new FloatWindow(grid, 20, 77, 23, 80, 50, false), CELL_W, CELL_H, AREA_W, AREA_H));
+        assertEquals(new Box(0, 0, 800, 460), FloatPlacement.place(
+                new FloatWindow(place0(80, 23), 0, 0, 23, 80, 50, true), CELL_W, CELL_H, AREA_W, AREA_H),
+                "ui2's pager from the first row stays at the top");
+        // The : line's list with 'cmdheight' 0: lifted (row -1), as high as every row above the
+        // line (23 rows of a host of 23 plus the line's). It ends on the line's top, the bottom
+        // row's (450), its top row cut by the 10 pixels the editor has no whole row for.
+        assertEquals(new Box(0, -10, 200, 460), FloatPlacement.place(
+                new FloatWindow(place0(20, 23), -1, 0, 23, 80, 250, true), CELL_W, CELL_H, AREA_W, AREA_H));
+    }
+
     @Test
     void aFloatLargerThanTheEditorKeepsItsTopLeftCornerInView() {
         assertEquals(new Box(0, 0, 2000, 1200), place(200, 60, 0, 0));

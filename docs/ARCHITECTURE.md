@@ -1040,6 +1040,9 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   it begins at the first row or column: it stays there, or the editor's text would show in the
   strip before it); one that would stick out is moved back in; one larger than the editor is
   cut off by the text widget.
+  ui2's windows and the `:` line's list (`FloatWindow.fromBottom`) are counted from the bottom
+  edge instead, as the status line and the command line under the text are: a message right
+  above the status line stays right above it, with no strip of text between.
   Not mapped through the text: where Eclipse's rows differ from Neovim's (a code mining, another
   wrap point), a float anchored to a text position can sit a row off.
 - **The editor's window** (`Grids.host`) is the one layout window on screen: each editor's is
