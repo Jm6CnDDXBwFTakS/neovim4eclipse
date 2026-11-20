@@ -60,8 +60,8 @@ Neovim keeps its row, and the editor draws the line over the status line instead
 
 ui2's own settings apply too, in `init.lua`. Example:
 `require('vim._core.ui2').enable({ msg = { target = 'msg' } })` puts messages in that window at
-the bottom right also with the row there. ui2 is experimental in Neovim 0.12, so its settings may
-change with a new Neovim.
+the bottom right also with the row there. ui2 is still experimental, so its settings may change
+with a new Neovim.
 
 ## Messages and errors
 

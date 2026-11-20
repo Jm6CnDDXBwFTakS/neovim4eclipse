@@ -435,7 +435,8 @@ public final class Grids {
             if (place.win() == -1 && eclipseTypes && !inCommandLine) {
                 continue; // Neovim's popup menu in an insert Eclipse types: see eclipseTypes
             }
-            if (overlay && place.win() == cmdWindow && !Integer.valueOf(cmdWindow).equals(windowOfGrid.get(cursorGrid))) {
+            if (overlay && cmdWindow > 0 && place.win() == cmdWindow
+                    && !Integer.valueOf(cmdWindow).equals(windowOfGrid.get(cursorGrid))) {
                 continue; // no row for the line, and none open: the status line shows (ui2Windows)
             }
             if (place.floating() && grids.containsKey(e.getKey()) && (drawFloats || always)

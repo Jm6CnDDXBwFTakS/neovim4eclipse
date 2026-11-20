@@ -5355,8 +5355,11 @@ final class LuaScripts {
             end
 
             -- 'cmdheight' 0, the user's wish: Neovim's own stays 1 (see above), the editor draws the
-            -- line over the status line. Read before ui2 and this script touch the option.
+            -- line over the status line. Read before ui2 and this script touch the option. Only a 0
+            -- a script set (init.lua, --cmd: last_set_sid not 0) is the user's: Eclipse's UI attaches
+            -- with ext_messages, and Neovim then sets 0 itself, with no script (measured on 0.12.6).
             local overlay = vim.o.cmdheight == 0
+              and vim.api.nvim_get_option_info2('cmdheight', {}).last_set_sid ~= 0
 
             local function send()
               local w = ui2.wins
@@ -5366,7 +5369,8 @@ final class LuaScripts {
             -- With no row for the line, messages go to ui2's message window, which shows them for
             -- a while and needs no row of its own; back when the row returns. Only ui2's default
             -- target is moved: a user's config that chose 'msg' keeps it, and the plug-in puts
-            -- back only what it moved.
+            -- back only what it moved. A prompt's list (inputlist(), z=) still stays with its
+            -- prompt: ui2 moves it into the prompt's dialog window (NeovimUi2IntegrationTest).
             local moved_messages = false
             local function place_messages()
               if overlay and ui2.cfg.msg.target == 'cmd' then

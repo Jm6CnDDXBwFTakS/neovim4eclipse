@@ -161,6 +161,21 @@ class NeovimUi2IntegrationTest {
         }
     }
 
+    /**
+     * Eclipse's UI attaches with {@code ext_messages}, and Neovim then sets {@code 'cmdheight'} 0
+     * itself: that is not the user's wish, so the row stays. A 0 set from Lua in the config is.
+     */
+    @Test
+    void onlyAZeroTheUserSetIsTheirWish() throws Exception {
+        try (NeovimSession s = start("--clean")) {
+            assertEquals(1, s.commandLineRows(), "no config: the row stays");
+            assertEquals("cmd", s.lua("return require('vim._core.ui2').cfg.msg.target"));
+        }
+        try (NeovimSession s = start("--clean", "--cmd", "lua vim.o.cmdheight = 0")) {
+            waitFor(() -> s.commandLineRows() == 0, "a 0 from the config's Lua");
+        }
+    }
+
     /** A config that chose ui2's message window itself keeps it when 'cmdheight' goes from 0 to 1. */
     @Test
     void aConfigsOwnMessageTargetIsKept() throws Exception {
@@ -170,6 +185,31 @@ class NeovimUi2IntegrationTest {
             s.lua("vim.o.cmdheight = 1");
             waitFor(() -> s.commandLineRows() == 1, "the row back");
             assertEquals("msg", s.lua("return require('vim._core.ui2').cfg.msg.target"), "the config's choice, not moved back");
+        }
+    }
+
+    /**
+     * With {@code 'cmdheight'} 0, a prompt's list ({@code inputlist()}, {@code z=}) stays with its
+     * prompt, in ui2's dialog window, not in the message window, which would drop it after a few
+     * seconds while the prompt still waits.
+     */
+    @Test
+    void aPromptsListStaysWithItsPromptWithCmdheightZero() throws Exception {
+        try (NeovimSession s = start("--clean", "--cmd", "set cmdheight=0")) {
+            waitFor(() -> s.commandLineRows() == 0, "no row for the line");
+            String dialog = "local b = require('vim._core.ui2').bufs.dialog;"
+                    + " return vim.api.nvim_buf_is_valid(b) and table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), '|') or ''";
+            String msg = "return table.concat(vim.api.nvim_buf_get_lines(require('vim._core.ui2').bufs.msg, 0, -1, false), '|')";
+            s.input(":call inputlist(['Pick one:', '1. alpha', '2. beta'])<CR>");
+            waitFor(() -> {
+                try {
+                    return String.valueOf(s.lua(dialog)).contains("2. beta");
+                } catch (Exception e) {
+                    return false;
+                }
+            }, "the list in the prompt's dialog window: " + Ui2Text.shown(s));
+            assertTrue(!String.valueOf(s.lua(msg)).contains("2. beta"), "not in the message window");
+            s.input("1<CR>");
         }
     }
 }
