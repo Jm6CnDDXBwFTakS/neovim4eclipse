@@ -139,6 +139,24 @@ class NeovimUi2IntegrationTest {
         }
     }
 
+    /** The same for a bang command, run as {@code :Eclipse!}: {@code :e!} shows as typed. */
+    @Test
+    void theRowShowsABangLineAsTypedNotItsEclipseReplacement() throws Exception {
+        try (NeovimSession s = start("--clean")) {
+            for (String key : List.of(":", "e", "!", "<CR>")) {
+                s.input(key);
+            }
+            String lua = "return vim.api.nvim_buf_get_lines(require('vim._core.ui2').bufs.cmd, 0, -1, false)[1] or ''";
+            waitFor(() -> {
+                try {
+                    return ":e!".equals(s.lua(lua));
+                } catch (Exception e) {
+                    return false;
+                }
+            }, "':e!' on the command row: " + Ui2Text.shown(s));
+        }
+    }
+
     /**
      * A user's {@code 'cmdheight'} 0 ({@code init.lua}, here {@code --cmd}) is kept as a wish: Neovim
      * stays at 1, the session reports no row for the line, and messages go to ui2's message window;

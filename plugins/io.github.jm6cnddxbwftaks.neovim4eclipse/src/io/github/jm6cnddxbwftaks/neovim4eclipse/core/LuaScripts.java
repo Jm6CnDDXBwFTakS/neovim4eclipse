@@ -554,7 +554,7 @@ final class LuaScripts {
                   return
                 end
                 local shown = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] or ''
-                if shown:match('^:Eclipse ') then
+                if shown:match('^:Eclipse!? ') then -- :e! runs as :Eclipse! edit
                   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { ':' .. vim.fn.strtrans(line) })
                 end
               end)
