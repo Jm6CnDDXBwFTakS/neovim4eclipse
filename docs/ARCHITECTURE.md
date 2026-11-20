@@ -689,9 +689,10 @@ Each attached code editor draws its Neovim window's status line in a row under i
   `statusline`, scheduled once per moment; on each attach (`NeovimSession.refreshStatusLinesAsync`);
   and when an editor's width in columns changes.
 - **Width:** every tabpage shares Neovim's one screen, sized to the focused editor, so a background
-  editor's window is as wide as that editor, not its own. Each row reports its editor's columns
-  (`NeovimSession.setStatusLineWidthAsync`, Lua `set_width`), and a window that is not current is
-  fitted to them; the current window to its own width.
+  editor's window is as wide as that editor, not its own (and with the viewport off no window is
+  its editor's width). Each row reports its editor's columns (`NeovimSession.setStatusLineWidthAsync`,
+  Lua `set_width`), and every window's line is fitted to its editor's; to the window's own width
+  until the editor reported.
 - **Colors:** a group that leaves a color unset (`%#Identifier#`, a text color only) takes it from
   `StatusLine` or `StatusLineNC`, as Neovim draws it over the status line.
 - **A modeline's line is not evaluated:** with `'modelineexpr'` on a modeline can set

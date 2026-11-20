@@ -120,9 +120,13 @@ t.test('a window that is not current is fitted to the width its editor reported'
   local line = M.line(other)
   t.eq(20, #line[2], 'twenty cells, not the screen\'s width')
   t.eq('R', line[2][20], 'the right part at the editor\'s right edge')
-  local current = vim.api.nvim_get_current_win()
-  M.set_width(current, 7)
-  t.eq(vim.api.nvim_win_get_width(current), #M.line(current)[2], 'the current window: its own width')
+  -- The current window too: with the viewport off its window is not its editor's width either.
+  local fresh = vim.api.nvim_open_win(vim.api.nvim_create_buf(true, false), true, { split = 'right' })
+  t.eq(fresh, vim.api.nvim_get_current_win(), 'the new window is current')
+  t.eq(vim.api.nvim_win_get_width(fresh), #M.line(fresh)[2], 'before its editor reported: the window\'s width')
+  M.set_width(fresh, 7)
+  t.eq(7, #M.line(fresh)[2], 'the current window, fitted to its editor')
+  vim.api.nvim_win_close(fresh, true)
 end)
 
 -- Neovim draws %#Identifier# (a text color only) over the status line's background.

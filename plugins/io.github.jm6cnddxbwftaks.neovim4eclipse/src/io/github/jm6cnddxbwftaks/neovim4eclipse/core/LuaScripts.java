@@ -6458,7 +6458,7 @@ final class LuaScripts {
      * 0 none; 1 only with another window in its tabpage, so none for an editor's window alone;
      * 2 always; 3 one for the screen, the current window's); the line's cells, one string per screen
      * cell, a wide character's second cell {@code ""}, padded with spaces to the editor's width (sent
-     * by the editor's row, {@code set_width}; the current window's own width for the focused one); the
+     * by the editor's row, {@code set_width}; the window's own width until it is known); the
      * index into {@code attrs} of each cell's highlight (1-based); and per highlight
      * {@code {fg, bg, reverse, bold, italic, underline, strikethrough}}, colors as {@code 0xRRGGBB},
      * a color the group leaves unset taken from {@code StatusLine} or {@code StatusLineNC} (as
@@ -6484,7 +6484,8 @@ final class LuaScripts {
             local DEFAULT = '%<%f %h%m%r%=%-14.(%l,%c%V%) %P'
             -- Each editor's width in columns, sent by its row (set_width): every tabpage shares one
             -- screen, sized to the focused editor, so a background editor's window is that wide,
-            -- not as wide as its own editor.
+            -- not as wide as its own editor; and with the viewport off (a fixed 120 x 40 screen)
+            -- not even the focused editor's window is its editor's width.
             M.widths = {}
 
             function M.set_width(win, cols)
@@ -6522,7 +6523,7 @@ final class LuaScripts {
                 return { false }
               end
               local current = win == vim.api.nvim_get_current_win()
-              local width = (not current and M.widths[win]) or vim.api.nvim_win_get_width(win)
+              local width = M.widths[win] or vim.api.nvim_win_get_width(win)
               local fmt = vim.api.nvim_get_option_value('statusline', { win = win })
               -- A 'statusline' a modeline set (last_set_sid -1, possible with 'modelineexpr' on):
               -- Neovim evaluates such a one in the sandbox, nvim_eval_statusline does not know where
