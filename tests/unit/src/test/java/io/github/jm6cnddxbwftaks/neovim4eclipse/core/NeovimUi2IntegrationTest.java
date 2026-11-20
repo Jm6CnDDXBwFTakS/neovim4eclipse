@@ -116,4 +116,26 @@ class NeovimUi2IntegrationTest {
             waitFor(() -> number(s, "return vim.api.nvim_get_current_win()") != pager, "q leaves the pager");
         }
     }
+
+    /**
+     * A line Eclipse carries out is run as its {@code :Eclipse} replacement; the command row then
+     * shows the line as typed, as Neovim leaves a line that ran, not the replacement's words.
+     */
+    @Test
+    void theRowShowsTheLineAsTypedNotItsEclipseReplacement() throws Exception {
+        try (NeovimSession s = start("--clean")) {
+            for (String key : List.of(":", "w", "i", "n", "c", "m", "d", " ", "l", "<CR>")) {
+                s.input(key);
+            }
+            String lua = "return vim.api.nvim_buf_get_lines(require('vim._core.ui2').bufs.cmd, 0, -1, false)[1] or ''";
+            waitFor(() -> {
+                try {
+                    return ":wincmd l".equals(s.lua(lua));
+                } catch (Exception e) {
+                    return false;
+                }
+            }, "':wincmd l' on the command row: " + Ui2Text.shown(s));
+            assertEquals("wincmd l", s.lua("return vim.fn.histget(':', -1)"), "the history holds it as typed too");
+        }
+    }
 }

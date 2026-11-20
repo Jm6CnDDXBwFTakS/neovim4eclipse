@@ -540,10 +540,31 @@ final class LuaScripts {
               run_open_command(command)
               return true
             end
+            -- ui2 leaves a line that ran on the command row, as Neovim does (:set nu stays shown).
+            -- For a line :Eclipse replaced that would be the replacement (:Eclipse window focus l 0
+            -- for :wincmd l), so the line as typed is put back. Scheduled: ui2 draws the replacement
+            -- after the command runs. Only while the row still holds the replacement: a message
+            -- the command gave since (an error, Eclipse's answer) stays. Plain text: ui2's colors
+            -- for a : line are its own drawing's.
+            local function show_typed(line)
+              vim.schedule(function()
+                local ui2 = package.loaded['vim._core.ui2']
+                local buf = ui2 and ui2.bufs and ui2.bufs.cmd
+                if not buf or not vim.api.nvim_buf_is_valid(buf) or vim.api.nvim_buf_line_count(buf) ~= 1 then
+                  return
+                end
+                local shown = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] or ''
+                if shown:match('^:Eclipse ') then
+                  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { ':' .. vim.fn.strtrans(line) })
+                end
+              end)
+            end
+
             vim.api.nvim_create_user_command('Eclipse', function(o)
               if typed then
                 vim.fn.histdel(':', -1) -- the replacement
                 vim.fn.histadd(':', typed)
+                show_typed(typed)
                 typed = nil
               end
               local name = o.fargs[1]
