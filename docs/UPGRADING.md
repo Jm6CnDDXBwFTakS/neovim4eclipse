@@ -449,12 +449,22 @@ put back as it was. It needs a JDK of release 22 or newer, as the Release tool d
    system's, and the others are hashed. This replaces running *Get Neovim* once in a development
    Eclipse.
 5. **Every test** with the new Neovim: `java releng/tools/ci/LikeCi.java --all`. Run it on macOS and
-   Windows too.
+   Windows too. Among them, the ui2 checks must pass: `tests/unit/src/test/lua/ui2_spec.lua` (each
+   ui2 behavior the plug-in relies on: the four windows and their ids, `'cmdheight'` 1, the windows'
+   width, the marks, `:messages` to its page, the command-line type) and
+   `NeovimUi2IntegrationTest` (`-Pintegration`: a real UI attached, the typed line and the pager
+   drawn as floats). ui2 draws the plug-in's command line, prompts, pager and messages, and there is
+   no fallback to switch to (docs/ARCHITECTURE.md, "Messages and output"), so a failure here blocks
+   the move.
 
 What stays yours: read the release notes (`:help news`, and each patch release's changelog on
 GitHub) for changes to what the plug-in uses (the API calls in `core/rpc`, the Lua in `LuaScripts`,
 `ext_cmdline`, autocommand events, options it sets), then remove the workarounds the new version
-makes unnecessary, each as its own commit after the move.
+makes unnecessary, each as its own commit after the move. Read every entry about **ui2**
+(`vim._core.ui2`, its windows, `msg_history_show`, `'cmdheight'`) in particular: ui2 is
+experimental, so it can change in a patch release without a deprecation, and the specs pin only
+what the plug-in already relies on. A change there goes into `LuaScripts.UI2`, the one place the
+plug-in talks to ui2, with a spec in `ui2_spec.lua`.
 
 By hand, the same: run the updater, change each copy `releng/version-copies.txt` lists, add the
 changelog entry, run the tests with `-Dnvim.path=/path/to/nvim-0.13.0/bin/nvim` and *Get Neovim*

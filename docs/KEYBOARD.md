@@ -14,7 +14,7 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 | Insert mode started from blockwise visual (`Ctrl+V` then `I`, `A`, `c`), or while recording a macro | Neovim, so it sees every key; the `Ctrl` letters ticked for insert mode too, also ones Eclipse binds (the Java editor's `Ctrl+O`) |
 | Keys typed within milliseconds of entering insert mode, or of a `Ctrl` key Neovim handles there, before Eclipse has Neovim's text | Neovim, so nothing is lost; then Eclipse types again |
 | The key after `Ctrl-R`, `Ctrl-V`, `Ctrl-Q`, `Ctrl-K`, `Ctrl-G` or `Ctrl-\` (keys after which Neovim waits for another), and any typed before Neovim has it | Neovim; then Eclipse types again |
-| `:`, `/`, `?` in normal mode | Neovim, which opens its command line; the editor shows it in the `:` box, whose keys all go to Neovim (Paste and Copy stay Eclipse's, acting on the box) |
+| `:`, `/`, `?` in normal mode | Neovim, which opens its command line and draws it itself (ui2) over the editor's last row; the editor's text keeps the keyboard and every key goes to Neovim. Eclipse's Paste goes into Neovim's line (`nvim_paste`); Copy, Cut and Select All do nothing while it is open (`editor/CommandLineEditHandlers`) |
 | `ZZ`, `ZQ`, and the file and tab commands (`:w`, `:wa`, `:q`, `:bd`, `:e`, `:tabn`, ... see docs/USER_GUIDE.md, "Command line") | Eclipse's save, Save All, close, open and tab switching |
 | `gd`, `Ctrl-]`, `K`, `grn`, `gra`, `grr`, `gri`, `grt`, `gO`, `gt`, `gT` in normal mode (`gra` in visual mode too) | Neovim first, which hands them to Eclipse (below) |
 | The left mouse button in normal and visual mode | Neovim's own mouse (`nvim_input_mouse`); Ctrl/Cmd+click, the right and middle buttons stay Eclipse's (docs/USER_GUIDE.md, "Mouse") |
@@ -25,10 +25,11 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 
 Eclipse looks at a `Ctrl` key before the editor does, so a letter only reaches Neovim if the plug-in
 claims it. *Window → Preferences → Neovim → Ctrl Keys* has two check boxes per letter, each with
-Vim's meaning beside it: **Normal** (normal and visual mode, and the `:` box) and **Insert** (insert
+Vim's meaning beside it: **Normal** (normal and visual mode, and the `:` line) and **Insert** (insert
 and replace mode, below). Ticked letters go to Neovim there, cleared ones keep their Eclipse shortcut.
-In the box, `Ctrl+V` pastes and `Ctrl+C` with text selected copies (on Windows and Linux). Changes
-apply at once.
+On the `:` line a ticked `Ctrl+V` is Neovim's (insert the next key literally); `Shift+Insert`, or
+`Ctrl+V` with its Normal box cleared, is Eclipse's Paste, which pastes into the line. Changes apply
+at once.
 
 In normal mode, by default every letter goes to Neovim **except these two**, on every system:
 
@@ -227,7 +228,7 @@ still handles counts, the `g` prefix and arguments (`fZ` finds a `Z`; it is not 
 
 `grn`, `gra`, `grr`, `gri`, `grt` and `gO` are Neovim's own defaults for a language server
 (`:help grn`); here Eclipse is that server, so they run its commands. Where the editor has no such
-command (Rename in a plain text file) the message line says so:
+command (Rename in a plain text file) a message on Neovim's line says so:
 `grn: Rename is not available in this editor`. `grx` (run a code lens) has no Eclipse counterpart
 and stays Neovim's. Which Eclipse command each key runs, and how it is found, is one table in the
 code (`core/IdeKeys`), which also makes Neovim's mappings.
@@ -260,7 +261,7 @@ editor shares.
 - `prefs/CtrlKeysPage`: the check boxes (`CtrlKeysPreferencePage` gives it the plug-in's store).
 - `core/LuaScripts` (`SETUP`) and `editor/IdeActions`: the keys handed to Eclipse.
 - `editor/VimKeyContexts`: activates the contexts of the letters sent to Neovim.
-- `editor/EditorKeyContext`: when they are active: while the editor's text (or its `:` box) has
+- `editor/EditorKeyContext`: when they are active: while the editor's text has
   the keyboard and Neovim owns the keys. A page editor taking the keyboard turns every editor's
   contexts off before its own Ctrl+W context goes on: SWT may report the page's focus-in before the
   text's focus-out, and two active Ctrl+W bindings are a conflict Eclipse resolves by running

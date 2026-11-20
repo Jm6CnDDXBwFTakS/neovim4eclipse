@@ -467,34 +467,20 @@ Neovim then sends `redraw` notifications describing that screen. The options pas
 `nvim_ui_attach` choose parts that come as *events* instead of drawn cells (`:help ui-ext-options`);
 the plug-in asks for these (`NeovimConnection.TERMINAL_UI`):
 
-- `ext_cmdline` and `ext_popupmenu`: Neovim's command line, as events. Typing `:set tabs` sends
-  `cmdline_show` with the text `set tabs`, the cursor as a byte offset (8) and the type `:`; Left
-  sends `cmdline_pos 7`; Tab on `:e ` sends `popupmenu_show` with the file names on grid -1 (the
-  command line); Esc sends `cmdline_hide`. The editor's `:` box draws exactly that
-  (`util/CmdlineState`) and sends every key back with `nvim_input`: the command line, its history and
-  its completion are Neovim's own, the box only shows them.
-  The same `popupmenu_show` comes for a completion in the text (`Ctrl-N` in insert mode), then
-  with the window's grid and the cell where the word starts: `[items, 0, 4, 0, 2]` is "first entry
-  selected, row 4, column 0 of grid 2", each item `[word, kind, menu, info]`. With this option
-  Neovim leaves the list's drawing to the UI, so the plug-in lays the entries out in cells itself
-  (`util/CompletionMenu`) and draws them at the word (`editor/CompletionMenuPopup`). Whether
-  Neovim *completes* is not in these events at all: with a single match it shows no list. That is
-  in its mode, `ic` (`:help mode()`), which is why the plug-in reads the mode after each key
-  (docs/ARCHITECTURE.md, "The completion list").
-- `ext_messages`: each message, as `msg_show` with a *kind* that says what it is. Example, `/nope`
-  then Enter sends two:
-
-  ```
-  ["msg_show", "search_cmd", [[0, "/nope", 0]], false, false, false, 3, "typed_cmd"]
-  ["msg_show", "emsg", [[25, "E486: Pattern not found: nope", 6]], false, true, false, 4, "typed_cmd"]
-  ```
-
-  The fields are kind, content (chunks of `[attribute, text, highlight]`), replace_last, history,
-  append, id and trigger. `util/MessageEvent` reads them, `util/MessageRoute` decides where each goes:
-  the echo of the search nowhere, the error to the message line in red; `:ls` (kind `list_cmd`) to
-  the output popup when it lists more than one line, to the message line otherwise. Without `ext_messages`, a UI that draws no grid sees no message at all, and Neovim
-  stops at a "Press ENTER" prompt whenever its message area overflows (2.6).
-
+- `ext_cmdline` and `ext_messages`: Neovim's command line and its messages, as events instead of
+  cells. Typing `:set tabs` sends `cmdline_show` with the text, the cursor as a byte offset (8) and
+  the type `:`; `/nope` then Enter sends two `msg_show` events, the echo of the search
+  (`search_cmd`) and the error (`emsg`, `E486: Pattern not found: nope`). Without `ext_messages` a
+  UI that draws no grid sees no message, and Neovim stops at a "Press ENTER" prompt whenever its
+  message area overflows (2.6). The plug-in turns both on but draws from neither: Neovim attaches
+  the UI before it reads the user's `init.lua`, and an error there, with no UI taking messages,
+  would stop Neovim at such a prompt nobody sees. Once the config ran, Neovim's own **ui2** takes
+  these events over (below, 2.4a) and Eclipse's UI gets none.
+- `ext_popupmenu` is left **off**: Neovim then draws its popup menu (the `:` line's Tab list, and
+  `Ctrl-N` in insert mode) itself, into a grid of its own, which the editor draws like a floating
+  window (below). Whether Neovim *completes* is not in any of these events: with a single match it
+  shows no list. That is in its mode, `ic` (`:help mode()`), which is why the plug-in reads the
+  mode after each key (docs/ARCHITECTURE.md, "Completion: Neovim completes and draws its popup menu").
 - `ext_multigrid`: each window drawn into a grid of its own, a rectangle of cells, with `win_pos`
   saying which window a grid shows. Example, `q:` with one command in the history: Neovim makes a
   new grid of 120 by 7 cells, sends its rows, then says it shows the new window:
@@ -530,6 +516,36 @@ A UI that takes over parts of the screen draws them itself, with Neovim's data. 
 search preview: while `/foo` is typed with `'incsearch'`, Neovim moves its view to the match but no
 `CursorMoved` fires; the only report is `win_viewport` (part of `ext_linegrid`), whose cursor the
 session hands to the editor's caret.
+
+### 2.4a ui2: Neovim draws its own command line
+
+Neovim 0.12 ships **ui2** (`vim._core.ui2`, experimental; `:help ui2`), a UI written in Lua that
+runs inside Neovim: it attaches with `vim.ui_attach`, takes the `ext_cmdline` and `ext_messages`
+events itself, and draws the command line and the messages into ordinary floating windows, with
+ordinary buffers. To any UI outside, these are floats like a plug-in's. ui2 has four:
+
+| Window (its `'filetype'`) | Shows |
+| --- | --- |
+| `cmd` | the command line as you type it, and a short message after a command (`3 lines yanked`) |
+| `msg` | messages while a line is typed, or shown apart from it |
+| `pager` | `g<` (the last command's output again) and long output; the cursor goes into it, `q` closes it |
+| `dialog` | a prompt that waits for an answer: `confirm()`, `:s/a/b/c`, `input()` |
+
+`LuaScripts.UI2` turns it on at start, after the user's config (ui2 does nothing without a UI, and
+the UI attaches first), sets `'cmdheight'` 1 so that opening `:` moves no text, and sends Eclipse
+the four windows' ids (`eclipse_ui2_windows`). The editor then draws them as it draws any float,
+from their grids (`util/Grids`, `editor/FloatingWindows`), always, and with the cursor in them.
+Example: `:ech` typed gives a grid line for ui2's `cmd` window whose first cells are `:ech`, with
+the cursor on its row at column 4, drawn over the editor's last row.
+
+Why copy cells instead of drawing a line of Eclipse's own from `cmdline_show` and `msg_show`, as the
+plug-in did before 0.3.0: each prompt, each kind of message, each way output grows and each input
+method's way of editing a text field was a case of its own, and the result still differed from
+Neovim (no `:s///c` prompt, no pager). ui2 is Neovim's own answer to all of them; drawing its floats
+costs the plug-in nothing new. What it costs the user: the line is no text field, so macOS's
+press-and-hold accent menu does not open on it, and an input method needs help (3.2h). Because ui2
+is experimental, the pinned Neovim's upgrade checks it first (docs/UPGRADING.md, "Neovim":
+`ui2_spec.lua`, `NeovimUi2IntegrationTest`).
 
 `nvim_set_client_info` tells Neovim who is connected (`neovim4eclipse` and the bundle version).
 `:checkhealth` and `nvim_list_chans()` show it.
@@ -568,9 +584,10 @@ one thread (`neovim4eclipse-input`), which keeps keys in order and keeps blockin
 A *hit-enter prompt* would block the same way: in a terminal, `:bufdo %s/a/b/g` prints one
 "N substitutions" message per buffer, more than fits, so Neovim asks "Press ENTER" and answers nothing
 else until a key comes. A UI attached with `ext_messages` never sees one, because Neovim sends the
-messages as events and has no message area of its own to fill (2.4). (Without it, a UI has to type
+messages as events and has no message area of its own to fill (2.4); with ui2 those events go to
+ui2, which shows long output in its pager instead of asking (2.4a). (Without either, a UI has to type
 every command as `:silent cmd`, collect the output with `:redir` and send Esc whenever Neovim stops
-at a prompt; the plug-in once did, and dropped it for `ext_messages`.) The `:` box still runs commands through `core/CommandRunner`,
+at a prompt; the plug-in once did.) The plug-in's own commands still run through `core/CommandRunner`,
 which waits until Neovim is idle before refreshing Eclipse: a long `:!make` holds every request until
 it ends.
 
@@ -939,10 +956,11 @@ Design: [SPLITS.md](design/SPLITS.md). Tests: `windows_spec.lua`, `WindowLayoutT
 
 The user has had a few errors and types `:messages` and Enter in an attached editor.
 
-1. Neovim, attached with `ext_messages`, sends the history as one UI event, `msg_history_show`,
-   each entry with its kind (`emsg` for an error). `util/MessageEvent` reads it, and
-   `core/StatusTracker` makes it a `util/ViewText`: the lines, an `ErrorMsg` highlight on each
-   error's lines. It goes to the view-content listeners, not to the output box.
+1. Neovim hands the history to ui2 as one event, `msg_history_show`, each entry with its kind
+   (`emsg` for an error). `LuaScripts.UI2` wrapped ui2's handler of it: unless the event is `g<`'s
+   (its `prev_cmd` flag), the entries go to Eclipse as `eclipse_messages`, each `{kind, text}`, and
+   ui2's pager stays closed. `core/StatusTracker` makes them a `util/ViewText`: the lines, an
+   `ErrorMsg` highlight on each error's lines, for the view-content listeners.
 2. `editor/NeovimPageOpener` (the listener `Activator` added) runs on the UI thread: it notes the
    editor Neovim is attached to and its colors, and opens the messages editor,
    `page.openEditor(new NeovimPageInput(MESSAGES), NeovimPageEditor.ID, false)`. An editor need not
@@ -961,7 +979,7 @@ The user has had a few errors and types `:messages` and Enter in an attached edi
 4. The messages editor has the keyboard, so the page takes the focus (section 3.2a's attach in
    reverse: `NeovimSession.focusPageAsync`). Neovim enters the page's window, and its `BufEnter`
    is known as the focus moving (`util/EnterDecision`); the session's focus events
-   (`core/FocusRouter`) go to the pane: `/` is drawn in the page's own command row, not over the code.
+   (`core/FocusRouter`) go to the pane: `/` opens ui2's line, drawn over the page's last row, not over the code.
    The code's editor stays attached: its document and caret do not move.
 5. `/E486` searches in the editing Neovim; `yy` fills its unnamed register, so `p` in the code
    pastes it, with no forwarding: it is one Neovim. `Ctrl-W k` sends a window command whose origin
@@ -984,6 +1002,32 @@ write hooks that answer E382, so a help file, a real file, is never written from
 [ARCHITECTURE.md](ARCHITECTURE.md), decision 10. Tests: `ViewTextTest`, `PageKindTest`,
 `PagePlacementTest`, `view_scripts_spec.lua`, `windows_spec.lua`, `NeovimSessionIntegrationTest`,
 `NeovimPagesEndToEndTest`, `NeovimPageEditorEndToEndTest`.
+
+### 3.2h `:e ` and a Japanese file name: an input method on Neovim's line
+
+The user types `:e ` in a text editor, switches the keyboard to Japanese, types `ka`, Space, Enter
+(the input method's commit), then Enter again.
+
+1. `:`, `e` and Space go to Neovim like any key; ui2 draws `:e ` in its `cmd` window, and the
+   editor draws that float over its last row (2.4a). `LuaScripts.UI2`'s `CmdlineEnter` autocommand
+   sends `eclipse_cmdline(":")`; on the UI thread `NeovimEditorController.onCmdlineType` turns on
+   Eclipse's Paste for the line (`editor/CommandLineEditHandlers`) and `editor/LineInputMethod`.
+2. The editor's `StyledText` still has the keyboard, so the input method composes in it. A display
+   filter (SWT runs filters before any listener) takes its `ImeComposition` events first:
+   `COMPOSITION_CHANGED` with the text `か`, nothing committed. `util/LineComposition.changed("か", 0)`
+   answers "send nothing", and the box at the line's cursor (`FloatingWindows.cursorCell`) shows
+   `か`; `COMPOSITION_OFFSET` puts the candidate list there. The document never sees the text.
+3. Space offers `可`; Enter commits it: `changed("可", 1)` answers `"可"`, sent to Neovim as
+   `nvim_paste`, and ui2 draws `:e 可`. The system then also delivers the commit as a key press
+   (on macOS with Enter's key code); `LineComposition.dropKey('可')` drops it, so it is neither
+   typed twice nor taken for Enter.
+4. The second Enter is an ordinary key: Neovim runs `:e 可`, `CmdlineLeave` sends
+   `eclipse_cmdline("")`, and the filters and handlers go off.
+
+A click while composing ends the composition, unsent: the input method does so itself on Linux and
+Windows; on macOS the plug-in calls Cocoa's `discardMarkedText` through SWT's internal classes,
+guarded. Tests: `LineCompositionTest` (the decisions), `LineInputMethodTest` (`tests/swt`,
+synthetic events); a real input method is a manual check (docs/MANUAL_CHECKS.md, `ime-compose`).
 
 ### 3.3 Insert mode
 
@@ -1051,7 +1095,6 @@ depends on, and a fake only has to implement those few methods. The ports in thi
 | `HostCommandRunner.Ide` | `util/HostCommandRunner` | a record inside `editor/HostCommands` |
 | `DocumentPush.Neovim`, `DocumentPush.Mirror`, `DocumentPush.Caret` | `sync/DocumentPush` | a record in `NeovimEditorController`; `BufferSynchronizer`; `editor/CaretSync` |
 | `BlockHighlight` | `VisualSelectionView` | `editor/BlockOverlay` (a fake that keeps the ranges in tests) |
-| `CommandLineBox.Commands` | `editor/CommandLineBox` | `SessionCommands` in `NeovimEditorController` (a fake that records the keys and pastes sent, in tests) |
 | `ClipboardPort` | `core/ClipboardRegisters` | `editor/ClipboardBridge` (`ClipboardPort.NONE`, or a fake that keeps one text per selection, in tests) |
 
 A port is not the only way to keep Eclipse out of a class. When the class only *stores* Eclipse

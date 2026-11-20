@@ -19,7 +19,7 @@ own commands.
 
 **Plug-ins that draw on the screen** are shown only in part, since Eclipse draws the editor:
 
-- Shown: Neovim's own completion list (`Ctrl-N`), the labels of jump plug-ins (flash, leap, hop,
+- Shown: Neovim's own popup menu (`Ctrl-N`, Tab on the `:` line), the labels of jump plug-ins (flash, leap, hop,
   mini.jump2d) and floating windows that do not take the keyboard (which-key's key hints).
 - Not shown: windows that take the keyboard (pickers such as Telescope, file trees, dashboards,
   `:Lazy`) and the menus of completion plug-ins (nvim-cmp, blink.cmp).

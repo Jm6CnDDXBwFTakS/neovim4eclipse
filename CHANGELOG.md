@@ -12,6 +12,43 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- **Neovim draws its own command line**, its prompts, its pager and its messages, as in a terminal:
+  the plug-in turns on Neovim's ui2 (new and still experimental in Neovim 0.12) and the editor
+  shows what it draws on its last row. So `:`, `/` and `?` are Neovim's line exactly, in your
+  colors, and prompts work that had no place before: `confirm()`, the questions of `:s/a/b/c`,
+  `input()`. `g<` and long output open Neovim's pager (`q` closes it); `:messages` still opens its
+  page editor. The text no longer moves when `:` opens with the cursor on the editor's last row.
+  The plug-in's own messages (`E37` from `:e`, a refused write) are Neovim messages too, so
+  `:messages` keeps them.
+- **Completion uses Neovim's own popup menu**: Tab on the `:` line and `Ctrl-N`, `Ctrl-P` and the
+  `Ctrl-X` modes in insert mode show Neovim's list as Neovim draws it (your `Pmenu` colors,
+  `'pumheight'`, `'completeopt'`).
+- **Input methods** (Japanese, Chinese, Korean) work on the `:` line on Linux, Windows and macOS:
+  the text being composed shows at the line's cursor, and what you commit goes into the line. A
+  click or leaving Eclipse while composing drops the composition.
+- Eclipse's Paste while a `:` line is open pastes into Neovim's line; Copy, Cut and Select All do
+  nothing then.
+- The status bar shows the mode (with a macro's recording) and Neovim's statusline. The pending
+  command (`2d`, `"a`) and messages are on Neovim's own line instead.
+- `vim.g.neovim4eclipse_floating_windows = 0` and `vim.g.neovim4eclipse_viewport = 0` now hide only
+  plug-ins' floating windows: Neovim's command line, messages and popup menu are always drawn.
+
+### Removed
+
+- The plug-in's own `:` box, the message line along the editor's bottom, the output box for
+  listings and shell output, the plug-in's completion list, the status bar's pending-command part
+  (*cmd*) and the error flash. Neovim's own line and popup menu replace them, and there is no
+  setting to bring them back.
+- Their settings have no effect: the preferences *Status Bar: cmd* (`statusShowcmd`) and *Flash the
+  editor on errors* (`flashOnError`), which left the preference pages, and
+  `vim.g.neovim4eclipse_completion_menu`, so `Ctrl-N` no longer switches to Eclipse's Word
+  Completion. Their names are still accepted, so a config or `plugin_customization.ini` that sets
+  them does no harm.
+- On macOS, the press-and-hold accent menu no longer opens on the `:` line (holding `E` offers no
+  `é`); dead keys (`Option+E`, then `E`) still work there, and so do input methods.
+
 ## [0.2.31] - 2026-11-20
 
 ### Changed

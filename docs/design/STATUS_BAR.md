@@ -1,6 +1,12 @@
 # Design note: the status bar: the mode's names, widths and the cap
 
-The Eclipse status bar shows Vim's mode, the pending command and Neovim's statusline in three
+Since 0.3.0 the Eclipse status bar shows two parts, Vim's mode and Neovim's statusline. The pending
+command (`showcmd`) left it: Neovim shows it on its own line (ui2, docs/ARCHITECTURE.md, "Messages
+and output"), and the preference `statusShowcmd` has no effect, its name kept (README, "Settings").
+What follows says "three labels" where it was written for the three parts of before; the rules for
+the mode and the statusline are unchanged.
+
+Before 0.3.0 the Eclipse status bar showed Vim's mode, the pending command and Neovim's statusline in three
 labels. A single bold, centered label 420 pixels wide, holding all three joined, did not work:
 longer text was cut with "...", and Neovim evaluated the statusline 300 columns wide, so its `%=`
 padding pushed the cursor position far past the label. The design below gives the text more room,
@@ -70,8 +76,8 @@ attached): Neovim sends `c`, then `n` and the command's echo, before it starts t
 command, and answers nothing, not even `nvim_get_mode`, until it ends. The label stays for a mode a
 script may still report.
 
-Hit-enter and `:confirm` were not reached in a headless probe; with the plug-in's `ext_messages`
-Neovim may never show them.
+Hit-enter and `:confirm` were not reached in a headless probe. With ui2 (0.3.0) Neovim shows no
+hit-enter prompt, and `confirm()` is ui2's dialog window, drawn in the editor.
 
 ## 3. Widths and the cap
 
@@ -91,7 +97,7 @@ area its 246, and the plug-in's labels were left 112.
   characters of the average width is not enough: mode texts are nearly all capitals, wider than the
   average, and the widest would be cut. While a macro is recorded the texts carry
   ` rec @a`, so the label widens only then.
-- Cmd: 10 characters of the bar's bold font, the size of Vim's `'showcmd'` area.
+- Cmd (before 0.3.0): 10 characters of the bar's bold font, the size of Vim's `'showcmd'` area.
 - Statusline: the preference (default 60) in characters of the editor's **fixed-width** font family at
   the bar's size (`StatusBarLabels.statuslineFontData`; not at the editor's size, with which a change of the
   editor's font showed only once the bar was rebuilt), down to 10 under the cap. Neovim fits the `'statusline'` to columns; in a fixed-width font columns are

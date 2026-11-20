@@ -34,7 +34,8 @@ The Neovim side:
 - **Quietly.** What the module does to a window that is not the current one runs with
   `'eventignore'` set to `all`, and with `F` added to `'shortmess'`: putting a buffer in a window
   gives Neovim's file info as `:b` does, and together with the message of the command that caused
-  the travel it made two, which opens Eclipse's output popup (found by `FileInfoEndToEndTest`).
+  the travel it made two, which opened the plug-in's output popup of before 0.3.0 (found by
+  `FileInfoEndToEndTest`); with ui2 it would still show two messages on every switch.
 - **Windows are created without entering them** (`nvim_open_tabpage(buf, false, {})`), and their
   copied jump history is cleared (E7).
 - **The safety nets.** `WinClosed` sends `eclipse_window_closed`, so a window closed in Neovim by

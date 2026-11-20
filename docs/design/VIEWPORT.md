@@ -70,7 +70,8 @@ small msgpack client attached with the plug-in's own UI options (`NeovimConnecti
 
 Neovim 0.12.6:
 
-- **X1, size.** With the plug-in's UI options `'cmdheight'` is already 0 (`ext_messages`), and the
+- **X1, size.** With the plug-in's UI options `'cmdheight'` was 0 (`ext_messages`; 1 since 0.3.0,
+  see section 3), and the
   default `'laststatus'` 2 takes one row: at 40 rows `winheight(0)` is 39. After
   `nvim_ui_try_resize(80, 25)`: `&lines` 25, `&columns` 80, `winheight` 24, `winwidth` 80. With
   `laststatus=0`, `winheight` is 25. So the grid needs *editor rows + (lines − winheight)*.
@@ -142,8 +143,13 @@ numbers sent (section 3.1).
   `util/LatestValue`, so at most one is in flight and only the newest counts.
 - A pure class `util/ViewportSize` turns the editor's cells into a grid size: `rows = editorRows +
   (lines − winheight)`, `columns = editorColumns + textoff` (X1, X7), at least one column and two
-  rows of text. The overhead (`{ &lines - winheight(0), textoff }`, for example `{ 1, 4 }` with the
-  default status line and `set number`) comes from `LuaScripts.VIEWPORT_OVERHEAD`. The grid goes to
+  rows of text. The overhead (`{ &lines - winheight(0), textoff }`, for example `{ 2, 4 }` with the
+  default status line, `set number` and `'cmdheight'` 1) comes from `LuaScripts.VIEWPORT_OVERHEAD`.
+  Since 0.3.0 `'cmdheight'` is 1 (`LuaScripts.UI2`, after ui2 is on): the screen has a row below
+  the status line for ui2's command line, which the editor draws over its own last row
+  (docs/ARCHITECTURE.md, "Messages and output"). At 0, ui2 would grow it while a `:` line is open,
+  the editor's window would shrink a row, and with the cursor on its last row the text would
+  scroll; at 1 the window keeps its height. The grid goes to
   Neovim with `nvim_ui_try_resize`, not twice the same.
 - No resize is sent while Neovim waits for the rest of a command (`nvim_get_mode().blocking`, after
   `z`, `r` or `"`): Neovim would not answer the overhead question then. The skipped resize is sent

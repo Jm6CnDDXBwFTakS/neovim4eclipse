@@ -149,7 +149,8 @@ does nothing for these settings on macOS.
    without starting Eclipse; they still need a display (`xvfb-run` on a headless machine). Example:
    `BlockOverlayTest` paints the overlay into an image and checks the pixels. A class that also
    needs Neovim or the editor can still go here once those are behind a small interface:
-   `CommandLineBoxTest` drives the real `:` box with a fake `CommandLineBox.Commands`. List the class in
+   `LineInputMethodTest` drives the real input-method filters with synthetic `ImeComposition`
+   events and a fake for Neovim's line (a paste callback). List the class in
    the compiler includes of `tests/swt/pom.xml`.
 4. The UI tests only for what really needs the workbench: editors and their commands, the
    Preferences dialog Eclipse opens (`OpenPreferencesHandlerTest`), menus, key bindings, and the
@@ -266,8 +267,8 @@ No mocking framework is used; tests use real JFace objects and small hand-writte
   counts focus only inside the active window, and `xvfb-run` has no window manager, so when a
   dialog or shell that a test opened closes, no window is active any more and `setFocus()` alone
   does nothing visible. On a desktop, typing in another window while the UI tests run does the same.
-  `KeyboardFocus` (`tests/swt`) is the same helper for the SWT tests: `CommandLineBoxTest` uses it
-  so that a `:` box closed by focus loss fails with "lost keyboard focus", not "Widget is disposed".
+  `KeyboardFocus` (`tests/swt`) is the same helper for the SWT tests: `NeovimWindowPanelTest` uses
+  it so that a `q:` panel closed by focus loss fails with "lost keyboard focus", not "Widget is disposed".
   To check where code under test left the focus, ask `KeyboardFocus.afterActivation(shell, timeout)`
   instead of `isFocusControl()`: on a desktop the window manager can take the activation from the
   test's window mid-test (the focus is then nowhere), and the window, activated again, gives the
@@ -327,8 +328,7 @@ waiting longer:
   fake one that moves only when the test says. `NeovimDownloadTest` moves its clock a full stall
   ahead once the server's first bytes are in, so "after 3 of 10 bytes" holds however slow the
   connection is; with a real 300 ms stall it once failed "after 0 of 10 bytes" on Windows. The same
-  idea, in its simplest form: pass the time as a value (`CmdlineWatcher.expectOwn(keys, now)`,
-  `NeovimInstaller.deleteReplaced(..., now)`).
+  idea, in its simplest form: pass the time as a value (`NeovimInstaller.deleteReplaced(..., now)`).
 
 **Checking that something did not happen** needs care too: "sleep 200 ms, then check nothing
 arrived" passes on a loaded machine even when the bug is there, because the stray event comes later.

@@ -44,8 +44,8 @@ On Linux and macOS `export ECLIPSE=/path/to/eclipse` names an Eclipse the tool d
 itself (see below).
 
 - **`due`** lists the cards whose source files changed since the last release tag (`v*`), and the
-  cards marked `always`. A card about macOS's input method does not come up in a release that did
-  not touch the `:` box. A POM, manifest or feature whose only change is the version number (each
+  cards marked `always`. A card about the input method does not come up in a release that did
+  not touch its code. A POM, manifest or feature whose only change is the version number (each
   release branch starts by setting it) counts for no card. `--since <ref>` compares with another commit; `--all` lists every card.
 - **`setup`** creates the folders under `~/var/n4e-checks` (`--root <folder>` for another place): a
   project `n4e-alpha` to import into Eclipse, the workspaces `ws1` and `ws2`, and `xdg`, a plug-in
@@ -259,7 +259,7 @@ picture is still to be judged.
    `:match` read in both themes, in Neovim's colors. In the picture of the command-line window,
    its history reads in both themes, on the editor's own background. In the picture of the floating
    windows, the panel lies on the editor's bottom edge and the note above it, both readable in both
-   themes, with the editor's text showing around them. In the picture of the completion list, the
+   themes, with the editor's text showing around them. In the picture of Neovim's popup menu, the
    list hangs under the word being completed, every entry reads, and the selected one stands out
    in both themes. In the two pictures of the page editors, the text reads on the editor's
    background in both themes, the error of `:messages` in Neovim's error color and the WARNING of
@@ -320,7 +320,7 @@ Committers* package (2025-09 and later: the new command id).
    ⇒ Eclipse's *Terminal* view opens with a shell whose folder is the one `notes.txt` is in
    (`pwd` there shows it); the editor shows no message.
 2. Click back into `notes.txt`, type `:terminal make` and Enter.
-   ⇒ A second shell opens in the same folder. The editor's message line says
+   ⇒ A second shell opens in the same folder. Neovim's line, at the editor's bottom, says
    `terminal: opened Eclipse's Terminal in …; "make" was not run, type it there`, and `make` did not
    run in either shell.
 3. Close the Terminal view, then type `:ls!` and Enter in `notes.txt`.
@@ -397,71 +397,63 @@ editor and watch it.
 
 **Expect:** each step's result, after its ⇒.
 
-## Input method and accent menu in the `:` box
+## Input method on Neovim's `:` line
 
-### `ime-compose` Japanese typing in the `:` box reaches Neovim once
+### `ime-compose` Japanese typed on the `:` line reaches Neovim once
 
-- **On:** macos
+- **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** editor/NeovimEditorController.java, editor/FloatingWindows.java, /pom.xml
+- **Areas:** editor/LineInputMethod.java, util/LineComposition.java, editor/FloatingWindows.java, /pom.xml
 
-The input method's events come from macOS itself, so no test can send them; the logic behind them
-is tested (`MarkedTextInputTest`). Add *Japanese – Romaji* in *System Settings → Keyboard → Input
-Sources* first.
+The input method's events come from the system itself, so no test can send them; the decisions
+behind them are tested (`LineCompositionTest`), and the SWT side with synthetic events
+(`LineInputMethodTest`). Add a Japanese input method first: on Linux an input method framework with
+one (fcitx5 or IBus with Mozc), on macOS *Japanese – Romaji* in *System Settings → Keyboard → Input
+Sources*, on Windows *Japanese* with the Microsoft IME in *Settings → Time & language → Language &
+region*.
 
-1. In an editor in Neovim mode, type `:`, switch to Japanese Romaji input, type `konnichiwa` and
-   press <kbd>Enter</kbd>.
-   ⇒ While you type, the text being composed shows underlined in the box. After <kbd>Enter</kbd>
-   the box shows `:こんにちわ`: each kana once, no `kkk`, no doubled kana, and the line has not run.
-2. Press <kbd>Esc</kbd> to leave the line. Then `:`, type `kyou`, <kbd>Space</kbd> to convert
-   (choose 今日 with the arrows if needed), <kbd>Enter</kbd> to keep it.
-   ⇒ The box shows `:今日`; the <kbd>Enter</kbd> that keeps the text does not run the line.
-3. Switch back to ABC input and press <kbd>Esc</kbd>.
-   ⇒ The line closes.
+1. In `n4e-alpha`'s `notes.txt`, in Neovim mode, type `:`, switch to Japanese input and type
+   `konnichiwa`.
+   ⇒ Neovim's line opens on the editor's last row. The text being composed shows underlined at the
+   line's cursor, and the document's text does not change.
+2. Press <kbd>Enter</kbd> to keep the text.
+   ⇒ The line shows `:こんにちわ`: each kana once, no `kkk`, nothing doubled, and the line has not
+   run.
+3. Switch back to direct (ABC) input and press <kbd>Esc</kbd>.
+   ⇒ The line closes; `notes.txt` is as it was.
+4. `:` `echo "`, switch to Japanese, type `kyou`, press <kbd>Space</kbd> to convert (choose 今日
+   if another candidate is offered), <kbd>Enter</kbd> to keep it, switch to direct input, type `"`
+   and <kbd>Enter</kbd>.
+   ⇒ After <kbd>Space</kbd> the candidate list opens at the line's cursor, not elsewhere on the
+   screen. The <kbd>Enter</kbd> that keeps 今日 does not run the line; the last one does, and
+   Neovim's line shows `今日`.
 
 **Expect:** each step's result, after its ⇒.
 
-### `ime-keys` Esc, Enter, Ctrl keys and Cmd+V while composing
+### `ime-keys` Esc, a click, leaving Eclipse and Paste while composing
 
-- **On:** macos
+- **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** editor/NeovimEditorController.java, editor/FloatingWindows.java, /pom.xml
+- **Areas:** editor/LineInputMethod.java, util/LineComposition.java, editor/CommandLineEditHandlers.java, /pom.xml
 
-1. `:` `abc`, switch to Japanese, type `ka`, press <kbd>Ctrl+U</kbd>, then <kbd>Enter</kbd>.
-   ⇒ <kbd>Ctrl+U</kbd> does nothing while composing; the line becomes `:abcか`.
-2. Type `ka`, press <kbd>Esc</kbd> twice, then <kbd>Esc</kbd> once more.
-   ⇒ The first two <kbd>Esc</kbd> cancel the composition and the box stays open; the third
-   closes the line.
-3. Copy `src` to the clipboard; `:`, type `kaka`, press <kbd>Cmd+V</kbd>.
-   ⇒ The line is `:かかsrc`.
-4. <kbd>Esc</kbd>; in ABC input: `:` `echo "` <kbd>Option+E</kbd> <kbd>E</kbd> `"` <kbd>Enter</kbd>.
-   ⇒ The message line shows `é` once.
-5. In Ex mode (<kbd>g</kbd><kbd>Q</kbd>), Japanese, type `ka`, click in the editor's text. Then, in
-   ABC input, <kbd>Ctrl+U</kbd>, `visual` <kbd>Enter</kbd> to leave Ex mode.
-   ⇒ The click keeps `か` in Ex mode's line.
-
-**Expect:** each step's result, after its ⇒.
-
-### `ime-accent` Holding a letter shows the accent menu, and its pick replaces the letter
-
-- **On:** macos
-- **Launch:** normal
-- **Areas:** editor/NeovimEditorController.java, editor/FloatingWindows.java, /pom.xml
-
-1. ABC input, press-and-hold on (macOS's default). `:` `echo "`, hold <kbd>E</kbd> until the accent
-   menu shows, let go, press <kbd>2</kbd>, type `"`, <kbd>Enter</kbd>.
-   ⇒ The message line shows `é` once: no `eeee` from the held key, no `2`, no leftover `e`.
-2. The same, but pick with the arrow keys and <kbd>Enter</kbd> in place of <kbd>2</kbd>.
-   ⇒ The picked accent, once, as in step 1.
-3. `:` `echo "`, hold <kbd>E</kbd>, let go, <kbd>Esc</kbd>; then <kbd>Esc</kbd> again.
-   ⇒ The first <kbd>Esc</kbd> closes only the menu, and the box stays open on `:echo "e`; the
-   second closes the line.
-4. `:` `echo "`, hold <kbd>E</kbd>, let go, and click an accent at once.
-   ⇒ The clicked accent replaces the e. (A click made after a pause is lost, an SWT bug described
-   in docs/USER_GUIDE.md, "Command line": use the digit or the arrows.)
-5. With the *ABC – AZERTY* input source, if you have it: step 1 with <kbd>Shift</kbd> and the
-   <kbd>é</kbd> key (2) as the digit.
-   ⇒ The picked accent, once, as in step 1.
+1. `:` `abc`, switch to Japanese, type `ka`, press <kbd>Esc</kbd> (twice if the input method
+   needs it to drop the text).
+   ⇒ The composition is gone and the line stays open on `:abc`. In direct input, one more
+   <kbd>Esc</kbd> closes the line.
+2. `:` `abc`, Japanese, type `ka`, then click in the editor's text.
+   ⇒ The composing `か` disappears and reaches neither the line nor `notes.txt`. Switch to direct
+   input and type `d`: if the line is still open it shows `:abcd`, and no `か` comes back later.
+   (On macOS this is the plug-in's call to Cocoa's `discardMarkedText`.)
+3. `:` `abc`, Japanese, type `ka`, switch to another application and back to Eclipse.
+   ⇒ As in step 2: the composition ended, nothing of it was sent.
+4. Copy `src` to the clipboard. <kbd>Esc</kbd> to close any line; `:`, Japanese, type `kaka`,
+   <kbd>Enter</kbd> to keep it, then Eclipse's Paste (<kbd>Cmd+V</kbd> on macOS,
+   <kbd>Shift+Insert</kbd> on Linux and Windows).
+   ⇒ The line is `:かかsrc`; `notes.txt` is unchanged.
+5. On macOS: <kbd>Esc</kbd>; in ABC input, `:` `echo "` <kbd>Option+E</kbd> <kbd>E</kbd> `"`
+   <kbd>Enter</kbd>.
+   ⇒ Neovim's line shows `é` once. (Holding <kbd>E</kbd> on the line opens no accent menu: the
+   README's Known limitations say so.)
 
 **Expect:** each step's result, after its ⇒.
 

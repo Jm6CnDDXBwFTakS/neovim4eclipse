@@ -43,7 +43,7 @@ edges, see [Known limitations](#known-limitations).
 | File and tab commands: `:w` `:wa` `:q` `:qa` `:wq` `:x` `:xa` `ZZ` `ZQ`, `:bd`, `:e file`, `:e!`, `:enew`, `:tabn` `:tabp`, `gt` `gT` | All other `:` commands, e.g. `:%s/a/b/g` |
 | Vim's windows as editors: `:split`, `:vsplit` and `Ctrl-W s` put an editor beside this one, in an editor stack of its own; `Ctrl-W h/j/k/l` move between them, `Ctrl-W +` sizes them, `:only` gathers them again (see [Splits](docs/USER_GUIDE.md#splits-split-vsplit-ctrl-w)) | Where a split goes (`'splitbelow'`, `'splitright'`), which file it shows, the counts |
 | `gd` and `Ctrl-]` (Open Declaration), `K` (hover information), and Neovim's language keys `grn` (Rename), `gra` (Quick Fix), `grr` (References), `gri` (Open Implementation), `grt` (Open Declared Type), `gO` (Quick Outline), through the editor's own commands (see [docs/KEYBOARD.md](docs/KEYBOARD.md)) | Counts and the `g` prefix of those keys |
-| The inline command line for `:`, `/`, `?` (typing, history) | Executing the command or search typed there |
+| Drawing Neovim's command line for `:`, `/`, `?`, its prompts, pager and messages over the editor's last row, as Neovim draws them (its ui2; see [Command line](docs/USER_GUIDE.md#command-line---)) | The line itself: typing, history, Tab completion, running the command or search typed there |
 | Drawing Neovim's command-line window (`q:`, `q/`, `q?`, `Ctrl-F` on the `:` line) over the editor's bottom (see [Command line](docs/USER_GUIDE.md#command-line---)) | The window itself: its history, keys and Enter |
 | `:messages`, `:checkhealth` and `:help` in editors of their own, beside the code (see [The page editors](docs/USER_GUIDE.md#the-page-editors-help-messages-checkhealth)) | Read-only windows of your own Neovim (your colors, mappings and registers, `:split` for a second view): the messages; the `:checkhealth` report, with `:checkhealth neovim4eclipse`; Neovim's own help, your plug-ins' pages included, with `Ctrl-]` and `Ctrl-T` |
 | The OS clipboard behind the `"+` and `"*` registers, and a copy of every other yank (see [Clipboard](docs/USER_GUIDE.md#clipboard)) | `p` / `P` / `.` / counts, from Neovim's own registers |
@@ -136,7 +136,7 @@ it, see [CONTRIBUTING.md, "Run it from Eclipse"](CONTRIBUTING.md#run-it-from-ecl
    `Ctrl+N` completes); `Ctrl+A`, `Ctrl+C`, `Ctrl+V`, `Ctrl+S`, `Ctrl+Z` and `Ctrl+F` stay
    Eclipse's. [docs/KEYBOARD.md](docs/KEYBOARD.md#insert-mode) lists the keys and where the
    Eclipse commands they replace went (Cut is `Shift+Delete`).
-4. **Run a command.** `:`, `/` and `?` open a command line inside the editor, at its bottom.
+4. **Run a command.** `:`, `/` and `?` open Neovim's command line inside the editor, on its last row.
    `:%s/old/new/g` runs in Neovim; `:w`, `:q`, `:e file` and the other file commands are Eclipse's
    own Save, Close and Open.
 5. **Use the IDE from Vim.** `gd` opens the declaration, `K` shows the hover information, `]d`
@@ -180,8 +180,8 @@ The variable is set with `--cmd`, not in the environment, so a Neovim you start 
 inside Eclipse does not see it.
 
 **noice.nvim** (on in LazyVim) cannot run inside Eclipse: it refuses any UI that draws the command
-line, the completion menu and the messages itself, as the plug-in does for the `:` box and the
-message line. It turns itself off and says why in three lines (`Noice can't work when the GUI has
+line, the completion menu and the messages itself. Inside Eclipse, Neovim draws those with its
+own ui2, which the plug-in turns on, and noice cannot run beside it. It turns itself off and says why in three lines (`Noice can't work when the GUI has
 ext_cmdline enabled`, and the like); the plug-in leaves those out of its start-up warning, so they
 alone open none, and noice keeps working in terminal Neovim. To keep it from loading in Eclipse at
 all:
@@ -239,8 +239,8 @@ where the table says otherwise. `0` or `false` turns a part off:
 | `vim.g.neovim4eclipse_search_highlight = 0` | The editor does not highlight search matches; search itself works as before ([Command line](docs/USER_GUIDE.md#command-line---)) |
 | `vim.g.neovim4eclipse_highlights = 0` | The editor does not show the flash after a yank, your `:match` highlights or a jump plug-in's labels ([Command line](docs/USER_GUIDE.md#command-line---)) |
 | `vim.g.neovim4eclipse_jump_label_group_prefixes = { 'Sneak' }` | More jump plug-ins whose labels the editor draws, by the start of their highlight groups' names; added to the built-in `Flash`, `Leap`, `Hop`, `MiniJump2d` ([Jump labels](docs/USER_GUIDE.md#jump-labels)) |
-| `vim.g.neovim4eclipse_floating_windows = 0` | The editor does not draw Neovim's floating windows, such as a plug-in's panel of key hints ([Floating windows](docs/USER_GUIDE.md#floating-windows)) |
-| `vim.g.neovim4eclipse_completion_menu = 0` | In insert mode `Ctrl-N` and `Ctrl-P` (also after `Ctrl-X`) run Eclipse's Word Completion instead of Neovim's own completion, and Neovim's list of matches is not drawn ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)) |
+| `vim.g.neovim4eclipse_floating_windows = 0` | The editor does not draw plug-ins' floating windows, such as a panel of key hints; Neovim's command line, messages, pager and popup menu are drawn all the same ([Floating windows](docs/USER_GUIDE.md#floating-windows)) |
+| `vim.g.neovim4eclipse_completion_menu = 0` | No effect since 0.3.0: `Ctrl-N` and `Ctrl-P` are always Neovim's completion, in Neovim's own popup menu. The name is still accepted ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)) |
 | `vim.g.neovim4eclipse_task_tags = 'TODO,FIXME'` | The comment tags `:Etasks` collects; read each time `:Etasks` runs ([The quickfix list](docs/USER_GUIDE.md#the-quickfix-list-eproblems-q)) |
 
 **Set by the plug-in**, for your config to read:
@@ -274,10 +274,10 @@ which an administrator can set for everyone in the product's `plugin_customizati
 |------------|-----|
 | Show the Neovim button on the main toolbar | `showToggleButton` |
 | Show Neovim menu in the menu bar | `showMenu` |
-| Flash the editor on errors | `flashOnError` |
+| No effect since 0.3.0 (was: flash the editor on errors; Neovim shows its errors itself) | `flashOnError` |
 | Show a welcome after installing, and a note after updates to a new minor version | `showWelcome` |
 | Status Bar: *mode* | `statusMode` |
-| Status Bar: *cmd* (the pending command, Vim's `showcmd`) | `statusShowcmd` |
+| No effect since 0.3.0 (was: Status Bar: *cmd*, the pending command; Neovim shows it in its own line) | `statusShowcmd` |
 | Status Bar: *statusline* (Neovim's `'statusline'`) | `statusStatusline` |
 | Status Bar: *Statusline width (characters)* | `statusStatuslineWidth` |
 | Status Bar: *At most this share of the status bar (%)* | `statusMaxWidthPercent` |
@@ -399,8 +399,8 @@ gets in your way:
    only some of what plug-ins draw appears:
    - **Shown:** floating windows that do not take the keyboard (a panel of key hints such as
      which-key's, a note or progress window opened in the background; see
-     [Floating windows](docs/USER_GUIDE.md#floating-windows)), Neovim's built-in completion list
-     for `Ctrl-N` ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and the labels of
+     [Floating windows](docs/USER_GUIDE.md#floating-windows)), Neovim's own popup menu for `Ctrl-N`
+     and for Tab on the `:` line ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and the labels of
      jump plug-ins (flash, leap, hop, mini.jump2d; see [Jump labels](docs/USER_GUIDE.md#jump-labels)).
    - **Not shown:** windows that take the keyboard (pickers such as Telescope and fzf-lua, file
      trees, dashboards, `:Lazy`), the menus of completion plug-ins (nvim-cmp, blink.cmp), and
@@ -413,6 +413,14 @@ gets in your way:
    seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave such plug-ins out
    in Eclipse (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in
    [Your `init.lua` in Eclipse](#your-initlua-in-eclipse)).
+8. **Neovim's command line and messages are always drawn.** Neovim draws them itself, with its
+   experimental ui2, as floating windows over the editor's last row; the editor copies them. So
+   `vim.g.neovim4eclipse_floating_windows = 0` and `vim.g.neovim4eclipse_viewport = 0` do not hide
+   them, or Neovim's popup menu (the `:` line's Tab list, `Ctrl-N`): those switches cover only
+   plug-ins' floats. There is no switch back to a command line of Eclipse's own.
+9. **macOS: no press-and-hold accent menu on the `:` line.** Holding a key such as `E` there
+   does not offer `é`, `è`, `ê`. Dead keys still work (`Option+E`, then `E` gives `é`), and so do
+   input methods such as Japanese.
 
 ## Reporting a problem
 

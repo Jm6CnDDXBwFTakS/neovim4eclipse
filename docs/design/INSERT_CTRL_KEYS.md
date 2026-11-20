@@ -189,7 +189,7 @@ back, `anInsertFromBlockwiseVisual…`, `anInsertWhileRecording…`).
 - **`Ctrl-C`**: offered, off by default (copy). When ticked, `KeyRouter` takes it for `Esc`: the
   typed text is replayed, so `.` repeats it.
 - **`Ctrl-N` / `Ctrl-P`**: Neovim's own completion, with its list drawn at the word
-  (docs/ARCHITECTURE.md, "The completion list"). On by default on every system.
+  (docs/ARCHITECTURE.md, "Completion: Neovim completes and draws its popup menu"). On by default on every system.
   - The key is a sync point (`KeyRouter.completeInNeovim`), after which Neovim types the insert
     until its mode is no longer a completing one (`ic`, `ix`); the section 5 hand-back then
     returns typing to Eclipse (`KeyInput.mayHandBack`). The character that ends a completion is
@@ -206,19 +206,11 @@ back, `anInsertFromBlockwiseVisual…`, `anInsertWhileRecording…`).
     another `Ctrl` letter is sent to Neovim with it (`<C-x><C-l>`), any other key is handled as
     usual. A pending `Ctrl-X` ends at any command other than the plug-in's own key commands
     (`editor/OtherCommandWatch`).
-- **With Neovim's list turned off** (`vim.g.neovim4eclipse_completion_menu = 0`), `Ctrl-N` /
-  `Ctrl-P` run Eclipse's *Word Completion* (Alt+/) instead, as before 0.2.24.
-  - Word Completion cannot go backward (`HippieCompleteAction` keeps only a forward iterator), so
-    `Ctrl-P` does what `Ctrl-N` does; its first offer is the nearest word before the caret, as
-    Vim's `Ctrl-P`.
-  - It offers the next word when pressed again only while no other command runs in between (its
-    `CompoundEditExitStrategy` ends on any other command), and the plug-in's own `...commands.ctrl.n`
-    would be one. So in an insert Eclipse types, `Ctrl+N` and `Ctrl+P` switch on contexts of their
-    own (`...context.complete.n`, `.p`) whose bindings run Eclipse's
-    `org.eclipse.ui.edit.text.hippieCompletion` directly (`KeyContextRule.contextId`). In an insert
-    Neovim drives they stay Neovim's letter contexts: Eclipse does not type there.
-  - `Ctrl-X Ctrl-N` and `Ctrl-X Ctrl-P` run Word Completion too; a key Eclipse's binding took
-    never reaches the router, and then `Ctrl-X Ctrl-N` goes straight to Word Completion.
+- **No switch to Eclipse's Word Completion** since 0.3.0. Before, `vim.g.neovim4eclipse_completion_menu = 0`
+  turned the plug-in's own list off and made `Ctrl-N` / `Ctrl-P` run *Word Completion* (Alt+/).
+  Neovim now draws its popup menu itself (the UI is attached without `ext_popupmenu`), so there is
+  no list of the plug-in's to turn off; the variable's name stays accepted and does nothing
+  (`NeovimSession.completesInNeovim` is always true).
 - Tests: `KeyRouterTest`, `KeyInputTest`, `KeyContextRuleTest`, `PluginXmlConsistencyTest`,
   `NeovimCompletionIntegrationTest`, UI `CompletionMenuEndToEndTest` (the list, the keys, the
   hand-back), `ctrlCEndsAnInsertAsEscDoes`, and `ctrlXCtrlOWhileEclipseTypesRunsContentAssist`

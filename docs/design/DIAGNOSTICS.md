@@ -36,7 +36,7 @@ Diagnostics in open documents:
 - **Tasks** (a `TODO`-style comment) are not diagnostics, so `]d` never stops on one. They are
   walked through the quickfix list instead: `:Etasks`, then Neovim's `]q` / `[q`. There are no task
   keys of the plug-in's own: Neovim 0.12 already maps `]t` / `[t` to `:tnext` / `:tprevious` (tags).
-- **The message** of the problem the cursor lands on is shown in the message line, as Eclipse's
+- **The message** of the problem the cursor lands on is shown on Neovim's line (ui2 since 0.3.0), as Eclipse's
   status bar does after Ctrl+. (*Next Annotation*). Example: `]d` to line 40 shows
   `Type mismatch: cannot convert from int to String`. This is Neovim's `on_jump` hook, set by the
   plug-in only when the user's `init.lua` set none (section 4).
@@ -57,16 +57,16 @@ The quickfix list:
   the user's own `setqflist()`. Neovim runs every one of them itself, typed, mapped or in a macro;
   an entry in a file that has no editor yet opens its editor, the way `:e file` does
   (docs/design/BUFFER_NUMBERS.md, 2.3).
-- **`:cl[ist]`**: the list, in the output popup (it is ordinary command output).
+- **`:cl[ist]`**: the list, shown as Neovim shows output (it is ordinary command output).
 - **`:copen` / `:cw[indow]`**: Eclipse's Problems view, or the Tasks view for `Eclipse tasks`, or
-  the output popup for other lists (5.4).
+  Neovim's output for other lists (5.4).
 - **`:Eproblems` / `:Etasks`** fill the quickfix list with the workspace's problems or tasks, and
   keep it current while it is the current list (5.2).
 
 Not done: Neovim's diagnostic float (`<C-w>d`, a Neovim default, and
 `vim.diagnostic.open_float()`): a float would open in a Neovim window nobody sees (the editors' windows sit in hidden tabpages,
 docs/design/WINDOWS.md). `K` already shows Eclipse's hover, which includes the problem text,
-and the message line shows it after each jump.
+and Neovim's line shows it after each jump.
 
 ## 2. Experiments (diagnostics)
 
@@ -84,7 +84,7 @@ Linux: a 50-line buffer with three diagnostics set by `vim.diagnostic.set`, keys
   `vim.diagnostic.config({ jump = … }, ns)` is ignored by `]d`. `jump({ namespace = ns })` limits a
   jump to one namespace.
 - With nothing left to jump to (`wrap = false` past the last problem) `on_jump` is **not** called,
-  and Neovim itself prints `No more valid diagnostics to move to`, which reaches the message line
+  and Neovim itself prints `No more valid diagnostics to move to`, which reaches Neovim's line
   like any message.
 - Neovim 0.12's defaults that matter here: `]d` `[d` `]D` `[D` `<C-W>d` (diagnostics); `]q` `[q`
   `]Q` `[Q` `]<C-Q>` `[<C-Q>` (quickfix: `:cnext` and friends, run with `nvim_cmd` from a Lua
@@ -197,7 +197,7 @@ diagnostics through the wrapper, a user's own `]d`), `DiagnosticTest`, `Diagnost
 zero-length range), `DiagnosticsSyncTest` (when lists are sent), `NeovimProblemsIntegrationTest`
 (the variable read through the session at start), and the UI test `DiagnosticsEndToEndTest` (a
 problem marker made with `IResource.createMarker(IMarker.PROBLEM)` on a plain text file, `]d` to it
-with its message in the message line, the marker deleted).
+with its message on Neovim's line, the marker deleted).
 
 ## 4. Keys, and the message after a jump
 
@@ -228,7 +228,8 @@ if jump.on_jump == nil then
 end
 ```
 
-The echo reaches the message line only because Eclipse receives messages as `ext_messages` events:
+The echo is shown only because messages go to a UI that takes them as events (ui2's Lua UI since
+0.3.0, Eclipse's own `ext_messages` UI before; docs/ARCHITECTURE.md, "Messages and output"):
 `nvim_echo` does not set `v:statusmsg`, and `on_jump` runs scheduled, after any read of it.
 
 Rejected: opening Eclipse's hover or Quick Fix popup on each jump. Those popups take the keyboard
@@ -307,10 +308,10 @@ that matter are in `quickfix_spec.lua`.
 |---|---|
 | `:Eproblems` | Fills the quickfix list titled `Eclipse problems` with every error, warning and info in the workspace, then jumps to the first, as `:make` does. |
 | `:Eproblems warning`, `:Eproblems error` | Only problems at least that severe, as `vim.diagnostic`'s `severity = { min = ... }`: `warning` gives errors and warnings, `error` errors. `info` is the same as none. Any other word is refused with Vim's `E475`; the three are completed. The title carries the argument: `Eclipse problems (warning)`. |
-| `:Eproblems!` | Fills the list without jumping (Vim's `:make!`); the message line says how many: `Eclipse problems: 12 (3 errors, 9 warnings)`. |
-| `:Etasks`, `:Etasks!` | The same for task markers (`TODO`, `FIXME`) whose tag is in `vim.g.neovim4eclipse_task_tags`: a comma-separated string in `init.lua`, `'JM6,FIXME'`, or `'*'` for every task. Read each time `:Etasks` runs, so it can be changed with `:let` without a restart. Not set: the message line says how to set it, and no list is made. Title: `Eclipse tasks (JM6)`. |
+| `:Eproblems!` | Fills the list without jumping (Vim's `:make!`); Neovim's line says how many: `Eclipse problems: 12 (3 errors, 9 warnings)`. |
+| `:Etasks`, `:Etasks!` | The same for task markers (`TODO`, `FIXME`) whose tag is in `vim.g.neovim4eclipse_task_tags`: a comma-separated string in `init.lua`, `'JM6,FIXME'`, or `'*'` for every task. Read each time `:Etasks` runs, so it can be changed with `:let` without a restart. Not set: Neovim's line says how to set it, and no list is made. Title: `Eclipse tasks (JM6)`. |
 | `]q` `[q` `:cnext` `:cc 3` ... | Neovim's own, unchanged (section 1). |
-| `:copen`, `:cwindow` | The Problems view for `Eclipse problems`, the Tasks view for `Eclipse tasks`; for any other list (`:vimgrep`, `vim.diagnostic.setqflist()`), its `:clist` in the output popup. `:lopen`, `:lwindow`: the location list's `:llist`. |
+| `:copen`, `:cwindow` | The Problems view for `Eclipse problems`, the Tasks view for `Eclipse tasks`; for any other list (`:vimgrep`, `vim.diagnostic.setqflist()`), its `:clist`, shown as Neovim shows output. `:lopen`, `:lwindow`: the location list's `:llist`. |
 
 User commands must start with a capital; the `E` prefix groups the plug-in's.
 
@@ -437,7 +438,7 @@ editor's tabpage. Eclipse's views are the Eclipse-native equivalent. The `WinNew
 `LuaScripts.WINDOWS` closes a `quickfix` or `loclist` window and calls the quickfix module's
 `window()`: for the plug-in's current list, `eclipse_show_view` with `problems` or `tasks`, and
 Eclipse shows that view (`IPageLayout.ID_PROBLEM_VIEW`, `ID_TASK_LIST`); for any other list it
-echoes `:clist` (or `:llist`), which arrives as multi-line output and opens the output popup.
+echoes `:clist` (or `:llist`), which is multi-line output, shown as Neovim shows any (ui2).
 Without the module loaded (a spec of the windows alone) the safety net shows its own message.
 
 Rejected: host commands (`:copen` in `HostCommand.TABLE`). A mapping's `<Cmd>copen<CR>`, a
@@ -509,7 +510,7 @@ itself uses; for a multi-page editor's text page the outer editor's context give
 guards the result, not the context.
 A command id unknown to the running Eclipse (a JDT command without Java tooling) does not count as
 run: `choose` checks `isDefined()` first, and refuses an action that is no command (`next_tab`). A
-command that fails while running, and a link that fails to open, say so in the message line
+command that fails while running, and a link that fails to open, say so on Neovim's line
 (`grr: References failed: ...`).
 
 **Tests**: `setup_spec.lua` (each key sends its action, `gra` in visual mode keeps the selection,

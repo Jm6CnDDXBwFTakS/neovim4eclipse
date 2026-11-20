@@ -11,7 +11,7 @@ and [KEYBOARD.md](../KEYBOARD.md)).
 | Note | What it covers |
 |------|----------------|
 | [MARKETPLACE.md](MARKETPLACE.md) | The permanent p2 update site on GitHub Pages, PGP-signed releases, and the Eclipse Marketplace listing |
-| [KEY_ROUTING.md](KEY_ROUTING.md) | When `:`, `/`, `?` open the box and when `q` records: Neovim says (`ext_cmdline`), the plug-in does not guess |
+| [KEY_ROUTING.md](KEY_ROUTING.md) | When `:`, `/`, `?` open a command line and when `q` records: Neovim says, the plug-in does not guess; since 0.3.0 Neovim also draws the line (ui2) |
 | [DIAGNOSTICS.md](DIAGNOSTICS.md) | Eclipse's problems as Neovim diagnostics (`]d`, `[d`), quickfix lists of the workspace's problems and tasks, the `gr*` keys |
 | [FOLDING.md](FOLDING.md) | Folding with `zo`, `zc` and the other `z` commands, mirroring Eclipse's folds into Neovim |
 | [VIEWPORT.md](VIEWPORT.md) | Neovim's window follows the editor's size and scroll position, so `H`, `L`, `Ctrl-D`, `zz` act on what is on screen |

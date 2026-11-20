@@ -220,8 +220,8 @@ a checklist, to fill in the form from. Why the values are what they are:
   pictures` (Linux) runs them with the pinned Neovim under `xvfb-run`, at a screen of a known size,
   and copies the results to `.tool-cache/marketplace/`. `ScreenshotCaptureTest` tells one story in a
   small Java project, `shop`, with only the Project Explorer and the Outline beside the editor:
-  visual line mode in `Invoice.java` (the mode in the status bar), the `:` box with
-  `:%s/total/sum/g` typed, and, once it has run and `:w` saved it, `:clist` in the output popup: the
+  visual line mode in `Invoice.java` (the mode in the status bar), Neovim's `:` line with
+  `:%s/total/sum/g` typed, and, once it has run and `:w` saved it, `:clist` in Neovim's output: the
   errors Eclipse's compiler then finds in `Order.java` and `Receipt.java`, which `:Eproblems` made
   Neovim's quickfix list; and, at the first of them, `ciw` on the broken call and Ctrl+Space:
   Eclipse's content assist in an insert Neovim began. The third shows what a Vim emulation does

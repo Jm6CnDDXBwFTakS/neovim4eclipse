@@ -4,9 +4,9 @@
 
 Outside insert mode every key goes to Neovim, which alone decides what it means: `:` `/` `?` open a
 command line or are the argument of the command before them (`f:`, `r/`, `d/foo`); `q` starts or
-stops a recording or is part of `gqq`. The `:` box is a view of Neovim's own command line
-(`util/CmdlineState`; docs/ARCHITECTURE.md, "Command line"): it opens when Neovim reports a line
-(`cmdline_show`, from `ext_cmdline`), and the recording state comes from Neovim (`reg_recording()`).
+stops a recording or is part of `gqq`. The command line is Neovim's own, and since 0.3.0 Neovim
+also draws it (its ui2, in a floating window the editor copies; docs/ARCHITECTURE.md, "Command
+line"), and the recording state comes from Neovim (`reg_recording()`).
 `ZZ` and `ZQ` are Neovim mappings to Eclipse's save and close (`core/IdeAction`). Nothing on the UI
 thread guesses from the keys typed so far.
 
@@ -14,7 +14,9 @@ This note explains why. The router (`core/KeyRouter`) once had to decide on the 
 Neovim had seen the key, whether a key went to Neovim or opened the editor's own box, because the
 box had its own history, completion and search answering. It guessed from Vim's command grammar.
 The three phases below are the steps from that guessing to the current design; what each found
-about Neovim still holds, and is why the guessing is gone.
+about Neovim still holds, and is why the guessing is gone. Phase 4 (0.3.0) replaced the box itself
+with Neovim's drawn line; the classes phases 2 and 3 name (`util/CmdlineEvent`, `CmdlineState`,
+`CmdlineWatcher`, `editor/CommandLineBox`) are gone with it.
 
 ## How guessing failed
 
@@ -129,8 +131,18 @@ Every `:`, `/`, `?` goes to Neovim, and the box is a view of Neovim's command li
 command-line mappings and completion are Neovim's own; the box's own history, completion and
 search answering are gone, and so is phase 2's take-over: every line is shown. With that, nothing
 on the UI thread needs to guess, so `util/KeyGrammar` was removed and `ZZ`/`ZQ` became Neovim
-mappings (`core/IdeAction`). How the box edits text (keys, pastes, input methods) is in
-docs/ARCHITECTURE.md, "Command line".
+mappings (`core/IdeAction`).
+
+## Phase 4: Neovim draws its own command line
+
+From 0.3.0 the box is gone too. `LuaScripts.UI2` turns on Neovim's ui2, which draws the command
+line, its prompts, the pager and messages in floating windows; the editor copies their cells over
+its last row like any float's, and its text widget keeps the keyboard, so every key reaches Neovim
+on the same road as in normal mode. The routing above is unchanged: Neovim still decides what `:`
+means. What the plug-in needs to know of a line is only that one is open (`eclipse_cmdline`, from
+`CmdlineEnter` and `CmdlineLeave`), for Eclipse's Paste and an input method
+(docs/ARCHITECTURE.md, "Command line"). The plug-in's own typed lines are no longer told apart:
+nothing in Eclipse shows a line from events any more.
 
 ## Experiments
 

@@ -33,7 +33,10 @@ window per text editor and one per page editor.
 | Current window | The one window that Neovim's keys and commands act on. |
 | Tab page | A set of windows, of which Neovim shows one set at a time (`:help tab-page`). Not an Eclipse editor tab. |
 | Split | A window made by dividing another within one tab page. |
-| Floating window, float | A window drawn over the others, outside the split layout: which-key's panel, the completion list, a hover (`:help api-floatwin`). |
+| Floating window, float | A window drawn over the others, outside the split layout: which-key's panel, a hover, ui2's command line (`:help api-floatwin`). |
+| Popup menu | Neovim's list of candidates: the `:` line's Tab completion and insert-mode `Ctrl-N` (`:help popupmenu-completion`). Drawn by Neovim into a grid of its own, a float with no window; the plug-in draws it as a float. |
+| ui2 | Neovim's newer, experimental way of drawing its command line, prompts, pager and messages (`vim._core.ui2`, Neovim 0.12; `:help ui2`): a Lua UI inside Neovim that draws them into four floating windows, `cmd`, `msg`, `pager` and `dialog`. The plug-in turns it on and copies those windows' cells over the editor's last row (ARCHITECTURE.md, "Messages and output"). |
+| Pager | ui2's window for long output and `g<`: the cursor goes into it, `q` closes it. Not the page editors. |
 | Grid | The character cells Neovim sends a UI for drawing. With `ext_multigrid` each window has a grid of its own; grid 1 is the whole screen (`:help ui-multigrid`). |
 | Command-line window | The window `q:` opens on the command history (`:help cmdwin`). |
 | UI | A program attached to Neovim that receives its redraw events (`nvim_ui_attach`); the plug-in is one. |
@@ -49,6 +52,7 @@ window per text editor and one per page editor.
 | Editor tabs | — | What Vim's tab commands move between (`editor/EditorTabs`); Neovim's tab pages are not used for them. |
 | The text editor's `StyledText` | — | Eclipse draws the text and the caret; Neovim's grid for that window is not drawn. |
 | The q: panel, floats over the editor | Their grids | Drawn by the plug-in over the text editor (`editor/NeovimWindowPanel`, `editor/FloatingWindows`). |
+| The `:` line over the editor's last row | ui2's `cmd` window, in the screen's row below the editor's window (`'cmdheight'` 1) | Drawn as a float, always; the editor's `StyledText` keeps the keyboard and every key goes to Neovim. |
 | A page editor (help, messages, checkhealth) | A window of the editing Neovim, alone in a hidden tab page | Drawn from that window's grid (`editor/WindowPane`, decision 10 in ARCHITECTURE.md); a split's two halves are two windows on one buffer. |
 
 ## The plug-in's own words
@@ -57,7 +61,7 @@ window per text editor and one per page editor.
 |---|---|
 | Editing Neovim | The one Neovim behind every text editor of a workbench. |
 | Attached | The text editor (and its window) whose document Neovim mirrors now: its buffer is kept in step and its caret follows Neovim's cursor. |
-| Focused window | Neovim's current window, and the part shown from it. The mode, the `:` box, messages, floats and host commands follow it (`core/FocusRouter`). Usually the attached editor's; a page's window can have it while the text editor stays attached. |
+| Focused window | Neovim's current window, and the part shown from it. The mode, floats (ui2's command line and messages among them) and host commands follow it (`core/FocusRouter`). Usually the attached editor's; a page's window can have it while the text editor stays attached. |
 | Home window | The window Neovim starts with. Documents are shown in it only by tests that pass no editor window. |
 | Page kind | help, messages or checkhealth (`util/PageKind`). Help and checkhealth have one page editor each; messages one buffer, and an editor per window on it. |
 | Dedicated Neovim | The Neovim the plug-in installs with Get Neovim and checks at every start. |

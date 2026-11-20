@@ -21,7 +21,6 @@ Eclipse status bar; changes apply immediately:
 | Item | Shows | Default |
 |------|-------|---------|
 | `mode` | `INSERT`, `V-BLOCK`, `INSERT rec @q` while a macro records | on |
-| `cmd` | the pending command as Vim's `showcmd` shows it: `2d`, `"a`, `2f` | on |
 | `statusline` | Neovim's own `'statusline'` (your config's, or Vim's default: file, line,col, position) | off |
 
 Each part has a label of its own, in that order. Hovering one shows its whole text. `ECLIPSE`
@@ -40,30 +39,31 @@ editor's fixed-width font, as in Vim, at the status bar's size (it does not foll
 position to the right. *At most this share of the status bar* (default 40%) keeps room for Eclipse's
 own messages: in a narrow window the statusline gets narrower first.
 
-Messages and errors are not in the status bar: they appear in the editor (next section).
+Messages, errors and the pending command (`2d`, `"a`) are not in the status bar: Neovim shows them
+in the editor, on its own line (next section). The preference that once showed the pending command
+here (`statusShowcmd`) has no effect since 0.3.0.
 
 ## Messages and errors
 
-Neovim's latest message or error appears in a line along the bottom of the editor, where Vim shows
-its messages and where the `:` box opens:
+Neovim shows its messages and errors itself, on the editor's last row, as in a terminal: the
+editor draws what Neovim's *ui2* draws there (Neovim's newer way of drawing its command line and
+messages, as floating windows; see [Command line](#command-line---)).
 
-- **Errors** in the theme's error color: `E486: Pattern not found: x`, `E37: No write since last
-  change`, `Can't find file "x"`.
-- **Other messages** in the editor's text color: `3 lines yanked`, `3 substitutions on 3 lines`.
+- **Errors** in your colorscheme's `ErrorMsg` colors: `E486: Pattern not found: x`,
+  `E37: No write since last change`, `Can't find file "x"`.
+- **Other messages** in its message colors: `3 lines yanked`, `3 substitutions on 3 lines`.
+- **Messages of more than one line** (two errors at once, a failed save with Neovim's
+  `Error in BufWriteCmd Autocommands` line above it, a Lua error with its traceback) take more
+  rows, over the text above the last row, as ui2 shows them; there is no "Press ENTER" prompt.
+  `g<` shows the last command's output again, in Neovim's pager ([Command line](#command-line---)).
 
-As in Vim, the message stays until the next key; a click also hides it. A message too long for the
-line ends in `...`. Its tooltip shows all of it, and `:messages` lists the recent ones in a
-[page editor](#the-page-editors-help-messages-checkhealth).
+Every message Neovim gives is shown this way, whatever printed it: a key, a `:` command
+(`:echo "hi"`, `:pwd`), a mapping, a timer or an autocommand; and the plug-in's own, such as the
+errors of the file and tab commands (`E37` from `:e`, a refused write), which Neovim shows and keeps
+as its own. `:messages` lists them all in a [page editor](#the-page-editors-help-messages-checkhealth).
 
-The line shows every message of one line that Neovim gives, whatever printed it: a key, a `:` command
-(`:echo "hi"`, `:pwd`), a mapping, a timer or an autocommand; and the plug-in's own errors from the file
-and tab commands. Messages of more than one line open the output box described under
-[Command line](#command-line---), as Vim would show them above a "Press ENTER" prompt: two
-errors at once, a failed save with Neovim's `Error in BufWriteCmd Autocommands` line above it, a Lua
-error with its traceback.
-
-*Window → Preferences → Neovim → Flash the editor on errors* (off by default) also tints the editor for
-a moment on each error, like Vim's `'visualbell'`, for when your eyes are on the cursor.
+The editor no longer flashes on errors: the preference *Flash the editor on errors* (`flashOnError`)
+has no effect since 0.3.0, and left the preference page.
 
 ## Problems (`]d`, `[d`)
 
@@ -78,7 +78,7 @@ Neovim's own keys move between them:
 
 They are Neovim's default mappings: the plug-in maps nothing, so your own mapping of these keys in
 `init.lua` wins. Each jump is in the jumplist (`Ctrl-O` comes back) and works in a macro. The
-message line then shows the problem's message (its first line), as Eclipse's status bar does after
+message is then shown on Neovim's line (its first line), as Eclipse's status bar does after
 *Next Annotation* (`Ctrl+.`); `K` right after opens Eclipse's hover for it, with its quick fixes in
 a Java editor. Example: on line 1 of a file with an unused import on line 3, `]d` goes to line 3
 and shows `The import java.util.List is never used`.
@@ -113,7 +113,7 @@ commands fill it with what Eclipse knows about the whole workspace:
 | `:Eproblems` | every error, warning and info in the workspace (the Problems view's), and goes to the first |
 | `:Eproblems warning` | errors and warnings only; `:Eproblems error`, errors only |
 | `:Etasks` | the tasks (`TODO`, `FIXME` comments a builder found) whose tag you chose, and goes to the first |
-| `:Eproblems!`, `:Etasks!` | the same, without going to the first; the message line says how many |
+| `:Eproblems!`, `:Etasks!` | the same, without going to the first; a message says how many |
 
 Then Neovim's own quickfix commands walk it, typed, mapped or in a macro: `]q` / `[q` (next /
 previous), `]Q` / `[Q` (last / first), `:cnext`, `:cprevious`, `:cc 3`, `:cnfile`, `:clist`,
@@ -131,7 +131,7 @@ previous), `]Q` / `[Q` (last / first), `:cnext`, `:cprevious`, `:cc 3`, `:cnfile
   and it follows Eclipse again from then on. Running `:Eproblems` again reuses its list (and makes
   it current) instead of adding another to Neovim's ten.
 - **`:copen` and `:cwindow`** show Eclipse's Problems view for `:Eproblems`'s list, the Tasks view
-  for `:Etasks`'s; for any other list, its `:clist` in the output popup. Neovim's own quickfix
+  for `:Etasks`'s; for any other list, its `:clist`, shown as Neovim shows any output. Neovim's own quickfix
   window cannot be shown (Eclipse shows one Neovim window per editor); `:lopen` shows the
   location list's `:llist`.
 - **Task tags**: set them in `init.lua`, comma-separated, or `'*'` for every task:
@@ -300,35 +300,43 @@ After a restart, Eclipse brings the stacks back as it does any layout you dragge
 
 ## Command line (`:`, `/`, `?`)
 
-`:`, `/` and `?` open Neovim's own command line, shown in a single text box near the bottom edge of
-the editor, as wide as the editor minus a small padding and in the editor's font. Every key you type
-in it goes to Neovim, so it behaves exactly like Neovim's command line: Enter runs it, Esc or
-Backspace on the empty line cancels, Up/Down browse Neovim's history (the same as in a terminal,
-kept between sessions), `Ctrl-R` inserts a register, and your command-line mappings and
-abbreviations apply. `:` from visual mode gets `:'<,'>` from Neovim. Clicking elsewhere in Eclipse
-cancels the line; switching to another application or input method keeps it. In Ex mode (`gQ`),
-where Vim cannot cancel a line, a click keeps it too, and a click in the editor leaves the keys in the
-box; `:vi` leaves Ex mode. In the box the `Ctrl`
-letters ticked in the preferences ([Preferences](#preferences), *Ctrl Keys*) go to Neovim's line (`Ctrl-R`, `Ctrl-U`, `Ctrl-N`),
-except `Ctrl-V`, which pastes, and `Ctrl-C` with text selected, which copies (on macOS, Cmd-V and Cmd-C
-do that, and `Ctrl-V` is Neovim's). Shift+Insert pastes too, and text from an input method (IME) goes
-in the same way: the text you are composing shows in the box, and reaches Neovim once you keep it
-(Enter while composing is the input method's, not the command's). On macOS, holding a letter
-shows its accent menu: pick with a digit (with Shift where the digits need it, as on AZERTY), or the
-arrows and Enter, or type the accent as two keys (Option+E, then E, makes `é`). Clicking an accent works only within a moment of letting go of the
-key: later clicks are lost to a bug in SWT, Eclipse's widget toolkit (its macOS `Text` asks for the
-event being handled, and after a pause there is none). With press-and-hold turned off, for every
-application or for Eclipse alone (`defaults write <Eclipse's id> ApplePressAndHoldEnabled -bool false`,
-the id being `CFBundleIdentifier` in `Eclipse.app/Contents/Info.plist`), a held letter repeats. A message that arrives while you type (a timer's `:echo`) shows above the box.
+`:`, `/` and `?` open Neovim's own command line, on the editor's last row, drawn by Neovim itself:
+Neovim's *ui2* (its newer, Lua-written way of drawing the command line and messages, still
+experimental) draws the line, its prompts, its pager and its messages as floating windows, and the
+editor copies their cells onto its last row, in Neovim's colors and the editor's font, with
+Neovim's cursor in the line. Every key you type goes to Neovim, so it behaves exactly like Neovim's
+command line: Enter runs it, Esc or Backspace on the empty line cancels, Up/Down browse Neovim's
+history (the same as in a terminal, kept between sessions), `Ctrl-R` inserts a register, and your
+command-line mappings and abbreviations apply. `:` from visual mode gets `:'<,'>` from Neovim. The
+text does not move when the line opens, also with the cursor on the editor's last row: Neovim's
+screen has a row of its own for the line (`'cmdheight'` 1), which the editor draws over its last
+row. Turning Neovim mode off cancels the line (in Ex mode, `gQ`, where Vim cannot cancel one, it
+stays; `:vi` leaves Ex mode).
 
-The box opens for every command line Neovim opens: a mapping in your `init.lua`
+The `Ctrl` letters ticked for normal mode on the preferences' *Ctrl Keys* page
+([Preferences](#preferences)) go to Neovim's line (`Ctrl-R`, `Ctrl-U`, `Ctrl-W`). Eclipse's Paste
+(`Cmd+V` on macOS, `Shift+Insert`, or `Ctrl+V` where you left it to Eclipse) puts the clipboard's
+text into Neovim's line, not into the document; Copy, Cut and Select All do nothing while the line
+is open (the line's text is Neovim's; `Ctrl-R` there inserts a register).
+
+**Input methods** (Japanese, Chinese, Korean) work on the line, on Linux, Windows and macOS: the
+text you are composing is shown at the line's cursor, the input method's list of candidates opens
+there, and the text you commit is typed into Neovim's line (Enter while composing is the input
+method's, not the command's; the next Enter runs the line). A click, or leaving Eclipse while
+composing, ends the composition, and nothing of it reaches the line. On macOS
+the press-and-hold accent menu does not open on the line; dead keys work (`Option+E`, then `E`,
+makes `é`).
+
+The line opens for every command line Neovim opens: a mapping in your `init.lua`
 (`vim.keymap.set('n', ';', ':')`, `vim.keymap.set('n', '<Space>s', ':%s/')`; in Vimscript
 `nnoremap ; :`), a count before `:` (`2:` gives `:.,.+1`), `!` with a motion (`!!` gives `:.!`), a
-search inside an operator (`d/`), and prompts such as `input()` and `confirm()`.
+search inside an operator (`d/`), and prompts such as `input()`, `confirm()` and the questions of
+`:s///c`, which ui2 shows in its prompt window.
 
 Tab completes the line as Neovim does (commands, options and their values, buffers, help tags,
-variables, functions, file names), following your `'wildmode'`; Shift+Tab goes back. A line above the
-box lists the candidates, with the selected one highlighted. File names complete from the editor's
+variables, functions, file names), following your `'wildmode'`; Shift+Tab goes back. Neovim lists the
+candidates as in a terminal, in its own popup menu above the line (with Neovim's default
+`'wildoptions'`), the selected one highlighted. File names complete from the editor's
 project folder (the editor's Neovim window works there, `:lcd`), and `:e` opens what Tab completes:
 a relative name is relative to that folder, as in Neovim. The folder is set once, when the editor's window
 opens, so a `:lcd` you type stays with that editor. An untitled document (*File → New → Untitled
@@ -369,7 +377,7 @@ A substitution (`:%s/old/new/g`) changes the text when you press Enter; Neovim's
 preview of it (`'inccommand'`) is not shown in the editor.
 
 Neovim's command-line window (`q:` for commands, `q/` and `q?` for searches, or `Ctrl-F` while
-typing on the `:` line) opens over the bottom of the editor, where the box opens: the history, one
+typing on the `:` line) opens over the bottom of the editor: the history, one
 line each, and an empty line at the end for a new one. It is Neovim's own window, so every key
 goes to Neovim, in every mode: move with `j` and `k`, search with `/`, edit a line in insert mode,
 and press Enter to run the line under the cursor; `:q` closes it without running anything. A click
@@ -381,8 +389,8 @@ config makes after its `:colorscheme` are lost then (make them in a `ColorScheme
 keep them). The left button and the wheel are Neovim's inside it, in every mode: a click puts the
 cursor on a history line, a double click selects a word, dragging selects, and the wheel scrolls
 (your `'mouse'`, `'mousescroll'` and mouse mappings apply; with `'mouse'` empty, a click there
-does nothing). The right and middle buttons do nothing there. An input method's composed text (Japanese, the macOS accent menu) does not reach it: the
-`:` box has that.
+does nothing). The right and middle buttons do nothing there. An input method's composed text (Japanese, say) does not reach it: the
+`:` line has that.
 
 File and tab commands are carried out by Eclipse, everything else by Neovim.
 
@@ -410,7 +418,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:tabonly!`, `:stag` | refused, with a message. A window opened some other way (a plug-in's `vim.cmd.split()`) is closed again with a message; a help window's page opens in the [help editor](#the-help-editor-help) instead. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
-work wherever a `:` line runs: typed in the box, from a mapping in your `init.lua` (`<leader>q` →
+work wherever a `:` line runs: typed on the line, from a mapping in your `init.lua` (`<leader>q` →
 `:q<CR>`), from a macro, with `:normal`, and repeated with `@:`. Neovim hands each one to Eclipse as
 `:Eclipse quit`, `:Eclipse! edit file` ..., a command you can also use in your own mappings; the
 history keeps what you typed. Each command of a `|` chain is handed over the same way: `:w | q`
@@ -460,22 +468,21 @@ buffer without a file, is undone at once (the editor's file stays the same); `:f
 file info as usual, which says `[Not edited]` until the next write after such an attempt.
 
 Every other command is typed into Neovim as you wrote it, so it is in the history, `@:` repeats it and a
-macro being recorded contains it. Listings of more than one line (`:ls`, `:jumps`, `:marks`,
-`:registers` ...), shell output (`:!ls`, `:!make`) and anything else of more than one
-line show in a read-only box in the same place, with the command as its first line; output that keeps coming
-(`:!make`) is added while the box is open. `j`/`k`, Space/`b`, `g`/`G` and the arrow and page keys
-scroll it; any other key or a click closes it. Output that comes while you type elsewhere in Eclipse
-(a timer's or an autocommand's) opens the box without taking the keyboard from there. Like a message,
-it then closes with your next key or click in the editor, and the key works as usual; click into the
-box to scroll it. `:messages` and `:checkhealth` open a
-[page editor](#the-page-editors-help-messages-checkhealth) instead, which stays open beside the code. One-line output (`:echo "hi"`, `:set ts?`, a `:s` report) goes to
-the message line instead, as on Neovim's own screen, and so do errors. Your own `:redir` collects as in Vim.
+macro being recorded contains it. Its output is Neovim's to show, as in a terminal with
+ui2: one line (`:echo "hi"`, `:set ts?`, a `:s` report) and errors on the last row; listings of
+more than one line (`:ls`, `:jumps`, `:marks`, `:registers` ...), shell output (`:!ls`, `:!make`)
+and anything else of more than one line over the text above it, drawn as Neovim draws it. `g<`
+shows the last command's output again in Neovim's *pager*, a window of ui2's with the cursor in it:
+move and search in it with Vim's keys (`j`, `k`, `G`, `/`), and close it with `q`. Output that comes
+while you type elsewhere in Eclipse (a timer's or an autocommand's) is drawn in the editor without
+taking the keyboard from there. `:messages` and `:checkhealth` open a
+[page editor](#the-page-editors-help-messages-checkhealth) instead, which stays open beside the code. Your own `:redir` collects as in Vim.
 
 ## Completion (`Ctrl-N`, `Ctrl-P`)
 
 In insert mode `Ctrl-N` and `Ctrl-P` are Vim's own completion, done by Neovim: the word before the
-cursor is completed from the words of the open files (`'complete'`), and Neovim's list of matches
-is drawn under the word. Example: after `al`, `Ctrl-N` gives `alpha` and a list of `alpha`,
+cursor is completed from the words of the open files (`'complete'`), and Neovim's list of matches,
+its own popup menu, is drawn under the word, as Neovim draws it. Example: after `al`, `Ctrl-N` gives `alpha` and a list of `alpha`,
 `alphabet`, `alpine`.
 
 | Key | With the list open |
@@ -505,12 +512,15 @@ is drawn under the word. Example: after `al`, `Ctrl-N` gives `alpha` and a list 
   insert Neovim types to its end (while recording a macro), `Ctrl-X Ctrl-O` is dropped with a
   message. In the command-line window of `:` commands (`q:`) the lines are your own commands,
   and `Tab` completes them as before.
-- **How it looks:** Neovim's colors for the list (`Pmenu`, `PmenuSel` and the others, your
-  colorscheme's), in the editor's font, inside a frame made from the editor's own colors, so
-  that it stands out where the colorscheme's list background is close to the editor's. `'pumheight'` limits its rows; otherwise it takes the room
-  there is, below the line or above it. `'completeopt'` works as in Vim (`noinsert`, `noselect`,
-  `fuzzy`), with one exception: the extra window `popup` and `preview` open for a match's
-  documentation is not shown.
+- **How it looks:** as in a terminal: Neovim draws its popup menu in a grid of its own, in your
+  colorscheme's `Pmenu`, `PmenuSel` and the other groups (`'pumblend'` included),
+  and the editor copies it as it does a [floating window](#floating-windows), in the editor's font.
+  `'pumheight'` limits its rows; otherwise it takes the room there is, below the line or above it.
+  `'completeopt'` works as in Vim (`noinsert`, `noselect`, `fuzzy`); the extra window `popup` opens
+  for a match's documentation is a floating window like a plug-in's, drawn as those are.
+- **Only for the keys you type.** While Eclipse types an insert, a list that opens by itself (a
+  `vim.fn.complete()` from an autocommand of your config) is not drawn: Neovim's cursor is not
+  where you type then, so the list would hang in the wrong place.
 - **One match, or none:** Neovim shows no list, as in Vim. It still completes until the next key:
   `Ctrl-N` again takes a single match back, any character goes on.
 - **`.` and undo** take the insert as one: what you typed and what was completed.
@@ -519,9 +529,9 @@ is drawn under the word. Example: after `al`, `Ctrl-N` gives `alpha` and a list 
   a setting or plug-in that opens the list by itself while you type (`'autocomplete'`, nvim-cmp)
   has nothing to work with. Eclipse's own content assist does that job.
 
-`vim.g.neovim4eclipse_completion_menu = 0` in `init.lua` turns this off: the keys then run
-Eclipse's *Word Completion* (`Alt+/`), which inserts the nearest matching word and shows no list,
-as before 0.2.24.
+`vim.g.neovim4eclipse_completion_menu = 0`, which once turned this off for Eclipse's *Word
+Completion* (`Alt+/`), has no effect since 0.3.0: Neovim draws its popup menu itself, so `Ctrl-N`
+is always Neovim's. The name is still accepted, so a config that sets it does no harm.
 
 ## Jump labels
 
@@ -597,11 +607,17 @@ the cursor into it.
 exist unseen, as before 0.2.23. Nothing is drawn either with `vim.g.neovim4eclipse_viewport = 0`:
 Neovim's screen is then not the editor's size, and a window "at the bottom" would land anywhere.
 
+Neovim's own floating windows are drawn whatever these say: ui2's command line, messages, pager
+and prompts ([Command line](#command-line---)) and Neovim's popup menu
+([Completion](#completion-ctrl-n-ctrl-p)). Without them there would be no command line to see, so
+the two switches cover only plug-ins' windows. Unlike a plug-in's, they are also drawn with the
+cursor in them (the line you type, the pager after `g<`).
+
 <a id="the-neovim-view-messages-checkhealth"></a>
 
 ## The page editors (`:help`, `:messages`, `:checkhealth`)
 
-Three commands show more than the box over the editor is good for: `:help`, `:messages`
+Three commands show more than the rows over the editor's bottom are good for: `:help`, `:messages`
 (Neovim's message history) and `:checkhealth` (its report on your setup). Each opens a **page
 editor** instead, an editor of its own beside your code, titled with what it holds: *Neovim: help*,
 *Neovim: messages*, *Neovim: checkhealth*. Vim opens these in a window of their own; here that
@@ -616,13 +632,13 @@ window is an Eclipse editor, and it is a window of your own Neovim, the one behi
   code. Help comes with your plug-ins' help pages, and the report is colored as Neovim colors
   `:checkhealth`, its OK, WARNING and ERROR lines included.
 - **Laid out as Neovim's screen:** below the page, the window's status line, as Neovim draws it
-  (lualine's, or Neovim's default with the page's name), and below that the command line. Every key
-  stays Neovim's there, so Neovim edits a `:` or `/` line itself: `Ctrl-W` deletes a word, `Ctrl-R`,
-  `Ctrl-U`, history and Tab work as in Neovim. With `'laststatus'` 0 there is no status line, as in
-  Neovim. Messages, output and floating windows (which-key's panel, say) show over the page editor,
-  as over your code. Eclipse's status bar shows Neovim's mode and pending command while it has the
-  keyboard (as you chose them in *Preferences › Neovim › Status Bar*); its status line is the one
-  drawn in the editor.
+  (lualine's, or Neovim's default with the page's name). Neovim's command line, messages and
+  output are drawn over the page's last row, as over your code. Every key stays Neovim's there, so
+  Neovim edits a `:` or `/` line itself: `Ctrl-W` deletes a word, `Ctrl-R`, `Ctrl-U`, history and
+  Tab work as in Neovim. With `'laststatus'` 0 there is no status line, as in Neovim. Floating
+  windows (which-key's panel, say) show over the page editor too. Eclipse's status bar shows
+  Neovim's mode while it has the keyboard (as you chose it in *Preferences › Neovim › Status Bar*);
+  its status line is the one drawn in the editor.
 - **It takes the keyboard**, as Vim's own `:help`, `:messages` and `:checkhealth` do. Every key is
   Neovim's; the left button and the wheel work as in Neovim. Eclipse's own shortcuts stay
   Eclipse's, as in any editor that is not a text editor.
@@ -808,7 +824,7 @@ work wherever Neovim reads the keys itself, as in a block-visual `I` or for the 
 insert mode. While Eclipse types, they do not apply: Eclipse inserts what you type.
 
 A completion plug-in (nvim-cmp, blink.cmp, ...) maps `Enter` and `Tab` in insert mode to accept its
-popup. That popup is the plug-in's own, not Neovim's list, and is not drawn, so in an insert Neovim types (a block-visual `I`, or
+popup. That popup is the plug-in's own, not Neovim's popup menu, and is not drawn, so in an insert Neovim types (a block-visual `I`, or
 while recording a macro) `Enter` could accept an entry you never saw. Leave completion plug-ins out
 inside Eclipse, which has its own (`Ctrl+Space`), beside Neovim's built-in one on `Ctrl+N`
 ([Completion](#completion-ctrl-n-ctrl-p)): see
@@ -886,8 +902,7 @@ history, which Neovim's ShaDa file brings back as after a restart in a terminal)
 On Linux and Windows each entry has an underlined letter: `Alt+V` then `V`, `A`, `R`, `G`, `W`, `P` or `N`
 (*Prefere<u>n</u>ces*, as in Eclipse's *Window* menu) runs it without the mouse.
 *Neovim: Detach Neovim* is in Quick Access (`Ctrl+3`) only: *Neovim Mode* off already
-gives the keys back to Eclipse. *Flash the editor on errors*
-adds a brief flash to errors in the message line ([Messages and errors](#messages-and-errors)).
+gives the keys back to Eclipse.
 *Show a welcome after installing...* turns off the welcome and the update notes (step 5 of
 [Install](../README.md#install)); an administrator can turn it off for everyone with the line
 `io.github.jm6cnddxbwftaks.neovim4eclipse/showWelcome=false` in the product's
@@ -1031,9 +1046,9 @@ narrowly as it can, and it is listed here.
   Your global values stay as they are. In those buffers `zf`, `zF`, `zd`, `zD` and `zE` also get
   buffer-local mappings that refuse them; every other `z` command is Neovim's (see
   [Known limitations](../README.md#known-limitations), item 6). `'showcmd'` is kept on, globally:
-  the plug-in reads Neovim's pending command through it, for the status bar and to refuse those
-  keys when they are typed slowly; turned off, it is turned on again, with a message the first time.
-  (The plug-in turns `'showcmd'` on at start in any case, for the status bar.) With `vim.g.neovim4eclipse_folds = 0`, none of this is set.
+  the plug-in reads Neovim's pending command through it, to refuse those keys when they are typed
+  slowly; turned off, it is turned on again, with a message the first time. (The plug-in turns
+  `'showcmd'` on at start in any case.) With `vim.g.neovim4eclipse_folds = 0`, none of this is set.
 
 - **`'linebreak'`, `'breakindent'` and `'showbreak'`, window-local, while word wrap is on.** On,
   off and `NONE`, so that lines wrap where Eclipse wraps them ([The editor's size, scrolling and
@@ -1042,7 +1057,7 @@ narrowly as it can, and it is listed here.
   is set.
 
 - **`vim.diagnostic`'s `jump.on_jump`, only if your config sets none.** After `]d` it shows the
-  first line of the problem's message in the message line ([Problems](#problems-d-d)). Set your own
+  first line of the problem's message on Neovim's line ([Problems](#problems-d-d)). Set your own
   `on_jump` (or the older `jump.float`) and the plug-in leaves it alone. The namespace
   `neovim4eclipse`, which holds Eclipse's problems, is set to draw nothing; your other namespaces
   keep their display settings.
@@ -1055,9 +1070,8 @@ narrowly as it can, and it is listed here.
 - **`'shortmess'` `F`, while Eclipse switches editors.** When another editor becomes active, the
   plug-in makes Neovim enter that file's buffer with `F` added to `'shortmess'`, and puts your value
   back right after. Without `F` (common in configs carried over from Vim), Neovim would show its
-  file info (`"a.txt" 3 lines --33%--`) on every switch, which Eclipse does not do. Two such
-  messages in a row also opened the output popup, which took the keyboard focus from the editor,
-  and Eclipse's Undo then left Neovim's cursor a line off. A `:b` you type is not affected.
+  file info (`"a.txt" 3 lines --33%--`) on every switch, which Eclipse does not do. A `:b` you
+  type is not affected.
 
 - **`'runtimepath'`: one folder of the plug-in's appended.** `<plug-in folder>/runtime` (on Linux
   `~/.local/share/neovim4eclipse-plugin/runtime`) holds one file, `lua/neovim4eclipse/health.lua`,

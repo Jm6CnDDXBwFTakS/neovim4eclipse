@@ -348,7 +348,7 @@ plug-in does. Lines are 1-based.
   is shown. An editor that cannot fold gets `nofoldenable`. With the opt-out, nothing is touched.
 - **`zf`, `zF`, `zd`, `zD` and `zE`**, in normal and visual mode, are refused in mirrored
   buffers, in two places (section 6 says why two). They show the error with
-  `nvim_echo(..., { err = true })`, which reaches the message line through `MessageRoute`.
+  `nvim_echo(..., { err = true })`, which Neovim shows on its own line (ui2, since 0.3.0).
   - *Typed together*: buffer-local mappings of the two keys.
   - *Typed apart*: after `'timeoutlen'` the mapping is given up and `z` is Neovim's own pending
     command. A key watcher (`vim.on_key`) looks at each typed key: one of those keys, in normal or
@@ -362,8 +362,8 @@ plug-in does. Lines are 1-based.
 
   `z` alone is not mapped (it was through 0.2.22, reading the next key with `getcharstr()`): the
   user's mappings that start with `z` run, whatever their length, a plug-in that lists what can
-  follow `z` (which-key) shows its menu, and Neovim reports the pending `z` itself
-  (`msg_showcmd`), so the status bar shows `z` (or `3z`) until the next key. `'showcmd'` is kept
+  follow `z` (which-key) shows its menu, and Neovim shows the pending `z` itself (`'showcmd'`, on
+  its own line since 0.3.0, as in a terminal) until the next key. `'showcmd'` is kept
   on (an `OptionSet` autocommand turns it on again, and the watcher itself does at a typed `z`,
   for the ways of turning it off that fire no `OptionSet`): without it the watcher would see nothing.
   While `z` is Neovim's own pending command, Neovim answers no request, as after `g` or `"`; what
