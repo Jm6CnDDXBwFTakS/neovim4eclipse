@@ -515,6 +515,28 @@ class GridsTest {
                 "with its row back, the line stays drawn");
     }
 
+    /**
+     * With {@code 'cmdheight'} 0, ui2's line expanded for output of more than one line is drawn
+     * although no line is typed, lifted onto the status line's row like the line; back to one row
+     * at the next key, it goes.
+     */
+    @Test
+    void withCmdheightZeroAnExpandedLineIsDrawnUntilItShrinks() {
+        grids.drawFloats(true);
+        screenWithUi2Line();
+        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, 1011, true);
+        grids.apply(new GridEvent.CursorGoto(2, 3, 0));
+        grids.floatsIfChanged();
+        grids.apply(new GridEvent.Resize(8, 80, 3)); // :ls, three lines: ui2 expands its line upward
+        grids.apply(new GridEvent.WinPos(8, 1010, true, 22, 0, 0, 0, 200));
+        List<FloatWindow> floats = grids.floatsIfChanged().orElseThrow();
+        assertEquals(1, floats.size(), "the output shows");
+        assertEquals(21, floats.get(0).row(), "rows 21 to 23: lifted, its last on the status line's row");
+        grids.apply(new GridEvent.Resize(8, 80, 1)); // the next key: one row again
+        grids.apply(new GridEvent.WinPos(8, 1010, true, 24, 0, 0, 0, 200));
+        assertEquals(List.of(), grids.floatsIfChanged().orElseThrow(), "gone with the key");
+    }
+
     /** The {@code :} line being typed: the cursor is in ui2's line, which is drawn with it. */
     @Test
     void ui2sLineIsDrawnWithTheCursorInItOnTheCommandLinesRow() {

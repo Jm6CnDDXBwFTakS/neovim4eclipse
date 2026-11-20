@@ -5436,6 +5436,35 @@ final class LuaScripts {
               vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_messages', sent)
             end
 
+            -- With the overlay, output of more than one line (:ls, :reg, :!cmd, a plug-in's report)
+            -- goes to ui2's line as with a row, not to the message window, which would drop it
+            -- after a few seconds: ui2 then expands the line upward until the next key, as Neovim
+            -- with 'cmdheight' 0 keeps such output on screen, and the editor draws the expanded
+            -- line (util/Grids). Only while the plug-in moved the target (a config's own choice
+            -- stands), and not errors: on the line ui2 shows an error's first row only, with
+            -- "[+x]", and that row is the one the overlay hides; in the message window it is
+            -- whole. One-line messages stay in the message window.
+            local msg_show = messages.msg_show
+            local errors = { rpc_error = true, emsg = true, echoerr = true, lua_error = true }
+            messages.msg_show = function(kind, content, ...)
+              if moved_messages and not errors[kind] then
+                local text = {}
+                for _, chunk in ipairs(content or {}) do
+                  text[#text + 1] = chunk[2]
+                end
+                if table.concat(text):find(string.char(10), 1, true) then -- a line break (a backslash escape is Java's too)
+                  ui2.cfg.msg.target = 'cmd'
+                  local ok, err = pcall(msg_show, kind, content, ...)
+                  ui2.cfg.msg.target = 'msg'
+                  if not ok then
+                    error(err, 0)
+                  end
+                  return
+                end
+              end
+              return msg_show(kind, content, ...)
+            end
+
             -- A stack, for a line opened inside another (<C-r>= on a : line): when the inner one
             -- closes, Eclipse hears the outer one's type again, not "closed".
             local open_lines = {}

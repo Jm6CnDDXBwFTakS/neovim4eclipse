@@ -180,7 +180,9 @@ public final class Grids {
      * draws Neovim's popup menu: always ({@link #alwaysDrawn}), except that with {@code overlay}
      * the command line's window {@code cmd} is drawn only while the cursor is in it, a line being
      * typed: the editor has no row for it then, and between lines it would cover the status line
-     * with the last line typed. Example: {@code [1002, 1003, 1004, 1005]}, 1002, 1003, {@code false}.
+     * with the last line typed. It is drawn too while ui2 has expanded it for output of more than one
+     * line ({@code :ls}), until the next key: {@code LuaScripts.UI2} sends such output there with the
+     * overlay. Example: {@code [1002, 1003, 1004, 1005]}, 1002, 1003, {@code false}.
      *
      * <p>With {@code overlay} the line's row, Neovim's screen's last, is not on the editor: the line
      * is drawn a row higher, on the status line's row, and so is what Neovim stacks on the line
@@ -448,8 +450,9 @@ public final class Grids {
                 continue; // Neovim's popup menu in an insert Eclipse types: see eclipseTypes
             }
             if (overlay && cmdWindow > 0 && place.win() == cmdWindow
-                    && !Integer.valueOf(cmdWindow).equals(windowOfGrid.get(cursorGrid))) {
-                continue; // no row for the line, and none open: the status line shows (ui2Windows)
+                    && !Integer.valueOf(cmdWindow).equals(windowOfGrid.get(cursorGrid))
+                    && (!grids.containsKey(e.getKey()) || grids.get(e.getKey()).height <= 1)) {
+                continue; // no row for the line, none open, no output expanding it: the status line shows (ui2Windows)
             }
             if (place.floating() && grids.containsKey(e.getKey()) && (drawFloats || always)
                     && (e.getKey() != cursorGrid || always) && (drawnWindow == -1 || place.win() != drawnWindow)) {

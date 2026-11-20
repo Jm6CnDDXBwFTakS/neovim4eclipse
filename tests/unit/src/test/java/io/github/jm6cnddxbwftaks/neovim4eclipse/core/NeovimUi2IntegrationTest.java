@@ -228,4 +228,35 @@ class NeovimUi2IntegrationTest {
             assertEquals("msg", s.lua("return require('vim._core.ui2').cfg.msg.target"));
         }
     }
+
+    /**
+     * With {@code 'cmdheight'} 0, output of more than one line is shown on ui2's expanded line,
+     * which the editor draws, until the next key; one line and errors go to the message window.
+     */
+    @Test
+    void withCmdheightZeroLongOutputStaysUntilAKey() throws Exception {
+        try (NeovimSession s = start("--clean", "--cmd", "set cmdheight=0")) {
+            waitFor(() -> s.commandLineRows() == 0, "no row for the line");
+            List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
+            s.addFloatingWindowListener(reports::add);
+            long cmd = number(s, "return require('vim._core.ui2').wins.cmd");
+            s.input(":echo \"one\\ntwo\\nthree\"<CR>");
+            waitFor(() -> {
+                FloatWindow line = window(reports, cmd);
+                return line != null && text(line).contains("three") && line.grid().height() >= 3;
+            }, "the output on the expanded line, drawn: " + reports);
+            String msg = "return table.concat(vim.api.nvim_buf_get_lines(require('vim._core.ui2').bufs.msg, 0, -1, false), '|')";
+            assertTrue(!String.valueOf(s.lua(msg)).contains("three"), "not in the message window");
+            s.input("j");
+            waitFor(() -> window(reports, cmd) == null, "gone at the next key");
+            s.input(":echo \"hi\"<CR>");
+            waitFor(() -> {
+                try {
+                    return String.valueOf(s.lua(msg)).contains("hi");
+                } catch (Exception e) {
+                    return false;
+                }
+            }, "one line: the message window");
+        }
+    }
 }

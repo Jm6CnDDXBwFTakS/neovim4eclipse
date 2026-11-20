@@ -52,9 +52,11 @@ status line, shows one in the editor with the keyboard only.
 
 `'cmdheight'` 0 (`vim.o.cmdheight = 0` in `init.lua`, or `:set ch=0`) gives the command line's row
 to the text, as in Neovim: the editor keeps no row under the status line, and the `:` line, while
-open, is drawn over the status line; Enter or Esc shows the status line again. Messages then show
-in Neovim's message window at the editor's bottom right, above the status line, for a few seconds
-(where ui2 puts them when there is no row to stay on); `g<` and `:messages` still show them again.
+open, is drawn over the status line; Enter or Esc shows the status line again. One-line messages
+and errors then show in Neovim's message window at the editor's bottom right, above the status
+line, for a few seconds (where ui2 puts them when there is no row to stay on); output of more than
+one line (`:ls`, `:reg`, `:!ls`) rises from the editor's bottom edge, over the status line, and
+stays until the next key, as in Neovim with 0. `g<` and `:messages` show them again.
 `:set ch=1` brings the row back. Unlike in a terminal, the text does not move when the line opens:
 Neovim keeps its row, and the editor draws the line over the status line instead. So `:set ch?`, and
 a config or statusline plug-in that reads `vim.o.cmdheight`, see 1, not 0. What Neovim keeps on

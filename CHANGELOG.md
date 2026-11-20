@@ -15,9 +15,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 ### Added
 
 - **`'cmdheight'` 0** gives the command line's row to the text, as in Neovim: the editor keeps no
-  row under the status line, and the `:` line is drawn over the status line while open. Messages
-  show for a few seconds at the bottom right, in Neovim's message window. `:set ch=0` and
-  `:set ch=1` switch it while you work.
+  row under the status line, and the `:` line is drawn over the status line while open. Short
+  messages show for a few seconds at the bottom right, in Neovim's message window; longer output
+  (`:ls`) stays over the status line until the next key. `:set ch=0` and `:set ch=1` switch it
+  while you work.
 
 ### Changed
 

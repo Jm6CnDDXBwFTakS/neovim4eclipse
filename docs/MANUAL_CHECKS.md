@@ -506,7 +506,10 @@ editor chrome, and another application taking the keyboard, need a person.
    ⇒ While typing, the line lies over `notes.txt`'s status line, which comes back at
    <kbd>Enter</kbd>; `hi` shows at the right, on the row just above the status line, for a few
    seconds, and goes. The text does not move at any point.
-8. `:set ch=1` and <kbd>Enter</kbd>.
+8. `:ls` and <kbd>Enter</kbd>, wait ten seconds, then <kbd>j</kbd>.
+   ⇒ The list of buffers rises from the editor's bottom edge, over the status line, and is still
+   there after the wait; <kbd>j</kbd> takes it away and shows the status line again.
+9. `:set ch=1` and <kbd>Enter</kbd>.
    ⇒ The row under each status line is back, as in step 1.
 
 **Expect:** each step's result, after its ⇒.

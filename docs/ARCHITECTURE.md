@@ -749,7 +749,10 @@ What the plug-in adds, all in `LuaScripts.UI2`, the one place it talks to ui2:
   The line is drawn only while the cursor is in it, a line being typed; between lines it would
   cover the status line with the last line typed. Messages, which would stay on that hidden row, go
   to ui2's `msg` window (`ui2.cfg.msg.target`), only when the target is ui2's default `'cmd'`, and
-  back when the row returns: a config that chose `'msg'` keeps it. The floats lie over the status
+  back when the row returns: a config that chose `'msg'` keeps it. Output of more than one line,
+  errors aside, still goes to the line meanwhile (`msg_show` is wrapped for it): ui2 expands the
+  line upward until the next key, and `Grids` draws the line while it has more than one row, so
+  `:ls` stays readable as in Neovim with 0 instead of fading with the message window's timer. The floats lie over the status
   row (`FloatingWindows.keepUnder`), as Neovim draws a float over a status line. Why not pass 0
   through: ui2 grows the option to 1 while a line is open, the window shrinks, and the text moves
   (the bullet above); drawing over the status row is Neovim's own picture with 0, without the
