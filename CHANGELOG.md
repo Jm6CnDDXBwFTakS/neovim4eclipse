@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-20
+
 ### Added
 
 - **`'cmdheight'` 0** gives the command line's row to the text, as in Neovim: the editor keeps no
