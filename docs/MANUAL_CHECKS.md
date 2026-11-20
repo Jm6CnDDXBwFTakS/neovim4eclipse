@@ -403,7 +403,7 @@ editor and watch it.
 
 - **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** editor/LineInputMethod.java, util/LineComposition.java, editor/FloatingWindows.java, /pom.xml
+- **Areas:** editor/LineInputMethod.java, util/LineComposition.java, editor/FloatingWindows.java, editor/StatusLineRow.java, util/FloatPlacement.java, /pom.xml
 
 The input method's events come from the system itself, so no test can send them; the decisions
 behind them are tested (`LineCompositionTest`), and the SWT side with synthetic events
@@ -414,8 +414,8 @@ region*.
 
 1. In `n4e-alpha`'s `notes.txt`, in Neovim mode, type `:`, switch to Japanese input and type
    `konnichiwa`.
-   ⇒ Neovim's line opens on the editor's last row. The text being composed shows underlined at the
-   line's cursor, and the document's text does not change.
+   ⇒ Neovim's line opens on the editor's last row, under the status line. The text being composed
+   shows underlined at the line's cursor, and the document's text does not change.
 2. Press <kbd>Enter</kbd> to keep the text.
    ⇒ The line shows `:こんにちわ`: each kana once, no `kkk`, nothing doubled, and the line has not
    run.
@@ -434,7 +434,7 @@ region*.
 
 - **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** editor/LineInputMethod.java, util/LineComposition.java, editor/CommandLineEditHandlers.java, /pom.xml
+- **Areas:** editor/LineInputMethod.java, util/LineComposition.java, editor/CommandLineEditHandlers.java, editor/LineOnFocusLoss.java, /pom.xml
 
 1. `:` `abc`, switch to Japanese, type `ka`, press <kbd>Esc</kbd> (twice if the input method
    needs it to drop the text).
@@ -446,7 +446,8 @@ region*.
    `notes.txt`; switch to direct input and type `:`: the new line is empty, no `か` comes back.
    (On macOS ending the composition is the plug-in's call to Cocoa's `discardMarkedText`.)
 3. `:` `abc`, Japanese, type `ka`, switch to another application and back to Eclipse.
-   ⇒ The line stays open and has not run. On Linux and macOS the composition ended unsent: in
+   ⇒ The line stays open and has not run (another application taking the keyboard keeps it). On
+   Linux and macOS the composition ended unsent: in
    direct input, type `d` and the line shows `:abcd`. On Windows the Microsoft IME commits the
    composing text when the window loses the focus, as in Windows' own applications, so the line
    shows `:abcか`, once.
@@ -460,6 +461,39 @@ region*.
    <kbd>Enter</kbd>.
    ⇒ Neovim's line shows `é` once. (Holding <kbd>E</kbd> on the line opens no accent menu: the
    README's Known limitations say so.)
+
+**Expect:** each step's result, after its ⇒.
+
+## Status line and command line
+
+### `sl-layout` Each editor's status line, the `:` line under it, and an open line on leaving
+
+- **On:** linux, macos, windows
+- **Launch:** normal
+- **Areas:** editor/StatusLineRow.java, editor/LineOnFocusLoss.java, util/StatusLines.java, editor/WindowPane.java, util/Grids.java
+
+What the row shows, its colors and its margin are tested (`status_line_spec.lua`, `StatusLineRowTest`,
+`StatusBarEndToEndTest`), and so is an open line abandoned when a view takes the keyboard
+(`LineOnFocusLossTest`, `FloatingWindowsEndToEndTest`). How the rows look beside Eclipse's own
+editor chrome, and another application taking the keyboard, need a person.
+
+1. Open `n4e-alpha`'s `notes.txt` and `ideas.txt` and drag one tab beside the other, so both show.
+   Click into `notes.txt`.
+   ⇒ Each editor shows a status line under its text, naming its own file, and under it an empty
+   row. `notes.txt`'s is in Neovim's `StatusLine` colors, `ideas.txt`'s in the dimmer
+   `StatusLineNC`; each reaches its editor's right edge, the ruler (`1,1  All`) at the end.
+2. In `notes.txt`: `:echo "hello"` and <kbd>Enter</kbd>.
+   ⇒ `hello` shows on the editor's last row, under the status line, and stays there; no text and
+   no status line is covered.
+3. `:echo "abc` (no <kbd>Enter</kbd>), click in the *Problems* view, click back into `notes.txt`,
+   type `:`.
+   ⇒ The new line reads `:` alone: the old one was cancelled when the view took the keyboard.
+   <kbd>Up</kbd> brings `echo "abc` back from the history. <kbd>Esc</kbd>.
+4. `:echo "abc`, switch to another application, switch back to Eclipse.
+   ⇒ The line is still open, `:echo "abc`. <kbd>Esc</kbd> closes it.
+5. `:help` and <kbd>Enter</kbd>.
+   ⇒ The help editor shows its status line under the text and the command line's row under it, as
+   the code editors do.
 
 **Expect:** each step's result, after its ⇒.
 
