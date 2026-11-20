@@ -441,11 +441,13 @@ region*.
    ⇒ The composition is gone and the line stays open on `:abc`. In direct input, one more
    <kbd>Esc</kbd> closes the line.
 2. `:` `abc`, Japanese, type `ka`, then click in the editor's text.
-   ⇒ The composing `か` disappears and reaches neither the line nor `notes.txt`. Switch to direct
-   input and type `d`: if the line is still open it shows `:abcd`, and no `か` comes back later.
-   (On macOS this is the plug-in's call to Cocoa's `discardMarkedText`.)
+   ⇒ The click abandons the line, as any click in the text does: the line closes with its `:abc`
+   and the composing `か`, and the cursor lands at the click. `か` reaches neither the line nor
+   `notes.txt`; switch to direct input and type `:`: the new line is empty, no `か` comes back.
+   (On macOS ending the composition is the plug-in's call to Cocoa's `discardMarkedText`.)
 3. `:` `abc`, Japanese, type `ka`, switch to another application and back to Eclipse.
-   ⇒ As in step 2: the composition ended, nothing of it was sent.
+   ⇒ The composition ended and nothing of it was sent. In direct input, type `d`: if the line is
+   still open it shows `:abcd`.
 4. Copy `src` to the clipboard. <kbd>Esc</kbd> to close any line; `:`, Japanese, type `kaka`,
    <kbd>Enter</kbd> to keep it, then Eclipse's Paste (<kbd>Cmd+V</kbd> on macOS,
    <kbd>Shift+Insert</kbd> on Linux and Windows).
