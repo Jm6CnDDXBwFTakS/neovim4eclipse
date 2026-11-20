@@ -597,9 +597,12 @@ java releng/tools/ci/LikeCi.java --all
 A loaded machine shows timing bugs a fast one hides (CONTRIBUTING.md, "Tests on a loaded
 machine"); right before the release.
 
-In Git Bash:
+In Git Bash, pin that shell to core 0, then run LikeCi from it, telling each JVM it has one core
+(CONTRIBUTING.md, "Tests on a loaded machine", says why both). Open a new Git Bash afterward to
+use every core again:
 
 ```sh
+powershell -Command "(Get-Process -Id $(cat /proc/$$/winpid)).ProcessorAffinity = 1"
 JAVA_TOOL_OPTIONS=-XX:ActiveProcessorCount=1 java releng/tools/ci/LikeCi.java --all
 ```
 

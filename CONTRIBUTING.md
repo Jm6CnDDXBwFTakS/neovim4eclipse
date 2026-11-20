@@ -426,6 +426,17 @@ argument whose name has a dot, or PowerShell splits it at the dot:
 The pin and the variable last as long as that PowerShell window; open a new window to use every core
 again.
 
+LikeCi and the other tools run only from Git Bash ("Developer tools: where they run"). There, pin
+the shell itself the same way, through PowerShell, which sets the affinity of Git Bash's own
+process (`/proc/$$/winpid` is its Windows process ID); every program the shell starts after that
+inherits the pin. `start /affinity` from Git Bash would not do: it makes cmd LikeCi's parent, and
+the tools refuse cmd.
+
+```sh
+powershell -Command "(Get-Process -Id $(cat /proc/$$/winpid)).ProcessorAffinity = 1"
+JAVA_TOOL_OPTIONS=-XX:ActiveProcessorCount=1 java releng/tools/ci/LikeCi.java --all
+```
+
 To check that the mask took effect, open Task Manager, *Details*, right-click a `java.exe` or
 `nvim.exe` process and choose *Set affinity*: only the chosen cores are ticked. To check the JVM's
 count, run `jcmd <pid> VM.flags -all | findstr ActiveProcessorCount` on a running `java.exe`: it
