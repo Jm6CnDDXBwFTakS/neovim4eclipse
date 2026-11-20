@@ -446,8 +446,10 @@ region*.
    `notes.txt`; switch to direct input and type `:`: the new line is empty, no `か` comes back.
    (On macOS ending the composition is the plug-in's call to Cocoa's `discardMarkedText`.)
 3. `:` `abc`, Japanese, type `ka`, switch to another application and back to Eclipse.
-   ⇒ The composition ended and nothing of it was sent. In direct input, type `d`: if the line is
-   still open it shows `:abcd`.
+   ⇒ The line stays open and has not run. On Linux and macOS the composition ended unsent: in
+   direct input, type `d` and the line shows `:abcd`. On Windows the Microsoft IME commits the
+   composing text when the window loses the focus, as in Windows' own applications, so the line
+   shows `:abcか`, once.
 4. Copy `src` to the clipboard. <kbd>Esc</kbd> to close any line; `:`, Japanese, type `kaka`,
    <kbd>Enter</kbd> to keep it, then Eclipse's Paste (<kbd>Cmd+V</kbd> on macOS,
    <kbd>Shift+Insert</kbd> on Linux and Windows).
