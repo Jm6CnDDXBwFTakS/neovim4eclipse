@@ -106,6 +106,7 @@ public final class MarketplaceTool {
     }
 
     public static void main(String[] args) {
+        Shell.requireSupportedShell("Marketplace");
         try {
             Path root = Path.of("").toAbsolutePath();
             if (!Files.isRegularFile(root.resolve(TOOL))) {
@@ -380,7 +381,7 @@ public final class MarketplaceTool {
 
     private void run(List<String> command) {
         if (shell.show(command) != 0) {
-            throw new ToolFailure(Shell.display(command) + " failed (see above)");
+            throw new ToolFailure(Shell.ran(command) + " failed (see above)");
         }
     }
 

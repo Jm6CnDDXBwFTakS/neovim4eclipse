@@ -164,33 +164,14 @@ public final class InstallCheckTool {
          * run's {@code --eclipse} and {@code --root}: without them a machine whose Eclipse is not
          * on PATH would stop at once. Example:
          * {@code java releng/tools/checks/InstallCheck.java 0.2.5 --eclipse /opt/eclipse/current/eclipse --yes}.
-         * An argument with a space or a shell character is quoted for the shell it is pasted into
-         * ({@link #shellWord}).
+         * An argument with a space or a shell character is quoted for a POSIX shell
+         * ({@link Shell#display}), the only kind the tool runs from.
          */
         String startCommand(Version v) {
-            return startCommand(v, System.getProperty("os.name").startsWith("Windows"));
-        }
-
-        /** {@link #startCommand(Version)} for Windows' shells or for a POSIX shell. */
-        String startCommand(Version v, boolean windows) {
-            StringBuilder command = new StringBuilder("java ").append(TOOL).append(' ').append(v);
-            for (String arg : named) {
-                command.append(' ').append(shellWord(arg, windows));
-            }
-            return command.append(" --yes").toString();
-        }
-
-        /**
-         * {@code arg} as one word of a pasted command. Plain words stay as they are. A POSIX shell
-         * gets single quotes, inside which nothing expands ({@code '} itself becomes {@code '\''}):
-         * {@code /tmp/a$b c} gives {@code '/tmp/a$b c'}. Windows gets double quotes (cmd and
-         * PowerShell), which a Windows path cannot contain.
-         */
-        static String shellWord(String arg, boolean windows) {
-            if (arg.matches("[A-Za-z0-9_./:=@+,-]+")) {
-                return arg;
-            }
-            return windows ? '"' + arg + '"' : "'" + arg.replace("'", "'\\''") + "'";
+            List<String> command = new ArrayList<>(List.of("java", TOOL, v.toString()));
+            command.addAll(named);
+            command.add("--yes");
+            return Shell.display(command);
         }
 
         private static String value(String[] args, int i) {
@@ -213,6 +194,7 @@ public final class InstallCheckTool {
     }
 
     public static void main(String[] args) {
+        Shell.requireSupportedShell("InstallCheck");
         try {
             Path repo = Path.of("").toAbsolutePath();
             if (!Files.isRegularFile(repo.resolve(TOOL))) {

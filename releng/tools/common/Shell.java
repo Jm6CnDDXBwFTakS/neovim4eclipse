@@ -51,6 +51,63 @@ public final class Shell {
     }
 
     /**
+     * What a tool says after its name when it is started from cmd or PowerShell. The single-file
+     * programs ({@code ci/LikeCi.java}, {@code checks/Proxy.java}, {@code neovim/ArchiveCheck.java}),
+     * which cannot import this class, hold a copy; {@code ShellDisplayTest} checks each.
+     */
+    public static final String WHERE_TOOLS_RUN = ": runs on Linux, macOS and in Git Bash on Windows, not from cmd or PowerShell."
+            + " Run it from Git Bash.";
+
+    /**
+     * Stops a tool started from cmd or PowerShell, with a message saying where to run it instead.
+     * Every program under {@code releng/tools} calls it, or its copy, first in its {@code main}.
+     *
+     * <p><b>Why.</b> The tools are supported on Linux, macOS, and in Git Bash on Windows
+     * (CONTRIBUTING.md, "Developer tools: where they run"). A tool prints commands to paste back
+     * (its {@code --yes} line) in the quoting of a POSIX shell, which cmd and PowerShell read
+     * differently: {@code '} is no quote in cmd, and PowerShell runs {@code $(...)} even inside
+     * double quotes. Refusing those two shells is one check here, where quoting for them would be a
+     * rule for every word of every printed line.
+     */
+    public static void requireSupportedShell(String tool) {
+        String parent = ProcessHandle.current().parent().flatMap(p -> p.info().command())
+                .map(c -> Path.of(c).getFileName().toString()).orElse("");
+        refusal(tool, WINDOWS, System.getenv("MSYSTEM"), parent).ifPresent(message -> {
+            System.err.println(message);
+            System.exit(2);
+        });
+    }
+
+    /**
+     * The message {@link #requireSupportedShell} stops with, or empty where the tool may run.
+     * {@code parent} is the file name of the program that started this one ({@code bash.exe},
+     * {@code cmd.exe}), or "" when Windows does not say.
+     *
+     * <p>On Windows a tool runs only when both of two signs say Git Bash, and neither alone is
+     * enough: {@code MSYSTEM} is set (Git for Windows' shell sets it, {@code MINGW64} or
+     * {@code UCRT64}, for every program it starts; cmd and PowerShell do not), and the program that
+     * started it is one of a known set ({@link #GIT_BASH_PARENTS}): Git Bash's {@code bash.exe} or
+     * {@code sh.exe}, or {@code java.exe}, for a tool another tool starts. Anything else is
+     * refused, a parent Windows does not name included: a cmd or PowerShell opened from Git Bash
+     * inherits {@code MSYSTEM}, and a list of the shells to refuse would miss one it does not
+     * know. Examples: {@code refusal("Release", true, "MINGW64", "bash.exe")} and
+     * {@code refusal("Release", false, null, "")} are empty; {@code refusal("Release", true, null,
+     * "bash.exe")}, {@code refusal("Release", true, "MINGW64", "pwsh.exe")} and
+     * {@code refusal("Release", true, "MINGW64", "")} are the message.
+     */
+    public static Optional<String> refusal(String tool, boolean windows, String msystem, String parent) {
+        if (!windows) {
+            return Optional.empty();
+        }
+        boolean gitBash = msystem != null && !msystem.isBlank();
+        boolean knownParent = GIT_BASH_PARENTS.contains(parent.toLowerCase(Locale.ROOT));
+        return gitBash && knownParent ? Optional.empty() : Optional.of(tool + WHERE_TOOLS_RUN);
+    }
+
+    /** The programs that may start a tool on Windows: Git Bash's shells, and Java for a tool another tool starts. */
+    public static final List<String> GIT_BASH_PARENTS = List.of("bash.exe", "sh.exe", "java.exe");
+
+    /**
      * {@code command}, checked for what Windows cannot pass: there Java joins the words into one
      * command line, quoting a word with a space but not escaping a double quote inside it, and the
      * program then takes that quote away. {@code --jq '"\(.a)\t\(.b)"'} reaches {@code gh} as
@@ -95,7 +152,7 @@ public final class Shell {
             return new Result(127, "", command.get(0) + ": " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ToolFailure("interrupted while running " + String.join(" ", command));
+            throw new ToolFailure("interrupted while running " + ran(command));
         }
     }
 
@@ -119,7 +176,7 @@ public final class Shell {
             return new Result(127, "", command.get(0) + ": " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ToolFailure("interrupted while running " + String.join(" ", command));
+            throw new ToolFailure("interrupted while running " + ran(command));
         }
     }
 
@@ -170,7 +227,7 @@ public final class Shell {
             return 127;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ToolFailure("interrupted while running " + String.join(" ", command));
+            throw new ToolFailure("interrupted while running " + ran(command));
         }
     }
 
@@ -178,7 +235,7 @@ public final class Shell {
     public String out(List<String> command) {
         Result r = capture(command);
         if (!r.ok()) {
-            throw new ToolFailure(String.join(" ", command) + " failed (" + r.status() + "): " + (r.err().isEmpty() ? r.out() : r.err()));
+            throw new ToolFailure(ran(command) + " failed (" + r.status() + "): " + (r.err().isEmpty() ? r.out() : r.err()));
         }
         return r.out();
     }
@@ -192,13 +249,16 @@ public final class Shell {
         return command;
     }
 
+    /** How {@link #maven} starts the wrapper on Windows; {@link #display} shows it as {@code ./mvnw}. */
+    static final List<String> WINDOWS_MAVEN = List.of("cmd", "/c", ".\\mvnw.cmd");
+
     /**
      * The command that runs the Maven wrapper. On Windows {@code cmd /c .\mvnw.cmd}: {@code .\} as
      * in a shell, since cmd does not look in the current folder when
      * {@code NoDefaultCurrentDirectoryInExePath} is set (as in {@code releng/tools/ci/LikeCi.java}).
      */
     public static List<String> maven(String... args) {
-        List<String> command = new ArrayList<>(WINDOWS ? List.of("cmd", "/c", ".\\mvnw.cmd") : List.of("./mvnw"));
+        List<String> command = new ArrayList<>(WINDOWS ? WINDOWS_MAVEN : List.of("./mvnw"));
         command.addAll(List.of(args));
         return command;
     }
@@ -276,11 +336,72 @@ public final class Shell {
         return Optional.empty();
     }
 
-    /** A command as a person would type it: words with a space or quote in single quotes. */
+    /**
+     * What {@link #display} prints in place of a word it cannot show: one with a control character
+     * (a line break, a tab, an escape), which printed raw would make a pasted line run as two
+     * commands or move the terminal's cursor, or with an invisible formatting character (a
+     * right-to-left override, a zero-width space), which would make the word look like another.
+     *
+     * <p>The marker is a redirection of input from a file of that name, which does not exist: pasted
+     * back, the shell stops with "No such file or directory" before it starts the command, so
+     * nothing runs with a word left out, whatever the tool does with its arguments.
+     */
+    public static final String WORD_NOT_SHOWN = "<'(a word with a control or invisible character, not shown)'";
+
+    /** A word that may be printed without quotes: only characters no POSIX shell reads. */
+    private static final java.util.regex.Pattern PLAIN = java.util.regex.Pattern.compile("[A-Za-z0-9_./:@%+,-][A-Za-z0-9_./:@%+,=-]*");
+
+    /**
+     * A character {@link #display} does not show: a control character ({@code \\p{Cc}}), a line or
+     * paragraph separator, which some terminals break the line at, or a formatting character
+     * ({@code \\p{Cf}}: the direction overrides U+202A-202E and U+2066-2069, zero-width U+200B-200D).
+     */
+    private static final java.util.regex.Pattern CONTROL = java.util.regex.Pattern.compile("[\\p{Cc}\\p{Cf}\\x{2028}\\x{2029}]");
+
+    /**
+     * A command as a person would type it in a POSIX shell (sh, bash, zsh, Git Bash), so that a
+     * printed rerun line (a tool's {@code --yes} hint) can be pasted back as it is. The tools run
+     * only from such a shell ({@link #requireSupportedShell}).
+     *
+     * <p>A word stays as it is only when it is made of plain characters ({@link #PLAIN}: letters
+     * and digits of ASCII, {@code _ . / : @ % + , -}, and {@code =} after the first character);
+     * every other word goes in single quotes, inside which no shell reads anything, and a single
+     * quote in it becomes {@code '\''}. An allow-list, not a list of the characters a shell reads:
+     * a character it forgets is quoted, never run. Examples: {@code --java '/opt/my jdk'},
+     * {@code 'HEAD~1'} ({@code ~} would expand at the start of a word), {@code ''} for an empty
+     * word. The first word is quoted when it holds an {@code =}, which would make it a variable
+     * assignment ({@code a=b echo hi}). A word with a control or invisible character is replaced
+     * by {@link #WORD_NOT_SHOWN}. {@link #maven}'s Windows start, {@code cmd /c
+     * .\mvnw.cmd}, is shown as {@code ./mvnw}, which Git Bash runs.
+     */
     public static String display(List<String> command) {
+        if (command.size() >= 3 && command.subList(0, 3).equals(WINDOWS_MAVEN)) {
+            // Shell.maven's Windows form, shown as Git Bash takes it: there MSYS rewrites /c to C:/
+            // for cmd, which then opens a prompt instead of running the build, and .\ loses its
+            // backslash; ./mvnw runs the same wrapper.
+            List<String> shown = new ArrayList<>(List.of("./mvnw"));
+            shown.addAll(command.subList(3, command.size()));
+            return ran(shown);
+        }
+        return ran(command);
+    }
+
+    /**
+     * A command as it ran, for a failure message: quoted as {@link #display} quotes, but word for
+     * word, so that {@code cmd /c .\mvnw.cmd verify} failed is said as {@code cmd /c '.\mvnw.cmd'
+     * verify}, not as the {@code ./mvnw} a person would paste. Example:
+     * {@code git push origin release/0.2.31 failed} names exactly what was started.
+     */
+    public static String ran(List<String> command) {
         List<String> words = new ArrayList<>();
         for (String w : command) {
-            words.add(w.isEmpty() || w.matches(".*[\\s'\"$`\\\\*?;&|<>()].*") ? "'" + w.replace("'", "'\\''") + "'" : w);
+            if (CONTROL.matcher(w).find()) {
+                words.add(WORD_NOT_SHOWN);
+            } else if (PLAIN.matcher(w).matches() && !(words.isEmpty() && w.contains("="))) {
+                words.add(w);
+            } else {
+                words.add("'" + w.replace("'", "'\\''") + "'");
+            }
         }
         return String.join(" ", words);
     }

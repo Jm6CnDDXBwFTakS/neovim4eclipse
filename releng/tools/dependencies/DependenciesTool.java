@@ -84,6 +84,7 @@ public final class DependenciesTool {
     }
 
     public static void main(String[] args) {
+        Shell.requireSupportedShell("Dependencies");
         try {
             Path root = Path.of("").toAbsolutePath();
             if (!Files.isRegularFile(root.resolve(TOOL))) {
@@ -150,7 +151,7 @@ public final class DependenciesTool {
                 }
             }
             rerun.add("--yes");
-            return new Options(new Updates.Exceptions(allYoung, young, majors), tests, mode, String.join(" ", rerun));
+            return new Options(new Updates.Exceptions(allYoung, young, majors), tests, mode, Shell.display(rerun));
         }
 
         private static String name(String flag, String name) {

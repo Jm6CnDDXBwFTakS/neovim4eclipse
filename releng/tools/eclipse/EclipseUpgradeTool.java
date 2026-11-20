@@ -113,6 +113,7 @@ public final class EclipseUpgradeTool {
     }
 
     public static void main(String[] args) {
+        Shell.requireSupportedShell("EclipseUpgrade");
         try {
             Path root = Path.of("").toAbsolutePath();
             if (!Files.isRegularFile(root.resolve(TOOL))) {
@@ -149,7 +150,7 @@ public final class EclipseUpgradeTool {
                 }
             }
             rerun.add("--yes");
-            EclipseUpgradeTool tool = new EclipseUpgradeTool(root, new Ask(mode, String.join(" ", rerun)), tests, java);
+            EclipseUpgradeTool tool = new EclipseUpgradeTool(root, new Ask(mode, Shell.display(rerun)), tests, java);
             String command = words.isEmpty() ? "" : words.get(0);
             switch (command) {
                 case "newest" -> {

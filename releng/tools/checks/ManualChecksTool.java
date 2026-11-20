@@ -489,6 +489,7 @@ public final class ManualChecksTool {
     // ---- The commands ----
 
     public static void main(String[] args) throws Exception {
+        Shell.requireSupportedShell("ManualChecks");
         try {
             run(args);
         } catch (ToolFailure f) { // from the shared code in common/, such as EclipseCopy
@@ -757,7 +758,7 @@ public final class ManualChecksTool {
         } catch (IOException e) {
             fail("could not start " + eclipse + " (" + e.getMessage() + "); name it with --eclipse or the ECLIPSE environment variable");
         }
-        System.out.println("Started for " + card.id() + ": " + String.join(" ", command)
+        System.out.println("Started for " + card.id() + ": " + Shell.display(command)
                 + (card.launch().equals("normal") ? "" : "\n  with XDG_DATA_HOME=" + xdg)
                 + "\n  output in " + log + "\nSteps: " + CHECKLIST + ", " + card.id() + ".");
     }
@@ -790,13 +791,12 @@ public final class ManualChecksTool {
 
         private static final String STATE = "eclipse-copy.properties";
 
-        /** The command that builds the update site ZIP, as typed on this platform's shell. */
-        static final String BUILD = build(currentPlatform());
-
-        /** Testable core of {@link #BUILD}: {@code .\mvnw.cmd} in PowerShell or cmd, else {@code ./mvnw}. */
-        static String build(String platform) {
-            return (platform.equals("windows") ? ".\\mvnw.cmd" : "./mvnw") + " verify -DskipTests";
-        }
+        /**
+         * The command that builds the update site ZIP, as typed in a POSIX shell, the only kind the
+         * tool runs from ({@code Shell.requireSupportedShell}); in Git Bash on Windows {@code ./mvnw}
+         * works too, where {@code .\mvnw.cmd} would lose its backslash.
+         */
+        static final String BUILD = "./mvnw verify -DskipTests";
 
         private ChecksEclipse() {
         }

@@ -22,6 +22,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `release/0.2.31` an earlier run cut by default (a `go --yes` that ran to its end), here and on
   origin, while that branch holds only the commit that sets its version. A branch with any other
   work on it is kept, and the tool says so.
+- For contributors: every developer tool under `releng/tools`, `LikeCi` included, is supported on
+  Linux, macOS and in Git Bash on Windows. Started from cmd or PowerShell, it stops at once and says
+  where to run it (CONTRIBUTING.md, "Developer tools: where they run").
 
 ### Fixed
 
@@ -31,12 +34,17 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   Unix-style shell still reached Neovim, where `:!` then failed. If you have set one of the folder
   variables in another spelling, the plug-in's folder is now the one it names, and a Neovim that
   *Get Neovim* installed in the old folder is offered again.
-- For contributors: on Windows the tools find the programs on the search path (`gh`, `gpg`, an
-  `eclipse` named without its folder) in a console that spells the variable `Path`, as cmd and
-  PowerShell opened from the Start menu do. They looked the variable up by the exact name `PATH`,
-  which Git Bash has, and so found no program anywhere else. A variable the tools set for a program
-  they start (`XDG_DATA_HOME`, `JAVA_HOME`, `JAVA_TOOL_OPTIONS`) replaces the one spelled another
-  way there, and no longer sits beside it.
+- For contributors: on Windows the tools look an environment variable up under any spelling of its
+  name (`Path` or `PATH`), as Windows does, and a variable they set for a program they start
+  (`XDG_DATA_HOME`, `JAVA_HOME`, `JAVA_TOOL_OPTIONS`) replaces the one spelled another way there,
+  where it sat beside it before.
+- For contributors: a command a tool prints for you to paste (the `--yes` line to run it again, a
+  step it names) leaves a word unquoted only when it holds no character a shell reads (`HEAD~1` is
+  now `'HEAD~1'`). A word with a line break, another control character or an invisible one (a
+  right-to-left override) is shown as a marker that stops the pasted line before it runs. The
+  Maven, Neovim, Eclipse, Dependencies and Release tools printed their `--yes` lines, and the
+  Release tool its LikeCi line for macOS and Windows, unquoted, so a folder with a space split into
+  two words.
 
 ## [0.2.30] - 2026-11-19
 

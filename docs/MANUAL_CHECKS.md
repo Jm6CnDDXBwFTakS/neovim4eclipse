@@ -25,22 +25,23 @@ java releng/tools/checks/ManualChecks.java list             # every card
 java releng/tools/checks/ManualChecks.java json             # the cards as JSON, for a page that keeps ticks
 ```
 
-The tool runs `git` (for `due`) and starts your Eclipse (for `launch`), so both must be found. On
-Windows neither is usually on `PATH` in a new PowerShell window. Paste this block into one, from
-the repository's root, after changing the first two lines to where your Git and Eclipse are (the
-two settings last as long as that window). It builds the update site ZIP `launch` installs, makes
-the folders, and starts Eclipse for a card:
+The tool runs `git` (for `due`) and starts your Eclipse (for `launch`). Like every tool under
+`releng/tools`, it runs on Linux, macOS, and in Git Bash on Windows; from cmd or PowerShell it stops
+at once (CONTRIBUTING.md, "Developer tools: where they run"). On
+Windows, open Git Bash (Git for Windows), which has `git` on `PATH`, and paste this block from the
+repository's root, after changing the first line to where your Eclipse is (the setting lasts as
+long as that window). It builds the update site ZIP `launch` installs, makes the folders, and
+starts Eclipse for a card:
 
-```powershell windows
-$env:PATH = "C:\path\to\git\cmd;$env:PATH"         # the folder with git.exe
-$env:ECLIPSE = "C:\path\to\eclipse\eclipse.exe"    # the Eclipse program itself, not its folder
-.\mvnw.cmd verify -DskipTests
+```sh windows
+export ECLIPSE='C:\path\to\eclipse\eclipse.exe'    # the Eclipse program itself, not its folder
+./mvnw verify -DskipTests
 java releng/tools/checks/ManualChecks.java setup
 java releng/tools/checks/ManualChecks.java launch gn-download
 ```
 
-On Linux and macOS `git` is on `PATH` already; `export ECLIPSE=/path/to/eclipse` names an Eclipse
-the tool does not find by itself (see below).
+On Linux and macOS `export ECLIPSE=/path/to/eclipse` names an Eclipse the tool does not find by
+itself (see below).
 
 - **`due`** lists the cards whose source files changed since the last release tag (`v*`), and the
   cards marked `always`. A card about macOS's input method does not come up in a release that did
@@ -231,7 +232,7 @@ xvfb-run -a -s "-screen 0 1600x1000x24" ./mvnw verify -Pgallery -Dnvim.path=/pat
 Three of the pictures show real Neovim plug-ins: which-key's panel of key hints after `z` and
 after `g`, and flash's jump labels. The repository holds no plug-in; they are taken from the
 pinned copies ([UPGRADING.md](UPGRADING.md), "The plug-ins the tests run"), so fetch those first,
-from the repository's root:
+from the repository's root (on Windows in Git Bash):
 
 ```sh linux macos windows
 java releng/tools/plugins/TestPlugins.java fetch
@@ -534,6 +535,9 @@ In PowerShell, `Remove-Item Env:XDG_DATA_HOME` afterward, or close the window.
    `CONNECT github.com:443` and `CONNECT release-assets.githubusercontent.com:443` (Get Neovim's
    download): all of them took the proxy.
 
+On Windows start the proxy in Git Bash, which every tool needs there (CONTRIBUTING.md, "Developer
+tools: where they run"):
+
 ```sh
 java releng/tools/checks/Proxy.java
 ```
@@ -576,7 +580,9 @@ java releng/tools/ci/LikeCi.java --all
 - **Launch:** none
 - **Areas:** always
 
-```powershell
+In Git Bash:
+
+```sh
 java releng/tools/ci/LikeCi.java --all
 ```
 
@@ -591,9 +597,10 @@ java releng/tools/ci/LikeCi.java --all
 A loaded machine shows timing bugs a fast one hides (CONTRIBUTING.md, "Tests on a loaded
 machine"); right before the release.
 
-```powershell
-$env:JAVA_TOOL_OPTIONS = '-XX:ActiveProcessorCount=1'
-java releng/tools/ci/LikeCi.java --all
+In Git Bash:
+
+```sh
+JAVA_TOOL_OPTIONS=-XX:ActiveProcessorCount=1 java releng/tools/ci/LikeCi.java --all
 ```
 
 **Expect:** every module passes.

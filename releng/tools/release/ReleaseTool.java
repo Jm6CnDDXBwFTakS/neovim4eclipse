@@ -118,6 +118,7 @@ public final class ReleaseTool {
     }
 
     public static void main(String[] args) {
+        Shell.requireSupportedShell("Release");
         try {
             Path root = Path.of("").toAbsolutePath();
             if (!Files.isRegularFile(root.resolve(TOOL))) {
@@ -312,9 +313,9 @@ public final class ReleaseTool {
         if (options.noTests()) {
             System.out.println("Local tests skipped (--no-tests); promote will want them.");
         } else if (options.mode() == Ask.Mode.DRY_RUN) {
-            System.out.println("[dry run] would run: java releng/tools/ci/LikeCi.java " + tests);
+            System.out.println("[dry run] would run: " + Shell.display(likeCiLine(tests)));
         } else {
-            List<String> likeCi = Shell.java("releng/tools/ci/LikeCi.java", tests.isEmpty() ? new String[0] : tests.split("\\s+"));
+            List<String> likeCi = Shell.java("releng/tools/ci/LikeCi.java", likeCiArgs(tests));
             if (shell.show(likeCi) != 0) {
                 throw new ToolFailure("the local tests failed (see above); fix them on " + v.branch() + " and run check again");
             }
@@ -323,8 +324,21 @@ public final class ReleaseTool {
         }
         System.out.println();
         System.out.println("On macOS and Windows, test the same commit once it is pushed (CI's macOS and Windows jobs are the gate):");
-        System.out.println("  git fetch origin && git switch --detach " + head.substring(0, 12));
-        System.out.println("  java releng/tools/ci/LikeCi.java " + tests);
+        System.out.println("  " + Shell.display(List.of("git", "fetch", "origin")) + " && "
+                + Shell.display(List.of("git", "switch", "--detach", head.substring(0, 12))));
+        System.out.println("  " + Shell.display(likeCiLine(tests)));
+    }
+
+    /** The {@code tests} setting ({@code --all}, or nothing) as LikeCi's arguments. */
+    private static String[] likeCiArgs(String tests) {
+        return tests.isBlank() ? new String[0] : tests.strip().split("\\s+");
+    }
+
+    /** LikeCi with the {@code tests} setting, as a person types it: {@code java releng/tools/ci/LikeCi.java --all}. */
+    private static List<String> likeCiLine(String tests) {
+        List<String> line = new ArrayList<>(List.of("java", "releng/tools/ci/LikeCi.java"));
+        line.addAll(List.of(likeCiArgs(tests)));
+        return line;
     }
 
     /** How long a passed check of the pinned archives counts for the same pins. */

@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import common.Ask;
+import common.Shell;
 import common.ToolFailure;
 import common.Version;
 
@@ -99,6 +100,6 @@ public record Options(String step, Ask.Mode mode, boolean noTests, boolean skipL
         }
         words.add(2, currentStep);
         words.add("--yes");
-        return String.join(" ", words);
+        return Shell.display(words);
     }
 }

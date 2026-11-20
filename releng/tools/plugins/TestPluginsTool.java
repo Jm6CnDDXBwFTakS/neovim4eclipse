@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 import common.Ask;
 import common.Folders;
 import common.Http;
+import common.Shell;
 import common.ToolCache;
 import common.ToolFailure;
 import plugins.Pins.Pin;
@@ -110,6 +111,7 @@ public final class TestPluginsTool {
     }
 
     public static void main(String[] args) {
+        Shell.requireSupportedShell("TestPlugins");
         try {
             Path root = Path.of("").toAbsolutePath();
             if (!Files.isRegularFile(root.resolve(TOOL))) {

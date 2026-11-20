@@ -30,7 +30,8 @@ Neovim plug-ins the jump-label tests run (`releng/test-plugins.properties`; with
 are left out and those tests skipped), runs CI's Maven commands with it (on Linux under `xvfb-run`, as CI), and
 lists what each module skipped. A failure that only CI would show shows up here first, a change
 that does not compile included. `--all` runs every test group (`-Pall`) the same way, for a
-release. `LikeCiTest` keeps its commands equal to the workflow's.
+release. `LikeCiTest` keeps its commands equal to the workflow's. On Windows run it, as every
+tool, from Git Bash ("Developer tools: where they run").
 
 ```bash
 java releng/tools/ci/LikeCi.java                # what CI runs, on this machine (before a push)
@@ -549,6 +550,28 @@ Maven artifactIds, the ZIP (`neovim4eclipse-0.1.0.zip`), the bundle IDs and Java
 A bundle ID is part of what users install: p2 sees a renamed bundle as a different plug-in (no
 update, only uninstall and reinstall), and saved preferences live under it. Do not rename it after a
 release.
+
+### Developer tools: where they run
+
+The plug-in supports Linux, macOS and Windows, and every tool under `releng/tools` (LikeCi among
+them) is supported on **Linux, macOS, and Windows in Git Bash** (Git for Windows' shell). Started
+from cmd or PowerShell, a tool stops at once and says so:
+
+```text
+Release: runs on Linux, macOS and in Git Bash on Windows, not from cmd or PowerShell. Run it from Git Bash.
+```
+
+Why: a tool prints commands for you to paste back (its `--yes` line to run it again, the step it
+is about to run), quoted for a POSIX shell (`common/Shell.display`). cmd keeps a single quote as
+part of the word, and PowerShell runs `$(...)` even inside double quotes, so a line that is right
+in bash can split a path or run something else there. On Windows a tool runs only when both signs
+say Git Bash: `MSYSTEM` is set (Git Bash sets it), and the program that started it is `bash.exe`,
+`sh.exe` or `java.exe` (a tool another tool starts); anything else is refused, a cmd or PowerShell
+opened from Git Bash, which inherits `MSYSTEM`, included. Refusing those two shells is one check,
+`Shell.requireSupportedShell`, which every program's `main` calls first (the single-file programs
+LikeCi, Proxy and ArchiveCheck, which cannot import it, hold a copy); `ShellDisplayTest` checks
+each. Quoting for cmd and PowerShell would be a rule for every word of every printed line. Maven
+itself (`mvnw.cmd`) runs from any shell; the commands in "Tests on a loaded machine" are Maven's.
 
 ### Where the tools keep their files
 

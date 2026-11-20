@@ -192,7 +192,7 @@ public final class Git {
         List<String> command = command(args.toArray(String[]::new));
         if (ask.confirm(what, List.of(Shell.display(command)))) {
             if (shell.show(command) != 0) {
-                throw new ToolFailure(Shell.display(command) + " failed; nothing was forced. See git's message above.");
+                throw new ToolFailure(Shell.ran(command) + " failed; nothing was forced. See git's message above.");
             }
         }
     }

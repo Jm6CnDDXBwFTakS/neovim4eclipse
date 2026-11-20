@@ -90,7 +90,30 @@ public final class LikeCi {
     private LikeCi() {
     }
 
+    /**
+     * Stops this program when started from cmd or PowerShell: a copy of
+     * {@code common.Shell.requireSupportedShell}, since this file runs alone and cannot import it
+     * ({@code ShellDisplayTest} checks the copy). The tools are supported on Linux, macOS, and in
+     * Git Bash on Windows: both {@code MSYSTEM} set (Git Bash sets it) and the program that
+     * started this one {@code bash.exe}, {@code sh.exe} or {@code java.exe}, or it stops.
+     * CONTRIBUTING.md, "Developer tools: where they run".
+     */
+    private static void requireSupportedShell(String tool) {
+        if (!System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).startsWith("windows")) {
+            return;
+        }
+        String msystem = System.getenv("MSYSTEM");
+        String parent = ProcessHandle.current().parent().flatMap(p -> p.info().command())
+                .map(c -> java.nio.file.Path.of(c).getFileName().toString().toLowerCase(java.util.Locale.ROOT)).orElse("");
+        if (msystem == null || msystem.isBlank() || !java.util.List.of("bash.exe", "sh.exe", "java.exe").contains(parent)) {
+            System.err.println(tool + ": runs on Linux, macOS and in Git Bash on Windows, not from cmd or PowerShell."
+                    + " Run it from Git Bash.");
+            System.exit(2);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        requireSupportedShell("LikeCi");
         boolean all = List.of(args).contains("--all");
         if (args.length > (all ? 1 : 0)) {
             System.err.println("Usage: java releng/tools/ci/LikeCi.java [--all]");

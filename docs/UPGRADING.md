@@ -132,7 +132,8 @@ and the newest pinned Eclipse started on that Java, and `LikeCi --all`. Only aft
 commit *Raise the Java release to 25*; a failure puts every file back. If the oldest Eclipse does
 not start on the new Java (4.34 refuses 24 and newer), raise it first, on today's Java (next
 section). `--no-tests` skips the proof, `--dry-run` shows the steps. Steps 1, 2 and 6 stay yours,
-and `LikeCi --all` and `smoke` on macOS and Windows.
+and `LikeCi --all` and `smoke` on macOS and Windows (on Windows from Git Bash: CONTRIBUTING.md,
+"Developer tools: where they run").
 
 To raise it by hand (example: 21 to 25):
 
@@ -206,7 +207,8 @@ and puts the working tree back if a step fails. Downloads are kept in
   (such as 4.34's `eclipse.ini`, which does not start on Java 24).
 - **`smoke`** builds the update site from this checkout and installs it into both pinned releases
   with p2's director, as the smoke job does after a release, on Linux, macOS (from the `.dmg`) or
-  Windows (from the `.zip`). Run it on macOS and Windows after a move. A release with no Platform
+  Windows (from the `.zip`). Run it on macOS and Windows after a move (on Windows from Git Bash: it
+  refuses cmd and PowerShell). A release with no Platform
   for this machine is skipped with a note (Eclipse 4.34 has no Windows on ARM build); it fails only
   if none can be installed into. A Platform brings no Java:
   it runs on `--java <home>`, else `eclipse.java` in `releng/tools/common/local.properties`, else

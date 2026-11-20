@@ -96,6 +96,7 @@ public final class MavenUpgradeTool {
     }
 
     public static void main(String[] args) {
+        Shell.requireSupportedShell("MavenUpgrade");
         try {
             Path root = Path.of("").toAbsolutePath();
             if (!Files.isRegularFile(root.resolve(TOOL))) {
@@ -134,7 +135,7 @@ public final class MavenUpgradeTool {
                 }
             }
             rerun.add("--yes");
-            new MavenUpgradeTool(root, new Ask(mode, String.join(" ", rerun)), maven, wrapper, allowYoung, tests).run();
+            new MavenUpgradeTool(root, new Ask(mode, Shell.display(rerun)), maven, wrapper, allowYoung, tests).run();
         } catch (ToolFailure f) {
             System.err.println();
             System.err.println("MavenUpgrade: " + f.getMessage());

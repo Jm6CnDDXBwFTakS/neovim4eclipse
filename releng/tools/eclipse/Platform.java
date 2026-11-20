@@ -97,7 +97,7 @@ public final class Platform {
     private static void run(Shell shell, List<String> command, String what) {
         Shell.Result r = shell.capture(command);
         if (!r.ok()) {
-            throw new ToolFailure("could not " + what + ": " + Shell.display(command) + "\n" + r.out() + r.err());
+            throw new ToolFailure("could not " + what + ": " + Shell.ran(command) + "\n" + r.out() + r.err());
         }
     }
 }

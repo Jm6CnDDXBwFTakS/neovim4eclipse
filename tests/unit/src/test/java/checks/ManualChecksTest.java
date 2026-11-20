@@ -233,12 +233,6 @@ class ManualChecksTest {
                 ManualChecksTool.plan("fresh", false, true), "nothing to empty, nothing to install");
     }
 
-    @Test
-    void theBuildCommandIsTheOneThePlatformsShellTakes() {
-        assertEquals("./mvnw verify -DskipTests", ManualChecksTool.ChecksEclipse.build("linux"));
-        assertEquals(".\\mvnw.cmd verify -DskipTests", ManualChecksTool.ChecksEclipse.build("windows"));
-    }
-
     /** The feature and the update site module the tool names exist under those names. */
     @Test
     void theFeatureAndTheSiteAreTheBuildsOwn() throws IOException {

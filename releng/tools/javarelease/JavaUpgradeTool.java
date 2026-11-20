@@ -81,6 +81,7 @@ public final class JavaUpgradeTool {
     }
 
     public static void main(String[] args) {
+        Shell.requireSupportedShell("JavaUpgrade");
         try {
             Path root = Path.of("").toAbsolutePath();
             if (!Files.isRegularFile(root.resolve(TOOL))) {
@@ -123,7 +124,8 @@ public final class JavaUpgradeTool {
                 throw new ToolFailure("name the Java release and a JDK of it, e.g. 25 --java /usr/lib/jvm/temurin-25-jdk\n" + USAGE);
             }
             rerun.add("--yes");
-            // Shell.display quotes a word with a space: C:\Program Files\Eclipse Adoptium\jdk-25 stays one argument.
+            // Shell.display quotes a word with a space for a POSIX shell: /opt/my jdk (or Git Bash's
+            // C:\Program Files\Eclipse Adoptium\jdk-25) stays one argument when the line is pasted back.
             new JavaUpgradeTool(root, new Ask(mode, Shell.display(rerun)), release, Path.of(java).toAbsolutePath(), tests).run();
         } catch (ToolFailure f) {
             System.err.println();
@@ -165,8 +167,9 @@ public final class JavaUpgradeTool {
         }
         plan.add(Changelog.FILE + ": under Unreleased, Changed: " + JavaFiles.changelogEntry(to));
         if (tests) {
-            plan.add("with JAVA_HOME=" + javaHome + ": " + Shell.display(smoke));
-            plan.add("with JAVA_HOME=" + javaHome + ": " + Shell.display(likeCi));
+            String on = "with JAVA_HOME " + Shell.display(List.of(javaHome.toString())) + ": ";
+            plan.add(on + Shell.display(smoke));
+            plan.add(on + Shell.display(likeCi));
         } else {
             plan.add("no smoke install and no tests (--no-tests)");
         }

@@ -84,6 +84,7 @@ public final class NeovimUpgradeTool {
     }
 
     public static void main(String[] args) {
+        Shell.requireSupportedShell("NeovimUpgrade");
         try {
             Path root = Path.of("").toAbsolutePath();
             if (!Files.isRegularFile(root.resolve(TOOL))) {
@@ -116,7 +117,7 @@ public final class NeovimUpgradeTool {
                 throw new ToolFailure("which Neovim? Usage: java " + TOOL + " <version>, e.g. 0.13.0");
             }
             rerun.add("--yes");
-            new NeovimUpgradeTool(root, target, allowYoung, tests, new Ask(mode, String.join(" ", rerun))).run();
+            new NeovimUpgradeTool(root, target, allowYoung, tests, new Ask(mode, Shell.display(rerun))).run();
         } catch (ToolFailure f) {
             System.err.println();
             System.err.println("NeovimUpgrade: " + f.getMessage());
@@ -142,7 +143,7 @@ public final class NeovimUpgradeTool {
             updater.add("--allow-young");
         }
         List<String> plan = List.of(
-                "java " + String.join(" ", updater),
+                Shell.display(withJava(updater)),
                 "rewrite the copies of " + from + " in " + String.join(", ", copyFiles) + " (" + VersionCopies.FILE + ")",
                 "CHANGELOG.md, Unreleased, Changed: " + NeovimFiles.entry(from, target),
                 "compile the plug-in; unpack all six archives with its extractor; run this machine's Neovim",
@@ -256,5 +257,12 @@ public final class NeovimUpgradeTool {
 
     private static void ok(String message) {
         System.out.println("ok: " + message);
+    }
+
+    /** {@code java} and then {@code args}, the way a person types a Java program's command. */
+    private static List<String> withJava(List<String> args) {
+        List<String> command = new ArrayList<>(List.of("java"));
+        command.addAll(args);
+        return command;
     }
 }
