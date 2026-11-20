@@ -576,16 +576,18 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
      * status bar item still work. Each workbench window has status bar items of its own
      * ({@code PageStatus} per status line manager).
      *
-     * <p>Warnings count only from the close on: while the test types, a slow machine may log
-     * {@code KeyInput}'s "A key took 315 ms" diagnostic (a warning, on a run pinned to one core),
-     * which says nothing about the window's close.
+     * <p>Warnings count only from the close on, and never {@code KeyInput}'s "A key took 315 ms"
+     * diagnostic: a slow machine (a run pinned to one core) may log it for a key typed before the
+     * close, when that key ends after it, and it says nothing about the window's close.
      */
     @Test
     void aSecondWorkbenchWindowWithAPageClosesCleanly() throws Exception {
         List<String> logged = new CopyOnWriteArrayList<>();
         java.util.concurrent.atomic.AtomicBoolean closing = new java.util.concurrent.atomic.AtomicBoolean();
         ILogListener listener = (status, plugin) -> {
-            if (status.getSeverity() >= IStatus.ERROR || closing.get() && status.getSeverity() >= IStatus.WARNING) {
+            boolean slowKey = String.valueOf(status.getMessage()).startsWith("A key took "); // KeyInput's speed diagnostic
+            if (status.getSeverity() >= IStatus.ERROR
+                    || closing.get() && status.getSeverity() >= IStatus.WARNING && !slowKey) {
                 logged.add(status.getPlugin() + ": " + status.getMessage()
                         + (status.getException() != null ? " (" + status.getException() + ")" : ""));
             }
@@ -624,6 +626,7 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
             type(thereText, "\u001b");
             IDocument thereDocument = there.getDocumentProvider().getDocument(there.getEditorInput());
             waitUntil("typed in the second window's editor", TIMEOUT_MS, () -> thereDocument.get().contains("SECOND"));
+            settle(); // every key typed handled, the Esc too, before the close
             there.doRevertToSaved();
         } finally {
             closing.set(true);
