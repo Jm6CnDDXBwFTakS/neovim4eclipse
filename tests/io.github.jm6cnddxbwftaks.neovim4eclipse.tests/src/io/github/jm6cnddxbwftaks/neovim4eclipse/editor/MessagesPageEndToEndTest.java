@@ -201,6 +201,35 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         });
     }
 
+    /**
+     * The user's {@code 'cmdheight'} 0 takes the command line's row away under the page's status
+     * line too, as under a code editor's: the status line lies on the page's bottom edge; 1 brings
+     * the row back.
+     */
+    @Test
+    void withCmdheight0ThePagesStatusLineLiesOnItsBottomEdge() {
+        NeovimPageEditor page = messagesShowing("cmdheight 0");
+        GridCanvas row = page.windowPane().statusRowForTests();
+        waitUntil("the status row shown", TIMEOUT_MS, () -> {
+            settle();
+            return row.isVisible() && row.getSize().y > 0;
+        });
+        int line = row.getSize().y;
+        try {
+            SessionProbe.lua(session, "vim.o.cmdheight = 0 return 0");
+            waitUntil("the status line on the bottom edge", TIMEOUT_MS, () -> {
+                settle();
+                return row.getBounds().y + row.getBounds().height == row.getParent().getClientArea().height;
+            }, () -> "; row " + row.getBounds() + ", area " + row.getParent().getClientArea());
+        } finally {
+            SessionProbe.lua(session, "vim.o.cmdheight = 1 return 0");
+        }
+        waitUntil("the command line's row back under it", TIMEOUT_MS, () -> {
+            settle();
+            return row.getBounds().y + row.getBounds().height == row.getParent().getClientArea().height - line;
+        }, () -> "; row " + row.getBounds() + ", area " + row.getParent().getClientArea());
+    }
+
     /** One Neovim item in Eclipse's status bar for the messages editors, kept while any is open. */
     @Test
     void oneStatusBarItemServesBothHalvesOfASplit() {

@@ -195,9 +195,161 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
                 return floatsOver(statusRowBounds(window)).isEmpty();
             }, () -> "; over it: " + floatsOver(statusRowBounds(window)));
         } finally {
-            typeSlowly(":set ch=1\r");
-            settle();
+            backToCmdheight1();
         }
+    }
+
+    /**
+     * A message ({@code :echo "hello"}) shows on the command line's row, under the status line, and
+     * stays there; the status line is not covered.
+     */
+    @Test
+    void aMessageShowsOnTheRowUnderTheStatusLineAndStays() {
+        int window = currentWindow();
+        typeSlowly(":echo \"hello\"\r");
+        waitUntil("hello under the status line", TIMEOUT_MS, () -> {
+            settle();
+            return helloUnderTheRow(window);
+        }, () -> "; floats " + visibleFloats() + ", row " + statusRowBounds(window));
+        settle();
+        settle();
+        assertTrue(helloUnderTheRow(window), "still there: " + visibleFloats());
+    }
+
+    private boolean helloUnderTheRow(int window) {
+        Rectangle row = statusRowBounds(window);
+        return row != null && floatsOver(row).isEmpty() && visibleFloatCanvases().stream()
+                .anyMatch(c -> text(c).contains("hello") && c.getBounds().y >= row.y + row.height);
+    }
+
+    /**
+     * {@code :set ch=0} takes the row under the status line away, so the editor shows one more text
+     * row and its status line lies on its bottom edge; {@code :set ch=1} brings the row back.
+     */
+    @Test
+    void withCmdheight0TheRowUnderTheStatusLineGoesAndComesBack() {
+        int window = currentWindow();
+        int line = widget.getLineHeight();
+        waitUntil("the status row", TIMEOUT_MS, () -> {
+            settle();
+            return statusRowBounds(window) != null;
+        });
+        int margin = widget.getBottomMargin();
+        typeSlowly(":set ch=0\r");
+        try {
+            waitUntil("one row less, the status line on the bottom edge", TIMEOUT_MS, () -> {
+                settle();
+                Rectangle row = statusRowBounds(window);
+                return widget.getBottomMargin() == margin - line && row != null
+                        && row.y + row.height == widget.getClientArea().height;
+            }, () -> "; margin " + widget.getBottomMargin() + " (was " + margin + "), row " + statusRowBounds(window)
+                    + ", client " + widget.getClientArea());
+        } finally {
+            backToCmdheight1();
+        }
+        waitUntil("the row back", TIMEOUT_MS, () -> {
+            settle();
+            Rectangle row = statusRowBounds(window);
+            return widget.getBottomMargin() == margin && row != null
+                    && row.y + row.height == widget.getClientArea().height - line;
+        }, () -> "; margin " + widget.getBottomMargin() + ", row " + statusRowBounds(window));
+    }
+
+    /**
+     * With {@code 'cmdheight'} 0 the {@code :} line being typed lies over the status line, and its
+     * Tab list right above it, covering neither; the text does not move. At Enter the line goes,
+     * and a message shows on the row above the status line, for a while.
+     */
+    @Test
+    void withCmdheight0TheTypedLineLiesOverTheStatusLine() {
+        int window = currentWindow();
+        typeSlowly(":set ch=0\r");
+        try {
+            waitUntil("the status row on the bottom edge", TIMEOUT_MS, () -> {
+                settle();
+                return statusRowBounds(window) != null && session.commandLineRows() == 0;
+            });
+            int top = widget.getTopIndex();
+            int margin = widget.getBottomMargin();
+            typeSlowly(":set ");
+            UiTestSupport.type(widget, '\t');
+            waitUntil("the line over the status line, its list right above it", TIMEOUT_MS, () -> {
+                settle();
+                Rectangle row = statusRowBounds(window);
+                if (row == null) {
+                    return false;
+                }
+                boolean lineOnTheRow = visibleFloatCanvases().stream()
+                        .anyMatch(c -> text(c).startsWith(":set") && c.getBounds().y == row.y);
+                boolean listAbove = visibleFloatCanvases().stream().anyMatch(c -> c.grid().window() == -1 // the popup menu
+                        && c.getBounds().y + c.getBounds().height == row.y);
+                return lineOnTheRow && listAbove;
+            }, () -> "; floats " + visibleFloats() + ", row " + statusRowBounds(window));
+            UiTestSupport.escape(widget);
+            settle();
+            typeSlowly(":echo \"hi\"\r");
+            waitUntil("hi on the row above the status line, nothing over it", TIMEOUT_MS, () -> {
+                settle();
+                Rectangle row = statusRowBounds(window);
+                return row != null && floatsOver(row).isEmpty() && visibleFloatCanvases().stream()
+                        .anyMatch(c -> text(c).contains("hi") && c.getBounds().y + c.getBounds().height == row.y);
+            }, () -> "; floats " + visibleFloats() + ", row " + statusRowBounds(window));
+            assertTrue(widget.getTopIndex() == top && widget.getBottomMargin() == margin,
+                    "the text did not move: top " + widget.getTopIndex() + " (was " + top + "), margin "
+                            + widget.getBottomMargin() + " (was " + margin + ")");
+            waitUntil("the message gone after a while", TIMEOUT_MS, () -> {
+                settle();
+                return visibleFloatCanvases().stream().noneMatch(c -> text(c).contains("hi"));
+            }, () -> "; floats " + visibleFloats());
+        } finally {
+            backToCmdheight1();
+        }
+    }
+
+    /** Whatever a failed step left open is closed, and 'cmdheight' is 1 again: one Neovim serves every test. */
+    private void backToCmdheight1() {
+        session.inputAsync("<Esc><Esc>");
+        settle();
+        typeSlowly(":set ch=1\r");
+        waitUntil("'cmdheight' 1 again", TIMEOUT_MS, () -> {
+            settle();
+            return session.commandLineRows() == 1;
+        });
+    }
+
+    /** The current window, with 'laststatus' 2 (Neovim's default, so no test needs it put back). */
+    private int currentWindow() {
+        try {
+            SessionProbe.lua(session, "vim.cmd('set laststatus=2') return 0");
+            return ((Number) SessionProbe.lua(session, "return vim.api.nvim_get_current_win()")).intValue();
+        } catch (Exception e) {
+            throw new AssertionError("Neovim did not answer", e);
+        }
+    }
+
+    /** The floats drawn in the editor (Neovim's windows and ui2's), not the status row. */
+    private List<GridCanvas> visibleFloatCanvases() {
+        List<GridCanvas> floats = new java.util.ArrayList<>();
+        for (Control child : widget.getChildren()) {
+            if (child instanceof GridCanvas canvas && !StatusLineRow.isRow(canvas) && canvas.isVisible()
+                    && canvas.grid() != null) {
+                floats.add(canvas);
+            }
+        }
+        return floats;
+    }
+
+    private List<String> visibleFloats() {
+        return visibleFloatCanvases().stream().map(c -> c.getBounds() + " \"" + text(c) + "\"").toList();
+    }
+
+    /** A canvas's text, its rows joined by {@code |}, trailing blanks dropped. */
+    private static String text(GridCanvas canvas) {
+        List<String> rows = new java.util.ArrayList<>();
+        for (int r = 0; r < canvas.grid().height(); r++) {
+            rows.add(canvas.grid().row(r).strip());
+        }
+        return String.join("|", rows);
     }
 
     /** The visible status row's bounds for {@code window}, or {@code null}. */

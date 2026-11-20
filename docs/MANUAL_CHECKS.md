@@ -474,49 +474,28 @@ region*.
 
 - **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** editor/StatusLineRow.java, editor/StatusRows.java, editor/LineOnFocusLoss.java, util/StatusLines.java, editor/WindowPane.java, util/Grids.java, editor/FloatingWindows.java
+- **Areas:** editor/StatusLineRow.java, editor/StatusRows.java, editor/LineOnFocusLoss.java, util/StatusLines.java, editor/WindowPane.java, util/Grids.java, editor/FloatingWindows.java, util/FloatPlacement.java
 
-What the row shows, its colors and its margin are tested (`status_line_spec.lua`, `StatusLineRowTest`,
-`StatusBarEndToEndTest`), and so is an open line abandoned when a view takes the keyboard
-(`LineOnFocusLossTest`, `FloatingWindowsEndToEndTest`). How the rows look beside Eclipse's own
-editor chrome, and another application taking the keyboard, need a person.
+What the rows show and where are tested: the line itself (`status_line_spec.lua`,
+`StatusLinesTest`), the row and its margin (`StatusLineRowTest`, `StatusRowsTest`), both editors
+side by side, a message under the status line, `'cmdheight'` 0 with the `:` line, its Tab list,
+output and one key taking it away (`StatusBarEndToEndTest`; a page editor's in
+`MessagesPageEndToEndTest`), where ui2's windows lie (`FloatPlacementTest`, `GridsTest`), and an
+open line abandoned when a view takes the keyboard (`LineOnFocusLossTest`,
+`FloatingWindowsEndToEndTest`). How the rows look beside Eclipse's own editor frame, and another
+application taking the keyboard, need a person.
 
 1. Open `n4e-alpha`'s `notes.txt` and `ideas.txt` and drag one tab beside the other, so both show.
-   Click into `notes.txt`.
+   Click into `ideas.txt`, then into `notes.txt`.
    ⇒ Each editor shows a status line under its text, naming its own file, and under it an empty
    row. `notes.txt`'s is in Neovim's `StatusLine` colors, `ideas.txt`'s in the dimmer
-   `StatusLineNC`; each reaches its editor's right edge, the ruler (`1,1  All`) at the end.
+   `StatusLineNC`; each reaches its editor's right edge, the ruler (`1,1  All`) at the end, and
+   nothing of Eclipse's frame (tabs, scroll bar, rulers) covers a row or is covered.
    (An editor Neovim has not shown yet, such as one restored at start and never clicked into,
    has no line until its first click: it has no Neovim window before that.)
-2. In `notes.txt`: `:echo "hello"` and <kbd>Enter</kbd>.
-   ⇒ `hello` shows on the editor's last row, under the status line, and stays there; no text and
-   no status line is covered.
-3. `:echo "abc` (no <kbd>Enter</kbd>), click in the *Problems* view, click back into `notes.txt`,
-   type `:`.
-   ⇒ The new line reads `:` alone: the old one was cancelled when the view took the keyboard.
-   <kbd>Up</kbd> brings `echo "abc` back from the history. <kbd>Esc</kbd>.
-4. `:echo "abc`, switch to another application, switch back to Eclipse.
+2. In `notes.txt`: `:echo "abc` (no <kbd>Enter</kbd>), switch to another application, switch back
+   to Eclipse.
    ⇒ The line is still open, `:echo "abc`. <kbd>Esc</kbd> closes it.
-5. `:help` and <kbd>Enter</kbd>.
-   ⇒ The help editor shows its status line under the text and the command line's row under it, as
-   the code editors do.
-6. Click into `notes.txt`, `:set ch=0` and <kbd>Enter</kbd>.
-   ⇒ The empty row under each status line is gone (also in the help editor): each editor shows one
-   more text row, its status line on its bottom edge. (With the cursor on the editor's last row,
-   the text may scroll by one line here: Neovim is at 0 for a moment before the plug-in sets it
-   back to 1.)
-   Then `:e ` and <kbd>Tab</kbd>.
-   ⇒ The list of names opens right above the line, which lies over the status line; no entry
-   covers the line. <kbd>Esc</kbd>.
-7. Type `:echo "hi"`, then <kbd>Enter</kbd>.
-   ⇒ While typing, the line lies over `notes.txt`'s status line, which comes back at
-   <kbd>Enter</kbd>; `hi` shows at the right, on the row just above the status line, for a few
-   seconds, and goes. The text does not move at any point.
-8. `:ls` and <kbd>Enter</kbd>, wait ten seconds, then <kbd>j</kbd>.
-   ⇒ The list of buffers rises from the editor's bottom edge, over the status line, and is still
-   there after the wait; <kbd>j</kbd> takes it away and shows the status line again.
-9. `:set ch=1` and <kbd>Enter</kbd>.
-   ⇒ The row under each status line is back, as in step 1.
 
 **Expect:** each step's result, after its ⇒.
 
