@@ -86,6 +86,13 @@ public final class Grids {
      * thread.
      */
     private Set<Integer> ui2Windows = Set.of();
+    /** ui2's command line window, or -1. */
+    private int cmdWindow = -1;
+    /**
+     * The user's {@code 'cmdheight'} is 0 ({@code LuaScripts.UI2}): the editor keeps no row for the
+     * command line, so ui2's line is drawn only while it is open, over the status line.
+     */
+    private boolean overlay;
     /** Whether Eclipse types the insert now ({@link #eclipseTypes}): Neovim's popup menu is then not drawn. */
     private boolean eclipseTypes;
     private boolean floatsChanged;
@@ -168,12 +175,17 @@ public final class Grids {
     /**
      * The windows of ui2, from {@code LuaScripts.UI2} (at start, and whenever ui2 makes one
      * again). They are Neovim's own command line and messages, so the editor draws them as it
-     * draws Neovim's popup menu: always ({@link #alwaysDrawn}). Example: {@code [1002, 1003, 1004, 1005]}.
+     * draws Neovim's popup menu: always ({@link #alwaysDrawn}), except that with {@code overlay}
+     * the command line's window {@code cmd} is drawn only while the cursor is in it, a line being
+     * typed: the editor has no row for it then, and between lines it would cover the status line
+     * with the last line typed. Example: {@code [1002, 1003, 1004, 1005]}, 1002, {@code false}.
      */
-    public void ui2Windows(List<Integer> wins) {
+    public void ui2Windows(List<Integer> wins, int cmd, boolean overlay) {
         Set<Integer> now = Set.copyOf(wins);
-        if (!now.equals(ui2Windows)) {
+        if (!now.equals(ui2Windows) || cmd != cmdWindow || overlay != this.overlay) {
             ui2Windows = now;
+            cmdWindow = cmd;
+            this.overlay = overlay;
             floatsChanged = true;
         }
     }
@@ -422,6 +434,9 @@ public final class Grids {
             boolean always = alwaysDrawn(e.getKey());
             if (place.win() == -1 && eclipseTypes && !inCommandLine) {
                 continue; // Neovim's popup menu in an insert Eclipse types: see eclipseTypes
+            }
+            if (overlay && place.win() == cmdWindow && !Integer.valueOf(cmdWindow).equals(windowOfGrid.get(cursorGrid))) {
+                continue; // no row for the line, and none open: the status line shows (ui2Windows)
             }
             if (place.floating() && grids.containsKey(e.getKey()) && (drawFloats || always)
                     && (e.getKey() != cursorGrid || always) && (drawnWindow == -1 || place.win() != drawnWindow)) {

@@ -470,7 +470,7 @@ region*.
 
 - **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** editor/StatusLineRow.java, editor/LineOnFocusLoss.java, util/StatusLines.java, editor/WindowPane.java, util/Grids.java
+- **Areas:** editor/StatusLineRow.java, editor/LineOnFocusLoss.java, util/StatusLines.java, editor/WindowPane.java, util/Grids.java, editor/FloatingWindows.java
 
 What the row shows, its colors and its margin are tested (`status_line_spec.lua`, `StatusLineRowTest`,
 `StatusBarEndToEndTest`), and so is an open line abandoned when a view takes the keyboard
@@ -494,6 +494,15 @@ editor chrome, and another application taking the keyboard, need a person.
 5. `:help` and <kbd>Enter</kbd>.
    ⇒ The help editor shows its status line under the text and the command line's row under it, as
    the code editors do.
+6. Click into `notes.txt`, `:set ch=0` and <kbd>Enter</kbd>.
+   ⇒ The empty row under each status line is gone (also in the help editor): each editor shows one
+   more text row, its status line on its bottom edge.
+7. Type `:echo "hi"`, then <kbd>Enter</kbd>.
+   ⇒ While typing, the line lies over `notes.txt`'s status line, which comes back at
+   <kbd>Enter</kbd>; `hi` shows at the right, on the row just above the status line, for a few
+   seconds, and goes. The text does not move at any point.
+8. `:set ch=1` and <kbd>Enter</kbd>.
+   ⇒ The row under each status line is back, as in step 1.
 
 **Expect:** each step's result, after its ⇒.
 

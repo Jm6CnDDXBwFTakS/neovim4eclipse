@@ -104,10 +104,14 @@ final class NotificationBridge implements Incoming {
         /**
          * The ids of ui2's windows ({@link LuaScripts#UI2}): the command line, messages, pager and
          * prompts Neovim draws itself. The editor draws them whatever else it draws of Neovim's
-         * floats, and with the cursor in them. Sent at start and each time ui2 makes one again.
-         * Example: {@code [1002, 1003, 1004, 1005]}.
+         * floats, and with the cursor in them. Sent at start, each time ui2 makes one again, and
+         * when {@code overlay} changes: the user's {@code 'cmdheight'} is 0, so the editor keeps no
+         * row for the command line and draws it over the status line while it is open.
+         * Example: {@code [1002, 1003, 1004, 1005]}, {@code false}.
+         *
+         * @param cmd the command line's window, the first of {@code wins}, or {@code -1} if not sent
          */
-        void onUi2Windows(List<Integer> wins);
+        void onUi2Windows(List<Integer> wins, int cmd, boolean overlay);
 
         /**
          * Every window's status line ({@link LuaScripts#STATUS_LINE}), sent when one that is not
@@ -408,16 +412,21 @@ final class NotificationBridge implements Incoming {
         sink.onViewContent(new PageBuffer(kind, buffer, line));
     }
 
-    /** Payload: {@code [cmd, msg, pager, dialog]}, the window ids from {@link LuaScripts#UI2}; a window not sent is left out. */
+    /**
+     * Payload: {@code [cmd, msg, pager, dialog, overlay]}, the window ids from {@link LuaScripts#UI2}
+     * (a window not sent is left out) and whether the user's {@code 'cmdheight'} is 0 (anything but
+     * {@code true} is no).
+     */
     private void onUi2Windows(List<?> args) {
         List<Integer> wins = new ArrayList<>();
-        for (int i = 0; i < args.size(); i++) {
+        for (int i = 0; i < Math.min(4, args.size()); i++) {
             int win = window(args, i);
             if (win != EditorWindow.UNKNOWN && win > 0) {
                 wins.add(win);
             }
         }
-        sink.onUi2Windows(List.copyOf(wins));
+        int cmd = args.isEmpty() ? -1 : window(args, 0);
+        sink.onUi2Windows(List.copyOf(wins), cmd > 0 ? cmd : -1, args.size() > 4 && Boolean.TRUE.equals(args.get(4)));
     }
 
     private void onWindowClosed(List<?> args) {

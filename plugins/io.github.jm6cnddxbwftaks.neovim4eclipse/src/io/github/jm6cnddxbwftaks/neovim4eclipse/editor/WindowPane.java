@@ -111,6 +111,11 @@ final class WindowPane {
     private final PageStatus status;
     private final Consumer<GridSnapshot> gridListener = this::onGrid;
     private final Consumer<GridSnapshot> statusListener = this::onStatusRow;
+    /** {@code :set ch=0} and back: the command line's row under the status row goes, or comes back. */
+    private final Consumer<Integer> commandLineRowsListener = rows -> onUi(() -> {
+        placeRows();
+        sendSize();
+    });
     /** Eclipse's text font changed: the cells change size, so Neovim is asked for the cells that fit now. */
     private final IPropertyChangeListener fontListener;
 
@@ -233,21 +238,24 @@ final class WindowPane {
         };
         JFaceResources.getFontRegistry().addListener(fontListener);
         floats = new FloatingWindows(canvas);
+        floats.keepUnder(statusRow);
         commandWindowPanel = new NeovimWindowPanel(canvas, new NeovimEditorController.PanelCommands(session), () -> {
             // nothing to update: a page has no Ctrl-key context of its own
         });
         session.addPageGridListener(gridListener);
         session.addPageStatusListener(statusListener);
         session.addPageClosedListener(closedListener);
+        session.addCommandLineRowsListener(commandLineRowsListener);
     }
 
     /**
      * The rows the canvas keeps under the page window's: its status line's while Neovim draws one,
-     * and the command line's ({@link StatusLineRow#COMMAND_LINE_ROWS}). Example: 2 with the default
-     * {@code 'laststatus'}.
+     * and the command line's ({@code NeovimSession.commandLineRows}: 1, or 0 with a user's
+     * {@code 'cmdheight'} 0, when ui2's line is drawn over the status row while open). Example: 2
+     * with the default {@code 'laststatus'} and {@code 'cmdheight'}.
      */
     private int rowsBelow() {
-        return (statusShown ? 1 : 0) + StatusLineRow.COMMAND_LINE_ROWS;
+        return (statusShown ? 1 : 0) + session.commandLineRows();
     }
 
     /** Puts the status row above the command line's rows, at the canvas's bottom; hidden without a line. */
@@ -511,6 +519,7 @@ final class WindowPane {
         session.removePageGridListener(gridListener);
         session.removePageStatusListener(statusListener);
         session.removePageClosedListener(closedListener);
+        session.removeCommandLineRowsListener(commandLineRowsListener);
         session.releaseFocus(target);
         commandWindowPanel.dispose();
         lineOnFocusLoss.dispose();

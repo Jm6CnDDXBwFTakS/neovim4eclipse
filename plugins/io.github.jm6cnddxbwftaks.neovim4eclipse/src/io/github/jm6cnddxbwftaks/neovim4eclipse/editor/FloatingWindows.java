@@ -13,6 +13,7 @@ import org.eclipse.swt.events.ControlListener;
 import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Canvas;
+import org.eclipse.swt.widgets.Control;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatPlacement;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
@@ -38,7 +39,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
  * A drawn window never takes the keyboard focus ({@code SWT.NO_FOCUS}): the keys keep going to the
  * editor, and from there to Neovim, which is what a window without the focus means. Clicks and
  * the wheel on it do nothing. The windows lie under the plug-in's own overlays (the command-line
- * window's panel), among themselves in Neovim's order ({@code zindex}). Neovim's own command
+ * window's panel), among themselves in Neovim's order ({@code zindex}), and over the status line's
+ * row ({@link #keepUnder}), as Neovim draws a float over a status line: ui2's message window can
+ * reach it, and with {@code 'cmdheight'} 0 ui2's {@code :} line lies on it. Neovim's own command
  * line, prompts, pager and messages (ui2) are floats too, drawn like the others; the one with
  * Neovim's cursor is drawn with it ({@link #cursorCell}).
  *
@@ -54,9 +57,17 @@ final class FloatingWindows {
     private final ControlListener placeOnResize = ControlListener.controlResizedAdapter(e -> place());
     private final PaintListener placeOnPaint = e -> place();
     private boolean listening;
+    /** A child of the host kept under every window drawn: the status line's row, or {@code null}. */
+    private Control under;
 
     FloatingWindows(Canvas host) {
         this.host = host;
+    }
+
+    /** Keeps {@code control}, a child of the host, under every window drawn (the status line's row). */
+    void keepUnder(Control control) {
+        under = control;
+        stack();
     }
 
     /**
@@ -179,6 +190,9 @@ final class FloatingWindows {
             if (canvas != null && !canvas.isDisposed()) {
                 canvas.moveBelow(null);
             }
+        }
+        if (under != null && !under.isDisposed()) {
+            under.moveBelow(null);
         }
     }
 }

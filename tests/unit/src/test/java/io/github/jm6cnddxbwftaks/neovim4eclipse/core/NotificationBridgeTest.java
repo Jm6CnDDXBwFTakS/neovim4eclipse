@@ -56,7 +56,9 @@ class NotificationBridgeTest {
             }
             @Override public void onBufferReload(int bufnr, boolean kept) { events.add("reload:" + bufnr + (kept ? " kept" : "")); }
             @Override public void onWindowClosed(int winid) { events.add("winclosed:" + winid); }
-            @Override public void onUi2Windows(List<Integer> wins) { events.add("ui2:" + wins); }
+            @Override public void onUi2Windows(List<Integer> wins, int cmd, boolean overlay) {
+                events.add("ui2:" + wins + (overlay ? " overlay" : "") + (cmd != wins.stream().findFirst().orElse(-1) ? " cmd " + cmd : ""));
+            }
             @Override public void onStatusLines(List<GridSnapshot> lines) {
                 events.add("statuslines:" + lines.stream().map(l -> l.window() + "=" + (l.height() == 0 ? "-" : l.row(0))).toList());
             }
@@ -310,7 +312,11 @@ class NotificationBridgeTest {
     void ui2sWindowsCarryTheirIds() {
         notify("eclipse_ui2_windows", 1002L, 1003L, 1004L, 1005L);
         notify("eclipse_ui2_windows", 1002L, -1L, "x", 1005L);
-        assertEquals(List.of("ui2:[1002, 1003, 1004, 1005]", "ui2:[1002, 1005]"), events);
+        notify("eclipse_ui2_windows", 1002L, 1003L, 1004L, 1005L, true); // the user's 'cmdheight' 0
+        notify("eclipse_ui2_windows", 1002L, 1003L, 1004L, 1005L, "yes"); // only true is
+        notify("eclipse_ui2_windows", -1L, 1003L, 1004L, 1005L, true); // no command line window yet
+        assertEquals(List.of("ui2:[1002, 1003, 1004, 1005]", "ui2:[1002, 1005]", "ui2:[1002, 1003, 1004, 1005] overlay",
+                "ui2:[1002, 1003, 1004, 1005]", "ui2:[1003, 1004, 1005] overlay cmd -1"), events);
     }
 
     /** LuaScripts.STATUS_LINE's every window's line ({@code util/StatusLines}); no argument, no lines. */

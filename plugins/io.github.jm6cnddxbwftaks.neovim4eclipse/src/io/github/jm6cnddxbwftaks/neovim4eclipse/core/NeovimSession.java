@@ -248,6 +248,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private boolean searching;
     /** The type of the command line open now ({@code ":"}, {@code "/"} ...), {@code ""} for none; from ui2. */
     private volatile String cmdlineType = "";
+    /** {@link #commandLineRows()}: written on the reader thread, read on the UI thread. */
+    private volatile int commandLineRows = 1;
     /** Neovim's screen grids, from its UI events ({@code ext_multigrid}); RPC reader thread only. */
     private final Grids grids = new Grids();
     /**
@@ -1084,6 +1086,28 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     public void removePageStatusListener(Consumer<GridSnapshot> listener) {
         events.removePageStatusListener(listener);
+    }
+
+    /**
+     * The rows an editor keeps under its status line for Neovim's command line: 1, as Neovim's
+     * screen has ({@code 'cmdheight'} 1), or 0 when the user's {@code 'cmdheight'} is 0
+     * ({@link LuaScripts#UI2}): the editor then shows one more text row, and ui2's line is drawn
+     * over the status line while it is open ({@code util/Grids}). Any thread.
+     */
+    public int commandLineRows() {
+        return commandLineRows;
+    }
+
+    /**
+     * Hears {@link #commandLineRows()} change (a {@code :set ch=0}), on the RPC reader thread; the
+     * listener hops to the UI thread itself.
+     */
+    public void addCommandLineRowsListener(Consumer<Integer> listener) {
+        events.addCommandLineRowsListener(listener);
+    }
+
+    public void removeCommandLineRowsListener(Consumer<Integer> listener) {
+        events.removeCommandLineRowsListener(listener);
     }
 
     /**
@@ -2380,8 +2404,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onUi2Windows(List<Integer> wins) {
-            grids.ui2Windows(wins); // on the reader thread, as the grids' redraws
+        public void onUi2Windows(List<Integer> wins, int cmd, boolean overlay) {
+            grids.ui2Windows(wins, cmd, overlay); // on the reader thread, as the grids' redraws
+            int rows = overlay ? 0 : 1;
+            if (rows != commandLineRows) {
+                commandLineRows = rows;
+                events.commandLineRows(rows);
+            }
         }
 
         @Override

@@ -476,10 +476,32 @@ class GridsTest {
     private void screenWithUi2Line() {
         grids.apply(new GridEvent.Resize(1, 80, 25));
         editorWindow();
-        grids.ui2Windows(List.of(1010, 1011, 1012, 1013));
+        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, false);
         grids.apply(new GridEvent.Resize(8, 80, 1));
         grids.apply(new GridEvent.Line(8, 0, 0, text(":ech", 0)));
         grids.apply(new GridEvent.WinPos(8, 1010, true, 24, 0, 0, 0, 200));
+    }
+
+    /**
+     * The user's {@code 'cmdheight'} 0: the editor keeps no row for the line, so ui2's line is drawn
+     * only while it is open (the cursor in it), on the editor's bottom edge over the status line;
+     * between lines the status line shows, not the last line typed.
+     */
+    @Test
+    void withCmdheightZeroUi2sLineIsDrawnOnlyWhileOpen() {
+        grids.drawFloats(true);
+        screenWithUi2Line();
+        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, true);
+        grids.apply(new GridEvent.CursorGoto(2, 3, 0)); // the cursor in the editor's window
+        assertEquals(List.of(), grids.floatsIfChanged().orElseThrow(), "no line open: nothing over the status line");
+        grids.apply(new GridEvent.CursorGoto(8, 0, 4)); // ':ech' being typed
+        List<FloatWindow> floats = grids.floatsIfChanged().orElseThrow();
+        assertEquals(1, floats.size());
+        assertEquals(floats.get(0).row() + 1, floats.get(0).hostRows(), "on the screen's last row: the editor's bottom edge");
+        grids.apply(new GridEvent.CursorGoto(2, 3, 0)); // Enter: back in the window
+        assertEquals(List.of(), grids.floatsIfChanged().orElseThrow());
+        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, false); // :set ch=1
+        assertEquals(1, grids.floatsIfChanged().orElseThrow().size(), "with its row back, the line stays drawn");
     }
 
     /** The {@code :} line being typed: the cursor is in ui2's line, which is drawn with it. */

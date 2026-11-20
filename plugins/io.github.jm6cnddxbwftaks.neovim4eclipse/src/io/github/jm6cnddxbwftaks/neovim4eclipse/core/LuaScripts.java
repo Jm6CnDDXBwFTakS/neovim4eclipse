@@ -5298,6 +5298,17 @@ final class LuaScripts {
      *       and with the cursor on its last row Neovim scrolls (0.12) or moves the cursor (0.13).
      *       At 1 the window keeps its height: the screen is one row taller than the editor, and
      *       ui2's line lives in that row.</li>
+     *   <li>A user's {@code 'cmdheight'} 0 (in {@code init.lua}, or {@code :set ch=0} later), Neovim's
+     *       way to give the line's row to the text, is kept as a wish, not as the option: Neovim
+     *       stays at 1, for the reason above, and Eclipse is told ({@code overlay}, the fifth value
+     *       of {@code eclipse_ui2_windows}). The editor then keeps no row for the line and draws it
+     *       over the status line while one is open ({@code util/Grids}, {@code editor/StatusLineRow}),
+     *       as Neovim does with 0. Messages go to ui2's message window then ({@code msg}, at the
+     *       bottom right, gone after a few seconds), as they would with nowhere to stay; unless the
+     *       user's config chose a place for them other than ui2's default. {@code :set ch=1} or
+     *       more ends it. Example: {@code vim.o.cmdheight = 0}: the editor shows one more text row,
+     *       {@code :} covers the status line until Enter or Esc, and {@code :w}'s message shows at
+     *       the bottom right.</li>
      *   <li>Each window as wide as the screen. ui2 opens them 10,000 cells wide and lets Neovim
      *       clip them; a client of multigrid gets the full width, which would pass the editor's
      *       limit on a float's cells ({@code util/Grids}). Set at {@code FileType} and after a
@@ -5343,9 +5354,28 @@ final class LuaScripts {
               end
             end
 
+            -- 'cmdheight' 0, the user's wish: Neovim's own stays 1 (see above), the editor draws the
+            -- line over the status line. Read before ui2 and this script touch the option.
+            local overlay = vim.o.cmdheight == 0
+
             local function send()
               local w = ui2.wins
-              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_ui2_windows', w.cmd, w.msg, w.pager, w.dialog)
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_ui2_windows', w.cmd, w.msg, w.pager, w.dialog, overlay)
+            end
+
+            -- With no row for the line, messages go to ui2's message window, which shows them for
+            -- a while and needs no row of its own; back when the row returns. Only ui2's default
+            -- target is moved: a user's config that chose 'msg' keeps it, and the plug-in puts
+            -- back only what it moved.
+            local moved_messages = false
+            local function place_messages()
+              if overlay and ui2.cfg.msg.target == 'cmd' then
+                ui2.cfg.msg.target = 'msg'
+                moved_messages = true
+              elseif not overlay and moved_messages then
+                ui2.cfg.msg.target = 'cmd'
+                moved_messages = false
+              end
             end
 
             vim.api.nvim_create_autocmd('FileType', {
@@ -5417,6 +5447,40 @@ final class LuaScripts {
               end,
             })
             vim.o.cmdheight = 1
+            place_messages()
+
+            -- :set ch=0 later turns the overlay on, :set ch=1 (or more) off; Neovim's own goes back to
+            -- 1 after a 0. Made after the line above, so that its own set is not taken for the
+            -- user's; `restoring` does the same for the set back to 1. Scheduled: setting an option
+            -- inside its own OptionSet is not seen by the other handlers (ui2's hides its line
+            -- window at 0 and shows it again at the 1).
+            local restoring = false
+            vim.api.nvim_create_autocmd('OptionSet', {
+              group = group,
+              pattern = 'cmdheight',
+              callback = function()
+                if restoring then
+                  return
+                end
+                local zero = tonumber(vim.v.option_new) == 0
+                if zero ~= overlay then
+                  overlay = zero
+                  place_messages()
+                end
+                if zero then
+                  vim.schedule(function()
+                    restoring = true
+                    pcall(function()
+                      vim.o.cmdheight = 1
+                    end)
+                    restoring = false
+                    send()
+                  end)
+                else
+                  send()
+                end
+              end,
+            })
             send()
             return true
             """;

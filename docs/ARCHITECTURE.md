@@ -486,7 +486,8 @@ the page editor ── keys, mouse, size ──▶ NeovimSession (the editing Ne
   the page with `setEditorSizeAsync`), and the focus events come to it (`core/FocusTarget`). Below
   its text the pane draws one row, as Neovim lays out its screen: the window's status line, the
   screen's (grid 1's) row below the page's window with its colors (`util/Grids.pageStatusIfChanged`).
-  Under it the command line's row (`StatusLineRow.COMMAND_LINE_ROWS`), where ui2's line is drawn,
+  Under it the command line's row (`NeovimSession.commandLineRows`: 1, or 0 with a user's
+  `'cmdheight'` 0), where ui2's line is drawn,
   as in code; the status row is a child of the canvas, placed above that row (`placeRows`), and the
   page window gets the canvas's rows less those two (`sendSize`). No widget
   takes the keyboard from the page's canvas, so every key is Neovim's and Neovim edits the line
@@ -736,6 +737,20 @@ What the plug-in adds, all in `LuaScripts.UI2`, the one place it talks to ui2:
   (0.12) or moves the cursor (0.13). At 1 nothing moves: Neovim's screen is one row taller than the
   editor's window (decision 9, [design/VIEWPORT.md](design/VIEWPORT.md)), and ui2's line lives in
   that row, which the editor keeps under its status line (`editor/StatusLineRow`).
+- **A user's `'cmdheight'` 0** (`init.lua`, or `:set ch=0` later, through `OptionSet`) is kept as a
+  wish: Neovim goes back to 1, for the reason above, and Eclipse is told (`overlay`, the fifth value
+  of `eclipse_ui2_windows`; `NeovimSession.commandLineRows` 0). The editor then keeps no row for the
+  line (`StatusLineRow`, `WindowPane.rowsBelow`): one more text row, Neovim's window one row
+  taller, and the screen's last row is not on screen. ui2's line window reaches that row, so it is
+  placed on the editor's bottom edge (`util/FloatPlacement`), over the status line, and drawn only
+  while the cursor is in it, a line being typed (`util/Grids.ui2Windows`); between lines it would
+  cover the status line with the last line typed. Messages, which would stay on that hidden row, go
+  to ui2's `msg` window (`ui2.cfg.msg.target`), only when the target is ui2's default `'cmd'`, and
+  back when the row returns: a config that chose `'msg'` keeps it. The floats lie over the status
+  row (`FloatingWindows.keepUnder`), as Neovim draws a float over a status line. Why not pass 0
+  through: ui2 grows the option to 1 while a line is open, the window shrinks, and the text moves
+  (the bullet above); drawing over the status row is Neovim's own picture with 0, without the
+  move.
 - **Each window as wide as the screen.** ui2 opens them 10,000 cells wide and lets Neovim clip
   them; a multigrid UI is sent the full width, past the editor's limit on a float's cells.
 - **The windows' ids** go to Eclipse (`eclipse_ui2_windows`) at start and whenever ui2 makes one

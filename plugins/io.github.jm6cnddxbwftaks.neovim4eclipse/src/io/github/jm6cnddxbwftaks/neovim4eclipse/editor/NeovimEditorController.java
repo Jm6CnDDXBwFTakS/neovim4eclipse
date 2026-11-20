@@ -213,6 +213,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<SearchPort.Highlights> highlightsListener = this::onHighlights;
     /** Every window's status line, from any session thread; this editor's row picks its own. */
     private final Consumer<GridSnapshot> statusLineListener = this::onStatusLine;
+    private final Consumer<Integer> commandLineRowsListener = this::onCommandLineRows;
     /** The mode last logged: Neovim reports the mode again after every key, which is not a change. */
     private volatile String loggedMode;
 
@@ -307,6 +308,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 this::abandonLine);
         this.statusLineRow = new StatusLineRow(styledText, window::winid,
                 (win, columns) -> session.setStatusLineWidthAsync(win, columns));
+        floatingWindows.keepUnder(statusLineRow.control());
         this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, session::pasteAsync);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
                 this::neovimHandlesMouse, session::mouseAsync, this::abandonLine);
@@ -398,6 +400,8 @@ public final class NeovimEditorController implements AutoCloseable {
 
         modeStatus.addTo(editor.getEditorSite());
         session.addStatusLineListener(statusLineListener);
+        session.addCommandLineRowsListener(commandLineRowsListener);
+        statusLineRow.commandLineRows(session.commandLineRows());
 
         int[] lineCol = DocumentPositions.offsetToCursor(documentOf(editor), offsets.caretModelOffset());
 
@@ -1080,6 +1084,15 @@ public final class NeovimEditorController implements AutoCloseable {
         });
     }
 
+    /** The rows kept for the command line changed ({@code :set ch=0}): the row under the status line goes, or comes back. Any thread. */
+    private void onCommandLineRows(int rows) {
+        SwtUiExecutor.INSTANCE.asyncExec(() -> {
+            if (!closed) {
+                statusLineRow.commandLineRows(rows);
+            }
+        });
+    }
+
     /** Whether this editor has the focus events now (no page took them; {@link #takeFocusBack}). Any thread. */
     boolean hasFocus() {
         return session.hasFocus(focusTarget);
@@ -1348,6 +1361,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeSearchListener(searchListener);
             session.removeHighlightsListener(highlightsListener);
             session.removeStatusLineListener(statusLineListener);
+            session.removeCommandLineRowsListener(commandLineRowsListener);
             if (viewport != null) {
                 session.setLeaveInsertView(null); // the next editor's attach sets its own
             }

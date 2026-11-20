@@ -138,4 +138,38 @@ class NeovimUi2IntegrationTest {
             assertEquals("wincmd l", s.lua("return vim.fn.histget(':', -1)"), "the history holds it as typed too");
         }
     }
+
+    /**
+     * A user's {@code 'cmdheight'} 0 ({@code init.lua}, here {@code --cmd}) is kept as a wish: Neovim
+     * stays at 1, the session reports no row for the line, and messages go to ui2's message window;
+     * {@code :set ch=1} and {@code :set ch=0} later switch both ways.
+     */
+    @Test
+    void cmdheightZeroKeepsNeovimsRowAndTellsTheEditor() throws Exception {
+        try (NeovimSession s = start("--clean", "--cmd", "set cmdheight=0")) {
+            String target = "return require('vim._core.ui2').cfg.msg.target";
+            waitFor(() -> s.commandLineRows() == 0, "no row for the line");
+            assertEquals(1L, number(s, "return vim.o.cmdheight"), "Neovim's own stays 1: no window shrinks");
+            assertEquals("msg", s.lua(target), "messages to ui2's message window");
+            s.lua("vim.o.cmdheight = 1");
+            waitFor(() -> s.commandLineRows() == 1, "the row back after :set ch=1");
+            assertEquals("cmd", s.lua(target), "messages back on the line's row");
+            s.lua("vim.o.cmdheight = 0");
+            waitFor(() -> s.commandLineRows() == 0 && number(s, "return vim.o.cmdheight") == 1,
+                    "no row again after :set ch=0, and Neovim's back at 1");
+            assertEquals("msg", s.lua(target));
+        }
+    }
+
+    /** A config that chose ui2's message window itself keeps it when 'cmdheight' goes from 0 to 1. */
+    @Test
+    void aConfigsOwnMessageTargetIsKept() throws Exception {
+        try (NeovimSession s = start("--clean", "--cmd", "set cmdheight=0",
+                "--cmd", "lua require('vim._core.ui2').cfg.msg.target = 'msg'")) {
+            waitFor(() -> s.commandLineRows() == 0, "no row for the line");
+            s.lua("vim.o.cmdheight = 1");
+            waitFor(() -> s.commandLineRows() == 1, "the row back");
+            assertEquals("msg", s.lua("return require('vim._core.ui2').cfg.msg.target"), "the config's choice, not moved back");
+        }
+    }
 }

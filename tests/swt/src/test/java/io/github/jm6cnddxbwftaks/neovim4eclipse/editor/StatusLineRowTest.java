@@ -151,6 +151,24 @@ class StatusLineRowTest {
         assertEquals(before + (1 + StatusLineRow.COMMAND_LINE_ROWS) * line, text.getBottomMargin(), "and a line brings it back");
     }
 
+    /**
+     * A user's {@code 'cmdheight'} 0: no row for the command line, so the status line sits on the
+     * editor's bottom edge, where ui2's line is drawn over it while open; 1 brings the row back.
+     */
+    @Test
+    void noCommandLineRowWithCmdheightZero() {
+        int before = text.getBottomMargin();
+        int height = text.getLineHeight();
+        row().show(line(WINDOW, "a.txt"));
+        row.commandLineRows(0);
+        assertEquals(before + height, text.getBottomMargin(), "the status line's row only");
+        Rectangle area = text.getClientArea();
+        assertEquals(new Rectangle(0, area.height - height, area.width, height), row.canvasForTests().getBounds(),
+                "on the bottom edge");
+        row.commandLineRows(1);
+        assertEquals(before + 2 * height, text.getBottomMargin(), "the command line's row back");
+    }
+
     /** The canvas lies over the margin, above the command line's row: one line high, the full width. */
     @Test
     void theCanvasIsAboveTheCommandLinesRow() {

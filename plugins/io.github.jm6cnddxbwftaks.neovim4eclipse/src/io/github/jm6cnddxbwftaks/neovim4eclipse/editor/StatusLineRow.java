@@ -9,6 +9,7 @@ import java.util.function.ObjIntConsumer;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Listener;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
@@ -22,7 +23,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
  * <h2>Where: the text widget's bottom margin</h2>
  * The rows are the {@code StyledText}'s bottom margin: the status line's, while one is shown, with a
  * {@link GridCanvas} over it as the widget's child, and under it the command line's
- * ({@link #COMMAND_LINE_ROWS}), where ui2 draws Neovim's {@code :} line and its messages. So the
+ * ({@link #commandLineRows}), where ui2 draws Neovim's {@code :} line and its messages. So the
  * editor is laid out as Neovim's screen: text, status line, command line. A margin is not text: Eclipse
  * never draws or scrolls text into it, so no line hides behind the row, and another editor's
  * layout (the rulers, the overview ruler) is left as it is. {@code ViewportFollower} counts the
@@ -61,10 +62,16 @@ final class StatusLineRow {
     private final Listener onChange = e -> place();
     /**
      * The command line's rows under the status line: {@code 'cmdheight'} as the plug-in sets it
-     * ({@code LuaScripts.UI2}). ui2 draws the line there ({@code FloatingWindows}), as Neovim lays out
-     * its screen. A user's larger {@code 'cmdheight'} still works: ui2's window then reaches up
-     * over the status line, from the editor's bottom edge ({@code util/FloatPlacement}).
+     * ({@code LuaScripts.UI2}), 1. ui2 draws the line there ({@code FloatingWindows}), as Neovim lays
+     * out its screen. A user's larger {@code 'cmdheight'} still works: ui2's window then reaches up
+     * over the status line, from the editor's bottom edge ({@code util/FloatPlacement}). A user's
+     * {@code 'cmdheight'} 0 makes it 0 ({@code NeovimSession.commandLineRows}): no row is kept, and
+     * ui2's line, drawn only while open, lies on the editor's bottom edge, over the status line, as
+     * in Neovim with 0. Example: an editor of 30 rows shows 29 of text with 0, 28 with 1.
      */
+    private int commandLineRows = COMMAND_LINE_ROWS;
+
+    /** The command line's rows by default ({@code 'cmdheight'} 1, as the plug-in sets it). */
     static final int COMMAND_LINE_ROWS = 1;
 
     /** The margin this row added to the widget's bottom margin, in pixels. */
@@ -106,6 +113,19 @@ final class StatusLineRow {
         place();
     }
 
+    /** Keeps {@code rows} rows for the command line (0 or 1; see {@link #commandLineRows}). UI thread. */
+    void commandLineRows(int rows) {
+        if (rows != commandLineRows) {
+            commandLineRows = rows;
+            place();
+        }
+    }
+
+    /** The row's canvas, which Neovim's floats lie over ({@code FloatingWindows.keepUnder}). */
+    Control control() {
+        return canvas;
+    }
+
     /** The row's canvas, for tests. */
     GridCanvas canvasForTests() {
         return canvas;
@@ -118,7 +138,7 @@ final class StatusLineRow {
         }
         reportWidth();
         int lineHeight = text.getLineHeight();
-        int height = ((shown ? 1 : 0) + COMMAND_LINE_ROWS) * lineHeight;
+        int height = ((shown ? 1 : 0) + commandLineRows) * lineHeight;
         if (height != added) {
             int base = Math.max(0, text.getBottomMargin() - added);
             added = height;

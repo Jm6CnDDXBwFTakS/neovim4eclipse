@@ -38,6 +38,7 @@ final class SessionEvents implements StateSync.Listeners {
     private final java.util.Map<Runnable, Consumer<Void>> inputHandledWrappers = new java.util.concurrent.ConcurrentHashMap<>();
     private final ListenerList<GridSnapshot> pageGridListeners = new ListenerList<>("page grid", Level.WARNING);
     private final ListenerList<GridSnapshot> pageStatusListeners = new ListenerList<>("page status line", Level.WARNING);
+    private final ListenerList<Integer> commandLineRowsListeners = new ListenerList<>("command line rows", Level.WARNING);
     private final ListenerList<String> cmdlineTypeListeners = new ListenerList<>("command line", Level.WARNING);
     private final ListenerList<CommandWindowView> commandWindowListeners = new ListenerList<>("command-line window",
             Level.WARNING);
@@ -143,6 +144,19 @@ final class SessionEvents implements StateSync.Listeners {
 
     void removePageStatusListener(Consumer<GridSnapshot> listener) {
         pageStatusListeners.remove(listener);
+    }
+
+    /** The rows an editor keeps for the command line changed ({@code NeovimSession.commandLineRows}). */
+    void commandLineRows(int rows) {
+        commandLineRowsListeners.fire(rows);
+    }
+
+    void addCommandLineRowsListener(Consumer<Integer> listener) {
+        commandLineRowsListeners.add(listener);
+    }
+
+    void removeCommandLineRowsListener(Consumer<Integer> listener) {
+        commandLineRowsListeners.remove(listener);
     }
 
     void addPageGridListener(Consumer<GridSnapshot> listener) {

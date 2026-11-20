@@ -122,6 +122,20 @@ class FloatingWindowsTest {
                 "SWT lists children top first: the overlay, the higher zindex, the lower");
     }
 
+    /**
+     * The status line's row lies under every window, as Neovim draws a float over a status line:
+     * with {@code 'cmdheight'} 0 ui2's {@code :} line lies on it. Also for windows drawn later.
+     */
+    @Test
+    void windowsLieOverTheStatusLinesRow() {
+        Label statusRow = new Label(host, SWT.NONE);
+        floats.keepUnder(statusRow);
+        floats.show(List.of(window(1002, 6, 2, 3, 4, 50)));
+        floats.show(List.of(window(1002, 6, 2, 3, 4, 50), window(1003, 6, 2, 3, 4, 200)));
+        assertEquals(List.of(floats.canvas(1003), floats.canvas(1002), statusRow), Arrays.asList(host.getChildren()),
+                "top first: the windows, then the status line's row");
+    }
+
     @Test
     void aRedrawnWindowKeepsItsCanvasAndAGoneOneLosesIt() {
         floats.show(List.of(window(1002, 6, 2, 3, 4, 50), window(1003, 6, 2, 5, 4, 60)));

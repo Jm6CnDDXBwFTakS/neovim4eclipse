@@ -50,6 +50,19 @@ the editor's height, Neovim's window is that much shorter, and no text hides beh
 per editor) show none, `2` (the default) shows one in every editor, and `3`, Neovim's global
 status line, shows one in the editor with the keyboard only.
 
+`'cmdheight'` 0 (`vim.o.cmdheight = 0` in `init.lua`, or `:set ch=0`) gives the command line's row
+to the text, as in Neovim: the editor keeps no row under the status line, and the `:` line, while
+open, is drawn over the status line; Enter or Esc shows the status line again. Messages then show
+in Neovim's message window at the editor's bottom right, above the status line, for a few seconds
+(where ui2 puts them when there is no row to stay on); `g<` and `:messages` still show them again.
+`:set ch=1` brings the row back. Unlike in a terminal, the text does not move when the line opens:
+Neovim keeps its row, and the editor draws the line over the status line instead.
+
+ui2's own settings apply too, in `init.lua`. Example:
+`require('vim._core.ui2').enable({ msg = { target = 'msg' } })` puts messages in that window at
+the bottom right also with the row there. ui2 is experimental in Neovim 0.12, so its settings may
+change with a new Neovim.
+
 ## Messages and errors
 
 Neovim shows its messages and errors itself, on the editor's command line row (its last, under the
