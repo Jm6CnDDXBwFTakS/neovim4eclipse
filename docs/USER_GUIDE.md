@@ -50,6 +50,10 @@ the editor's height, Neovim's window is that much shorter, and no text hides beh
 per editor) show none, `2` (the default) shows one in every editor, and `3`, Neovim's global
 status line, shows one in the editor with the keyboard only.
 
+An editor Neovim has not shown yet (restored when Eclipse starts, or opened in the background and
+never clicked into) has no Neovim window, so it has no status line either; it gets one the first
+time you click into it, and keeps it from then on.
+
 `'cmdheight'` 0 (`vim.o.cmdheight = 0` in `init.lua`, or `:set ch=0`) gives the command line's row
 to the text, as in Neovim: the editor keeps no row under the status line, and the `:` line, while
 open, is drawn over the status line; Enter or Esc shows the status line again. One-line messages

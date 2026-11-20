@@ -486,6 +486,8 @@ editor chrome, and another application taking the keyboard, need a person.
    ⇒ Each editor shows a status line under its text, naming its own file, and under it an empty
    row. `notes.txt`'s is in Neovim's `StatusLine` colors, `ideas.txt`'s in the dimmer
    `StatusLineNC`; each reaches its editor's right edge, the ruler (`1,1  All`) at the end.
+   (An editor Neovim has not shown yet, such as one restored at start and never clicked into,
+   has no line until its first click: it has no Neovim window before that.)
 2. In `notes.txt`: `:echo "hello"` and <kbd>Enter</kbd>.
    ⇒ `hello` shows on the editor's last row, under the status line, and stays there; no text and
    no status line is covered.
