@@ -56,7 +56,11 @@ open, is drawn over the status line; Enter or Esc shows the status line again. M
 in Neovim's message window at the editor's bottom right, above the status line, for a few seconds
 (where ui2 puts them when there is no row to stay on); `g<` and `:messages` still show them again.
 `:set ch=1` brings the row back. Unlike in a terminal, the text does not move when the line opens:
-Neovim keeps its row, and the editor draws the line over the status line instead.
+Neovim keeps its row, and the editor draws the line over the status line instead. So `:set ch?`, and
+a config or statusline plug-in that reads `vim.o.cmdheight`, see 1, not 0. What Neovim keeps on
+that row between lines (`-- INSERT --`, `recording @q`, the search count `[1/5]`, the pending
+command) is not shown then, as in Neovim with 0; the mode and a recording are in Eclipse's status
+bar.
 
 ui2's own settings apply too, in `init.lua`. Example:
 `require('vim._core.ui2').enable({ msg = { target = 'msg' } })` puts messages in that window at
