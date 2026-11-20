@@ -86,7 +86,7 @@ t.test('a window ui2 lost comes back, and its new id is sent', function()
   t.eq(vim.o.columns, vim.api.nvim_win_get_width(new), 'the new window is fitted too')
 end)
 
-t.test('a file opened in the pager is announced, so Eclipse opens its editor', function()
+t.test('a file opened in the pager is announced, so Eclipse can send Neovim back', function()
   local ui2 = start()
   vim.api.nvim_set_current_win(ui2.wins.pager)
   t.forget()
@@ -119,6 +119,8 @@ t.test('entering the pager tells Eclipse nothing, so it does not send Neovim bac
   local ui2 = start()
   local editor = vim.api.nvim_get_current_win()
   t.forget()
+  -- As ui2 enters its pager: it clears the window's 'eventignorewin' first, so BufEnter fires.
+  vim.wo[ui2.wins.pager].eventignorewin = ''
   vim.api.nvim_set_current_win(ui2.wins.pager)
   t.eq({}, t.sent('eclipse_buf_enter'), 'no buf enter for the pager')
   vim.api.nvim_set_current_win(editor)

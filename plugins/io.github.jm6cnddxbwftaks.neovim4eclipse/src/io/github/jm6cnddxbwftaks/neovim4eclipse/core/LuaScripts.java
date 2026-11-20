@@ -132,7 +132,8 @@ final class LuaScripts {
                 -- One of ui2's own buffers (UI2): its pager or prompt, entered for a moment. The
                 -- editor draws it where it is; Eclipse is not told, or it would send Neovim back.
                 -- The buffer, not the window: a file opened in the pager (gf, :e) is announced,
-                -- so Eclipse opens its editor and Neovim goes back, as from any other window.
+                -- and Eclipse sends Neovim back to the editor, as from any window it does not show
+                -- (util/EnterDecision), so the file is never edited where Eclipse cannot see it.
                 local ui2 = package.loaded['vim._core.ui2']
                 if ui2 then
                   for _, buf in pairs(ui2.bufs) do
@@ -1775,8 +1776,6 @@ final class LuaScripts {
             --- Why :tabonly! does not run (WINDOW_COMMANDS refuses it): it would discard the changes of
             --- every other editor tab at once, where Vim's keeps their buffers hidden.
             M.TABS = "with ! it would discard every other editor tab's changes; :tabonly asks about them"
-            --- Why the safety net closed a window, by win_gettype(): '' for a plain one (a split
-            --- opened without the command line, which Eclipse never heard of).
             --- Whether win shows one of ui2's own buffers (its command line, messages, pager or
             --- prompt; LuaScripts.UI2): Neovim's own windows, which the safety net leaves alone.
             local function shows_ui2_buffer(win)
@@ -1793,6 +1792,8 @@ final class LuaScripts {
               return false
             end
 
+            --- Why the safety net closed a window, by win_gettype(): '' for a plain one (a split
+            --- opened without the command line, which Eclipse never heard of).
             local why_closed = {
               [''] = 'Eclipse shows each window as an editor; :split and :vsplit make one',
               quickfix = 'Eclipse cannot show the quickfix window; :cnext, :cprevious and :cc still work',
@@ -5288,7 +5289,8 @@ final class LuaScripts {
      *       the cursor in them and even with plug-ins' floats turned off. The plug-in's other
      *       scripts (SETUP's {@code BufEnter}, WINDOWS' safety net) leave ui2's own
      *       <em>buffers</em> to it ({@code ui2.bufs}), not its windows: a file opened in the pager
-     *       ({@code gf}, {@code :e}) is a file like any other, and gets its editor.</li>
+     *       ({@code gf}, {@code :e}) is announced, and Eclipse sends Neovim back to the editor, as
+     *       from any window it does not show.</li>
      *   <li>{@code :messages} shown in its page editor, not in ui2's pager: the history goes to
      *       Eclipse ({@code eclipse_messages}, each entry as {@code {kind, text}}), whose page
      *       keeps it open, searchable and copyable with the mouse (docs/USER_GUIDE.md, "The page

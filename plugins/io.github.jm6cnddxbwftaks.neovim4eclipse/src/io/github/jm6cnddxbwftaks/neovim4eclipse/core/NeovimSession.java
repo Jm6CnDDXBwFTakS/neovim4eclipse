@@ -246,6 +246,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * ({@code 'incsearch'}, a {@code win_viewport}). RPC reader thread only.
      */
     private boolean searching;
+    /** The type of the command line open now ({@code ":"}, {@code "/"} ...), {@code ""} for none; from ui2. */
+    private volatile String cmdlineType = "";
     /** Neovim's screen grids, from its UI events ({@code ext_multigrid}); RPC reader thread only. */
     private final Grids grids = new Grids();
     /**
@@ -727,6 +729,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public boolean isNeovimDrivenInsert() {
         return keyInput.isNeovimDrivenInsert() && isTypingMode();
+    }
+
+    /**
+     * Whether a command line is open now, as the last {@code eclipse_cmdline} said
+     * ({@link LuaScripts#UI2}); in the order of those notifications, unlike the mode, which comes
+     * on its own. Example: {@code :} typed, then a page clicked: {@code true} until the line ends.
+     */
+    public boolean commandLineOpen() {
+        return !cmdlineType.isEmpty();
     }
 
     /**
@@ -2487,6 +2498,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public void onCmdlineType(String type) {
             searching = "/".equals(type) || "?".equals(type);
+            cmdlineType = type;
             events.cmdlineType(type);
         }
 

@@ -704,8 +704,9 @@ What the plug-in adds, all in `LuaScripts.UI2`, the one place it talks to ui2:
 - **ui2's own buffers left to it** (`ui2.bufs`): `SETUP`'s `BufEnter` sends Eclipse nothing for
   one, so entering the pager is not undone (`util/EnterDecision`), and `WINDOWS`' safety net never
   closes a window that shows one, also with the cursor in it. The buffer, not the window: a file
-  opened in the pager (`gf`, `:e`) is announced like any other, so Eclipse opens its editor and
-  Neovim goes back, and Neovim's and Eclipse's text cannot drift in a window Eclipse never heard of.
+  opened in the pager (`gf`, `:e`) is announced like any other, and Eclipse sends Neovim back to
+  the editor, as from any window it does not show (`util/EnterDecision`), so the file is never
+  edited in a window Eclipse never heard of.
 - **Windows ui2 made before the plug-in's script ran** (a user's `init.lua` that turns ui2 on) are
   fitted too, since no `FileType` comes for them.
 - **A line inside a line** (`<C-r>=` on a `:` line): the types are kept as a stack, so when the
