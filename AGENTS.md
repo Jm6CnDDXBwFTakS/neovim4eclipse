@@ -31,6 +31,16 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
   costs (what it refuses that the other allowed) and what the other option would need instead.
   Why: a rule proven by one check needs one review; a rule that guards every route keeps turning
   up new routes.
+- **Honor Neovim's own settings, within reason**: when a feature is added or changed, the
+  standard Vim and Neovim options that govern it in a terminal (`'cmdheight'`, `'laststatus'`,
+  `'statusline'`, `'showcmd'`, ui2's config) decide it here too, before any preference of the
+  plug-in's, where that is reasonable to build. List the options that touch the feature, and say
+  which are honored, which are not, and why. Leave one out, and say so in the docs, when
+  following it would cost far more than it gives: much plug-in code for a rarely used option, a
+  fight with how Eclipse works (an option that would move Eclipse's text), or a workaround that is
+  hard to keep correct. A new plug-in setting is for what no Vim option covers. Why: users
+  configure Neovim in `init.lua` and expect it to behave as configured; a setting of our own beside
+  a Vim option is a second place to look.
 - **Review before the final test run**: once a change is built and its own tests pass, a code
   review (correctness against the docs and spec, edge cases, error handling, docs kept current)
   and a security review (untrusted input, paths, links, what a later step trusts) of the branch's
