@@ -124,6 +124,8 @@ public final class NeovimEditorController implements AutoCloseable {
     /** The left mouse button, handed to Neovim in normal and visual mode. */
     private final NeovimMouse mouse;
     private final ModeStatusContribution modeStatus;
+    /** Abandons an open {@code :} line when the keyboard goes to another part ({@link LineOnFocusLoss}). */
+    private final LineOnFocusLoss lineOnFocusLoss;
     /** Neovim's status line of this editor's window, under the text ({@link StatusLineRow}). */
     private final StatusLineRow statusLineRow;
     /** This editor's Neovim window, whose status line {@link #statusLineRow} shows. */
@@ -299,6 +301,10 @@ public final class NeovimEditorController implements AutoCloseable {
         this.commandWindowPanel = new NeovimWindowPanel(styledText, new PanelCommands(session),
                 this::onCommandLineStateChanged);
         this.floatingWindows = new FloatingWindows(styledText);
+        this.lineOnFocusLoss = new LineOnFocusLoss(styledText,
+                () -> !closed && neovimModeActive && session.commandLineOpen()
+                        && !VimModes.isExMode(session.getMode()), // gQ: Vim cannot cancel its line
+                this::abandonLine);
         this.statusLineRow = new StatusLineRow(styledText, window::winid,
                 (win, columns) -> session.setStatusLineWidthAsync(win, columns));
         this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, session::pasteAsync);
@@ -1020,9 +1026,10 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Runs before each click {@link NeovimMouse} hands to Neovim: a {@code :}, {@code /} or
-     * {@code ?} line that is open is abandoned first ({@code <C-c>}), as clicking away from a field
-     * does, and the click then lands in the text, in that order on the input thread. Ex mode
+     * Runs before each click {@link NeovimMouse} hands to Neovim, and when the keyboard goes to
+     * another part ({@link LineOnFocusLoss}): a {@code :}, {@code /} or {@code ?} line that is open
+     * is abandoned ({@code <C-c>}), as clicking away from a field does; a click then lands in the
+     * text, in that order on the input thread. Ex mode
      * ({@code gQ}) gets no clicks at all ({@link #neovimHandlesMouse}). UI thread.
      */
     private void abandonLine() {
@@ -1364,6 +1371,7 @@ public final class NeovimEditorController implements AutoCloseable {
             commandWindowPanel.dispose();
             floatingWindows.dispose();
             statusLineRow.dispose();
+            lineOnFocusLoss.dispose();
             if (!styledText.isDisposed()) {
                 styledText.removeListener(SWT.MouseDown, endCompletionListener);
                 styledText.removeListener(SWT.FocusOut, endCompletionListener);

@@ -216,6 +216,49 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
         }
     }
 
+    /** ui2's windows as drawn over {@code canvas}: the rows of each float of ui2's, joined. */
+    private String ui2DrawnOver(GridCanvas canvas) {
+        StringBuilder rows = new StringBuilder();
+        for (Control child : canvas.getChildren()) {
+            if (child instanceof GridCanvas grid && !grid.isDisposed() && grid.isVisible() && grid.grid() != null
+                    && isNeovimsOwnFloat(grid)) {
+                for (int r = 0; r < grid.grid().height(); r++) {
+                    rows.append(grid.grid().row(r).stripTrailing()).append('\n');
+                }
+            }
+        }
+        return rows.toString();
+    }
+
+    /**
+     * In a page editor: a line left open, the focus away in a view and back, then {@code :}: the
+     * line was abandoned, and the new one is drawn empty, not with the old text.
+     */
+    @Test
+    void aLineLeftOpenInAPageIsAbandonedWhenTheFocusGoes() throws Exception {
+        colon("help help-context");
+        NeovimPageEditor view = pageShowing("help-context");
+        GridCanvas canvas = view.canvasForTests();
+        UiTestSupport.requireKeyboardFocus(canvas, TIMEOUT_MS);
+        for (char c : ":echo 'stale text'".toCharArray()) {
+            key(canvas, c, c, 0);
+        }
+        expectCommandLine(":echo 'stale text'");
+        page().showView(org.eclipse.ui.IPageLayout.ID_TASK_LIST);
+        settle();
+        expectCommandLine(""); // left open, not run: abandoned when the keyboard went (LineOnFocusLoss)
+        page().activate(view);
+        UiTestSupport.requireKeyboardFocus(canvas, TIMEOUT_MS);
+        key(canvas, ':', ':', 0);
+        expectCommandLine(":");
+        waitUntil("the new ':' line drawn without the old text", TIMEOUT_MS, () -> {
+            settle();
+            String drawn = ui2DrawnOver(canvas);
+            return drawn.contains(":") && !drawn.contains("stale text");
+        }, () -> "; ui2 is drawn as \"" + ui2DrawnOver(canvas).replace("\n", "\\n") + "\"");
+        key(canvas, SWT.ESC, (char) 27, 0);
+    }
+
     /** {@code /} searches in the page editor, {@code yy} yanks, and {@code p} in the editor pastes the line. */
     @Test
     void aLineYankedInTheViewPastesInTheEditor() {

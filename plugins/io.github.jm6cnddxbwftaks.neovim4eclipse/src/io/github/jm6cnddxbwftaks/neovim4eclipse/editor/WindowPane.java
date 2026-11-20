@@ -99,6 +99,8 @@ final class WindowPane {
     /** Whether this page has Neovim's focus ({@link #takeFocus}). */
     private boolean focused;
     private boolean disposed;
+    /** Abandons an open {@code :} line when the keyboard goes to another part ({@link LineOnFocusLoss}). */
+    private final LineOnFocusLoss lineOnFocusLoss;
     private final FloatingWindows floats;
     /** Neovim's command-line window ({@code q:} typed in the page), drawn over the page's bottom. */
     private final NeovimWindowPanel commandWindowPanel;
@@ -205,6 +207,12 @@ final class WindowPane {
             }
         });
         canvas.addListener(SWT.FocusIn, e -> takeFocus());
+        lineOnFocusLoss = new LineOnFocusLoss(canvas,
+                () -> session.commandLineOpen() && !VimModes.isExMode(session.getMode()), () -> {
+            if (VimModes.isCmdline(session.getMode())) {
+                session.inputAsync("<C-c>");
+            }
+        });
         canvas.addControlListener(new ControlAdapter() {
             @Override
             public void controlResized(ControlEvent e) {
@@ -486,6 +494,7 @@ final class WindowPane {
         session.removePageClosedListener(closedListener);
         session.releaseFocus(target);
         commandWindowPanel.dispose();
+        lineOnFocusLoss.dispose();
         status.release();
         floats.dispose();
         if (window != EditorWindow.UNKNOWN) {

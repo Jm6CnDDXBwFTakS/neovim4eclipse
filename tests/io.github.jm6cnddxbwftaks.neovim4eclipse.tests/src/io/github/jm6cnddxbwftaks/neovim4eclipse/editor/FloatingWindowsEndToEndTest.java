@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.ui.IPageLayout;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +43,75 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
             settle();
             return canvas() == null;
         });
+    }
+
+    /**
+     * ui2's command line as drawn over the editor: the rows of every canvas of ui2's windows,
+     * joined. Example: {@code ":"} right after {@code :} was typed.
+     */
+    private String ui2Drawn() {
+        StringBuilder rows = new StringBuilder();
+        for (Control child : widget.getChildren()) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && canvas.isVisible()
+                    && !StatusLineRow.isRow(canvas) && isNeovimsOwnFloat(canvas)) {
+                rows.append(rowsOf(canvas.grid()));
+            }
+        }
+        return rows.toString();
+    }
+
+    /** A line run, the focus away in a view and back, then {@code :}: the new line is drawn empty. */
+    @Test
+    void aNewLineAfterTheFocusCameBackIsDrawnWithoutTheLastOnesText() throws Exception {
+        type(widget, ":");
+        expectCommandLine(":");
+        session.pasteAsync("echo 'stale text'");
+        expectCommandLine(":echo 'stale text'");
+        type(widget, "\r");
+        expectShown("stale text");
+        awayAndBackThenColon();
+    }
+
+    /**
+     * A line left open (not run) when the keyboard goes to a view is abandoned
+     * ({@link LineOnFocusLoss}): back in the editor, {@code :} opens an empty line, drawn without
+     * the old text. Before, Neovim kept the line, invisible meanwhile, and {@code :} went on its end.
+     */
+    @Test
+    void aLineLeftOpenWhenTheFocusGoesIsAbandoned() throws Exception {
+        type(widget, ":");
+        expectCommandLine(":");
+        session.pasteAsync("echo 'stale text'");
+        expectCommandLine(":echo 'stale text'");
+        page().showView(IPageLayout.ID_TASK_LIST);
+        settle();
+        expectCommandLine(""); // abandoned while the view has the keyboard
+        page().activate(editor);
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        type(widget, ":");
+        expectCommandLine(":");
+        waitUntil("the new ':' line drawn without the old text", TIMEOUT_MS, () -> {
+            settle();
+            String drawn = ui2Drawn();
+            return drawn.contains(":") && !drawn.contains("stale text");
+        }, () -> "; ui2 is drawn as \"" + ui2Drawn().replace("\n", "\\n") + "\"");
+        type(widget, "\u001b");
+    }
+
+    /** The keyboard to the Tasks view and back to the editor, then {@code :}: drawn without "stale text". */
+    private void awayAndBackThenColon() throws Exception {
+        page().showView(IPageLayout.ID_TASK_LIST);
+        settle();
+        page().activate(editor);
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        type(widget, ":");
+        expectCommandLine(":");
+        waitUntil("the new ':' line drawn without the old text", TIMEOUT_MS, () -> {
+            settle();
+            String drawn = ui2Drawn();
+            return drawn.contains(":") && !drawn.contains("stale text");
+        }, () -> "; ui2 is drawn as \"" + ui2Drawn().replace("\n", "\\n") + "\"");
+        type(widget, "\u001b");
     }
 
     /**

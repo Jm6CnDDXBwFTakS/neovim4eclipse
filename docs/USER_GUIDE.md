@@ -319,7 +319,10 @@ command-line mappings and abbreviations apply. `:` from visual mode gets `:'<,'>
 text does not move when the line opens, also with the cursor on the editor's last row: Neovim's
 screen has a row of its own for the line (`'cmdheight'` 1), which the editor draws over its last
 row. Turning Neovim mode off cancels the line, and so does a click in the text, as clicking away
-from a field does (in Ex mode, `gQ`, where Vim cannot cancel one, it stays; `:vi` leaves Ex mode).
+from a field does, and so does the keyboard going to another part of Eclipse (a view, another
+editor): coming back, `:` starts a new line, and the old one is in the history (`Up`). Switching
+to another application keeps the line, to paste into it on your return. In Ex mode (`gQ`), where
+Vim cannot cancel a line, it stays; `:vi` leaves Ex mode.
 
 The `Ctrl` letters ticked for normal mode on the preferences' *Ctrl Keys* page
 ([Preferences](#preferences)) go to Neovim's line (`Ctrl-R`, `Ctrl-U`, `Ctrl-W`). Eclipse's Paste
