@@ -51,7 +51,7 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
      */
     private GridCanvas canvas() {
         for (Control child : widget.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !isNeovimsOwnFloat(canvas)) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas) && !isNeovimsOwnFloat(canvas)) {
                 return canvas;
             }
         }

@@ -275,7 +275,7 @@ class SearchGalleryTest extends EndToEndTestBase {
                     settle();
                     int drawn = 0;
                     for (org.eclipse.swt.widgets.Control child : javaWidget.getChildren()) {
-                        if (child instanceof GridCanvas canvas && !canvas.isDisposed() && canvas.grid() != null) {
+                        if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas) && canvas.grid() != null) {
                             drawn++;
                         }
                     }
@@ -288,7 +288,7 @@ class SearchGalleryTest extends EndToEndTestBase {
                 waitUntil("the floats gone", TIMEOUT_MS, () -> {
                     settle();
                     for (org.eclipse.swt.widgets.Control child : javaWidget.getChildren()) {
-                        if (child instanceof GridCanvas) {
+                        if (child instanceof GridCanvas && !StatusLineRow.isRow(child)) {
                             return false;
                         }
                     }
@@ -523,7 +523,7 @@ class SearchGalleryTest extends EndToEndTestBase {
     /** The command-line window's canvas below the editor's widget, or {@code null} when it is closed. */
     private static GridCanvas canvasOf(org.eclipse.swt.widgets.Composite parent) {
         for (org.eclipse.swt.widgets.Control child : parent.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed()) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas)) {
                 return canvas;
             }
             if (child instanceof org.eclipse.swt.widgets.Composite composite) {
@@ -607,7 +607,7 @@ class SearchGalleryTest extends EndToEndTestBase {
     private static int floatsDrawn(StyledText widget) {
         int drawn = 0;
         for (org.eclipse.swt.widgets.Control child : widget.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && canvas.grid() != null) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas) && canvas.grid() != null) {
                 drawn++;
             }
         }

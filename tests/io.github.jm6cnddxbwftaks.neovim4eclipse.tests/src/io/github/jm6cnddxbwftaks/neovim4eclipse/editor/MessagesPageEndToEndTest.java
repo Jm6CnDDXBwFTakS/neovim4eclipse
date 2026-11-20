@@ -626,7 +626,7 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
             return null;
         }
         for (Control child : parent.getChildren()) {
-            if (child instanceof GridCanvas grid && !grid.isDisposed() && grid.isVisible() && !isNeovimsOwnFloat(grid)) {
+            if (child instanceof GridCanvas grid && !grid.isDisposed() && grid.isVisible() && !StatusLineRow.isRow(grid) && !isNeovimsOwnFloat(grid)) {
                 return grid;
             }
             if (child instanceof Composite composite) {

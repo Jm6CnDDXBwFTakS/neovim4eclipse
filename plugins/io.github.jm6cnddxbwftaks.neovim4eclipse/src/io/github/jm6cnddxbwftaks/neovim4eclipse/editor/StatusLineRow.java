@@ -36,6 +36,17 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
  */
 final class StatusLineRow {
 
+    /** Marks the row's canvas among the widget's children, which Neovim's floats are too ({@link #isRow}). */
+    private static final String DATA_KEY = StatusLineRow.class.getName();
+
+    /**
+     * Whether {@code control} is a status row's canvas, not a float's: both are {@link GridCanvas}
+     * children of the editor's widget. Example: a test counting the floats drawn leaves it out.
+     */
+    static boolean isRow(org.eclipse.swt.widgets.Control control) {
+        return Boolean.TRUE.equals(control.getData(DATA_KEY));
+    }
+
     private final StyledText text;
     private final IntSupplier window;
     private final GridCanvas canvas;
@@ -62,6 +73,7 @@ final class StatusLineRow {
         this.window = window;
         this.width = width;
         this.canvas = new GridCanvas(text, text, SWT.NO_FOCUS);
+        canvas.setData(DATA_KEY, Boolean.TRUE);
         canvas.setVisible(false);
         text.addListener(SWT.Resize, onChange);
         text.addListener(SWT.Paint, onChange); // a new font or zoom changes the line height

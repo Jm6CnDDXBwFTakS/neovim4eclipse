@@ -39,7 +39,7 @@ class CommandWindowEndToEndTest extends EndToEndTestBase {
      */
     private GridCanvas canvasOf(Composite parent) {
         for (Control child : parent.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !isNeovimsOwnFloat(canvas)) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas) && !isNeovimsOwnFloat(canvas)) {
                 return canvas;
             }
             if (child instanceof Composite composite) {
