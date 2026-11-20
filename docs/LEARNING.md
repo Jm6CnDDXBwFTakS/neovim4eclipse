@@ -536,7 +536,7 @@ the UI attaches first), sets `'cmdheight'` 1 so that opening `:` moves no text, 
 the four windows' ids (`eclipse_ui2_windows`). The editor then draws them as it draws any float,
 from their grids (`util/Grids`, `editor/FloatingWindows`), always, and with the cursor in them.
 Example: `:ech` typed gives a grid line for ui2's `cmd` window whose first cells are `:ech`, with
-the cursor on its row at column 4, drawn over the editor's last row.
+the cursor on its row at column 4, drawn on the editor's command line row, under the status line.
 
 Why copy cells instead of drawing a line of Eclipse's own from `cmdline_show` and `msg_show`, as the
 plug-in did before 0.3.0: each prompt, each kind of message, each way output grows and each input
@@ -979,7 +979,7 @@ The user has had a few errors and types `:messages` and Enter in an attached edi
 4. The messages editor has the keyboard, so the page takes the focus (section 3.2a's attach in
    reverse: `NeovimSession.focusPageAsync`). Neovim enters the page's window, and its `BufEnter`
    is known as the focus moving (`util/EnterDecision`); the session's focus events
-   (`core/FocusRouter`) go to the pane: `/` opens ui2's line, drawn over the page's last row, not over the code.
+   (`core/FocusRouter`) go to the pane: `/` opens ui2's line, drawn on the page's command line row, not over the code.
    The code's editor stays attached: its document and caret do not move.
 5. `/E486` searches in the editing Neovim; `yy` fills its unnamed register, so `p` in the code
    pastes it, with no forwarding: it is one Neovim. `Ctrl-W k` sends a window command whose origin
@@ -1009,7 +1009,7 @@ The user types `:e ` in a text editor, switches the keyboard to Japanese, types 
 (the input method's commit), then Enter again.
 
 1. `:`, `e` and Space go to Neovim like any key; ui2 draws `:e ` in its `cmd` window, and the
-   editor draws that float over its last row (2.4a). `LuaScripts.UI2`'s `CmdlineEnter` autocommand
+   editor draws that float on its command line row (2.4a). `LuaScripts.UI2`'s `CmdlineEnter` autocommand
    sends `eclipse_cmdline(":")`; on the UI thread `NeovimEditorController.onCmdlineType` turns on
    Eclipse's Paste for the line (`editor/CommandLineEditHandlers`) and `editor/LineInputMethod`.
 2. The editor's `StyledText` still has the keyboard, so the input method composes in it. A display

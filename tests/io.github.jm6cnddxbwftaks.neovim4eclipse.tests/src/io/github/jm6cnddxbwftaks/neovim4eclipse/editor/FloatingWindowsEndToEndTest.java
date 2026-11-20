@@ -146,16 +146,20 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
-    void aPanelOpenedWithoutTheFocusIsDrawnOnTheEditorsBottomEdgeAndTheKeysStayTheEditors() {
+    void aPanelOpenedWithoutTheFocusIsDrawnOnTheWindowsBottomEdgeAndTheKeysStayTheEditors() {
         SessionProbe.lua(session, OPEN_PANEL);
         GridCanvas canvas = floatShowing("w  write");
         assertTrue(rowsOf(canvas.grid()).contains("f  find"));
         Rectangle area = widget.getClientArea();
-        waitUntil("the panel on the editor's bottom edge", TIMEOUT_MS, () -> {
+        // On the last text row, as on Neovim's screen: above the status line and the command line,
+        // which the editor draws under its text (StatusLineRow).
+        int below = widget.getBottomMargin();
+        waitUntil("the panel on the window's bottom edge, above the status and command lines", TIMEOUT_MS, () -> {
             settle();
             Rectangle b = canvas.getBounds();
-            return b.y + b.height == area.y + area.height;
-        }, () -> "; the panel is at " + canvas.getBounds() + " in " + area);
+            int bottom = b.y + b.height;
+            return bottom <= area.height - below && bottom > area.height - below - widget.getLineHeight();
+        }, () -> "; the panel is at " + canvas.getBounds() + " in " + area + ", " + below + " px below the text");
         assertEquals(2 * canvas.cellHeight(), canvas.getBounds().height);
         assertTrue(widget.isFocusControl(), "the editor keeps the keyboard focus");
         type(widget, "mq"); // Neovim's, through the editor: the panel takes no key

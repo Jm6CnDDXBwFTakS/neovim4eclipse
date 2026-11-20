@@ -401,8 +401,10 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         Point size = canvas.getSize();
         List<?> window = (List<?>) SessionProbe.lua(session, "local w = " + pane.window()
                 + " return { vim.api.nvim_win_get_width(w), vim.api.nvim_win_get_height(w) }");
+        // The canvas's rows less those drawn under the window: its status line, the command line's.
+        int below = (pane.statusRowForTests().isVisible() ? 1 : 0) + StatusLineRow.COMMAND_LINE_ROWS;
         return ((Number) window.get(0)).intValue() == ScreenInput.cells(size.x, canvas.cellWidth())
-                && ((Number) window.get(1)).intValue() == ScreenInput.cells(size.y, canvas.cellHeight());
+                && ((Number) window.get(1)).intValue() == ScreenInput.cells(size.y, canvas.cellHeight()) - below;
     }
 
     private String pageSizes(WindowPane pane) {
@@ -424,7 +426,7 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
         waitUntil("the status row shown", TIMEOUT_MS, () -> {
             settle();
-            return pane.statusRowForTests().getSize().y > 0;
+            return pane.statusRowForTests().isVisible() && pane.statusRowForTests().getSize().y > 0;
         });
         waitUntil("the window the canvas's size", TIMEOUT_MS, () -> {
             settle();
@@ -434,7 +436,7 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
             SessionProbe.lua(session, "vim.o.laststatus = 0 return 0");
             waitUntil("the status row gone", TIMEOUT_MS, () -> {
                 settle();
-                return pane.statusRowForTests().getSize().y == 0;
+                return !pane.statusRowForTests().isVisible(); // hidden: the canvas keeps the command line's row
             });
             waitUntil("the window the taller canvas's size", TIMEOUT_MS, () -> {
                 settle();

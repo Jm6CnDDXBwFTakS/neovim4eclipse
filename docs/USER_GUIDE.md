@@ -46,14 +46,15 @@ editor with the keyboard shows it in `StatusLine`, the others in `StatusLineNC`,
 plug-in shows its inactive sections there, as in Neovim's own windows. Example: two editors side
 by side, `notes.txt [+]` in the one you type in, `ideas.txt` dimmed in the other.
 
-The row is the editor's own: it takes one line of the editor's height, Neovim's window is one line
-shorter, and no text hides behind it. `'laststatus'` decides as in Neovim: `0` and `1` (one window
+The row is the editor's own, and so is the command line's row under it: they take two lines of
+the editor's height, Neovim's window is that much shorter, and no text hides behind them. `'laststatus'` decides as in Neovim: `0` and `1` (one window
 per editor) show none, `2` (the default) shows one in every editor, and `3`, Neovim's global
 status line, shows one in the editor with the keyboard only.
 
 ## Messages and errors
 
-Neovim shows its messages and errors itself, on the editor's last row, as in a terminal: the
+Neovim shows its messages and errors itself, on the editor's command line row (its last, under the
+status line), as in a terminal: the
 editor draws what Neovim's *ui2* draws there (Neovim's newer way of drawing its command line and
 messages, as floating windows; see [Command line](#command-line---)).
 
@@ -62,7 +63,7 @@ messages, as floating windows; see [Command line](#command-line---)).
 - **Other messages** in its message colors: `3 lines yanked`, `3 substitutions on 3 lines`.
 - **Messages of more than one line** (two errors at once, a failed save with Neovim's
   `Error in BufWriteCmd Autocommands` line above it, a Lua error with its traceback) take more
-  rows, over the text above the last row, as ui2 shows them; there is no "Press ENTER" prompt.
+  rows, upward from the command line row over the status line and the text, as ui2 shows them; there is no "Press ENTER" prompt.
   `g<` shows the last command's output again, in Neovim's pager ([Command line](#command-line---)).
 
 Every message Neovim gives is shown this way, whatever printed it: a key, a `:` command
@@ -308,7 +309,8 @@ After a restart, Eclipse brings the stacks back as it does any layout you dragge
 
 ## Command line (`:`, `/`, `?`)
 
-`:`, `/` and `?` open Neovim's own command line, on the editor's last row, drawn by Neovim itself:
+`:`, `/` and `?` open Neovim's own command line, on the editor's last row (under the status line,
+as on Neovim's screen), drawn by Neovim itself:
 Neovim's *ui2* (its newer, Lua-written way of drawing the command line and messages, still
 experimental) draws the line, its prompts, its pager and its messages as floating windows, and the
 editor copies their cells onto its last row, in Neovim's colors and the editor's font, with
@@ -316,9 +318,10 @@ Neovim's cursor in the line. Every key you type goes to Neovim, so it behaves ex
 command line: Enter runs it, Esc or Backspace on the empty line cancels, Up/Down browse Neovim's
 history (the same as in a terminal, kept between sessions), `Ctrl-R` inserts a register, and your
 command-line mappings and abbreviations apply. `:` from visual mode gets `:'<,'>` from Neovim. The
-text does not move when the line opens, also with the cursor on the editor's last row: Neovim's
-screen has a row of its own for the line (`'cmdheight'` 1), which the editor draws over its last
-row. Turning Neovim mode off cancels the line, and so does a click in the text, as clicking away
+text does not move when the line opens, also with the cursor on the editor's last text row:
+Neovim's screen has a row of its own for the line (`'cmdheight'` 1), and so does the editor, under
+the status line ([Status line](#status-line)). The last message stays on that row until another
+replaces it, as in Neovim, and covers no text. Turning Neovim mode off cancels the line, and so does a click in the text, as clicking away
 from a field does, and so does the keyboard going to another part of Eclipse (a view, another
 editor): coming back, `:` starts a new line, and the old one is in the history (`Up`). Switching
 to another application keeps the line, to paste into it on your return. In Ex mode (`gQ`), where
@@ -480,7 +483,7 @@ file info as usual, which says `[Not edited]` until the next write after such an
 
 Every other command is typed into Neovim as you wrote it, so it is in the history, `@:` repeats it and a
 macro being recorded contains it. Its output is Neovim's to show, as in a terminal with
-ui2: one line (`:echo "hi"`, `:set ts?`, a `:s` report) and errors on the last row; listings of
+ui2: one line (`:echo "hi"`, `:set ts?`, a `:s` report) and errors on the command line row; listings of
 more than one line (`:ls`, `:jumps`, `:marks`, `:registers` ...), shell output (`:!ls`, `:!make`)
 and anything else of more than one line over the text above it, drawn as Neovim draws it. `g<`
 shows the last command's output again in Neovim's *pager*, a window of ui2's with the cursor in it:
@@ -643,8 +646,8 @@ window is an Eclipse editor, and it is a window of your own Neovim, the one behi
   code. Help comes with your plug-ins' help pages, and the report is colored as Neovim colors
   `:checkhealth`, its OK, WARNING and ERROR lines included.
 - **Laid out as Neovim's screen:** below the page, the window's status line, as Neovim draws it
-  (lualine's, or Neovim's default with the page's name). Neovim's command line, messages and
-  output are drawn over the page's last row, as over your code. Every key stays Neovim's there, so
+  (lualine's, or Neovim's default with the page's name), and under it the command line's row,
+  where Neovim's command line and messages are drawn, as in your code. Every key stays Neovim's there, so
   Neovim edits a `:` or `/` line itself: `Ctrl-W` deletes a word, `Ctrl-R`, `Ctrl-U`, history and
   Tab work as in Neovim. With `'laststatus'` 0 there is no status line, as in Neovim. Floating
   windows (which-key's panel, say) show over the page editor too. Eclipse's status bar shows

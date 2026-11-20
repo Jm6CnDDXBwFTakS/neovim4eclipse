@@ -16,7 +16,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - **Neovim draws its own command line**, its prompts, its pager and its messages, as in a terminal:
   the plug-in turns on Neovim's ui2 (new and still experimental in Neovim 0.12) and the editor
-  shows what it draws on its last row. So `:`, `/` and `?` are Neovim's line exactly, in your
+  shows what it draws on its last row, under the status line, as Neovim lays out its screen. So `:`, `/` and `?` are Neovim's line exactly, in your
   colors, and prompts work that had no place before: `confirm()`, the questions of `:s/a/b/c`,
   `input()`. `g<` and long output open Neovim's pager (`q` closes it); `:messages` still opens its
   page editor. The text no longer moves when `:` opens with the cursor on the editor's last row.

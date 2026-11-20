@@ -484,7 +484,7 @@ class GridsTest {
 
     /** The {@code :} line being typed: the cursor is in ui2's line, which is drawn with it. */
     @Test
-    void ui2sLineIsDrawnWithTheCursorInItOverTheEditorsLastRow() {
+    void ui2sLineIsDrawnWithTheCursorInItOnTheCommandLinesRow() {
         grids.drawFloats(true);
         screenWithUi2Line();
         grids.apply(new GridEvent.CursorGoto(8, 0, 4));
@@ -494,7 +494,8 @@ class GridsTest {
         assertEquals(":ech", line.grid().row(0).strip());
         assertEquals(0, line.grid().cursorRow());
         assertEquals(4, line.grid().cursorCol());
-        assertEquals(22, line.row(), "screen row 24, moved up by the 2 rows below the editor's window: its last row");
+        assertEquals(24, line.row(), "screen row 24: under the editor's window and its status line, as on Neovim's screen");
+        assertEquals(line.row() + 1, line.hostRows(), "the host counts the rows the editor draws under its window: the line is its last");
         grids.apply(new GridEvent.CursorGoto(8, 0, 2)); // the cursor moved left, no line changed
         assertEquals(2, grids.floatsIfChanged().orElseThrow().get(0).grid().cursorCol(), "drawn again with the cursor");
     }
@@ -513,11 +514,11 @@ class GridsTest {
 
     /**
      * Neovim's popup menu, the one float with no window (-1): drawn with plug-ins' floats off too.
-     * While a {@code :} line is typed it hangs from that line and moves up with it; in insert mode
+     * While a {@code :} line is typed it hangs from that line, where Neovim put it; in insert mode
      * it stays by the text.
      */
     @Test
-    void thePopupMenuMovesWithTheCommandLineButNotInInsertMode() {
+    void thePopupMenuHangsFromTheCommandLineOrStaysByTheText() {
         grids.drawFloats(false);
         screenWithUi2Line();
         grids.apply(new GridEvent.Resize(9, 16, 5));
@@ -526,7 +527,7 @@ class GridsTest {
         grids.apply(new GridEvent.CursorGoto(8, 0, 4));
         List<FloatWindow> typing = grids.floatsIfChanged().orElseThrow();
         assertEquals(List.of(1010, -1), typing.stream().map(f -> f.grid().window()).toList());
-        assertEquals(17, typing.get(1).row(), "screen row 19, moved up by 2 as the line is");
+        assertEquals(19, typing.get(1).row(), "screen row 19, just above the line, as Neovim put it");
         grids.apply(new GridEvent.CursorGoto(2, 4, 0)); // insert-mode completion, by the text
         List<FloatWindow> inserting = grids.floatsIfChanged().orElseThrow();
         assertEquals(19, inserting.get(1).row(), "where Neovim put it");

@@ -17,7 +17,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * @param row      the row of its top left cell, counted from the editor's window's first row;
  *                 negative above it
  * @param col      the column of its top left cell, counted from the editor's window's first column
- * @param hostRows the rows of the editor's window, 0 when not known
+ * @param hostRows the rows of the editor's window and of Neovim's screen below it (status line,
+ *                 command line), which the editor draws too; 0 when not known
  * @param hostCols its columns, 0 when not known
  * @param zindex   its place in the stack ({@code zindex}): a higher one lies on top
  */

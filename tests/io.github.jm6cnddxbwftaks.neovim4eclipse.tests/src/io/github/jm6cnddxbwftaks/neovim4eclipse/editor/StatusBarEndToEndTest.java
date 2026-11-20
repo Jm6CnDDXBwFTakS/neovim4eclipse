@@ -69,16 +69,17 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * The status row under the editor's text ({@link StatusLineRow}): the visible canvas child of the
-     * widget that lies on the client area's last line and shows window {@code window}'s grid;
-     * {@code null} when none is shown. The window tells it from ui2's floats, which can lie on the
-     * same line (with {@code 'laststatus'} 0 the ruler moves to ui2's command-line window).
+     * The status row under the editor's text ({@link StatusLineRow}): the visible row canvas child of
+     * the widget that lies just above the command line's row and shows window {@code window}'s grid;
+     * {@code null} when none is shown.
      */
     private String statusRowText(int window) {
         Rectangle area = widget.getClientArea();
+        int commandLine = StatusLineRow.COMMAND_LINE_ROWS * widget.getLineHeight();
         for (Control child : widget.getChildren()) {
-            if (child instanceof GridCanvas canvas && canvas.isVisible() && canvas.grid() != null && canvas.grid().window() == window
-                    && canvas.grid().height() == 1 && canvas.getBounds().y + canvas.getBounds().height == area.height) {
+            if (child instanceof GridCanvas canvas && StatusLineRow.isRow(canvas) && canvas.isVisible() && canvas.grid() != null
+                    && canvas.grid().window() == window && canvas.grid().height() == 1
+                    && canvas.getBounds().y + canvas.getBounds().height == area.height - commandLine) {
                 return canvas.grid().row(0);
             }
         }
@@ -88,7 +89,7 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
     /**
      * Neovim's status line is drawn under the editor's text, evaluated by Neovim for this editor's
      * window (its default format names the file), and {@code :set laststatus=0} takes the row away,
-     * the text widget's margin with it. The cells are {@code status_line_spec.lua}, the row's
+     * and its line of margin with it; the command line's row stays. The cells are {@code status_line_spec.lua}, the row's
      * placement {@code StatusLineRowTest}; here the session, the notifications and the row together.
      */
     @Test
@@ -101,9 +102,11 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
             String row = statusRowText(window);
             return row != null && row.contains("test.txt");
         }, () -> "; the row reads " + statusRowText(window));
-        // The row's margin is one line high; the editor's own margin is what is left without it.
-        int margin = widget.getBottomMargin() - widget.getLineHeight();
-        assertTrue(margin >= 0, "the row takes a line of margin under the text: " + widget.getBottomMargin());
+        // The status line's row and the command line's take that many lines of margin under the
+        // text; without a status line, the command line's stay.
+        int line = widget.getLineHeight();
+        int margin = widget.getBottomMargin() - line;
+        assertTrue(margin >= StatusLineRow.COMMAND_LINE_ROWS * line, "the rows take their margin under the text: " + widget.getBottomMargin());
         try {
             SessionProbe.lua(session, "vim.cmd('set laststatus=0') return 0");
             waitUntil("the status row gone", TIMEOUT_MS, () -> {

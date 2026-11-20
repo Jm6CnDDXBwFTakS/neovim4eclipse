@@ -86,6 +86,8 @@ final class WindowPane {
     private final GridCanvas canvas;
     /** Neovim's status line for the page's window, a row below the text, as Neovim draws it. */
     private final GridCanvas statusRow;
+    /** Whether Neovim draws a status line for the page window now ({@code 'laststatus'}). UI thread. */
+    private boolean statusShown;
     /** The two, one above the other. */
     private final Composite rows;
     private final NeovimSession session;
@@ -192,8 +194,10 @@ final class WindowPane {
         };
         canvas = new GridCanvas(rows, look, SWT.NONE);
         canvas.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
-        statusRow = new GridCanvas(rows, look, SWT.NO_FOCUS);
-        statusRow.setLayoutData(hiddenRow());
+        // Inside the canvas, as Neovim lays out its screen: the page window's rows, its status line,
+        // the command line's row, where ui2 draws its line and messages (placeRows).
+        statusRow = new GridCanvas(canvas, look, SWT.NO_FOCUS);
+        statusRow.setVisible(false);
         canvas.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -216,15 +220,13 @@ final class WindowPane {
         canvas.addControlListener(new ControlAdapter() {
             @Override
             public void controlResized(ControlEvent e) {
+                placeRows();
                 sendSize();
             }
         });
         fontListener = event -> {
             if (JFaceResources.TEXT_FONT.equals(event.getProperty()) && !canvas.isDisposed()) {
-                if (((GridData) statusRow.getLayoutData()).heightHint > 0) {
-                    ((GridData) statusRow.getLayoutData()).heightHint = lineHeight();
-                }
-                rows.layout(true);
+                placeRows();
                 canvas.redraw();
                 sendSize();
             }
@@ -239,11 +241,28 @@ final class WindowPane {
         session.addPageClosedListener(closedListener);
     }
 
-    /** The status row's layout: one text line high once Neovim draws a status line, hidden until then. */
-    private GridData hiddenRow() {
-        GridData data = new GridData(SWT.FILL, SWT.BOTTOM, true, false);
-        data.heightHint = 0;
-        return data;
+    /**
+     * The rows the canvas keeps under the page window's: its status line's while Neovim draws one,
+     * and the command line's ({@link StatusLineRow#COMMAND_LINE_ROWS}). Example: 2 with the default
+     * {@code 'laststatus'}.
+     */
+    private int rowsBelow() {
+        return (statusShown ? 1 : 0) + StatusLineRow.COMMAND_LINE_ROWS;
+    }
+
+    /** Puts the status row above the command line's rows, at the canvas's bottom; hidden without a line. */
+    private void placeRows() {
+        if (canvas.isDisposed()) {
+            return;
+        }
+        if (!statusShown) {
+            statusRow.setVisible(false);
+            return;
+        }
+        Point size = canvas.getSize();
+        int height = lineHeight();
+        statusRow.setBounds(0, Math.max(0, size.y - rowsBelow() * height), size.x, height);
+        statusRow.setVisible(true);
     }
 
     /**
@@ -257,17 +276,15 @@ final class WindowPane {
             if (row.window() != window) {
                 return;
             }
-            GridData data = (GridData) statusRow.getLayoutData();
             boolean shown = row.height() > 0;
-            int height = shown ? lineHeight() : 0;
-            if (data.heightHint != height) {
-                data.heightHint = height; // the row appears, or goes
-                rows.layout(true);
+            if (shown != statusShown) {
+                statusShown = shown; // the row appears, or goes: the page window's rows change
                 sendSize();
             }
             if (shown) {
                 statusRow.show(row);
             }
+            placeRows();
         });
     }
 
@@ -401,7 +418,9 @@ final class WindowPane {
             return;
         }
         Point size = canvas.getSize();
-        session.setEditorSizeAsync(ScreenInput.cells(size.x, canvas.cellWidth()), ScreenInput.cells(size.y, canvas.cellHeight()));
+        // The page window's rows: the canvas's, less those drawn under them (status line, command line).
+        int rows = Math.max(1, ScreenInput.cells(size.y, canvas.cellHeight()) - rowsBelow());
+        session.setEditorSizeAsync(ScreenInput.cells(size.x, canvas.cellWidth()), rows);
     }
 
     /** Neovim closed a page's window by itself, or this one could not be entered: if it is this page's, the editor closes. */

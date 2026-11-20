@@ -87,11 +87,23 @@ class StatusLineRowTest {
         assertTrue(widths.get(1)[1] < columns);
     }
 
+    /** The command line's row is there from the start, with no status line yet: ui2 draws there. */
+    @Test
+    void theCommandLinesRowIsThereFromTheStart() {
+        int before = text.getBottomMargin();
+        row();
+        assertEquals(before + StatusLineRow.COMMAND_LINE_ROWS * text.getLineHeight(), text.getBottomMargin());
+        assertFalse(row.canvasForTests().isVisible(), "no status line yet");
+        row.dispose();
+        assertEquals(before, text.getBottomMargin());
+    }
+
     @Test
     void aShownLineAddsOneLineOfMarginAndDisposeTakesItBack() {
         int before = text.getBottomMargin();
         row().show(line(WINDOW, "a.txt  1,1"));
-        assertEquals(before + text.getLineHeight(), text.getBottomMargin());
+        assertEquals(before + (1 + StatusLineRow.COMMAND_LINE_ROWS) * text.getLineHeight(), text.getBottomMargin(),
+                "the status line's row and the command line's");
         assertTrue(row.canvasForTests().isVisible());
         assertEquals("a.txt  1,1", row.canvasForTests().grid().row(0));
 
@@ -104,10 +116,11 @@ class StatusLineRowTest {
     @Test
     void anExistingMarginIsKept() {
         text.setBottomMargin(7);
+        int rows = (1 + StatusLineRow.COMMAND_LINE_ROWS) * text.getLineHeight();
         row().show(line(WINDOW, "x"));
-        assertEquals(7 + text.getLineHeight(), text.getBottomMargin());
+        assertEquals(7 + rows, text.getBottomMargin());
         row.show(line(WINDOW, "y")); // a second line adds nothing more
-        assertEquals(7 + text.getLineHeight(), text.getBottomMargin());
+        assertEquals(7 + rows, text.getBottomMargin());
         row.dispose();
         assertEquals(7, text.getBottomMargin());
     }
@@ -115,9 +128,7 @@ class StatusLineRowTest {
     /** Every window's lines reach every editor; one shows its own window's only. */
     @Test
     void otherWindowsLinesAreIgnored() {
-        int before = text.getBottomMargin();
         row().show(line(WINDOW + 1, "other.txt"));
-        assertEquals(before, text.getBottomMargin());
         assertFalse(row.canvasForTests().isVisible());
 
         row.show(line(WINDOW, "mine.txt"));
@@ -126,30 +137,33 @@ class StatusLineRowTest {
         assertSame(mine, row.canvasForTests().grid(), "still its own window's line");
     }
 
-    /** {@code 'laststatus'} 0, or 1 with one window: a line of no rows takes the row away. */
+    /** {@code 'laststatus'} 0, or 1 with one window: a line of no rows takes the status row away, not the command line's. */
     @Test
     void aLineOfNoRowsHidesTheRow() {
         int before = text.getBottomMargin();
+        int line = text.getLineHeight();
         row().show(line(WINDOW, "a.txt"));
         row.show(StatusLines.none(WINDOW));
-        assertEquals(before, text.getBottomMargin());
+        assertEquals(before + StatusLineRow.COMMAND_LINE_ROWS * line, text.getBottomMargin());
         assertFalse(row.canvasForTests().isVisible());
 
         row.show(line(WINDOW, "a.txt"));
-        assertEquals(before + text.getLineHeight(), text.getBottomMargin(), "and a line brings it back");
+        assertEquals(before + (1 + StatusLineRow.COMMAND_LINE_ROWS) * line, text.getBottomMargin(), "and a line brings it back");
     }
 
-    /** The canvas lies over the margin: the client area's last line height, its full width. */
+    /** The canvas lies over the margin, above the command line's row: one line high, the full width. */
     @Test
-    void theCanvasIsAtTheBottomOfTheClientArea() {
+    void theCanvasIsAboveTheCommandLinesRow() {
         row().show(line(WINDOW, "a.txt"));
         Rectangle area = text.getClientArea();
         int height = text.getLineHeight();
-        assertEquals(new Rectangle(0, area.height - height, area.width, height), row.canvasForTests().getBounds());
+        int top = area.height - (1 + StatusLineRow.COMMAND_LINE_ROWS) * height;
+        assertEquals(new Rectangle(0, top, area.width, height), row.canvasForTests().getBounds());
 
         shell.setSize(500, 200); // a resize moves it along
         shell.layout(true, true);
         area = text.getClientArea();
-        assertEquals(new Rectangle(0, area.height - height, area.width, height), row.canvasForTests().getBounds());
+        top = area.height - (1 + StatusLineRow.COMMAND_LINE_ROWS) * height;
+        assertEquals(new Rectangle(0, top, area.width, height), row.canvasForTests().getBounds());
     }
 }

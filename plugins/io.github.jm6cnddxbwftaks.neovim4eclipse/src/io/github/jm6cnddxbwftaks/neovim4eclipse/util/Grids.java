@@ -447,13 +447,14 @@ public final class Grids {
             }
             cells += size;
             // ui2's windows hang from the bottom of Neovim's screen, below the editor's window (its
-            // status line, the command line): moved up by those rows, over the editor's last ones.
-            // So is the popup menu while a ':' line is typed: it hangs from that line.
-            boolean fromBottom = ui2Windows.contains(place.win()) || (place.win() == -1 && inCommandLine);
+            // status line, the command line). The editor draws those rows too, under its text, as
+            // Neovim lays out its screen (editor/StatusLineRow, WindowPane): so the host counts them,
+            // and a window that reaches the screen's last row is drawn on the editor's last row,
+            // the command line's (FloatPlacement).
             floats.add(new FloatWindow(snapshot(place.win(), e.getKey(), grid, alwaysDrawn(e.getKey())),
-                    place.row() - (host == null ? 0 : host.row()) - (fromBottom ? below : 0),
+                    place.row() - (host == null ? 0 : host.row()),
                     place.col() - (host == null ? 0 : host.col()),
-                    host == null ? 0 : host.height(), host == null ? 0 : host.width(), place.zindex()));
+                    host == null ? 0 : host.height() + below, host == null ? 0 : host.width(), place.zindex()));
         }
         floats.sort(Comparator.comparingInt(FloatWindow::zindex).thenComparingInt(f -> f.grid().window()));
         if (floats.equals(lastFloats)) {

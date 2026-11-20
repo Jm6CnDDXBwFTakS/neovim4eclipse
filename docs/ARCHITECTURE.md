@@ -115,7 +115,8 @@ extends, `'mouse'`, `'mousetime'` and `<2-LeftMouse>` mappings apply, and a clic
   text (`StatusLineRow`).
 - **Caret**: block vs thin via SWT `Caret` size (`CursorStyleController`); Eclipse's own width comes back when Neovim leaves the editor.
 - **Ex / search**: Neovim draws its own command line, prompts, pager and messages (its ui2, in
-  floating windows), and the editor copies their cells over its last row like any float's (see
+  floating windows), and the editor copies their cells onto its command line row, under the status
+  line, like any float's (see
   "Command line" and "Messages and output" below). No widget takes the keyboard from the editor's
   text: every key goes on to Neovim, which edits the line itself.
 
@@ -485,7 +486,9 @@ the page editor ── keys, mouse, size ──▶ NeovimSession (the editing Ne
   the page with `setEditorSizeAsync`), and the focus events come to it (`core/FocusTarget`). Below
   its text the pane draws one row, as Neovim lays out its screen: the window's status line, the
   screen's (grid 1's) row below the page's window with its colors (`util/Grids.pageStatusIfChanged`).
-  Neovim's command line is ui2's float, drawn over the canvas's last row as over code. No widget
+  Under it the command line's row (`StatusLineRow.COMMAND_LINE_ROWS`), where ui2's line is drawn,
+  as in code; the status row is a child of the canvas, placed above that row (`placeRows`), and the
+  page window gets the canvas's rows less those two (`sendSize`). No widget
   takes the keyboard from the page's canvas, so every key is Neovim's and Neovim edits the line
   itself. Messages, output and floats are drawn over the canvas; the mode goes
   to Eclipse's status bar through one item for all page editors of a status bar
@@ -731,7 +734,7 @@ What the plug-in adds, all in `LuaScripts.UI2`, the one place it talks to ui2:
   the window above then shrinks a row, and with the cursor on its last row Neovim scrolls the text
   (0.12) or moves the cursor (0.13). At 1 nothing moves: Neovim's screen is one row taller than the
   editor's window (decision 9, [design/VIEWPORT.md](design/VIEWPORT.md)), and ui2's line lives in
-  that row, which the editor draws over its own last row.
+  that row, which the editor keeps under its status line (`editor/StatusLineRow`).
 - **Each window as wide as the screen.** ui2 opens them 10,000 cells wide and lets Neovim clip
   them; a multigrid UI is sent the full width, past the editor's limit on a float's cells.
 - **The windows' ids** go to Eclipse (`eclipse_ui2_windows`) at start and whenever ui2 makes one
@@ -785,8 +788,8 @@ start-up).
 
 ## Command line
 
-Neovim draws its command line itself: ui2's `cmd` window, over the editor's last row ("Messages and
-output"). The editor's `StyledText` keeps the keyboard while the line is open, and every key goes
+Neovim draws its command line itself: ui2's `cmd` window, on the editor's command line row under
+the status line ("Messages and output"). The editor's `StyledText` keeps the keyboard while the line is open, and every key goes
 on to Neovim as in normal mode, so Neovim's history, completion, registers, mappings and
 abbreviations all apply, and nothing in Eclipse edits a text of its own.
 
@@ -1013,10 +1016,10 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   the `:` line's Tab list and insert-mode completion show. Without them there is no command line to
   see, so neither switch hides them, and they are drawn with the cursor in them (the typed line, the
   pager after `g<`), which the focused-float rule above would leave out. They hang from the bottom of
-  Neovim's screen, below the editor's window, so they move up by the rows below it
-  (`Grids.rowsBelow`: its status line and the command line, `'cmdheight'` 1), and the line lies over
-  the editor's last row; the popup menu moves with them while a `:` line is open and stays by the
-  text in insert mode. It is left out while Eclipse types an insert (`Grids.eclipseTypes`): Neovim's
+  Neovim's screen, below the editor's window and its status line; the editor draws those rows too
+  (`editor/StatusLineRow`, `WindowPane`), so its host counts them (`Grids.rowsBelow`, added to
+  `FloatWindow.hostRows`), the line lies on the editor's last row, the command line's, and the
+  popup menu hangs above it while a `:` line is open and stays by the text in insert mode. It is left out while Eclipse types an insert (`Grids.eclipseTypes`): Neovim's
   cursor is not where the user types then, so a list a config opens by itself would hang in the
   wrong place; a `Ctrl-N` is typed by Neovim, and drawn.
 - **They only show** (`editor/FloatingWindows`): no focus, no mouse; among themselves in `zindex`
