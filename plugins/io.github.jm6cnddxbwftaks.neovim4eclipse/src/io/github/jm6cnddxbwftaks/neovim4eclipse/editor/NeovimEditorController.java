@@ -21,6 +21,7 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Listener;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.commands.ICommandService;
@@ -205,6 +206,8 @@ public final class NeovimEditorController implements AutoCloseable {
      * taking every key for it.
      */
     private final Listener endCompletionListener = e -> endCompletion();
+    /** A click in the text while a command line is open: see {@link #abandonLine}. */
+    private final Listener abandonLineOnClick = this::abandonLine;
     private final Consumer<FoldState> foldListener = this::onFolds;
     private final Consumer<ViewportPort.WrapChange> wrapListener = this::onNeovimWrap;
     private final Consumer<ViewportPort.TopLine> topLineListener = this::onNeovimTopLine;
@@ -368,6 +371,7 @@ public final class NeovimEditorController implements AutoCloseable {
         session.addCursorListener(cursorListener);
         session.addSelectionListener(selectionListener);
         styledText.addListener(SWT.MouseDown, endCompletionListener);
+        styledText.addListener(SWT.MouseDown, abandonLineOnClick);
         styledText.addListener(SWT.FocusOut, endCompletionListener);
         // A float reported before this editor listened (it lives in this editor's tab page, and
         // Neovim showed it again when the tab page came back) would stay unseen until it changes.
@@ -1009,13 +1013,26 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
+     * A click in the text while a {@code :}, {@code /} or {@code ?} line is open abandons the line
+     * ({@code <C-c>}), as clicking away from a field does, and the click does nothing else. Not in
+     * Ex mode ({@code gQ}), which ignores {@code <C-c>}. UI thread.
+     */
+    private void abandonLine(Event e) {
+        String mode = session.getMode();
+        if (!closed && neovimModeActive && e.button == 1 && VimModes.isCmdline(mode) && !VimModes.isExMode(mode)) {
+            session.inputAsync("<C-c>");
+        }
+    }
+
+    /**
      * Whether a left click goes to Neovim's mouse ({@link NeovimMouse}): in Neovim mode, except in
-     * insert and replace mode, where Eclipse types and so places the caret itself, and in Ex mode,
-     * where Neovim would take it as a click on its command line.
+     * insert and replace mode, where Eclipse types and so places the caret itself, and on the
+     * command line (Ex mode included), where a click in the text abandons the line instead
+     * ({@link #abandonLineOnClick}).
      */
     private boolean neovimHandlesMouse() {
         String mode = session.getMode();
-        return !closed && started && neovimModeActive && !VimModes.isTyping(mode) && !VimModes.isExMode(mode);
+        return !closed && started && neovimModeActive && !VimModes.isTyping(mode) && !VimModes.isCmdline(mode);
     }
 
     /**
@@ -1358,6 +1375,7 @@ public final class NeovimEditorController implements AutoCloseable {
             floatingWindows.dispose();
             if (!styledText.isDisposed()) {
                 styledText.removeListener(SWT.MouseDown, endCompletionListener);
+                styledText.removeListener(SWT.MouseDown, abandonLineOnClick);
                 styledText.removeListener(SWT.FocusOut, endCompletionListener);
             }
             selectionView.dispose();

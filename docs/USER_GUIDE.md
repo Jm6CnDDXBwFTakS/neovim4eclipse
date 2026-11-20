@@ -310,8 +310,8 @@ history (the same as in a terminal, kept between sessions), `Ctrl-R` inserts a r
 command-line mappings and abbreviations apply. `:` from visual mode gets `:'<,'>` from Neovim. The
 text does not move when the line opens, also with the cursor on the editor's last row: Neovim's
 screen has a row of its own for the line (`'cmdheight'` 1), which the editor draws over its last
-row. Turning Neovim mode off cancels the line (in Ex mode, `gQ`, where Vim cannot cancel one, it
-stays; `:vi` leaves Ex mode).
+row. Turning Neovim mode off cancels the line, and so does a click in the text, as clicking away
+from a field does (in Ex mode, `gQ`, where Vim cannot cancel one, it stays; `:vi` leaves Ex mode).
 
 The `Ctrl` letters ticked for normal mode on the preferences' *Ctrl Keys* page
 ([Preferences](#preferences)) go to Neovim's line (`Ctrl-R`, `Ctrl-U`, `Ctrl-W`). Eclipse's Paste
