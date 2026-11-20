@@ -463,7 +463,7 @@ public final class EditorAttachManager {
         try {
             if (textEditorOf(multiPage) == null) {
                 if (isAttachedTo(multiPage)) {
-                    detachQuietly(); // switched to a form page: hand keys back to Eclipse
+                    detachForGood(); // switched to a form page: hand keys back to Eclipse
                 }
             } else if (autoAttach) {
                 attach(multiPage, false);
@@ -1486,7 +1486,20 @@ public final class EditorAttachManager {
     }
 
     public synchronized void detach() {
-        detachQuietly();
+        detachForGood();
         LOG.info("Detached Neovim");
+    }
+
+    /**
+     * Detaches, and takes the editor's status row away with it: Neovim leaves this editor for
+     * good, not for another editor (where {@link #detachQuietly} keeps the row, as Neovim keeps a
+     * background window's status line). Example: Detach Neovim, or a form page. Guarded by {@code this}.
+     */
+    private synchronized void detachForGood() {
+        NeovimEditorController leaving = activeController;
+        detachQuietly();
+        if (leaving != null) {
+            leaving.releaseStatusRow();
+        }
     }
 }

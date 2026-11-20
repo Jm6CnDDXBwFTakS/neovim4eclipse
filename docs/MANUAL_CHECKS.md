@@ -474,7 +474,7 @@ region*.
 
 - **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** editor/StatusLineRow.java, editor/LineOnFocusLoss.java, util/StatusLines.java, editor/WindowPane.java, util/Grids.java, editor/FloatingWindows.java
+- **Areas:** editor/StatusLineRow.java, editor/StatusRows.java, editor/LineOnFocusLoss.java, util/StatusLines.java, editor/WindowPane.java, util/Grids.java, editor/FloatingWindows.java
 
 What the row shows, its colors and its margin are tested (`status_line_spec.lua`, `StatusLineRowTest`,
 `StatusBarEndToEndTest`), and so is an open line abandoned when a view takes the keyboard

@@ -6757,7 +6757,13 @@ final class LuaScripts {
                                           'DirChanged', 'FileType', 'DiagnosticChanged' },
               { group = group, callback = M.send_all })
             vim.api.nvim_create_autocmd('WinClosed', { group = group, callback = function(ev)
-              M.widths[tonumber(ev.match)] = nil -- window ids are not reused: only a closed one's width goes
+              local win = tonumber(ev.match)
+              M.widths[win] = nil -- window ids are not reused: only a closed one's width goes
+              local ok, config = pcall(vim.api.nvim_win_get_config, win)
+              if not ok or config.relative ~= '' then return end -- a float (ui2's, a picker) has no line
+              -- An editor keeps its row while another has the keyboard (editor/StatusRows): a
+              -- closed window's line is a line of no rows, which takes its row away.
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_status_lines', { { win, { false } } })
             end })
             vim.api.nvim_create_autocmd('OptionSet', { group = group,
               pattern = { 'laststatus', 'statusline' }, callback = M.send_all })

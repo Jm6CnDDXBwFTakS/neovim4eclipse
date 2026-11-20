@@ -199,6 +199,7 @@
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimWheel.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/StatusBarLabels.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/StatusLineRow.java</include>
+            <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/StatusRows.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/LineOnFocusLoss.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/SearchHighlighter.java</include>
             <include>io/github/jm6cnddxbwftaks/neovim4eclipse/editor/NeovimHighlighter.java</include>

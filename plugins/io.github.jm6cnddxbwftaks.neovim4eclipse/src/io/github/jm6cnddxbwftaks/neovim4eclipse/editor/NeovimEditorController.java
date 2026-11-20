@@ -126,7 +126,12 @@ public final class NeovimEditorController implements AutoCloseable {
     private final ModeStatusContribution modeStatus;
     /** Abandons an open {@code :} line when the keyboard goes to another part ({@link LineOnFocusLoss}). */
     private final LineOnFocusLoss lineOnFocusLoss;
-    /** Neovim's status line of this editor's window, under the text ({@link StatusLineRow}). */
+    /**
+     * Every editor's status row ({@link StatusRows}): a row outlives its controller, so that an
+     * editor in the background keeps its window's line, as Neovim keeps every window's.
+     */
+    private static final StatusRows STATUS_ROWS = new StatusRows(SwtUiExecutor.INSTANCE);
+    /** Neovim's status line of this editor's window, under the text: {@link #STATUS_ROWS}'s, not closed with this. */
     private final StatusLineRow statusLineRow;
     /** This editor's Neovim window, whose status line {@link #statusLineRow} shows. */
     private final EditorWindow window;
@@ -211,9 +216,6 @@ public final class NeovimEditorController implements AutoCloseable {
     private final Consumer<ViewportPort.TopLine> topLineListener = this::onNeovimTopLine;
     private final Consumer<SearchPort.Matches> searchListener = this::onSearchMatches;
     private final Consumer<SearchPort.Highlights> highlightsListener = this::onHighlights;
-    /** Every window's status line, from any session thread; this editor's row picks its own. */
-    private final Consumer<GridSnapshot> statusLineListener = this::onStatusLine;
-    private final Consumer<Integer> commandLineRowsListener = this::onCommandLineRows;
     /** The mode last logged: Neovim reports the mode again after every key, which is not a change. */
     private volatile String loggedMode;
 
@@ -306,8 +308,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 () -> !closed && neovimModeActive && session.commandLineOpen()
                         && !VimModes.isExMode(session.getMode()), // gQ: Vim cannot cancel its line
                 this::abandonLine);
-        this.statusLineRow = new StatusLineRow(styledText, window::winid,
-                (win, columns) -> session.setStatusLineWidthAsync(win, columns));
+        this.statusLineRow = STATUS_ROWS.rowFor(styledText, window, window::winid, new SessionStatusLines(session));
         floatingWindows.keepUnder(statusLineRow.control());
         this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, session::pasteAsync);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
@@ -399,9 +400,6 @@ public final class NeovimEditorController implements AutoCloseable {
         }
 
         modeStatus.addTo(editor.getEditorSite());
-        session.addStatusLineListener(statusLineListener);
-        session.addCommandLineRowsListener(commandLineRowsListener);
-        statusLineRow.commandLineRows(session.commandLineRows());
 
         int[] lineCol = DocumentPositions.offsetToCursor(documentOf(editor), offsets.caretModelOffset());
 
@@ -421,12 +419,10 @@ public final class NeovimEditorController implements AutoCloseable {
         }
 
         onModeChanged(session.getMode());
-        // The line as last evaluated, until Neovim sends this window's again (it may be a window
-        // that travelled here, or one opened just now: then every window's line is asked for).
-        GridSnapshot line = session.statusLine(window.winid());
-        if (line != null) {
-            statusLineRow.show(line);
-        }
+        // Each row's line as last evaluated, until Neovim sends its window's again (a window may
+        // have travelled to this editor or from it, or be one opened just now: then every
+        // window's line is asked for).
+        STATUS_ROWS.showLastLines();
         session.refreshStatusLinesAsync();
         Consumer<NeovimEditorController> hook = startedHookForTests;
         if (hook != null) {
@@ -791,10 +787,32 @@ public final class NeovimEditorController implements AutoCloseable {
                 controller.close();
             } catch (RuntimeException | Error closing) {
                 e.addSuppressed(closing);
+            } finally {
+                controller.releaseStatusRow(); // never attached: no Neovim line, no command line row
             }
             throw e;
         }
         return controller;
+    }
+
+    /**
+     * Takes this editor's status row away ({@link StatusRows#release}): Neovim leaves the editor for
+     * good (Detach Neovim, a form page, a failed attach), not for another editor, where the row
+     * stays. Close the controller first. UI thread.
+     */
+    void releaseStatusRow() {
+        STATUS_ROWS.release(styledText);
+    }
+
+    /**
+     * Takes away the rows that show {@code session}'s lines, once it has ended (shut down, restarted
+     * or the plug-in stopped): its window ids mean nothing any more. Rows of a newer session stay.
+     * Any thread; the work is queued on the UI thread.
+     */
+    public static void releaseStatusRows(NeovimSession session) {
+        if (SwtUiExecutor.INSTANCE.isAvailable()) { // not once the workbench has closed: the rows went with it
+            SwtUiExecutor.INSTANCE.asyncExec(() -> STATUS_ROWS.release(new SessionStatusLines(session)));
+        }
     }
 
     public ITextEditor getEditor() {
@@ -1072,27 +1090,6 @@ public final class NeovimEditorController implements AutoCloseable {
         keyContext.update();
     }
 
-    /** A window's status line changed (any window's): this editor's row shows its own. Any thread. */
-    private void onStatusLine(GridSnapshot line) {
-        if (line.window() != window.winid()) {
-            return; // another window's: not a task on the UI thread per editor per line
-        }
-        SwtUiExecutor.INSTANCE.asyncExec(() -> {
-            if (!closed) {
-                statusLineRow.show(line);
-            }
-        });
-    }
-
-    /** The rows kept for the command line changed ({@code :set ch=0}): the row under the status line goes, or comes back. Any thread. */
-    private void onCommandLineRows(int rows) {
-        SwtUiExecutor.INSTANCE.asyncExec(() -> {
-            if (!closed) {
-                statusLineRow.commandLineRows(rows);
-            }
-        });
-    }
-
     /** Whether this editor has the focus events now (no page took them; {@link #takeFocusBack}). Any thread. */
     boolean hasFocus() {
         return session.hasFocus(focusTarget);
@@ -1360,8 +1357,6 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeTopLineListener(topLineListener);
             session.removeSearchListener(searchListener);
             session.removeHighlightsListener(highlightsListener);
-            session.removeStatusLineListener(statusLineListener);
-            session.removeCommandLineRowsListener(commandLineRowsListener);
             if (viewport != null) {
                 session.setLeaveInsertView(null); // the next editor's attach sets its own
             }
@@ -1384,7 +1379,6 @@ public final class NeovimEditorController implements AutoCloseable {
             lineInput.dispose();
             commandWindowPanel.dispose();
             floatingWindows.dispose();
-            statusLineRow.dispose();
             lineOnFocusLoss.dispose();
             if (!styledText.isDisposed()) {
                 styledText.removeListener(SWT.MouseDown, endCompletionListener);
@@ -1437,6 +1431,47 @@ public final class NeovimEditorController implements AutoCloseable {
         @Override
         public void close() {
             session.closeCommandWindowAsync();
+        }
+    }
+
+    /**
+     * The session as {@link StatusRows}' source of lines: two are the same Neovim when their
+     * sessions are the same object (a record's {@code equals}).
+     */
+    private record SessionStatusLines(NeovimSession session) implements StatusRows.Source {
+        @Override
+        public void addStatusLineListener(Consumer<GridSnapshot> listener) {
+            session.addStatusLineListener(listener);
+        }
+
+        @Override
+        public void removeStatusLineListener(Consumer<GridSnapshot> listener) {
+            session.removeStatusLineListener(listener);
+        }
+
+        @Override
+        public void addCommandLineRowsListener(Consumer<Integer> listener) {
+            session.addCommandLineRowsListener(listener);
+        }
+
+        @Override
+        public void removeCommandLineRowsListener(Consumer<Integer> listener) {
+            session.removeCommandLineRowsListener(listener);
+        }
+
+        @Override
+        public int commandLineRows() {
+            return session.commandLineRows();
+        }
+
+        @Override
+        public GridSnapshot statusLine(int window) {
+            return session.statusLine(window);
+        }
+
+        @Override
+        public void setStatusLineWidthAsync(int window, int columns) {
+            session.setStatusLineWidthAsync(window, columns);
         }
     }
 

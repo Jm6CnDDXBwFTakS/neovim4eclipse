@@ -666,8 +666,21 @@ value of a key no code asks for, unread, so a user's old setting does nothing an
 
 ## The status line in the editor
 
-Each attached code editor draws its Neovim window's status line in a row under its text
+Each code editor draws its Neovim window's status line in a row under its text
 (`editor/StatusLineRow`), as Neovim lays out its screen and as a page editor's pane does.
+
+- **Every editor, not only the attached one:** only the editor with the keyboard has a controller,
+  and the attach manager closes it when another editor is attached. So the rows live in
+  `editor/StatusRows`, one per text widget for the widget's lifetime: the next controller of the
+  same editor takes the row that is there, and every row hears the lines Neovim sends for every
+  window. Example: `notes.txt` and `ideas.txt` side by side, the keyboard in `notes.txt`; `ideas.txt`
+  keeps its line, in `StatusLineNC`, and its text does not move a row when the keyboard comes
+  back. A closed window's line is sent as one of no rows, and a window that travelled away
+  leaves its editor's token without an id: the row goes. Detach Neovim, a form page and a failed
+  attach take the editor's row away (`StatusRows.release`), as Neovim leaves that editor. When
+  the plug-in stops or restarts Neovim its window ids mean nothing any more: the old rows go
+  (after a crash, at the next attach), and each editor gets one again at its next attach. Eclipse's Toggle Split Editor gives one editor two
+  text widgets on one window, so both halves show that window's line.
 
 - **Where:** the `StyledText`'s bottom margin, one line higher while a line is shown, with a
   `GridCanvas` over it as the widget's child. A margin is not text: Eclipse draws and scrolls no

@@ -109,6 +109,28 @@ t.test('send_all notifies eclipse_status_lines with every window\'s line', funct
   t.eq(true, all[1][2][1])
 end)
 
+-- An editor keeps its row while another has the keyboard (editor/StatusRows): when its window
+-- closes, a line of no rows takes the row away, since Neovim sends no line for it any more.
+t.test('a closed window\'s line is sent as none', function()
+  lines()
+  vim.o.laststatus = 2
+  local win = vim.api.nvim_open_win(vim.api.nvim_create_buf(true, false), false, { split = 'right' })
+  t.forget()
+  vim.api.nvim_win_close(win, true)
+  local sent = t.sent('eclipse_status_lines')
+  t.eq(1, #sent, 'one notification, at once')
+  t.eq({ { win, { false } } }, sent[1][1])
+end)
+
+t.test('a closed float sends nothing: it has no line', function()
+  lines()
+  local float = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false,
+    { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  t.forget()
+  vim.api.nvim_win_close(float, true)
+  t.eq(0, #t.sent('eclipse_status_lines'))
+end)
+
 -- Every tabpage shares Neovim's one screen, sized to the focused editor: a background editor's
 -- window is that wide. Its row says how wide its editor is (set_width), and the line fits that.
 t.test('a window that is not current is fitted to the width its editor reported', function()

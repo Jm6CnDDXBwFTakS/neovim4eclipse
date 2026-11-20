@@ -7,8 +7,13 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.wait
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.jface.preference.IPreferenceStore;
+import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.ui.IEditorReference;
+import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -74,9 +79,14 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
      * {@code null} when none is shown.
      */
     private String statusRowText(int window) {
-        Rectangle area = widget.getClientArea();
-        int commandLine = StatusLineRow.COMMAND_LINE_ROWS * widget.getLineHeight();
-        for (Control child : widget.getChildren()) {
+        return statusRowText(widget, window);
+    }
+
+    /** {@link #statusRowText(int)} in editor widget {@code text}, which may be another editor's. */
+    private static String statusRowText(StyledText text, int window) {
+        Rectangle area = text.getClientArea();
+        int commandLine = StatusLineRow.COMMAND_LINE_ROWS * text.getLineHeight();
+        for (Control child : text.getChildren()) {
             if (child instanceof GridCanvas canvas && StatusLineRow.isRow(canvas) && canvas.isVisible() && canvas.grid() != null
                     && canvas.grid().window() == window && canvas.grid().height() == 1
                     && canvas.getBounds().y + canvas.getBounds().height == area.height - commandLine) {
@@ -115,6 +125,45 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
             }, () -> "; the row reads " + statusRowText(window) + ", margin " + widget.getBottomMargin());
         } finally {
             SessionProbe.lua(session, "vim.cmd('set laststatus=2') return 0");
+        }
+    }
+
+    /**
+     * Two editors side by side ({@code :vsplit}, a second editor on test.txt in a stack of its own):
+     * each shows its own window's status line, the one in the background too. Neovim draws only
+     * the focused editor's screen, so the background editor's row lives on the lines Neovim sends
+     * for every window ({@code eclipse_status_lines}).
+     */
+    @Test
+    void anEditorBesideTheFocusedOneShowsItsStatusLineToo() throws Exception {
+        SessionProbe.lua(session, "vim.cmd('set laststatus=2') return 0");
+        int first = ((Number) SessionProbe.lua(session, "return vim.api.nvim_get_current_win()")).intValue();
+        IWorkbenchPage page = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
+        session.commandAsync("vsplit");
+        settle();
+        try {
+            waitUntil("the clone of :vsplit", TIMEOUT_MS, () -> page.getActiveEditor() != editor
+                    && page.getActiveEditor() instanceof ITextEditor);
+            ITextEditor clone = (ITextEditor) page.getActiveEditor();
+            waitForAttach(clone, "the clone of :vsplit");
+            settle();
+            int second = ((Number) SessionProbe.lua(session, "return vim.api.nvim_get_current_win()")).intValue();
+            StyledText cloneText = widgetOf(clone);
+            waitUntil("both editors' status rows naming test.txt", TIMEOUT_MS, () -> {
+                settle();
+                String focused = statusRowText(cloneText, second);
+                String background = statusRowText(widget, first);
+                return focused != null && focused.contains("test.txt") && background != null
+                        && background.contains("test.txt");
+            }, () -> "; the clone's row (window " + second + ") reads " + statusRowText(cloneText, second)
+                    + ", the background editor's (window " + first + ") " + statusRowText(widget, first));
+        } finally {
+            for (IEditorReference reference : page.getEditorReferences()) {
+                if (reference.getEditor(false) != editor) {
+                    page.closeEditors(new IEditorReference[] { reference }, false);
+                }
+            }
+            settle();
         }
     }
 

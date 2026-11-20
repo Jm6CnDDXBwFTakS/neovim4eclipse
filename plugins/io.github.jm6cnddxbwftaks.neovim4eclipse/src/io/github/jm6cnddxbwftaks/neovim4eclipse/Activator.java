@@ -27,6 +27,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.HealthCheck;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ClipboardBridge;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.EditorAttachManager;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimEditorController;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimPageEditor;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.NeovimPageOpener;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ProjectFolderExit;
@@ -303,6 +304,8 @@ public class Activator extends AbstractUIPlugin {
     private synchronized void shutdownSession() {
         if (session != null) {
             session.shutdown();
+            // Background editors' status rows showed this Neovim's windows (editor/StatusRows).
+            NeovimEditorController.releaseStatusRows(session);
             session = null;
         }
     }
