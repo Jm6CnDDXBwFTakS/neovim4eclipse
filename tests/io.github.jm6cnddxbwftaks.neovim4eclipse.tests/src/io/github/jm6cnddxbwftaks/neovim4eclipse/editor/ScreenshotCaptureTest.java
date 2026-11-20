@@ -26,6 +26,8 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.PicturesFolder;
+
 /**
  * Takes the screenshots for the Eclipse Marketplace listing and the README, so they can be taken
  * again after the UI changes instead of by hand. Not a test, though named like one (Surefire runs
@@ -163,7 +165,9 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
                 }
             }
             fontsBefore = PictureFont.useInEditors(); // as in the demo, legible when scaled down
-            shop = JavaProjects.create(PROJECT, PROJECT);
+            // Its folder under the pictures' folder in /tmp, as the demo's: the status lines show the
+            // files' paths, which must not lead into the home folder (gallery/PicturesFolder).
+            shop = JavaProjects.create(PROJECT, PROJECT, PicturesFolder.root().resolve(PROJECT));
             JavaProjects.addClass(shop, PROJECT, "Order.java", ORDER);
             JavaProjects.addClass(shop, PROJECT, "Receipt.java", RECEIPT);
             IFile invoice = JavaProjects.addClass(shop, PROJECT, "Invoice.java", INVOICE);

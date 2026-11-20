@@ -32,11 +32,26 @@ final class JavaProjects {
 
     /** A new Java project {@code name} (an old one of that name is deleted first) with the source package {@code pkg}. */
     static IProject create(String name, String pkg) throws CoreException {
+        return create(name, pkg, null);
+    }
+
+    /**
+     * {@link #create(String, String)} with the project's folder at {@code location} instead of in the
+     * workspace ({@code null}: in the workspace). Example: the demo's project under the pictures'
+     * folder in {@code /tmp}, so that no path a picture shows leads into the home folder.
+     */
+    static IProject create(String name, String pkg, java.nio.file.Path location) throws CoreException {
         IProject p = ResourcesPlugin.getWorkspace().getRoot().getProject(name);
         if (p.exists()) {
             p.delete(true, true, null);
         }
-        p.create(null);
+        if (location == null) {
+            p.create(null);
+        } else {
+            IProjectDescription where = ResourcesPlugin.getWorkspace().newProjectDescription(name);
+            where.setLocation(org.eclipse.core.runtime.Path.fromOSString(location.toString()));
+            p.create(where, null);
+        }
         p.open(null);
         IFolder src = p.getFolder("src");
         src.create(true, true, null);

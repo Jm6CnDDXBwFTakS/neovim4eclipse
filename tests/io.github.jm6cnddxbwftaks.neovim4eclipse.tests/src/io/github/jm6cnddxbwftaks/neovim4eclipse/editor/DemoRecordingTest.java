@@ -38,6 +38,9 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.PicturesFolder;
+
 /**
  * Records the README's demo: a Java file edited through Neovim (ciw, a macro, {@code :%s},
  * {@code gd}, content assist in insert mode, a split, {@code :e!}), one picture after every key,
@@ -61,11 +64,12 @@ class DemoRecordingTest extends EndToEndTestBase {
     /**
      * The window size. This wide, the status bar keeps the plug-in's mode label whole while a macro
      * records ("INSERT rec @q"): JFace keeps a third of the status line for Eclipse's messages and
-     * shrinks the last item, the mode label, first. This tall, the editor shows the file's 24 lines
-     * (23, and one more once content assist adds it) in {@link PictureFont#FONT} at {@link PictureFont#POINTS}.
+     * shrinks the last item, the mode label, first. This tall, the editor shows the file's 22 lines
+     * (23 once content assist adds one), its status line and Neovim's {@code :} row under them, in
+     * {@link PictureFont#FONT} at {@link PictureFont#POINTS}.
      */
     private static final int WIDTH = 1100;
-    private static final int HEIGHT = 700;
+    private static final int HEIGHT = 748;
 
     /**
      * The typing rhythm: after a key, the picture stays a random time between these, in
@@ -168,7 +172,10 @@ class DemoRecordingTest extends EndToEndTestBase {
                 page.hideView(view);
             }
             fontsBefore = PictureFont.useInEditors(); // the editor and the captions in one font
-            demo = JavaProjects.create("demo", "demo"); // a Java project: content assist needs its build path
+            // A Java project (content assist needs its build path), its folder under the pictures'
+            // folder in /tmp: the status line shows the file's path, which must not lead into the
+            // home folder (the GIF is public; gallery/PicturesFolder).
+            demo = JavaProjects.create("demo", "demo", PicturesFolder.root().resolve("demo"));
             IFile file = JavaProjects.addClass(demo, "demo", "Greeter.java", SOURCE);
             opened = IDE.openEditor(page, file, JAVA_EDITOR, true);
             if (!(opened instanceof ITextEditor java)) {
@@ -180,7 +187,9 @@ class DemoRecordingTest extends EndToEndTestBase {
             // A clean start, which the last picture comes back to: no search left from an earlier
             // run (the pictures' Neovim keeps its history under pictures.home), and Eclipse's
             // build of the new Java project done, so no "Building" shows in the status bar.
-            session.commandAsync("let @/ = '' | nohlsearch");
+            // Through the API, not typed: a typed line would stay on Neovim's ':' row, in the first
+            // picture and so in every loop.
+            SessionProbe.lua(session, "vim.fn.setreg('/', '') vim.cmd.nohlsearch() return 0");
             waitUntil("the workspace build", TIMEOUT_MS, JavaProjects::buildDone);
             settle();
             captionTop = captionTop(text);
@@ -268,7 +277,7 @@ class DemoRecordingTest extends EndToEndTestBase {
         waitUntil("the file reverted", TIMEOUT_MS, () -> doc.get().equals(SOURCE));
         // The last search's matches stay highlighted ('hlsearch'); the first picture has none, so
         // they go quietly, through the API, for the loop to close without a jump.
-        session.commandAsync("nohlsearch");
+        SessionProbe.lua(session, "vim.cmd.nohlsearch() return 0"); // not typed: see record()
         caption.setLength(0);
         picture(folder, STEP_MS); // the same as the first picture
 
@@ -341,8 +350,13 @@ class DemoRecordingTest extends EndToEndTestBase {
             picture(folder, after(key));
         }
         pressEnter(text);
-        expectCommandLine("");
-        settle();
+        // Not asked of Neovim (expectCommandLine): the line's run may change the buffer, and Neovim's
+        // change waits for this UI thread (BufferSynchronizer) while an asking UI thread would wait
+        // for Neovim. The line's end comes as a notification, read without asking.
+        waitUntil("the line closed", TIMEOUT_MS, () -> {
+            settle();
+            return !session.commandLineOpen();
+        });
         caption.append('⏎');
         picture(folder, after('⏎'));
     }
