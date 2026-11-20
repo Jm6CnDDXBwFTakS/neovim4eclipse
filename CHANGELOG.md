@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.2.31] - 2026-11-20
+
 ### Changed
 
 - For contributors: `releng/tools/javarelease/JavaUpgrade.java` raises the Java release the plug-in
