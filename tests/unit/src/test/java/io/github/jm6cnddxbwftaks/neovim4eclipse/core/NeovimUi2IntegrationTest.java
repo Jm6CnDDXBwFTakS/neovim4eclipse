@@ -269,9 +269,11 @@ class NeovimUi2IntegrationTest {
      */
     @Test
     void repeatedLongOutputShowsAgainWithCmdheightZero() throws Exception {
-        try (NeovimSession s = start("--clean", "--cmd", "set cmdheight=0",
-                "--cmd", "nnoremap <F2> <Cmd>echo \"one\\ntwo\\nthree\"<CR>", "--cmd", "nnoremap <F3> <Cmd>echo 'hi'<CR>")) {
+        try (NeovimSession s = start("--clean", "--cmd", "set cmdheight=0")) {
             waitFor(() -> s.commandLineRows() == 0, "no row for the line");
+            // Set here, not with --cmd: on Windows a program's arguments lose a " inside them.
+            s.lua("vim.keymap.set('n', '<F2>', '<Cmd>echo join([\"one\", \"two\", \"three\"], nr2char(10))<CR>')"
+                    + " vim.keymap.set('n', '<F3>', [[<Cmd>echo 'hi'<CR>]])");
             List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
             s.addFloatingWindowListener(reports::add);
             for (int round = 1; round <= 2; round++) {
