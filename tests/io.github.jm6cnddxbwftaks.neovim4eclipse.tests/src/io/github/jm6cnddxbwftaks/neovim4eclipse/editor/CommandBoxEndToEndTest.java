@@ -3,6 +3,7 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.escape;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,7 +24,6 @@ import org.eclipse.swt.dnd.Clipboard;
 import org.eclipse.swt.dnd.TextTransfer;
 import org.eclipse.swt.dnd.Transfer;
 import org.eclipse.swt.widgets.Event;
-import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IURIEditorInput;
 import org.eclipse.ui.ide.IDE;
@@ -35,12 +35,15 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 
 /**
- * The {@code :} box ({@link CommandLineBox}) the whole way: {@code :} typed in the editor opens it,
- * the command is typed into it, Enter runs it in Eclipse ({@link HostCommands}) or in Neovim.
- * Covers {@code :e!}, where {@code :e} looks for files, and command names and abbreviations.
+ * Neovim's command line the whole way: {@code :} typed in the editor opens it, ui2 draws it over
+ * the editor's last row, the command goes in as keys or a paste while the editor's widget keeps
+ * the keyboard, and Enter runs it, in Neovim or, through Neovim's hooks, in Eclipse
+ * ({@link HostCommands}). Covers {@code :e!}, where {@code :e} looks for files, and command names
+ * and abbreviations.
  *
- * <p>Errors from Eclipse's side ("Can't find file") go to the editor's message line, read back by
- * {@link #messageText}; errors from Neovim's side arrive as the session's status message.
+ * <p>The line is read back from Neovim ({@link #commandLine}), and messages from ui2's windows
+ * ({@link #shownText}): both Neovim's own and the plug-in's, which go through Neovim
+ * ({@code NeovimSession.echoAsync}).
  */
 class CommandBoxEndToEndTest extends EndToEndTestBase {
 
@@ -60,8 +63,6 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         try {
             test.run();
         } finally {
-            // Settled first: SessionProbe waits on the UI thread, and Neovim's line events for the
-            // test's last command also need the UI thread; asked in between, each waits for the other.
             settle();
             SessionProbe.lua(session, "pcall(vim.keymap.del, 'n', '" + lhs + "')");
         }
@@ -83,41 +84,27 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         }
     }
 
-    /** Waits for the box to open (from Neovim's command line) reading {@code text}, and returns it. */
-    private Text boxReading(String text) {
-        waitUntil("the box to open with " + text, TIMEOUT_MS, () -> {
-            Text box = textChildOf(widget);
-            return box != null && text.equals(box.getText());
-        }, () -> {
-            Text box = textChildOf(widget);
-            return "; the box " + (box == null ? "is closed" : "reads " + box.getText());
-        });
-        Text box = textChildOf(widget);
-        UiTestSupport.requireKeyboardFocus(box, TIMEOUT_MS);
-        return box;
-    }
-
-    private static void pressEnter(Text box) {
-        Event enter = new Event();
-        enter.keyCode = SWT.CR;
-        enter.character = SWT.CR;
-        enter.doit = true;
-        box.notifyListeners(SWT.KeyDown, enter);
+    /**
+     * Puts {@code text} into Neovim's open command line as a paste, and waits until the line reads
+     * {@code expected}. Example: with {@code :} open, {@code paste("echo", ":echo")}.
+     */
+    private void paste(String text, String expected) {
+        session.pasteAsync(text);
+        expectCommandLine(expected);
     }
 
     /**
-     * Ex mode ({@code gQ}): a click in the editor keeps the box, its line and the focus, and does not
-     * reach Neovim's line. Before, the click sent {@code <C-c>}, which Neovim ignores in Ex mode, and
-     * closed the box over the line Neovim kept: the user typed blind. Sent to Neovim, the click also
-     * moved the line's cursor to its start ({@code :ho 1ec}). {@code :vi} leaves Ex mode.
+     * Ex mode ({@code gQ}): a click in the editor keeps Neovim's line and the editor's focus. Before,
+     * the click sent {@code <C-c>}, which Neovim ignores in Ex mode, and closed the line Eclipse
+     * showed over the line Neovim kept: the user typed blind. Sent to Neovim, the click also moved
+     * the line's cursor to its start ({@code :ho 1ec}). {@code :vi} leaves Ex mode.
      */
     @Test
     void aClickInTheEditorKeepsExModesLine() {
         type(widget, "gQ");
         try {
-            Text box = boxReading(":");
-            box.insert("echo");
-            boxReading(":echo");
+            expectCommandLine(":");
+            paste("echo", ":echo");
 
             Event click = new Event();
             click.button = 1;
@@ -125,11 +112,10 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
             click.y = 5;
             widget.notifyListeners(SWT.MouseDown, click);
             settle();
-            box = boxReading(":echo"); // still open, with the focus
+            expectCommandLine(":echo"); // still open, its cursor still at the end
 
-            box.insert(" 1");
-            boxReading(":echo 1");
-            pressEnter(box);
+            paste(" 1", ":echo 1");
+            pressEnter(widget);
             waitUntil("the command run", TIMEOUT_MS,
                     () -> "echo 1".equals(SessionProbe.lua(session, "return vim.fn.histget(':', -1)")),
                     () -> "; last command " + SessionProbe.lua(session, "return vim.fn.histget(':', -1)"));
@@ -143,80 +129,71 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * The toolbar button switched to Eclipse mode with the box open: the box goes, and Neovim's line
-     * with it (Neovim is in normal mode again). Before, the box stayed, as Neovim's views of the line
-     * were no longer passed to it. Back in Neovim mode, {@code :} opens it as usual.
+     * The toolbar button switched to Eclipse mode with a command line open: Neovim's line goes
+     * (Neovim is in normal mode again), as the keys no longer reach it. Back in Neovim mode,
+     * {@code :} opens it as usual.
      */
     @Test
-    void eclipseModeClosesAnOpenBox() {
+    void eclipseModeClosesAnOpenLine() {
         NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
-        type(widget, ':');
-        boxReading(":");
+        openCommandLine(widget, "");
         try {
             controller.setNeovimModeActive(false);
-            assertNull(textChildOf(widget), "the box is gone");
             waitUntil("Neovim's line abandoned", TIMEOUT_MS, () -> "n".equals(session.getMode()),
                     () -> "; mode " + session.getMode());
         } finally {
             controller.setNeovimModeActive(true);
         }
         settle();
-        type(widget, ':');
-        Text box = boxReading(":");
-        box.insert("s/alpha/omega/");
-        boxReading(":s/alpha/omega/");
-        pressEnter(box);
+        runCommandLine(widget, "s/alpha/omega/");
         expectText("omega\nbeta\ngamma\n");
     }
 
-    /** {@code nnoremap <Space>s :%s/}: the box opens with Neovim's text so far. */
+    /** {@code nnoremap <Space>s :%s/}: Neovim's line opens with the mapping's text, and the rest goes after it. */
     @Test
-    void aMappingWithTextPrefillsTheBox() throws Exception {
+    void aMappingWithTextPrefillsTheLine() throws Exception {
         withMapping("<Space>s", ":%s/", () -> {
             type(widget, " s");
-            Text box = boxReading(":%s/");
-            box.insert("a/A/g");
-            pressEnter(box);
+            expectCommandLine(":%s/");
+            paste("a/A/g", ":%s/a/A/g");
+            pressEnter(widget);
             expectText("AlphA\nbetA\ngAmmA\n");
         });
     }
 
     /**
-     * {@code nnoremap <Space>d d/}: Neovim's search line belongs to the {@code d} operator, so the box
-     * answers that line instead of starting a new search, and the operator deletes up to the match.
+     * {@code nnoremap <Space>d d/}: Neovim's search line belongs to the {@code d} operator, so the
+     * pattern typed answers that line instead of starting a new search, and the operator deletes up
+     * to the match.
      */
     @Test
     void aSearchInsideAMappedOperatorIsAnswered() throws Exception {
         withMapping("<Space>d", "d/", () -> {
             type(widget, " d");
-            Text box = boxReading("/");
-            box.insert("gamma");
-            pressEnter(box);
+            expectCommandLine("/");
+            paste("gamma", "/gamma");
+            pressEnter(widget);
             expectText("gamma\n");
         });
     }
 
-    /** {@code d/} typed at full speed: Neovim's search line belongs to {@code d}, and the box answers it. */
+    /** {@code d/} typed at full speed: Neovim's search line belongs to {@code d}, and the pattern answers it. */
     @Test
     void aSearchAfterAnOperatorTypedFastIsAnswered() throws Exception {
         type(widget, "ggd/");
-        Text box = boxReading("/");
-        box.insert("gamma");
-        pressEnter(box);
+        expectCommandLine("/");
+        paste("gamma", "/gamma");
+        pressEnter(widget);
         expectText("gamma\n");
     }
 
-    /** Esc in a box that took over Neovim's search line closes that line too: the next key is a command again. */
+    /** Esc in Neovim's search line closes it: the next key is a command again. */
     @Test
     void escapeLeavesNeovimsSearchLine() throws Exception {
         withMapping("<Space>d", "d/", () -> {
             type(widget, " d");
-            Text box = boxReading("/");
-            Event esc = new Event();
-            esc.keyCode = SWT.ESC;
-            esc.character = SWT.ESC;
-            esc.doit = true;
-            box.notifyListeners(SWT.KeyDown, esc);
+            expectCommandLine("/");
+            escape(widget);
             waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
             type(widget, "x");
             expectText("lpha\nbeta\ngamma\n");
@@ -224,83 +201,43 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Tab in the {@code :} box, the whole way: Neovim completes {@code :e} names in the window's
-     * folder, which is the project's root ({@code :lcd}, set when the editor is attached), and Enter
-     * opens the completed file.
+     * Tab on Neovim's line, the whole way: Neovim completes {@code :e} names in the window's folder,
+     * which is the project's root ({@code :lcd}, set when the editor is attached), and Enter opens
+     * the completed file. The Tab goes to Neovim as a key; Eclipse does not move the focus with it.
      */
     @Test
     void tabCompletesAFileNameForEditAndEnterOpensIt() throws Exception {
         createFile("other.txt", "other\n");
-        Text box = openBox(widget, "e ot");
+        openCommandLine(widget, "e ot");
 
-        Event tab = new Event();
-        tab.detail = SWT.TRAVERSE_TAB_NEXT;
-        tab.keyCode = SWT.TAB;
-        tab.character = SWT.TAB;
-        tab.doit = true;
-        box.notifyListeners(SWT.Traverse, tab);
-        waitUntil("Tab to complete the name", TIMEOUT_MS, () -> ":e other.txt".equals(box.getText()),
-                () -> "; the box reads " + box.getText());
+        type(widget, '\t');
+        expectCommandLine(":e other.txt");
 
-        Event enter = new Event();
-        enter.keyCode = SWT.CR;
-        enter.character = SWT.CR;
-        enter.doit = true;
-        box.notifyListeners(SWT.KeyDown, enter);
+        pressEnter(widget);
         waitUntil("other.txt to open", TIMEOUT_MS, () -> activeEditorIs("other.txt"));
         page().closeEditor(page().getActiveEditor(), false);
     }
 
-    // ---- Output above a prompt of Neovim's ----
-
-    /** The output popup inside {@code parent}: a {@link StyledText} below the editor's own widget. */
-    private static StyledText outputPopupIn(org.eclipse.swt.widgets.Composite parent) {
-        for (org.eclipse.swt.widgets.Control child : parent.getChildren()) {
-            if (child instanceof StyledText text && !text.isDisposed()) {
-                return text;
-            }
-            if (child instanceof org.eclipse.swt.widgets.Composite composite) {
-                StyledText found = outputPopupIn(composite);
-                if (found != null) {
-                    return found;
-                }
-            }
-        }
-        return null;
-    }
+    // ---- Output of a command ----
 
     /**
-     * {@code :w !sort} shows the text in the output popup, and Neovim then asks for a key itself
-     * ({@code :!cmd} does not), which the {@code :} box shows. "Press any key to continue" appears
-     * once, in the box: the popup leaves out its own prompt line while the box takes the keys. One
-     * key closes both and changes nothing.
+     * {@code :w !sort} shows the command's output in Neovim's own windows (ui2's message window or
+     * pager), and changes nothing in the file.
      *
      * <p>{@code sort} rather than {@code cat}: Windows has a {@code sort} command but no {@code cat}
      * (a shell started from Git Bash finds Git's {@code cat}, one started from PowerShell does not).
      * The lines are already in order, so {@code sort} gives them back unchanged on every system.
      */
     @Test
-    void wBangCmdShowsItsOutputAboveOnePrompt() {
-        runInBox(widget, "w !sort");
+    void wBangCmdShowsItsOutput() {
+        runCommandLine(widget, "w !sort");
 
-        waitUntil("the output and Neovim's prompt", TIMEOUT_MS, () -> {
-            StyledText popup = outputPopupIn(widget);
-            Text box = textChildOf(widget);
-            return popup != null && popup.getText().contains("gamma")
-                    && box != null && box.getText().equals("Press any key to continue");
-        }, () -> "; popup " + (outputPopupIn(widget) == null ? "none" : "\"" + outputPopupIn(widget).getText() + "\"")
-                + ", box " + (textChildOf(widget) == null ? "none" : "\"" + textChildOf(widget).getText() + "\""));
-        assertEquals(":w !sort\nalpha\nbeta\ngamma", outputPopupIn(widget).getText(), "no prompt line of its own");
-
-        Event key = new Event();
-        key.character = 'x';
-        key.keyCode = 'x';
-        key.doit = true;
-        textChildOf(widget).notifyListeners(SWT.KeyDown, key);
-
-        waitUntil("both to close", TIMEOUT_MS, () -> outputPopupIn(widget) == null && textChildOf(widget) == null);
+        expectShown("alpha\nbeta\ngamma");
+        // ui2 has no "Press ENTER" prompt of its own; Esc leaves whatever window it opened.
+        escape(widget);
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
         settle();
-        assertEquals("alpha\nbeta\ngamma\n", document.get(), "the key answered the prompt, nothing else");
+        assertEquals("alpha\nbeta\ngamma\n", document.get(), "the command changed nothing");
     }
 
     // ---- Where :e looks ----
@@ -320,7 +257,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         ITextEditor nestedEditor = (ITextEditor) IDE.openEditor(page(), nested, TEXT_EDITOR, true);
         waitForAttach(nestedEditor, "src/Nested.txt");
 
-        runInBox(widgetOf(nestedEditor), "e root.txt");
+        runCommandLine(widgetOf(nestedEditor), "e root.txt");
 
         waitUntil("root.txt to open", TIMEOUT_MS, () -> activeEditorIs("root.txt"));
         ITextEditor opened = (ITextEditor) page().getActiveEditor();
@@ -340,7 +277,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         try {
             Files.writeString(outside, "outside\n", StandardCharsets.UTF_8);
 
-            runInBox(widget, "e " + outside);
+            runCommandLine(widget, "e " + outside);
 
             waitUntil("outside.txt to open", TIMEOUT_MS, () -> activeEditorIs("outside.txt"));
             IEditorPart opened = page().getActiveEditor();
@@ -365,15 +302,15 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         ITextEditor untitled = openUntitledFile();
         StyledText untitledWidget = widgetOf(untitled);
 
-        runInBox(untitledWidget, "e root.txt");
+        runCommandLine(untitledWidget, "e root.txt");
         waitUntil("root.txt to open", TIMEOUT_MS, () -> activeEditorIs("root.txt"),
-                () -> "; the message line shows " + messageText(untitled));
+                () -> "; Neovim shows " + shownText());
         assertEquals("root\n", documentOf((ITextEditor) page().getActiveEditor()).get(), "the project's root.txt");
         page().closeEditor(page().getActiveEditor(), false);
 
         page().activate(untitled);
         waitForAttach(untitled, "the untitled file");
-        runInBox(untitledWidget, "e " + project.getFile("root.txt").getLocation().toOSString());
+        runCommandLine(untitledWidget, "e " + project.getFile("root.txt").getLocation().toOSString());
         waitUntil("root.txt to open by its absolute path", TIMEOUT_MS, () -> activeEditorIs("root.txt"));
         page().closeAllEditors(false);
         editor = null;
@@ -383,31 +320,26 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
      * {@code :vimgrep} into files without an editor or a buffer yet: its first match's editor opens,
      * and {@code :cnext} opens the next one's. {@code :vimgrep} makes those buffers without
      * {@code BufNew}, so before, no editor opened (found on macOS, any system). Its
-     * {@code (1 of 2): ...} shows in the opened editor's message line, as on Neovim's own screen; its
-     * progress line (the file it is searching, a message of its own) is not shown, so no output popup
-     * opens and closes again on the jump.
+     * {@code (1 of 2): ...} shows in Neovim's line, as on Neovim's own screen.
      */
     @Test
-    void vimgrepShowsItsFirstMatchInTheMessageLine() throws Exception {
+    void vimgrepShowsItsFirstMatchInNeovimsLine() throws Exception {
         project.getFolder("vg").create(true, true, null);
         createFile("vg/bar.txt", "class Bar\n");
         createFile("vg/foo.txt", "see Bar\n");
 
         try {
-            runInBox(widget, "vimgrep /Bar/ vg/*.txt");
+            runCommandLine(widget, "vimgrep /Bar/ vg/*.txt");
             waitUntil("bar.txt to open", TIMEOUT_MS, () -> activeEditorIs("bar.txt"),
-                    () -> "; the message line shows " + messageText(editor) + "; " + whereNeovimIs());
+                    () -> "; Neovim shows " + shownText() + "; " + whereNeovimIs());
             ITextEditor bar = (ITextEditor) page().getActiveEditor();
-            waitUntil("the first match in its message line", TIMEOUT_MS,
-                    () -> messageText(bar).equals("(1 of 2): class Bar"), () -> ": " + messageText(bar));
+            expectShown("(1 of 2): class Bar");
             waitForAttach(bar, "bar.txt");
 
-            runInBox(widgetOf(bar), "cnext");
+            runCommandLine(widgetOf(bar), "cnext");
             waitUntil("foo.txt to open", TIMEOUT_MS, () -> activeEditorIs("foo.txt"),
-                    () -> "; the message line shows " + messageText(bar) + "; " + whereNeovimIs());
-            ITextEditor foo = (ITextEditor) page().getActiveEditor();
-            waitUntil("the second match in its message line", TIMEOUT_MS,
-                    () -> messageText(foo).equals("(2 of 2): see Bar"), () -> ": " + messageText(foo));
+                    () -> "; Neovim shows " + shownText() + "; " + whereNeovimIs());
+            expectShown("(2 of 2): see Bar");
         } finally {
             // Also after a failure: the editors the jumps opened would stay for the next tests.
             page().closeAllEditors(false);
@@ -416,53 +348,46 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * A {@code :vimgrep} with no match shows only Vim's error, {@code E480: No match: nosuchword}: no
-     * output popup, and no line naming the file it searched (that progress line is a message of its
-     * own, which the plug-in leaves out). The manual test "A :vimgrep list through files with no
-     * editor", its last step.
+     * A {@code :vimgrep} with no match shows Vim's error, {@code E480: No match: nosuchword}, and
+     * opens no editor. The manual test "A :vimgrep list through files with no editor", its last
+     * step.
      */
     @Test
-    void vimgrepWithNoMatchShowsOnlyE480() throws Exception {
+    void vimgrepWithNoMatchShowsE480() throws Exception {
         project.getFolder("vg").create(true, true, null);
         createFile("vg/bar.txt", "class Bar\n");
 
-        runInBox(widget, "vimgrep /nosuchword/ vg/*.txt");
+        runCommandLine(widget, "vimgrep /nosuchword/ vg/*.txt");
 
-        waitUntil("E480 in the message line", TIMEOUT_MS,
-                () -> messageText(editor).equals("E480: No match: nosuchword"), () -> ": " + messageText(editor));
+        expectShown("E480: No match: nosuchword");
         settle();
-        assertNull(outputPopupIn(widget), "no output popup");
         assertSame(editor, page().getActiveEditor(), "no editor opened");
     }
 
     /**
-     * {@code :%s} typed in the box changes the document only on Enter. While it is typed, Neovim's
-     * {@code 'inccommand'} previews the substitution in its buffer and reports the preview as buffer
-     * events without a {@code changedtick}; the plug-in drops those (NotificationBridge), so the
-     * editor keeps its text and stays clean, also after Esc. Before, the preview reached Eclipse as
-     * real edits and stayed after Esc, for a save to write. After Enter the text changes, and
-     * {@code u} takes it back in one step. The manual test "A substitution changes the text only on
-     * Enter".
+     * {@code :%s} typed on Neovim's line changes the document only on Enter. While it is typed,
+     * Neovim's {@code 'inccommand'} previews the substitution in its buffer and reports the preview
+     * as buffer events without a {@code changedtick}; the plug-in drops those (NotificationBridge),
+     * so the editor keeps its text and stays clean, also after Esc. Before, the preview reached
+     * Eclipse as real edits and stayed after Esc, for a save to write. After Enter the text changes,
+     * and {@code u} takes it back in one step. The manual test "A substitution changes the text only
+     * on Enter".
      */
     @Test
     void aSubstitutionChangesTheDocumentOnlyOnEnter() throws Exception {
         assertEquals("nosplit", SessionProbe.lua(session, "return vim.o.inccommand"), "Neovim previews :s as it is typed");
-        Text box = openBox(widget, "%s/a/A/g");
+        openCommandLine(widget, "%s/a/A/g");
         settle(); // the preview's buffer events reached the session, had they been applied
         expectText("alpha\nbeta\ngamma\n");
         assertFalse(editor.isDirty(), "no change while the command is typed");
 
-        Event esc = new Event();
-        esc.keyCode = SWT.ESC;
-        esc.character = SWT.ESC;
-        esc.doit = true;
-        box.notifyListeners(SWT.KeyDown, esc);
+        escape(widget);
         waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
         settle();
         expectText("alpha\nbeta\ngamma\n");
         assertFalse(editor.isDirty(), "no change after Esc");
 
-        runInBox(widget, "%s/a/A/g");
+        runCommandLine(widget, "%s/a/A/g");
         expectText("AlphA\nbetA\ngAmmA\n");
         assertTrue(editor.isDirty(), "changed on Enter");
         type(widget, "u");
@@ -503,7 +428,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         document.replace(0, 0, "1");
         settle();
 
-        runInBox(widget, "wal");
+        runCommandLine(widget, "wal");
 
         waitUntil("both files saved", TIMEOUT_MS, () -> !editor.isDirty() && !second.isDirty());
         assertEquals("1alpha\nbeta\ngamma\n", fileText("test.txt"));
@@ -519,12 +444,10 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     void colonWSavesAndShowsVimsWrittenMessage() throws Exception {
         document.replace(0, 0, "1");
         settle();
-        runInBox(widget, "w");
+        runCommandLine(widget, "w");
         waitUntil("test.txt saved", TIMEOUT_MS, () -> !editor.isDirty());
         assertEquals("1alpha\nbeta\ngamma\n", fileText("test.txt"));
-        String expected = "\"test.txt\" 3L, 18B written";
-        waitUntil("the message " + expected, TIMEOUT_MS, () -> expected.equals(messageText(editor)),
-                () -> "; the message line shows " + messageText(editor));
+        expectShown("\"test.txt\" 3L, 18B written");
     }
 
     /**
@@ -538,7 +461,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         type(widget, "ggdd");
         expectText("beta\n");
 
-        runInBox(widget, "e!");
+        runCommandLine(widget, "e!");
         expectText("alpha\nbeta\ngamma\n");
         assertFalse(editor.isDirty());
 
@@ -546,16 +469,15 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         expectText("alpha\nbeta\n");
     }
 
-    // ---- Eclipse's shortcuts in the box ----
+    // ---- Eclipse's shortcuts on Neovim's line ----
 
     /**
-     * Eclipse's Paste (Ctrl+V, Cmd+V, Shift+Insert) with the box open pastes into Neovim's line, not
-     * into the file behind it.
+     * Eclipse's Paste (Ctrl+V, Cmd+V, Shift+Insert) with Neovim's line open pastes into that line
+     * ({@code CommandLineEditHandlers}), not into the file behind it.
      */
     @Test
-    void pasteWithTheBoxOpenPastesIntoTheLine() throws Exception {
-        type(widget, ':');
-        boxReading(":");
+    void pasteWithTheLineOpenPastesIntoTheLine() throws Exception {
+        openCommandLine(widget, "");
         Clipboard clipboard = new Clipboard(widget.getDisplay());
         try {
             // Not a :s, whose 'inccommand' preview would change the buffer before Enter.
@@ -565,42 +487,36 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
         }
 
         String beforePaste = clipboardText();
+        // The editor hears of the open line after Neovim reports it, and only then activates the
+        // Paste handler of its own (CommandLineEditHandlers): the report is waited for first.
+        settle();
         runCommand("org.eclipse.ui.edit.paste");
 
         // The system clipboard is shared: in a virtual machine with clipboard sharing, the host's
         // clipboard can replace "2delete" before the paste (CONTRIBUTING.md, "Tests on a virtual
         // machine"). The message says what the clipboard held, so that case is recognized at once.
-        waitUntil("the box to read :2delete", TIMEOUT_MS, () -> {
-            Text open = textChildOf(widget);
-            return open != null && ":2delete".equals(open.getText());
-        }, () -> {
-            Text open = textChildOf(widget);
-            return "; the box " + (open == null ? "is closed" : "reads " + open.getText())
-                    + "; the clipboard held \"" + beforePaste + "\" before the paste and holds \""
-                    + clipboardText() + "\" now";
-        });
-        Text box = textChildOf(widget);
+        String[] line = { "" };
+        waitUntil("Neovim's line to read :2delete", TIMEOUT_MS, () -> ":2delete".equals(line[0] = commandLine()),
+                () -> "; it reads \"" + line[0] + "\"; the clipboard held \"" + beforePaste
+                        + "\" before the paste and holds \"" + clipboardText() + "\" now");
         expectText("alpha\nbeta\ngamma\n"); // the file is untouched
-        pressEnter(box);
+        pressEnter(widget);
         expectText("alpha\ngamma\n");
     }
 
-    /** While the box has the focus, the Vim Ctrl keys are bound to Neovim: Ctrl+U clears Neovim's line. */
+    /** While Neovim's line is open, the Vim Ctrl keys are bound to Neovim: Ctrl+U clears the line. */
     @Test
-    void aVimCtrlKeyInTheBoxReachesNeovimsLine() throws Exception {
-        type(widget, ':');
-        Text box = boxReading(":");
-        box.insert("echo 1");
-        boxReading(":echo 1");
+    void aVimCtrlKeyReachesNeovimsLine() throws Exception {
+        openCommandLine(widget, "echo 1");
         waitUntil("Ctrl+U bound to Neovim", TIMEOUT_MS,
                 () -> VimCtrlKeys.commandId('u').equals(commandFor("CTRL+U")),
                 () -> "; Ctrl+U runs " + commandFor("CTRL+U"));
 
         runCommand(VimCtrlKeys.commandId('u'));
 
-        Text cleared = boxReading(":");
-        pressEnter(cleared); // an empty line closes without running anything
-        waitUntil("the box to close", TIMEOUT_MS, () -> textChildOf(widget) == null);
+        expectCommandLine(":");
+        pressEnter(widget); // an empty line closes without running anything
+        expectCommandLine("");
     }
 
     private static String commandFor(String keys) {

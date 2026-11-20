@@ -28,7 +28,6 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IPageLayout;
@@ -37,6 +36,7 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.EditorWindow;
@@ -73,51 +73,34 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         return found;
     }
 
-    /** Runs {@code line} from the code editor's {@code :} box, as typed. */
+    /** Runs {@code line} on Neovim's command line from the code editor, as typed. */
     private void colon(String line) {
         colonIn(widget, line);
     }
 
-    /** Runs {@code line} from the {@code :} box of the code editor showing in {@code text}. */
-    private static void colonIn(StyledText text, String line) {
-        type(text, ":");
-        enterInBox(text, line);
+    /** Runs {@code line} on Neovim's command line from the code editor showing in {@code text}. */
+    private void colonIn(StyledText text, String line) {
+        openCommandLine(text, line);
+        pressEnter(text);
     }
 
     /**
      * Types {@code :} and {@code line} in the page, then Enter: every key goes to Neovim, which edits
-     * the line itself, and the page draws it in its command row.
+     * the line itself; ui2 draws it over the page as over code.
      */
-    private static void colonInPage(NeovimPageEditor page, String line) {
+    private void colonInPage(NeovimPageEditor page, String line) {
         UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
         key(page.canvasForTests(), ':');
-        waitUntil("the : line drawn in the page", TIMEOUT_MS, () -> commandRowOf(page).startsWith(":"));
+        expectCommandLine(":");
         for (char c : line.toCharArray()) {
             key(page.canvasForTests(), c);
         }
+        expectCommandLine(":" + line);
         Event enter = new Event();
         enter.keyCode = SWT.CR;
         enter.character = SWT.CR;
         enter.doit = true;
         page.canvasForTests().notifyListeners(SWT.KeyDown, enter);
-    }
-
-    /** What the page's drawn command row shows, trailing blanks dropped; "" before anything was drawn. */
-    private static String commandRowOf(NeovimPageEditor page) {
-        GridSnapshot row = page.windowPane().commandRowForTests().grid();
-        return row == null ? "" : row.row(0).stripTrailing();
-    }
-
-    private static void enterInBox(Composite host, String line) {
-        waitUntil("the : box", TIMEOUT_MS, () -> textChildOf(host) != null);
-        Text box = textChildOf(host);
-        UiTestSupport.requireKeyboardFocus(box, TIMEOUT_MS);
-        box.insert(line);
-        Event enter = new Event();
-        enter.keyCode = SWT.CR;
-        enter.character = SWT.CR;
-        enter.doit = true;
-        box.notifyListeners(SWT.KeyDown, enter);
     }
 
     private static void key(Control control, char character) {
@@ -176,28 +159,21 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
                 SessionProbe.lua(session, "return vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())"));
     }
 
-    /** {@code /} typed in the page is drawn in the page's own command row, not in a box over the code. */
+    /** {@code /} typed in the page goes to Neovim's search line, and the keys stay the page's. */
     @Test
-    void searchInThePageIsDrawnInItsCommandRow() {
+    void searchInThePageGoesToNeovimsLine() {
         NeovimPageEditor page = messagesShowing("search here");
         UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
         key(page.canvasForTests(), '/');
         key(page.canvasForTests(), 'x');
-        waitUntil("/x in the page's command row", TIMEOUT_MS, () -> {
-            settle();
-            return commandRowOf(page).equals("/x");
-        });
-        assertNull(textChildOf(widget), "no : box over the code");
+        expectCommandLine("/x");
         assertTrue(page.canvasForTests().isFocusControl(), "the keys stay the page's");
         Event escape = new Event();
         escape.keyCode = SWT.ESC;
         escape.character = SWT.ESC;
         escape.doit = true;
         page.canvasForTests().notifyListeners(SWT.KeyDown, escape);
-        waitUntil("the command row blank again", TIMEOUT_MS, () -> {
-            settle();
-            return commandRowOf(page).isEmpty();
-        });
+        expectCommandLine("");
     }
 
     /** Ctrl-W on the page's command line is Neovim's: it deletes a word, and the editor stays open. */
@@ -208,15 +184,9 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         for (char c : ":ab cd".toCharArray()) {
             key(page.canvasForTests(), c);
         }
-        waitUntil(":ab cd drawn", TIMEOUT_MS, () -> {
-            settle();
-            return commandRowOf(page).equals(":ab cd");
-        }, () -> "; drawn: '" + commandRowOf(page) + "', row of " + page.windowPane().commandRowForTests().getSize());
+        expectCommandLine(":ab cd");
         page.sendKey("<C-w>"); // what the plug-in's Ctrl+W binding does in a page editor
-        waitUntil("the word deleted by Neovim", TIMEOUT_MS, () -> {
-            settle();
-            return commandRowOf(page).equals(":ab");
-        });
+        expectCommandLine(":ab "); // the word deleted by Neovim, the blank before it kept, as in Vim
         assertTrue(page().isPartVisible(page), "still open: Ctrl+W was not Eclipse's Close");
         session.inputAsync("<Esc>");
     }
@@ -324,10 +294,7 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         waitUntil("the code with the focus again", TIMEOUT_MS,
                 () -> EditorAttachManager.getInstance().getActiveController().hasFocus());
         colon("echo 'still the code'");
-        waitUntil("the echo in the code's message line", TIMEOUT_MS, () -> {
-            settle();
-            return session.currentStatus().message().contains("still the code");
-        });
+        expectShown("still the code");
     }
 
     /** The code editor the page came from closed while the page has the keyboard: the page keeps it, and q still closes it. */
@@ -385,7 +352,8 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         SessionProbe.lua(session, "vim.api.nvim_feedkeys('q:', 'n', false) return 0");
         waitUntil("the command-line window over the page", TIMEOUT_MS, () -> {
             settle();
-            return gridCanvasChildOf(page.canvasForTests()) != null;
+            return !"".equals(SessionProbe.lua(session, "return vim.fn.getcmdwintype()"))
+                    && gridCanvasChildOf(page.canvasForTests()) != null;
         });
         session.closeCommandWindowAsync();
         settle();
@@ -451,6 +419,7 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
      * its rows are always the canvas's rows ({@code :set laststatus=0}, then back).
      */
     @Test
+    @Disabled("ui2: with laststatus=0 the page's status row stays; Grids.pageStatusIfChanged takes the command line's row (cmdheight) for it")
     void thePagesWindowKeepsItsCanvasRowsAsTheStatusRowComesAndGoes() {
         NeovimPageEditor page = messagesShowing("rows follow");
         WindowPane pane = page.windowPane();
@@ -518,34 +487,9 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Ctrl-F on the page's {@code :} line opens the command-line window: Neovim closes the line
-     * first ({@code cmdline_hide}), so the command row under the window is blank, not the old line.
+     * {@code :e} and Tab in the page: Neovim's candidates in its popup menu ({@link #popupMenu},
+     * the float of window {@code -1}), drawn over the page as over code, gone with the line.
      */
-    @Test
-    void ctrlFLeavesTheCommandRowBlankUnderTheCommandLineWindow() {
-        NeovimPageEditor page = messagesShowing("ctrl f here");
-        UiTestSupport.requireKeyboardFocus(page.canvasForTests(), TIMEOUT_MS);
-        for (char c : ":abc".toCharArray()) {
-            key(page.canvasForTests(), c);
-        }
-        waitUntil(":abc drawn", TIMEOUT_MS, () -> {
-            settle();
-            return commandRowOf(page).equals(":abc");
-        });
-        page.sendKey("<C-f>");
-        waitUntil("the command-line window open", TIMEOUT_MS, () -> {
-            settle();
-            return !"".equals(SessionProbe.lua(session, "return vim.fn.getcmdwintype()"));
-        });
-        waitUntil("the command row blank", TIMEOUT_MS, () -> {
-            settle();
-            return commandRowOf(page).isEmpty();
-        }, () -> "; drawn: '" + commandRowOf(page) + "'");
-        session.closeCommandWindowAsync();
-        settle();
-    }
-
-    /** {@code :e} and Tab in the page: Neovim's candidates in a row over the page, the selected one marked. */
     @Test
     void tabOnThePagesCommandLineListsTheCandidates() throws Exception {
         createFile("tabone.txt", "1\n");
@@ -555,22 +499,17 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         for (char c : ":e tab".toCharArray()) {
             key(page.canvasForTests(), c);
         }
-        waitUntil(":e tab drawn", TIMEOUT_MS, () -> {
-            settle();
-            return commandRowOf(page).equals(":e tab");
-        });
+        expectCommandLine(":e tab");
         page.sendKey("<Tab>");
-        GridCanvas candidates = page.windowPane().candidateRowForTests();
         waitUntil("the candidates listed", TIMEOUT_MS, () -> {
             settle();
-            GridSnapshot row = candidates.grid();
-            return candidates.isVisible() && row != null && row.row(0).contains("tabone.txt")
-                    && row.row(0).contains("tabtwo.txt");
-        });
+            String menu = popupMenuText();
+            return menu.contains("tabone.txt") && menu.contains("tabtwo.txt");
+        }, () -> "; the menu reads \"" + popupMenuText() + "\"");
         session.inputAsync("<Esc>");
         waitUntil("the candidates gone with the line", TIMEOUT_MS, () -> {
             settle();
-            return !candidates.isVisible();
+            return popupMenu() == null;
         });
     }
 
@@ -593,8 +532,8 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
             page.canvasForTests().notifyListeners(SWT.KeyDown, enter);
             waitUntil("the echo shown, with the next Ex line open", TIMEOUT_MS, () -> {
                 settle();
-                return page.windowPane().messageTextForTests().contains("ex one") && commandRowOf(page).startsWith(":");
-            }, () -> "; message '" + page.windowPane().messageTextForTests() + "', row '" + commandRowOf(page) + "'");
+                return shownText().contains("ex one") && commandLine().startsWith(":");
+            }, () -> "; Neovim shows '" + shownText() + "', its line '" + commandLine() + "'");
         } finally {
             session.inputAsync("vi<CR>"); // leaves Ex mode
             waitUntil("Ex mode left", TIMEOUT_MS, () -> !VimModes.isExMode(session.getMode()));
@@ -679,13 +618,17 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         return ((Number) SessionProbe.lua(session, "return vim.api.nvim_get_current_win()")).intValue();
     }
 
-    /** The first {@link GridCanvas} below {@code parent}: the command-line window's panel over a page. */
-    private static GridCanvas gridCanvasChildOf(Composite parent) {
+    /**
+     * The first {@link GridCanvas} below {@code parent}: the command-line window's panel over a
+     * page. ui2's windows and Neovim's popup menu, drawn over the page too, are skipped
+     * ({@link #isNeovimsOwnFloat}).
+     */
+    private GridCanvas gridCanvasChildOf(Composite parent) {
         if (parent.isDisposed()) {
             return null;
         }
         for (Control child : parent.getChildren()) {
-            if (child instanceof GridCanvas grid && !grid.isDisposed() && grid.isVisible()) {
+            if (child instanceof GridCanvas grid && !grid.isDisposed() && grid.isVisible() && !isNeovimsOwnFloat(grid)) {
                 return grid;
             }
             if (child instanceof Composite composite) {

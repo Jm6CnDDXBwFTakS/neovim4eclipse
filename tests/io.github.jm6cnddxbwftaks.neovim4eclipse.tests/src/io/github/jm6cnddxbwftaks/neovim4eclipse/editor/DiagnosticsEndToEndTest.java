@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Eclipse's problems as Neovim diagnostics, in a plain text editor (no Java tooling): a problem
- * marker on the file reaches Neovim, Neovim's own {@code ]d} goes to it and the message line shows its
+ * marker on the file reaches Neovim, Neovim's own {@code ]d} goes to it and Neovim's line shows its
  * text, and the list follows the marker going away (the opt-out, read at start, is
  * {@code NeovimProblemsIntegrationTest}). A builder makes such markers;
  * the test makes one itself ({@code IResource.createMarker}), and the editor's annotation model shows
@@ -77,8 +77,7 @@ class DiagnosticsEndToEndTest extends EndToEndTestBase {
 
         waitUntil("the cursor on line 3", TIMEOUT_MS, () -> cursorLine() == 3, () -> "; it is on " + cursorLine());
         waitUntil("the caret on line 3", TIMEOUT_MS, () -> widget.getLineAtOffset(widget.getCaretOffset()) == 2);
-        waitUntil("the message", TIMEOUT_MS, () -> "gamma cannot be resolved".equals(messageText(editor)),
-                () -> "; the message line shows \"" + messageText(editor) + "\"");
+        expectShown("gamma cannot be resolved");
     }
 
     @Test

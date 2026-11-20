@@ -19,7 +19,6 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Pattern;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
@@ -49,8 +48,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
  * before closing. The editor's file is {@code test.txt}, {@code "alpha\nbeta\ngamma\n"};
  * each test makes it {@code "lpha\n..."} first ({@code 0x}), so the copy is told from the file.
  *
- * <p>Error checks come last in a test: Neovim shows an error of the write hook in two lines, which
- * opens the output popup, and that takes the keyboard focus.
+ * <p>Error checks come last in a test: Neovim shows an error of the write hook in two lines, in
+ * ui2's message window.
  */
 class OtherFileWriteEndToEndTest extends EndToEndTestBase {
 
@@ -79,9 +78,9 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         return answer.get();
     }
 
+    /** Waits until Neovim shows {@code expected} in its line (ui2, {@link #expectShown}). */
     private void expectMessage(String expected) {
-        waitUntil("the message " + expected, TIMEOUT_MS, () -> expected.equals(messageText(editor)),
-                () -> "; the message line shows " + messageText(editor));
+        expectShown(expected);
     }
 
     private void backToTheTestFile() {
@@ -117,7 +116,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     void aWriteUnderAnotherNameIsACopyAndTheEditorKeepsItsChanges() {
         List<String> dialogs = closeModalDialogsWhile(widget);
         change();
-        runInBox(widget, "w copy.txt");
+        runCommandLine(widget, "w copy.txt");
 
         expectMessage("\"copy.txt\" [New] 3L, 16B written");
         IFile copy = project.getFile("copy.txt");
@@ -127,7 +126,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertTrue(editor.isDirty(), "the editor's changes are still unsaved, as in Vim");
         assertEquals("test.txt", editor.getTitle());
 
-        runInBox(widget, "w"); // still a save of the editor's own file
+        runCommandLine(widget, "w"); // still a save of the editor's own file
         // The save goes through Eclipse a moment after Enter: wait for it, as for every outcome
         // (it failed on Windows pinned to one core when read at once).
         waitUntil("test.txt saved", TIMEOUT_MS, () -> !editor.isDirty() && CHANGED.equals(fileText("test.txt")),
@@ -144,7 +143,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         List<String> dialogs = closeModalDialogsWhile(widget);
         ITextEditor other = openInTheBackground(createFile("other.txt", "other\n"));
         change();
-        runInBox(widget, "w! other.txt");
+        runCommandLine(widget, "w! other.txt");
 
         expectMessage("\"other.txt\" 3L, 16B written");
         assertEquals(CHANGED, fileText("other.txt"));
@@ -161,7 +160,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         documentOf(other).replace(0, 1, ""); // unsaved changes, made without Neovim
         assertTrue(other.isDirty());
         change();
-        runInBox(widget, "w! unsaved.txt");
+        runCommandLine(widget, "w! unsaved.txt");
 
         waitUntil("the refusal", TIMEOUT_MS, () -> errmsg().contains("has unsaved changes"), () -> ": " + errmsg());
         assertEquals("\"unsaved.txt\" has unsaved changes in an Eclipse editor; save or close it first", errmsg());
@@ -175,7 +174,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         Path folder = Files.createTempDirectory("neovim4eclipse-copy");
         Path out = folder.resolve("out.txt");
         change();
-        runInBox(widget, "w " + out);
+        runCommandLine(widget, "w " + out);
 
         expectMessage("\"out.txt\" [New] 3L, 16B written");
         assertEquals(CHANGED, Files.readString(out));
@@ -188,7 +187,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         latin.setCharset("ISO-8859-1", null);
         latin.setContents(new ByteArrayInputStream("café\n".getBytes(StandardCharsets.ISO_8859_1)), true, false, null);
         ITextEditor opened = openExisting(latin);
-        runInBox(widgetOf(opened), "w latin-copy.txt");
+        runCommandLine(widgetOf(opened), "w latin-copy.txt");
 
         waitUntil("the copy", TIMEOUT_MS, () -> project.getFile("latin-copy.txt").exists());
         IFile copy = project.getFile("latin-copy.txt");
@@ -196,7 +195,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         try (var in = copy.getContents()) {
             assertArrayEquals("café\n".getBytes(StandardCharsets.ISO_8859_1), in.readAllBytes());
         }
-        assertEquals("\"latin-copy.txt\" [New] 1L, 5B written", messageText(opened));
+        expectShown("\"latin-copy.txt\" [New] 1L, 5B written");
     }
 
     /**
@@ -232,11 +231,11 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     @Test
     void aCopyIntoAMissingFolderNeedsPlusPlusP() {
         change();
-        runInBox(widget, "w ++p sub/deeper/copy.txt");
+        runCommandLine(widget, "w ++p sub/deeper/copy.txt");
         expectMessage("\"copy.txt\" [New] 3L, 16B written");
         assertEquals(CHANGED, fileText("sub/deeper/copy.txt"));
 
-        runInBox(widget, "w other/copy.txt");
+        runCommandLine(widget, "w other/copy.txt");
         waitUntil("E212", TIMEOUT_MS, () -> errmsg().startsWith("E212"), () -> ": " + errmsg());
         assertFalse(project.getFolder("other").exists());
     }
@@ -244,7 +243,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     @Test
     void someLinesGoToAnotherFile() {
         change();
-        runInBox(widget, "2,3w part.txt");
+        runCommandLine(widget, "2,3w part.txt");
         expectMessage("\"part.txt\" [New] 2L, 11B written");
         assertEquals("beta\ngamma\n", fileText("part.txt"));
         assertTrue(editor.isDirty());
@@ -253,14 +252,14 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     @Test
     void linesAreAppendedToAFileAndAMissingOneNeedsBang() {
         change();
-        runInBox(widget, "1w! >> log.txt");
+        runCommandLine(widget, "1w! >> log.txt");
         expectMessage("\"log.txt\" [New] 1L, 5B appended");
-        runInBox(widget, "3w >> log.txt");
+        runCommandLine(widget, "3w >> log.txt");
         expectMessage("\"log.txt\" 1L, 6B appended");
         assertEquals("lpha\ngamma\n", fileText("log.txt"));
         assertTrue(project.getFile("log.txt").isSynchronized(IResource.DEPTH_ZERO));
 
-        runInBox(widget, "w >> missing.txt");
+        runCommandLine(widget, "w >> missing.txt");
         waitUntil("E212", TIMEOUT_MS, () -> errmsg().startsWith("E212"), () -> ": " + errmsg());
         assertFalse(project.getFile("missing.txt").exists());
     }
@@ -270,7 +269,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         List<String> dialogs = closeModalDialogsWhile(widget);
         int bufnr = session.getAttachedBufnr();
         change();
-        runInBox(widget, "saveas sa.txt");
+        runCommandLine(widget, "saveas sa.txt");
 
         waitUntil("the editor on sa.txt", TIMEOUT_MS, () -> "sa.txt".equals(editor.getTitle()),
                 () -> "; it is " + editor.getTitle());
@@ -284,7 +283,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
 
         type(widget, "u");
         expectText("alpha\nbeta\ngamma\n"); // Neovim's undo history came along
-        runInBox(widget, "w");
+        runCommandLine(widget, "w");
         assertEquals("alpha\nbeta\ngamma\n", fileText("sa.txt"), "a later :w saves the new file");
         assertEquals(List.of(), dialogs);
     }
@@ -293,7 +292,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     void saveasOutsideTheWorkspace() throws Exception {
         Path out = Files.createTempDirectory("neovim4eclipse-saveas").resolve("out.txt");
         change();
-        runInBox(widget, "saveas " + out);
+        runCommandLine(widget, "saveas " + out);
 
         waitUntil("the editor on out.txt", TIMEOUT_MS, () -> "out.txt".equals(editor.getTitle()));
         assertEquals(CHANGED, Files.readString(out));
@@ -304,7 +303,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     void saveasToAFileOpenInAnotherEditorIsRefused() throws Exception {
         openInTheBackground(createFile("taken.txt", "taken\n"));
         change();
-        runInBox(widget, "saveas! taken.txt");
+        runCommandLine(widget, "saveas! taken.txt");
 
         waitUntil("the refusal", TIMEOUT_MS, () -> errmsg().startsWith("E139"), () -> ": " + errmsg());
         assertEquals("taken\n", fileText("taken.txt"));
@@ -331,12 +330,12 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         // Kept in Neovim, not spliced into later Lua as text: on Windows the name has backslashes,
         // which a quoted Lua string would read as escapes (C:\Users: "invalid escape sequence").
         SessionProbe.lua(session, "_G.neovim4eclipse_test_untitled = vim.api.nvim_buf_get_name(0)");
-        runInBox(untitledWidget, "call setline(1, 'hello')");
+        runCommandLine(untitledWidget, "call setline(1, 'hello')");
         expectText(untitled, "hello");
 
-        runInBox(untitledWidget, "w a.txt");
+        runCommandLine(untitledWidget, "w a.txt");
         waitUntil("the editor on a.txt", TIMEOUT_MS, () -> "a.txt".equals(untitled.getTitle()),
-                () -> "; it is " + untitled.getTitle() + ", the message line shows " + messageText(untitled));
+                () -> "; it is " + untitled.getTitle() + ", Neovim shows " + shownText());
         assertEquals(project.getFile("a.txt"), untitled.getEditorInput().getAdapter(IFile.class), "a workspace-file editor");
         assertEquals("hello", fileText("a.txt"));
         assertFalse(untitled.isDirty());
@@ -346,9 +345,9 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
                 () -> Boolean.TRUE.equals(SessionProbe.lua(session, "return vim.api.nvim_buf_get_name(0):match('a%.txt$') ~= nil"
                         + " and vim.fn.bufexists(_G.neovim4eclipse_test_untitled) == 0")));
 
-        runInBox(untitledWidget, "call setline(1, 'again')");
+        runCommandLine(untitledWidget, "call setline(1, 'again')");
         expectText(untitled, "again");
-        runInBox(untitledWidget, "w");
+        runCommandLine(untitledWidget, "w");
         waitUntil("a later :w to save a.txt", TIMEOUT_MS, () -> "again".equals(fileText("a.txt")));
         assertEquals(List.of(), dialogs);
         page().closeEditor(untitled, false);
@@ -375,12 +374,12 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
                     "the project selected, as a right-click selects it");
             ITextEditor untitled = openUntitledFile();
             StyledText untitledWidget = widgetOf(untitled);
-            runInBox(untitledWidget, "call setline(1, 'selected')");
+            runCommandLine(untitledWidget, "call setline(1, 'selected')");
             expectText(untitled, "selected");
 
-            runInBox(untitledWidget, "w c.txt");
+            runCommandLine(untitledWidget, "w c.txt");
             waitUntil("the editor on c.txt", TIMEOUT_MS, () -> "c.txt".equals(untitled.getTitle()),
-                    () -> "; it is " + untitled.getTitle() + ", the message line shows " + messageText(untitled));
+                    () -> "; it is " + untitled.getTitle() + ", Neovim shows " + shownText());
             assertEquals(other.getFile("c.txt"), untitled.getEditorInput().getAdapter(IFile.class),
                     "in the selected project");
             assertFalse(project.getFile("c.txt").exists(), "not beside the editor before it");
@@ -410,14 +409,14 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
             page().activate(editor);
             waitForAttach(editor, "test.txt");
 
-            runInBox(widget, "enew");
+            runCommandLine(widget, "enew");
             ITextEditor untitled = expectUntitledEditor();
             StyledText untitledWidget = widgetOf(untitled);
-            runInBox(untitledWidget, "call setline(1, 'new')");
+            runCommandLine(untitledWidget, "call setline(1, 'new')");
             expectText(untitled, "new");
-            runInBox(untitledWidget, "w e.txt");
+            runCommandLine(untitledWidget, "w e.txt");
             waitUntil("the editor on e.txt", TIMEOUT_MS, () -> "e.txt".equals(untitled.getTitle()),
-                    () -> "; it is " + untitled.getTitle() + ", the message line shows " + messageText(untitled));
+                    () -> "; it is " + untitled.getTitle() + ", Neovim shows " + shownText());
             assertEquals(project.getFile("e.txt"), untitled.getEditorInput().getAdapter(IFile.class),
                     "in the project of the editor :enew was typed in");
             assertFalse(other.getFile("e.txt").exists(), "not in the selected project");
@@ -440,15 +439,15 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         IFolder sub = project.getFolder("enew-lcd");
         sub.create(true, true, null);
         try {
-            runInBox(widget, "lcd enew-lcd"); // relative to the window's folder, the project's root
-            runInBox(widget, "enew");
+            runCommandLine(widget, "lcd enew-lcd"); // relative to the window's folder, the project's root
+            runCommandLine(widget, "enew");
             ITextEditor untitled = expectUntitledEditor();
             StyledText untitledWidget = widgetOf(untitled);
-            runInBox(untitledWidget, "call setline(1, 'local')");
+            runCommandLine(untitledWidget, "call setline(1, 'local')");
             expectText(untitled, "local");
-            runInBox(untitledWidget, "w f.txt");
+            runCommandLine(untitledWidget, "w f.txt");
             waitUntil("the editor on f.txt", TIMEOUT_MS, () -> "f.txt".equals(untitled.getTitle()),
-                    () -> "; it is " + untitled.getTitle() + ", the message line shows " + messageText(untitled));
+                    () -> "; it is " + untitled.getTitle() + ", Neovim shows " + shownText());
             assertEquals(sub.getFile("f.txt"), untitled.getEditorInput().getAdapter(IFile.class),
                     "in the folder :lcd chose");
             assertFalse(project.getFile("f.txt").exists(), "not in the project's root");
@@ -468,7 +467,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     /** The untitled editor's alternate file is the editor {@code :enew} came from: {@code Ctrl-^} goes back. */
     @Test
     void ctrlCaretInAnEnewEditorGoesBack() throws Exception {
-        runInBox(widget, "enew");
+        runCommandLine(widget, "enew");
         expectUntitledEditor();
         session.inputAsync("<C-^>");
         waitForAttach(editor, "test.txt, after Ctrl-^");
@@ -493,13 +492,12 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
             expectText("beta\ngamma\n");
             assertTrue(editor.isDirty());
 
-            runInBox(widget, "enew!");
+            // v:errmsg is the last error Neovim reported; cleared first, so an older one does not count.
+            SessionProbe.lua(session, "vim.v.errmsg = ''; return 0");
+            runCommandLine(widget, "enew!");
             ITextEditor untitled = expectUntitledEditor();
-            settle(); // an error would reach the message line after the new editor shows
-            for (ITextEditor shown : List.of(untitled, editor)) {
-                assertFalse(Pattern.compile("E\\d+:").matcher(messageText(shown)).find(),
-                        "no error: " + messageText(shown));
-            }
+            settle(); // an error would be reported after the new editor shows
+            assertEquals("", SessionProbe.lua(session, "return vim.v.errmsg"), "no error; Neovim shows " + shownText());
             // getEditorReferences, not the deprecated getEditors; getEditor(false) does not restore one.
             assertTrue(Arrays.stream(page().getEditorReferences()).anyMatch(ref -> ref.getEditor(false) == editor),
                     "the changed editor stays open");
@@ -515,7 +513,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     private ITextEditor expectUntitledEditor() {
         waitUntil("an untitled editor", TIMEOUT_MS, () -> page().getActiveEditor() instanceof ITextEditor active
                 && active != editor && active.getEditorInput().getAdapter(IFile.class) == null,
-                () -> "; the active editor is " + page().getActiveEditor() + ", the message line shows " + messageText(editor));
+                () -> "; the active editor is " + page().getActiveEditor() + ", Neovim shows " + shownText());
         ITextEditor untitled = (ITextEditor) page().getActiveEditor();
         waitForAttach(untitled, "the untitled editor");
         return untitled;
@@ -527,10 +525,10 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         List<String> dialogs = closeModalDialogsWhile(widget);
         ITextEditor untitled = openUntitledFile();
         StyledText untitledWidget = widgetOf(untitled);
-        runInBox(untitledWidget, "call setline(1, 'hello')");
+        runCommandLine(untitledWidget, "call setline(1, 'hello')");
         expectText(untitled, "hello");
 
-        runInBox(untitledWidget, "wq b.txt");
+        runCommandLine(untitledWidget, "wq b.txt");
         expectClosed(untitled);
         assertEquals("hello", fileText("b.txt"));
         assertEquals(List.of(), dialogs, "no question about the untitled document's changes");
@@ -545,17 +543,17 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     void writeWithANameCopiesAClonedUntitledDocument() throws Exception {
         List<String> dialogs = closeModalDialogsWhile(widget);
         ITextEditor untitled = openUntitledFile();
-        runInBox(widgetOf(untitled), "call setline(1, 'shared')");
+        runCommandLine(widgetOf(untitled), "call setline(1, 'shared')");
         expectText(untitled, "shared");
         runCommand("org.eclipse.ui.window.newEditor"); // Window › Editor › Clone
         ITextEditor clone = (ITextEditor) page().getActiveEditor();
         waitForAttach(clone, "the clone");
 
-        runInBox(widgetOf(clone), "w shared.txt");
+        runCommandLine(widgetOf(clone), "w shared.txt");
         waitUntil("the copy written", TIMEOUT_MS, () -> project.getFile("shared.txt").exists());
         assertEquals("shared", fileText("shared.txt"));
         waitUntil("Vim's written message, no error", TIMEOUT_MS,
-                () -> messageText(clone).startsWith("\"shared.txt\" [New]"), () -> ": " + messageText(clone));
+                () -> shownText().contains("\"shared.txt\" [New]"), () -> ": " + shownText());
         assertTrue(EditorAttachManager.hasNoFile(clone.getEditorInput()), "the clone stays untitled");
         assertTrue(EditorAttachManager.hasNoFile(untitled.getEditorInput()), "the first editor too");
         assertEquals(List.of(), dialogs);
@@ -589,7 +587,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     @Test
     void wqWithANameWritesTheCopyThenCloses() {
         ITextEditor target = editor;
-        runInBox(widget, "wq copy.txt");
+        runCommandLine(widget, "wq copy.txt");
         expectClosed(target);
         assertEquals("alpha\nbeta\ngamma\n", fileText("copy.txt"));
     }
@@ -598,7 +596,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     void wqBangWithANameDiscardsTheEditorsOwnChanges() {
         ITextEditor target = editor;
         change();
-        runInBox(widget, "wq! copy.txt");
+        runCommandLine(widget, "wq! copy.txt");
         expectClosed(target);
         assertEquals(CHANGED, fileText("copy.txt"), "the copy has the changes");
         assertEquals("alpha\nbeta\ngamma\n", fileText("test.txt"), "the file has not");
@@ -611,8 +609,8 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     @Test
     void wqWithAnExistingNameNeedsBangAndStaysOpen() throws Exception {
         createFile("taken.txt", "taken\n");
-        runInBox(widget, "wq taken.txt");
-        waitUntil("E13", TIMEOUT_MS, () -> messageText(editor).startsWith("E13"), () -> ": " + messageText(editor));
+        runCommandLine(widget, "wq taken.txt");
+        expectShown("E13");
         assertEquals("taken\n", fileText("taken.txt"));
         assertTrue(page().findEditor(editor.getEditorInput()) != null, "still open");
     }
@@ -634,12 +632,12 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
             } catch (IOException | UnsupportedOperationException e) {
                 assumeTrue(false, "cannot make a symbolic link here: " + e);
             }
-            runInBox(widget, "w copy.local");
+            runCommandLine(widget, "w copy.local");
             waitUntil("the refusal", TIMEOUT_MS, () -> errmsg().contains("is a link to"), () -> ": " + errmsg());
             assertEquals(DanglingLinks.refusal("copy.local", link), errmsg());
             assertFalse(Files.exists(gone), "nothing written through the link");
 
-            runInBox(widget, "w! copy.local");
+            runCommandLine(widget, "w! copy.local");
             waitUntil("the link's target written", TIMEOUT_MS, () -> Files.exists(gone));
             assertEquals("alpha\nbeta\ngamma\n", Files.readString(gone, StandardCharsets.UTF_8));
         } finally {

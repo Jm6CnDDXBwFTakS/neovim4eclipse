@@ -42,7 +42,7 @@ class BufferDeleteEndToEndTest extends EndToEndTestBase {
     @Test
     void aNameClosesThatBuffersEditor() throws Exception {
         StyledText other = widgetOf(openOtherAndReturn());
-        runInBox(widget, "bd other"); // a unique part of the name is enough, as with :b
+        runCommandLine(widget, "bd other"); // a unique part of the name is enough, as with :b
         expectClosed(other, "other.txt's editor");
     }
 
@@ -50,7 +50,7 @@ class BufferDeleteEndToEndTest extends EndToEndTestBase {
     void aNumberClosesThatBuffersEditor() throws Exception {
         StyledText other = widgetOf(openOtherAndReturn());
         int bufnr = ((Number) SessionProbe.lua(session, "return vim.fn.bufnr('other.txt')")).intValue();
-        runInBox(widget, "bd " + bufnr);
+        runCommandLine(widget, "bd " + bufnr);
         expectClosed(other, "other.txt's editor (buffer " + bufnr + ")");
     }
 
@@ -135,14 +135,10 @@ class BufferDeleteEndToEndTest extends EndToEndTestBase {
     @Test
     void aBufferNobodyHasGetsVimsErrorAndClosesNothing() throws Exception {
         ITextEditor other = openOtherAndReturn();
-        runInBox(widget, "bd 999");
-        waitUntil("the E516 message", TIMEOUT_MS,
-                () -> messageText(editor).equals("E516: No buffers were deleted"), // Neovim's own: 999 is no listed buffer
-                () -> "; the message line shows " + messageText(editor));
-        runInBox(widget, "bd nosuchfile");
-        waitUntil("the E94 message", TIMEOUT_MS,
-                () -> messageText(editor).equals("E94: No matching buffer for nosuchfile"),
-                () -> "; the message line shows " + messageText(editor));
+        runCommandLine(widget, "bd 999");
+        expectShown("E516: No buffers were deleted"); // Neovim's own: 999 is no listed buffer
+        runCommandLine(widget, "bd nosuchfile");
+        expectShown("E94: No matching buffer for nosuchfile");
         assertFalse(widgetOf(other).isDisposed(), "other.txt stays open");
         assertFalse(widget.isDisposed(), "test.txt stays open");
         page().closeEditor(other, false);

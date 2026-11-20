@@ -43,7 +43,6 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
-import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.INavigationLocation;
@@ -90,7 +89,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     void gQuestionQuestionEncodesTheLine() {
         type(widget, "ggg??");
         expectText("nycun\nbeta\ngamma\n");
-        assertNull(textChildOf(widget), "a ? opened the search prompt");
+        assertEquals("", commandLine(), "a ? opened the search prompt");
     }
 
     @Test
@@ -167,9 +166,9 @@ class EditorEndToEndTest extends EndToEndTestBase {
 
         type(widgetOf(sourcePage), "gt");
 
-        // A gt that fails shows its error in the message line and stays on this tab, so the wait fails.
+        // A gt that fails shows its error in Neovim's line and stays on this tab, so the wait fails.
         waitUntil("another tab to be active", TIMEOUT_MS, () -> page().getActiveEditor() != multiPage,
-                () -> "; the message line shows " + messageText(sourcePage));
+                () -> "; Neovim shows " + shownText());
         page().closeEditor(multiPage, false);
     }
 
@@ -246,11 +245,11 @@ class EditorEndToEndTest extends EndToEndTestBase {
         page.activate(editor);
         waitForAttach(editor, "test.txt");
 
-        runInBox(widget, "e other.txt");
+        runCommandLine(widget, "e other.txt");
         waitForAttach(other, "other.txt, after :e");
-        runInBox(widgetOf(other), "e #");
+        runCommandLine(widgetOf(other), "e #");
         waitForAttach(editor, "test.txt, after :e #");
-        runInBox(widget, "e #");
+        runCommandLine(widget, "e #");
         waitForAttach(other, "other.txt, after a second :e #");
         assertEquals(other, page.getActiveEditor());
 
@@ -279,11 +278,11 @@ class EditorEndToEndTest extends EndToEndTestBase {
         try {
             page.activate(editor);
             waitForAttach(editor, "test.txt");
-            runInBox(widget, "e other.txt");
+            runCommandLine(widget, "e other.txt");
             waitForAttach(other, "other.txt, after :e");
-            runInBox(widgetOf(other), "e #");
+            runCommandLine(widgetOf(other), "e #");
             waitForAttach(editor, "test.txt, after :e #");
-            runInBox(widget, "e #");
+            runCommandLine(widget, "e #");
             waitForAttach(other, "other.txt, after a second :e #");
 
             assertOnlyOneWay("<C-o>", -1);
@@ -310,11 +309,11 @@ class EditorEndToEndTest extends EndToEndTestBase {
         try {
             page.activate(editor);
             waitForAttach(editor, "test.txt");
-            runInBox(widget, "e other.txt");
+            runCommandLine(widget, "e other.txt");
             waitForAttach(other, "other.txt, after :e");
-            runInBox(widgetOf(other), "e #");
+            runCommandLine(widgetOf(other), "e #");
             waitForAttach(editor, "test.txt, after :e #");
-            runInBox(widget, "e #");
+            runCommandLine(widget, "e #");
             waitForAttach(other, "other.txt, after a second :e #");
 
             List<String> back = pressAndRecord("<C-o>", 2, this::activeEditor);
@@ -341,9 +340,9 @@ class EditorEndToEndTest extends EndToEndTestBase {
         try {
             page.activate(editor);
             waitForAttach(editor, "test.txt");
-            runInBox(widget, "e other.txt");
+            runCommandLine(widget, "e other.txt");
             waitForAttach(other, "other.txt, after :e");
-            runInBox(widgetOf(other), "e #");
+            runCommandLine(widgetOf(other), "e #");
             waitForAttach(editor, "test.txt, after :e #");
             page.activate(third); // a tab click
             waitForAttach(third, "third.txt");
@@ -366,7 +365,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     void ctrlOBackToANewFileNotWrittenYetKeepsItsEditor() throws Exception {
         IWorkbenchPage page = editor.getSite().getPage();
         try {
-            runInBox(widget, "e new.txt");
+            runCommandLine(widget, "e new.txt");
             waitUntil("new.txt's editor", TIMEOUT_MS, () -> page.getActiveEditor() != null
                     && "new.txt".equals(page.getActiveEditor().getTitle()));
             ITextEditor created = (ITextEditor) page.getActiveEditor();
@@ -442,9 +441,9 @@ class EditorEndToEndTest extends EndToEndTestBase {
         try {
             page.activate(editor);
             waitForAttach(editor, "test.txt");
-            runInBox(widget, "e other.txt");
+            runCommandLine(widget, "e other.txt");
             waitForAttach(other, "other.txt, after :e");
-            runInBox(widgetOf(other), "e #");
+            runCommandLine(widgetOf(other), "e #");
             waitForAttach(editor, "test.txt, after :e #");
             page.activate(third);
             waitForAttach(third, "third.txt");
@@ -481,9 +480,9 @@ class EditorEndToEndTest extends EndToEndTestBase {
             waitForAttach(editor, "test.txt, a tab click");
             type(widget, "j");
             settle();
-            runInBox(widget, "e other.txt");
+            runCommandLine(widget, "e other.txt");
             waitForAttach(other, "other.txt, after :e");
-            runInBox(widgetOf(other), "e #");
+            runCommandLine(widgetOf(other), "e #");
             waitForAttach(editor, "test.txt, after :e #");
 
             List<String> back = pressAndRecord("<C-o>", 4, this::activeEditorAndLine);
@@ -594,7 +593,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
         waitForAttach(editor, "test.txt");
         type(widget, "G");
         settle();
-        runInBox(widget, "b other.txt");
+        runCommandLine(widget, "b other.txt");
         waitForAttach(other, "other.txt, after :b");
 
         session.inputAsync("<C-o>");
@@ -813,7 +812,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
         expectText(editor, "alpha\nbeta\ngamma\n");
         type(widget, "jx");
         expectText(editor, "alpha\neta\ngamma\n");
-        runInBox(widget, "w");
+        runCommandLine(widget, "w");
         waitUntil("renamed.txt saved", TIMEOUT_MS, () -> "alpha\neta\ngamma\n".equals(fileText("renamed.txt")),
                 () -> "; it reads " + fileText("renamed.txt").replace("\n", "\\n"));
     }
@@ -830,7 +829,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
     void anEditorReusedForAFileWithTheSameTextGetsABufferOfItsOwn() throws Exception {
         type(widget, 'x');
         expectText(editor, "lpha\nbeta\ngamma\n");
-        runInBox(widget, "w");
+        runCommandLine(widget, "w");
         waitUntil("test.txt saved", TIMEOUT_MS, () -> !editor.isDirty());
         int bufnr = session.getAttachedBufnr();
         IFile other = createFile("same.txt", "lpha\nbeta\ngamma\n");
@@ -1383,7 +1382,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
             waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
             type(widget, "ap");
             ctrlKey(widget, 'n');
-            waitUntil("Neovim's list", TIMEOUT_MS, () -> session.completionMenu().isShowing());
+            waitUntil("Neovim's list", TIMEOUT_MS, () -> popupMenu() != null);
             expectText("apple\napricot\napple\n");
             ctrlKey(widget, 'x');
             ctrlKey(widget, 'o');
@@ -1391,7 +1390,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
                     () -> run.contains(ITextEditorActionDefinitionIds.CONTENT_ASSIST_PROPOSALS), run::toString);
             waitUntil("the completion over", TIMEOUT_MS, () -> !session.isCompleting());
             waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
-            assertFalse(session.completionMenu().isShowing(), "Neovim's list is gone");
+            waitUntil("Neovim's list gone", TIMEOUT_MS, () -> popupMenu() == null);
             assertEquals("i", session.getMode(), "Neovim is not in a Ctrl-X mode");
             expectText("apple\napricot\napple\n");
             type(widget, "s");
@@ -1989,35 +1988,36 @@ class EditorEndToEndTest extends EndToEndTestBase {
         document.set("key: a/b/c\n");
         settle();
         type(widget, "0f:r/t/");
-        assertNull(textChildOf(widget), "no : box");
+        settle();
+        assertEquals("", commandLine(), "no command line");
         type(widget, 'x');
         expectText("key/ /b/c\n");
     }
 
 
-    /** {@code f:} finds the colon (it does not open the : box), {@code r/} replaces it, {@code t/} stops before the next slash. */
+    /** {@code f:} finds the colon (it does not open a command line), {@code r/} replaces it, {@code t/} stops before the next slash. */
     @Test
     void fRAndTTakeColonAndSlashAsTheirArgument() throws Exception {
         document.set("key: a/b/c\n");
         settle();
         typeSlowly("0f:r/t/");
-        assertNull(textChildOf(widget), "no : box");
+        assertEquals("", commandLine(), "no command line");
         type(widget, 'x');
         expectText("key/ /b/c\n");
     }
 
     /**
      * The {@code q} that stops a recording takes no register, so the {@code :} right after it opens
-     * the box, and the recorded macro then plays back.
+     * Neovim's command line, and the recorded macro then plays back.
      *
      * <p>The keys are typed faster than Neovim reports its state: {@code jq} may arrive while the
      * session still says "not recording". That no longer matters: every key outside insert mode goes
      * to Neovim, which knows the {@code q} stops the recording and that the {@code :} after it opens
-     * a command line (the box opens on {@code cmdline_show}). Before 0.1.7 {@code KeyRouter} guessed
+     * a command line. Before 0.1.7 {@code KeyRouter} guessed
      * both from the keys it routed, and this test caught the guess going wrong.
      */
     @Test
-    void afterRecordingAMacroColonOpensTheBoxAndTheMacroPlaysBack() {
+    void afterRecordingAMacroColonOpensTheLineAndTheMacroPlaysBack() {
         type(widget, "ggqaA;");
         escape(widget);
         waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
@@ -2026,15 +2026,9 @@ class EditorEndToEndTest extends EndToEndTestBase {
         waitUntil("the recording to stop", TIMEOUT_MS, () -> !session.isRecording());
 
         type(widget, ':');
-        waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(widget) != null,
-                () -> "; Neovim is in mode " + session.getMode() + " (c: the : went to Neovim)");
-        Text box = textChildOf(widget);
-        Event escape = new Event();
-        escape.keyCode = SWT.ESC;
-        escape.character = SWT.ESC;
-        escape.doit = true;
-        box.notifyListeners(SWT.KeyDown, escape);
-        waitUntil("the : box to close", TIMEOUT_MS, () -> textChildOf(widget) == null);
+        expectCommandLine(":");
+        escape(widget);
+        expectCommandLine("");
 
         type(widget, "@a");
         expectText("alpha;\nbeta;\ngamma\n");

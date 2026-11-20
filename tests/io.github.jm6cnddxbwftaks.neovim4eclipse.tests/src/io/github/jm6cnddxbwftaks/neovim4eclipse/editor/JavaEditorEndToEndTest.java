@@ -507,12 +507,12 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
             type(javaWidget, 'x');
             expectJava(BADLY_INDENTED);
 
-            runInBox(javaWidget, "w");
-            // This timed out once on macOS with no further detail. runInBox now fails at once if the
-            // box lost focus before Enter; if the save itself does not finish, say what is left.
+            runCommandLine(javaWidget, "w");
+            // This timed out once on macOS with no further detail; if the save does not finish,
+            // say what is left.
             waitUntil("the save", TIMEOUT_MS, () -> !javaEditor.isDirty(),
-                    () -> "; the editor is still dirty (" + UiTestSupport.focusReport(javaWidget) + ", : box "
-                            + (textChildOf(javaWidget) == null ? "closed" : "still open") + ", mode " + session.getMode()
+                    () -> "; the editor is still dirty (" + UiTestSupport.focusReport(javaWidget) + ", command line \""
+                            + commandLine() + "\", mode " + session.getMode()
                             + ", Error Log " + errorLog + "); the document reads:\n" + javaText());
             String formatted = javaText();
             assertTrue(formatted.contains("\t\tint x = 1;"), "saved formatted: " + formatted);

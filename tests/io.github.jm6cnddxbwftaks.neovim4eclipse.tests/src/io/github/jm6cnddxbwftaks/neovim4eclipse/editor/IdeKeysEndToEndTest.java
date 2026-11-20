@@ -92,12 +92,11 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
         assertEquals(message("gO: Quick Outline is not available in this editor"), choice(IdeAction.OUTLINE));
     }
 
-    /** {@code grn} typed in a text file shows its message in the message line. */
+    /** {@code grn} typed in a text file shows its message in Neovim's line. */
     @Test
     void grnInATextFileSaysRenameIsNotAvailable() {
         typeSlowly("grn");
-        waitUntil("the message", TIMEOUT_MS, () -> "grn: Rename is not available in this editor".equals(messageText(editor)),
-                () -> "; the message line shows \"" + messageText(editor) + "\"");
+        expectShown("grn: Rename is not available in this editor");
     }
 
     /**
@@ -151,20 +150,19 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
         }
     }
 
-    /** A command that fails while running says so in the message line, with the key and its label. */
+    /** A command that fails while running says so in Neovim's line, with the key and its label. */
     @Test
     void aCommandThatFailsWhileRunningSaysSo() {
         IdeActions.EclipseEditor failing = new IdeActions.EclipseEditor(editor, editor.getAdapter(ITextViewer.class),
                 widget.getCaretOffset(), IdeAction.REFERENCES, IdeKeys.COMMANDS.get(IdeAction.REFERENCES));
         try (ExpectedLog log = ExpectedLog.of(IdeActions.class)) {
             assertTrue(failing.execute(TestFailingHandler.COMMAND), "it ran (and failed): no next way");
-            waitUntil("the message", TIMEOUT_MS, () -> "grr: References failed: boom".equals(messageText(editor)),
-                    () -> "; the message line shows \"" + messageText(editor) + "\"");
+            expectShown("grr: References failed: boom");
             log.assertLogged(Level.WARNING, "grr: running " + TestFailingHandler.COMMAND + " failed");
         }
     }
 
-    /** A link that throws when opened says so in the message line, and counts as opened. */
+    /** A link that throws when opened says so in Neovim's line, and counts as opened. */
     @Test
     void aLinkThatFailsToOpenSaysSo() throws Exception {
         ITextEditor links = openFile("links.txt", TestHyperlinkDetector.FAILING + "\n");
@@ -174,8 +172,8 @@ class IdeKeysEndToEndTest extends EndToEndTestBase {
         try (ExpectedLog log = ExpectedLog.of(IdeActions.class)) {
             assertTrue(failing.openLink(TestHyperlinkDetector.ID), "found, and failed: no next way");
             waitUntil("the message", TIMEOUT_MS,
-                    () -> "grt: Open Declared Type failed: cannot open FAILME".equals(messageText(links)),
-                    () -> "; the message line shows \"" + messageText(links) + "\"");
+                    () -> shownText().contains("grt: Open Declared Type failed: cannot open FAILME"),
+                    () -> "; Neovim shows \"" + shownText() + "\"");
             log.assertLogged(Level.WARNING, "grt: opening the link of " + TestHyperlinkDetector.ID + " failed");
         }
         page().closeEditor(links, false);

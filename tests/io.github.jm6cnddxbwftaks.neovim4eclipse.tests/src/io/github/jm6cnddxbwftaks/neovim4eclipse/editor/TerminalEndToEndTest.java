@@ -3,8 +3,6 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import org.eclipse.ui.PlatformUI;
@@ -14,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EclipseTerminal;
 
 /**
- * {@code :terminal} in an Eclipse without the Terminal, from the {@code :} box to the message: the
+ * {@code :terminal} in an Eclipse without the Terminal, from Neovim's command line to the message: the
  * test Eclipse has none, so the command opens nothing and says how to get one
  * ({@link EclipseTerminal#NO_TERMINAL}). The way through is the real one: Neovim's command line
  * hands the line to Eclipse ({@code LuaScripts.HOST_COMMANDS}), which asks the workbench whether a
@@ -29,12 +27,8 @@ class TerminalEndToEndTest extends EndToEndTestBase {
         ICommandService commands = PlatformUI.getWorkbench().getService(ICommandService.class);
         assumeTrue(EclipseTerminal.commandId(id -> commands.getCommand(id).isDefined(), id -> commands.getCommand(id).isHandled()).isEmpty(),
                 "this test Eclipse has a Terminal; the message is for one without");
-        MessageLine line = messageLineOf(editor);
+        runCommandLine(widget, "terminal make");
 
-        runInBox(widget, "terminal make");
-
-        waitUntil("the message that this Eclipse has no Terminal", TIMEOUT_MS,
-                () -> line.text().equals(EclipseTerminal.NO_TERMINAL), () -> "; it shows \"" + line.text() + "\"");
-        assertTrue(line.isError(), "an error: nothing was opened");
+        expectShown(EclipseTerminal.NO_TERMINAL);
     }
 }

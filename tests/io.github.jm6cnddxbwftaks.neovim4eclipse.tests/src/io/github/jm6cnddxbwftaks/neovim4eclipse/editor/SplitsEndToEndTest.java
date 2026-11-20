@@ -234,32 +234,36 @@ class SplitsEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * Typed through the {@code :} box, as a person types them: {@code :vsplit}, then
+     * Typed on Neovim's command line, as a person types them: {@code :vsplit}, then
      * {@code :split other.txt}. The new editor keeps the focus each time, so the second split is
      * made from the clone: the clone on the left with other.txt above it, test.txt on the right, and
-     * Neovim in other.txt. The box closes after the command has moved the focus; it gave the focus
-     * back to the editor it was typed in, which then made the second split on the right.
+     * Neovim in other.txt. Once Neovim's line has closed, the focus must still be on the new editor:
+     * when Eclipse's own {@code :} box closed after the command had moved the focus, it gave the
+     * focus back to the editor it was typed in, which then made the second split on the right.
      */
     @Test
-    void splitsTypedInTheBoxLeaveTheNewEditorActive() throws Exception {
+    void splitsTypedOnTheCommandLineLeaveTheNewEditorActive() throws Exception {
         createFile("other.txt", "other\n");
-        runInBox(widget, "vsplit");
+        runCommandLine(widget, "vsplit");
         ITextEditor clone = waitForNewEditor(editor, "the clone of :vsplit");
-        stillActiveOnceTheBoxCloses(clone, widget, "the clone of :vsplit");
+        stillActiveOnceTheLineCloses(clone, widget, "the clone of :vsplit");
 
-        runInBox(widgetOf(clone), "split other.txt");
+        runCommandLine(widgetOf(clone), "split other.txt");
         ITextEditor other = waitForNewEditor(clone, "other.txt of :split");
         assertEquals("other.txt", other.getEditorInput().getName());
-        stillActiveOnceTheBoxCloses(other, widgetOf(clone), "other.txt of :split");
+        stillActiveOnceTheLineCloses(other, widgetOf(clone), "other.txt of :split");
 
         assertTrue(onScreen(clone).x < onScreen(editor).x, "the clone on the left");
         assertEquals(onScreen(clone).x, onScreen(other).x, "other.txt over the clone");
         assertTrue(onScreen(other).y < onScreen(clone).y, "other.txt above the clone");
     }
 
-    /** Once the box typed in {@code typedIn} has closed, {@code opened} is still active and has the focus. */
-    private void stillActiveOnceTheBoxCloses(ITextEditor opened, StyledText typedIn, String what) {
-        waitUntil("the : box closed", TIMEOUT_MS, () -> textChildOf(typedIn) == null);
+    /**
+     * Once Neovim's command line, typed in {@code typedIn}, has closed, {@code opened} is still
+     * active and has the focus.
+     */
+    private void stillActiveOnceTheLineCloses(ITextEditor opened, StyledText typedIn, String what) {
+        expectCommandLine("");
         settle();
         assertSame(opened, page().getActiveEditor(), what + " still the active editor");
         waitUntil(what + " with the focus", TIMEOUT_MS, () -> widgetOf(opened).isFocusControl(),

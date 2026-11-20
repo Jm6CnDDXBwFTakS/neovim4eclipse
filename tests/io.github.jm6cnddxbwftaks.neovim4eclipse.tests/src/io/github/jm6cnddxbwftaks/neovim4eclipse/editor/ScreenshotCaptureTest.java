@@ -13,15 +13,10 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.CoreException;
-import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.Image;
-import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Control;
-import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IViewReference;
 import org.eclipse.ui.IWorkbenchPage;
@@ -56,11 +51,11 @@ import org.junit.jupiter.api.Test;
  * <ol>
  *   <li>{@code 01-visual-mode.png}: visual line mode over a loop; Eclipse shows Neovim's selection
  *       and the mode in the status bar.</li>
- *   <li>{@code 02-command-line.png}: the {@code :} box with {@code :%s/total/sum/g} typed, its
+ *   <li>{@code 02-command-line.png}: Neovim's command line with {@code :%s/total/sum/g} typed, its
  *       matches highlighted.</li>
  *   <li>{@code 03-problems.png}: the substitution run and saved ({@code :w}); Eclipse's compiler
  *       finds the two other classes still calling {@code total()}; {@code :Eproblems} goes to the
- *       first, and {@code :clist} lists both in the output popup, Neovim's quickfix list of
+ *       first, and {@code :clist} lists both in Neovim's own window, its quickfix list of
  *       Eclipse's errors: what no Vim emulation shows.</li>
  *   <li>{@code 04-content-assist.png}: at that first error, {@code ciw} on {@code total} and
  *       Ctrl+Space: Eclipse's content assist lists {@code Invoice}'s methods, {@code sum()} among
@@ -187,50 +182,45 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
             typeSlowly(text, "\u001b"); // Esc
 
             // 2. The : command line, with a substitution typed but not yet run.
-            Text box = openBox(text, "%s/total/sum/g");
+            openCommandLine(text, "%s/total/sum/g");
+            settle(); // the line drawn
             capture(window, "02-command-line.png");
 
             // 3. Run it and save: Eclipse's build finds Order.java and Receipt.java still calling
             // total(); :Eproblems goes to the first error, opening its file, and :clist lists both
-            // in the output popup.
-            Event enter = new Event();
-            enter.keyCode = SWT.CR;
-            enter.character = SWT.CR;
-            enter.doit = true;
-            requireOpen(box, text).notifyListeners(SWT.KeyDown, enter);
+            // in Neovim's pager.
+            pressEnter(text);
             waitUntil("the substitution", TIMEOUT_MS, () -> documentOf(java).get().contains("public double sum()"));
-            // The box closes when Neovim reports its command line gone, a moment after the edit:
-            // the next : would otherwise find this box still there and type into it.
-            waitUntil("the : box closed", TIMEOUT_MS, () -> textChildOf(text) == null);
-            runInBox(text, "w");
+            expectCommandLine("");
+            runCommandLine(text, "w");
             waitUntil("Invoice.java saved", TIMEOUT_MS, () -> !java.isDirty());
             IFile orderFile = shop.getFile("src/shop/Order.java");
             IFile receiptFile = shop.getFile("src/shop/Receipt.java");
             waitUntil("the build's errors in Order.java and Receipt.java", TIMEOUT_MS,
                     () -> JavaProjects.buildDone() && hasError(orderFile) && hasError(receiptFile));
-            waitUntil("the : box closed", TIMEOUT_MS, () -> textChildOf(text) == null);
-            runInBox(text, "Eproblems");
+            expectCommandLine("");
+            runCommandLine(text, "Eproblems");
             waitUntil("the first error's editor", TIMEOUT_MS, () -> page.getActiveEditor() instanceof ITextEditor e && e != java);
             ITextEditor first = (ITextEditor) page.getActiveEditor();
             waitForAttach(first, first.getTitle());
-            waitUntil("the quickfix message", TIMEOUT_MS, () -> messageText(first).startsWith("(1 of 2)"),
-                    () -> "; the message line shows " + messageText(first));
+            expectShown("(1 of 2)");
             StyledText firstText = widgetOf(first);
-            runInBox(firstText, "clist");
+            runCommandLine(firstText, "clist");
             waitUntil("the :clist output", TIMEOUT_MS, () -> {
-                StyledText popup = outputPopupIn(firstText);
-                return popup != null && popup.getText().contains("Order.java") && popup.getText().contains("Receipt.java");
+                settle();
+                String shown = shownText();
+                return shown.contains("Order.java") && shown.contains("Receipt.java");
             });
             capture(window, "03-problems.png");
 
             // 4. Content assist in insert mode, at that first error: ciw takes out the call to
             // total(), and Ctrl+Space lists what Invoice offers instead, sum() among them. Eclipse's
             // own feature, in an insert Neovim began.
-            // :clist's output has the focus and waits for a key, which closes it: Esc, typed into
-            // the popup as a user's goes. The :%s pattern's matches ('hlsearch') go too, through
-            // the API, so that only the list draws the eye.
-            UiTestSupport.escape(outputPopupIn(firstText));
-            waitUntil("the :clist output closed", TIMEOUT_MS, () -> outputPopupIn(firstText) == null);
+            // Esc leaves :clist's output, as a user's goes (in ui2's pager, if it opened one). The
+            // :%s pattern's matches ('hlsearch') go too, through the API, so that only the list
+            // draws the eye.
+            UiTestSupport.escape(firstText);
+            waitUntil("normal mode after :clist", TIMEOUT_MS, () -> "n".equals(session.getMode()));
             session.commandAsync("nohlsearch");
             session.commandAsync("call search('total(', 'cw')");
             settle();
@@ -250,22 +240,6 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
                 shop.delete(true, true, null);
             }
         }
-    }
-
-    /** The output popup in {@code parent}: a {@link StyledText} below the editor's own widget. */
-    private static StyledText outputPopupIn(Composite parent) {
-        for (Control child : parent.getChildren()) {
-            if (child instanceof StyledText popup && !popup.isDisposed()) {
-                return popup;
-            }
-            if (child instanceof Composite composite) {
-                StyledText found = outputPopupIn(composite);
-                if (found != null) {
-                    return found;
-                }
-            }
-        }
-        return null;
     }
 
     /** Whether Eclipse has an error marker on {@code file} (the Java builder's, here). */

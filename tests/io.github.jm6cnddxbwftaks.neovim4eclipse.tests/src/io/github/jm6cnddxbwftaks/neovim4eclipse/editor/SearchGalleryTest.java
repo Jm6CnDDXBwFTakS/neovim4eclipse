@@ -87,7 +87,7 @@ class SearchGalleryTest extends EndToEndTestBase {
                             + "fox matches where they meet. Their colors are Neovim's default colorscheme's, the same "
                             + "in both themes (docs/design/SEARCH_HIGHLIGHTING.md, \"The yank flash and window matches\")."),
             new Picture("cmdwin", "Neovim's command-line window (q:)",
-                    "The window covers the editor's bottom rows, framed like the : box: the history, one command a "
+                    "The window covers the editor's bottom rows, framed: the history, one command a "
                             + "line, in the editor's own background and text colors, with Neovim's syntax colors for "
                             + "Vim script on top, readable in both themes (Neovim's 'background' follows the theme). "
                             + "The cursor is a block on the last, empty line."),
@@ -307,17 +307,12 @@ class SearchGalleryTest extends EndToEndTestBase {
             UiTestSupport.ctrlKey(javaWidget, 'n');
             UiTestSupport.ctrlKey(javaWidget, 'n');
             try {
+                // Neovim's popup menu (the float of window -1, popupMenu()), and its second match
+                // selected as Neovim says (complete_info()), not by the menu's colors.
                 waitUntil("the completion list with its second entry selected", TIMEOUT_MS, () -> {
                     settle();
-                    for (org.eclipse.swt.widgets.Control frame : javaWidget.getChildren()) { // the list's canvas is in a frame
-                        if (frame instanceof org.eclipse.swt.widgets.Composite composite && frame.getVisible()
-                                && composite.getChildren().length == 1
-                                && composite.getChildren()[0] instanceof GridCanvas canvas && canvas.grid() != null && canvas.grid().window() == -1 && canvas.grid().height() > 1
-                                && canvas.grid().hlAt(1, 1) == io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu.PMENU_SEL) {
-                            return true;
-                        }
-                    }
-                    return false;
+                    return popupMenu() != null && popupMenu().grid().height() > 1 && SessionProbe.lua(session,
+                            "return vim.fn.complete_info({ 'selected' }).selected") instanceof Number n && n.intValue() == 1;
                 });
                 take(javaWidget, "completion", 16);
             } finally {

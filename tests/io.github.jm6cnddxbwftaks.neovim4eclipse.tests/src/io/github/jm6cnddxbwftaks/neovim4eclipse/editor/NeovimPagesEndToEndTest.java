@@ -28,7 +28,6 @@ import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
-import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.handlers.IHandlerService;
@@ -80,18 +79,10 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
         return pages;
     }
 
-    /** Runs {@code line} from the editor's {@code :} box, as typed. */
+    /** Runs {@code line} on Neovim's command line from the editor, as typed ({@link #openCommandLine}). */
     private void colon(String line) {
-        type(widget, ":");
-        waitUntil("the : box", TIMEOUT_MS, () -> textChildOf(widget) != null);
-        Text box = textChildOf(widget);
-        UiTestSupport.requireKeyboardFocus(box, TIMEOUT_MS);
-        box.insert(line);
-        Event enter = new Event();
-        enter.keyCode = SWT.CR;
-        enter.character = SWT.CR;
-        enter.doit = true;
-        box.notifyListeners(SWT.KeyDown, enter);
+        openCommandLine(widget, line);
+        pressEnter(widget);
     }
 
     /** Waits for a page editor to show a row holding {@code text}, and returns it. */
@@ -332,7 +323,9 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
         NeovimPageEditor view = pageShowing("help-context");
         assertEquals("Neovim: help", view.getPartName());
         assertEquals("help", bufferTypeOf(view), "the help buffer itself");
-        assertEquals(1L, ((Number) SessionProbe.lua(session, "return #vim.api.nvim_tabpage_list_wins(0)")).longValue(),
+        // Floating windows (ui2's line, messages, pager) are not counted: they are always there.
+        assertEquals(1L, ((Number) SessionProbe.lua(session, "local n = 0 for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0))"
+                + " do if vim.api.nvim_win_get_config(w).relative == '' then n = n + 1 end end return n")).longValue(),
                 "no help window left in the editing Neovim");
 
         SessionProbe.lua(session, "vim.cmd.echomsg(\"'after help'\") return 0");

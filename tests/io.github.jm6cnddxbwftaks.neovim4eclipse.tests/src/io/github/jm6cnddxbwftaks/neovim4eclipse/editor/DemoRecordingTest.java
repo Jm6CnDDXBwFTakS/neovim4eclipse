@@ -29,7 +29,6 @@ import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IViewReference;
 import org.eclipse.ui.IWorkbenchPage;
@@ -315,37 +314,35 @@ class DemoRecordingTest extends EndToEndTestBase {
                 : KEY_MIN_MS + rhythm.nextInt(KEY_MAX_MS - KEY_MIN_MS + 1);
     }
 
-    /** A search, {@code /} then the pattern then Enter, typed into the box it opens. */
+    /** A search, {@code /} then the pattern then Enter, typed on the command line it opens. */
     private void search(File folder, String pattern) {
         command(folder, '/', pattern);
     }
 
     /**
-     * {@code :} or {@code /} and then {@code line}, a key at a time, into the box Neovim's command
-     * line opens, then Enter. Each key goes to Neovim through the box ({@code CommandLineBox});
-     * the picture waits until Neovim's report shows it.
+     * {@code :} or {@code /} and then {@code line}, a key at a time, on Neovim's command line, then
+     * Enter. Each key goes to Neovim through the editor's widget, which keeps the keyboard while
+     * the line is open, and ui2 draws the line; the picture waits until Neovim's line reads the
+     * keys so far ({@link #commandLine}) and the editor has drawn it ({@link #settle}).
      */
     private void command(File folder, char first, String line) {
         UiTestSupport.type(text, first);
-        waitUntil("the " + first + " box to open", TIMEOUT_MS, () -> textChildOf(text) != null);
-        Text box = textChildOf(text);
+        expectCommandLine(String.valueOf(first));
+        settle();
         caption.append(first);
         picture(folder, after(first));
         StringBuilder typed = new StringBuilder().append(first);
         for (char key : line.toCharArray()) {
-            requireOpen(box, text).insert(String.valueOf(key));
+            UiTestSupport.type(text, key);
             typed.append(key);
-            String expected = typed.toString();
-            waitUntil("the box to show " + expected, TIMEOUT_MS, () -> requireOpen(box, text).getText().equals(expected));
+            expectCommandLine(typed.toString());
+            settle();
             caption.append(key);
             picture(folder, after(key));
         }
-        Event enter = new Event();
-        enter.keyCode = SWT.CR;
-        enter.character = SWT.CR;
-        enter.doit = true;
-        requireOpen(box, text).notifyListeners(SWT.KeyDown, enter);
-        waitUntil("the box to close", TIMEOUT_MS, () -> box.isDisposed() || !box.isVisible());
+        pressEnter(text);
+        expectCommandLine("");
+        settle();
         caption.append('⏎');
         picture(folder, after('⏎'));
     }

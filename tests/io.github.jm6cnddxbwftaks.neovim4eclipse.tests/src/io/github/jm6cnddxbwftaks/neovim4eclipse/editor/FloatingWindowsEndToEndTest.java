@@ -44,10 +44,14 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
         });
     }
 
-    /** The first float's canvas over the editor's text, or {@code null} when none is drawn. */
+    /**
+     * The first float's canvas over the editor's text, or {@code null} when none is drawn. ui2's
+     * windows, always drawn, and Neovim's popup menu are not this test's floats, and are skipped
+     * ({@link #isNeovimsOwnFloat}).
+     */
     private GridCanvas canvas() {
         for (Control child : widget.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed()) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !isNeovimsOwnFloat(canvas)) {
                 return canvas;
             }
         }

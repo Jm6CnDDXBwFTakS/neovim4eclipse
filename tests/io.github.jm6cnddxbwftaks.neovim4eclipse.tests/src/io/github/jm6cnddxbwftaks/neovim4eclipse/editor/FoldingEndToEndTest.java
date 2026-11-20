@@ -186,11 +186,11 @@ class FoldingEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
-    void zfShowsAnErrorInTheMessageLineAndMakesNoFold() {
-        typeSlowly(foldWidget, "Gzf"); // nothing after it: the next key clears the message line
-        waitUntil("the error in the message line", TIMEOUT_MS,
-                () -> messageText(foldEditor).contains("zf: Eclipse defines the folds in this editor"),
-                () -> "; it reads " + messageText(foldEditor));
+    void zfShowsAnErrorInNeovimsLineAndMakesNoFold() {
+        typeSlowly(foldWidget, "Gzf");
+        waitUntil("the error in Neovim's line", TIMEOUT_MS,
+                () -> shownText().contains("zf: Eclipse defines the folds in this editor"),
+                () -> "; Neovim shows " + shownText());
         assertEquals(0, ((Number) SessionProbe.lua(session, "return vim.fn.foldlevel(10)")).intValue());
     }
 

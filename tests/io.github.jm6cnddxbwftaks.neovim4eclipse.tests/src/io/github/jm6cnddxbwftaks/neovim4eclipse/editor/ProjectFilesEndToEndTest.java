@@ -52,14 +52,20 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
 
     /**
      * Counts the {@code FileType} events from now on, as a user's {@code FileType} setup would see
-     * them (a language server started from one).
+     * them (a language server started from one). ui2's own buffers ({@code cmd}, {@code msg},
+     * {@code pager}, {@code dialog}, {@code LuaScripts.UI2}) get a {@code FileType} when ui2 makes
+     * them; no file is read there, so they are not counted.
      */
     @BeforeEach
     void countFiletypes() {
         SessionProbe.lua(session, """
                 _G.neovim4eclipse_test_filetypes = {}
                 vim.api.nvim_create_augroup('neovim4eclipse_test_filetypes', { clear = true })
+                local ui2_kinds = { cmd = true, msg = true, pager = true, dialog = true }
                 vim.api.nvim_create_autocmd('FileType', { group = 'neovim4eclipse_test_filetypes', callback = function(ev)
+                  if ui2_kinds[ev.match] and vim.bo[ev.buf].buftype == 'nofile' then
+                    return
+                  end
                   table.insert(_G.neovim4eclipse_test_filetypes, vim.fn.fnamemodify(ev.file, ':t') .. '=' .. ev.match)
                 end })
                 return 0""");

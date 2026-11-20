@@ -11,7 +11,6 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
-import org.eclipse.swt.widgets.Text;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -33,10 +32,14 @@ class CommandWindowEndToEndTest extends EndToEndTestBase {
         SessionProbe.lua(session, "vim.g.n4e_cmdwin = nil");
     }
 
-    /** The panel's canvas below the editor's widget, or {@code null} when it is closed. */
-    private static GridCanvas canvasOf(Composite parent) {
+    /**
+     * The panel's canvas below the editor's widget, or {@code null} when it is closed. ui2's
+     * windows and Neovim's popup menu are drawn as canvases there too, and are skipped
+     * ({@link #isNeovimsOwnFloat}).
+     */
+    private GridCanvas canvasOf(Composite parent) {
         for (Control child : parent.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed()) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !isNeovimsOwnFloat(canvas)) {
                 return canvas;
             }
             if (child instanceof Composite composite) {
@@ -166,24 +169,12 @@ class CommandWindowEndToEndTest extends EndToEndTestBase {
     }
 
     @Test
-    void ctrlFOnTheColonBoxOpensTheWindowWithItsLine() {
-        type(widget, ":");
-        waitUntil("the : box", TIMEOUT_MS, () -> textChildOf(widget) != null);
-        Text box = textChildOf(widget);
-        UiTestSupport.requireKeyboardFocus(box, TIMEOUT_MS);
-        box.insert("echo 42");
-        waitUntil("Neovim has the line", TIMEOUT_MS, () -> {
-            settle();
-            Text open = textChildOf(widget);
-            return open != null && ":echo 42".equals(open.getText());
-        });
-        // In the box, Vim's Ctrl keys come through Eclipse's key bindings (SendKeyHandler), as here.
+    void ctrlFOnTheColonLineOpensTheWindowWithItsLine() {
+        openCommandLine(widget, "echo 42");
+        // On Neovim's line, Vim's Ctrl keys come through Eclipse's key bindings (SendKeyHandler), as here.
         EditorAttachManager.getInstance().getActiveController().sendKey("<C-f>");
         GridCanvas canvas = panelShowing("echo 42");
-        waitUntil("the : box closed", TIMEOUT_MS, () -> {
-            settle();
-            return textChildOf(widget) == null;
-        });
+        waitUntil("the command-line window open", TIMEOUT_MS, session::isCommandWindowOpen);
         UiTestSupport.requireKeyboardFocus(canvas, TIMEOUT_MS);
     }
 }

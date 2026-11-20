@@ -3,74 +3,39 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
-import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.eclipse.jface.preference.IPreferenceStore;
 import org.junit.jupiter.api.Test;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
-
 /**
- * Neovim's messages and errors in the line along the bottom of the editor ({@link MessageLine}),
- * from a real key to what is drawn: errors marked as errors, plain messages not, the next key
- * hiding them, nothing left in the status bar, and the opt-in flash.
+ * Neovim's messages and errors along the bottom of the editor, from a real key to what Neovim
+ * shows: ui2 ({@code LuaScripts.UI2}) draws them in its own windows over the editor's last row
+ * ({@code editor/FloatingWindows}), and nothing is left in Eclipse's status bar. The text is read
+ * from ui2's buffers ({@link #shownText}); how the cells are drawn is tested with the floats
+ * ({@code FloatingWindowsEndToEndTest}).
  */
 class MessageLineEndToEndTest extends EndToEndTestBase {
 
-    private MessageLine line() {
-        return messageLineOf(editor);
-    }
-
-    private void waitForMessage(String text) {
-        waitUntil("\"" + text + "\" in the message line", TIMEOUT_MS, () -> line().text().equals(text),
-                () -> "; it shows \"" + line().text() + "\"");
-    }
-
+    /** An error and a plain message both show in Neovim's line; neither in the status bar. */
     @Test
-    void anErrorFromNeovimShowsInTheEditorAsAnError() {
-        runInBox(widget, "s/zzz/y/");
+    void anErrorAndAMessageFromNeovimShowInItsLine() {
+        runCommandLine(widget, "s/zzz/y/");
 
-        waitForMessage("E486: Pattern not found: zzz");
-        assertTrue(line().isError());
+        expectShown("E486: Pattern not found: zzz");
         assertTrue(statusLineTexts(editor).stream().noneMatch(text -> text.contains("E486")),
                 "not in the status bar: " + statusLineTexts(editor));
 
         typeSlowly("3yy"); // a message of another kind than an error
-        waitForMessage("3 lines yanked");
-        assertFalse(line().isError(), "a plain message is not an error");
+        expectShown("3 lines yanked");
     }
 
-    /** {@code n} twice with no match: the second error shows again after the first key hid it. */
+    /**
+     * The plug-in's own messages go through Neovim too ({@code NeovimSession.echoAsync}, Neovim's
+     * {@code nvim_echo}), so they show where Neovim's do and are kept in {@code :messages}.
+     */
     @Test
-    void theSameErrorTwiceShowsTwice() {
-        runInBox(widget, "s/zzz/y/");
-        waitForMessage("E486: Pattern not found: zzz");
-        typeSlowly("j");
-        waitUntil("the message line to hide", TIMEOUT_MS, () -> !line().isShowing());
-
-        runInBox(widget, "s/zzz/y/");
-
-        waitForMessage("E486: Pattern not found: zzz");
-    }
-
-    @Test
-    void withTheFlashOnAnErrorFlashesTheEditor() {
-        IPreferenceStore store = Activator.getDefault().getPreferenceStore();
-        store.setValue(PreferenceConstants.FLASH_ON_ERROR, true);
-        try {
-            int before = line().flashCount();
-            runInBox(widget, "s/zzz/y/");
-
-            waitForMessage("E486: Pattern not found: zzz");
-            // Counted, not caught in the act: the flash lasts 150 ms, and a slow CI machine (macOS)
-            // could start and end it between two checks of isFlashing().
-            waitUntil("the flash", TIMEOUT_MS, () -> line().flashCount() > before);
-            waitUntil("the flash to end", TIMEOUT_MS, () -> !line().isFlashing());
-        } finally {
-            store.setToDefault(PreferenceConstants.FLASH_ON_ERROR);
-        }
+    void aMessageOfThePluginsShowsInNeovimsLine() {
+        session.echoAsync("neovim4eclipse says hello", false);
+        expectShown("neovim4eclipse says hello");
     }
 }

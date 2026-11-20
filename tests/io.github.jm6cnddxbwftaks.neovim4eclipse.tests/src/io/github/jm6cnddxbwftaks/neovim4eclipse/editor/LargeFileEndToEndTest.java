@@ -65,7 +65,7 @@ class LargeFileEndToEndTest extends EndToEndTestBase {
 
     @Test
     void anEditAtLine6000ItsDotAndUndoAndWriteStayInSync() {
-        runInBox(widget, "6000");
+        runCommandLine(widget, "6000");
         type(widget, "cw");
         waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
         type(widget, "LINE");
@@ -80,14 +80,14 @@ class LargeFileEndToEndTest extends EndToEndTestBase {
         expectLine(6000, "LINE" + original(6000).substring("line".length()));
         expectNeovimHasTheDocument();
 
-        runInBox(widget, "w");
+        runCommandLine(widget, "w");
         waitUntil("the editor saved", TIMEOUT_MS, () -> !editor.isDirty());
         assertEquals(document.get(), fileText("big.txt"), "the file on disk is the document");
     }
 
     @Test
     void ctrlWTwiceAtLine9000DeletesBothTypedWords() {
-        runInBox(widget, "9000");
+        runCommandLine(widget, "9000");
         type(widget, 'A');
         waitUntil("Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
         type(widget, " extra words");

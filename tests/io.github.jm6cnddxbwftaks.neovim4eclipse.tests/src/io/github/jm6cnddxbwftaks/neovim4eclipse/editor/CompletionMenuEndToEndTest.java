@@ -16,9 +16,6 @@ import java.util.List;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Point;
-import org.eclipse.swt.graphics.Rectangle;
-import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,13 +24,13 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.CompletionMenu;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 
 /**
- * Neovim's insert-mode completion in a real editor ({@link CompletionMenuPopup}, {@code KeyRouter},
- * {@code EditorKeyContext}): Ctrl-N in an insert Eclipse types hands the typed text to Neovim,
- * Neovim completes and its list is drawn at the word; while it completes every key is Neovim's,
+ * Neovim's insert-mode completion in a real editor ({@code KeyRouter}, {@code EditorKeyContext}):
+ * Ctrl-N in an insert Eclipse types hands the typed text to Neovim, Neovim completes and its popup
+ * menu is drawn at the word, a float of Neovim's own (window id {@code -1}, {@link #popupMenu}); while it completes every key is Neovim's,
  * the Ctrl letters Eclipse binds too; the key that ends the completion gives typing back to
  * Eclipse. The keys go through the workbench's key bindings, as a keyboard's do.
  *
@@ -74,22 +71,7 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
         store.setToDefault(PreferenceConstants.ctrlKeyInsert('y'));
     }
 
-    /** The list's canvas over the editor's text, or {@code null} when none is drawn. */
-    private GridCanvas list() {
-        for (Control frame : widget.getChildren()) { // the list's canvas sits in a frame (OverlayFrame), the frame on the text
-            if (!(frame instanceof Composite composite) || frame.isDisposed() || !frame.getVisible()) {
-                continue;
-            }
-            for (Control child : composite.getChildren()) {
-                if (child instanceof GridCanvas canvas && canvas.grid() != null
-                        && canvas.grid().window() == -1) { // no Neovim window: the list is the plug-in's own grid
-                    return canvas;
-                }
-            }
-        }
-        return null;
-    }
-
+    /** The rows of {@code grid}, each without its trailing blanks and ended by a line break. */
     private static String rowsOf(GridSnapshot grid) {
         StringBuilder rows = new StringBuilder();
         for (int r = 0; grid != null && r < grid.height(); r++) {
@@ -98,20 +80,34 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
         return rows.toString();
     }
 
-    private GridCanvas listShowing(String rows) {
+    /**
+     * Waits until Neovim's popup menu is drawn ({@link #popupMenu}: a float of Neovim's own, the
+     * grid of window id {@code -1}, whose cells the editor copies, {@code editor/FloatingWindows})
+     * with {@code rows}, and returns it.
+     */
+    private FloatWindow listShowing(String rows) {
         waitUntil("the list showing " + rows.replace("\n", "|"), TIMEOUT_MS, () -> {
             settle();
-            GridCanvas canvas = list();
-            return canvas != null && rows.equals(rowsOf(canvas.grid()));
-        }, () -> list() == null ? "; no list" : "; it shows " + rowsOf(list().grid()).replace("\n", "|"));
-        return list();
+            FloatWindow menu = popupMenu();
+            return menu != null && rows.equals(rowsOf(menu.grid()));
+        }, () -> popupMenu() == null ? "; no list" : "; it shows " + rowsOf(popupMenu().grid()).replace("\n", "|"));
+        return popupMenu();
     }
 
     private void noList() {
         waitUntil("the list gone", TIMEOUT_MS, () -> {
             settle();
-            return list() == null;
+            return popupMenu() == null;
         });
+    }
+
+    /**
+     * The index of the selected match in Neovim's completion ({@code complete_info()}), -1 for
+     * none: asked from Neovim, since the menu's colors are Neovim's highlight ids.
+     */
+    private int selectedMatch() {
+        Object selected = SessionProbe.lua(session, "return vim.fn.complete_info({ 'selected' }).selected");
+        return selected instanceof Number number ? number.intValue() : -2;
     }
 
     private List<?> neovimLines() {
@@ -127,22 +123,18 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
     void ctrlNCompletesInNeovimWithItsListAndTypingGoesBackToEclipse() {
         ctrlKey(widget, 'n');
         expectText("apple\napricot\napple\n");
-        GridCanvas list = listShowing(" apple\n apricot\n");
-        assertEquals(CompletionMenu.PMENU_SEL, list.grid().hlAt(0, 1), "the first match is selected");
+        FloatWindow list = listShowing("apple\napricot\n");
+        assertEquals(0, selectedMatch(), "the first match is selected");
         assertTrue(widget.isFocusControl(), "the editor keeps the keyboard focus");
-        int wordStart = widget.getOffsetAtLine(2);
-        Point word = widget.getLocationAtOffset(wordStart);
-        Rectangle bounds = list.getParent().getBounds(); // the frame around the cells is what is placed
-        assertEquals(word.y + widget.getLineHeight(wordStart), bounds.y, "under the line of the word");
-        assertEquals(Math.max(widget.getClientArea().x, word.x - list.cellWidth() - CompletionMenuPopup.BORDER), bounds.x,
-                "its text lined up with the word");
+        // Neovim places its menu itself, on the screen row under the word's (the third line's, row 2).
+        assertEquals(3, list.row(), "under the line of the word");
 
         ctrlKey(widget, 'n');
         expectText("apple\napricot\napricot\n");
         waitUntil("the second entry selected", TIMEOUT_MS, () -> {
             settle();
-            return list() != null && list().grid().hlAt(1, 1) == CompletionMenu.PMENU_SEL;
-        });
+            return popupMenu() != null && selectedMatch() == 1;
+        }, () -> "; selected " + selectedMatch());
 
         type(widget, "(");
         expectText("apple\napricot\napricot(\n");
@@ -169,7 +161,7 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
         store.setValue(PreferenceConstants.ctrlKeyInsert('y'), false);
         settle();
         ctrlKey(widget, 'n');
-        listShowing(" apple\n apricot\n");
+        listShowing("apple\napricot\n");
         ctrlKey(widget, 'e');
         expectText("apple\napricot\nap\n");
         noList();
@@ -178,7 +170,7 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
 
         ctrlKey(widget, 'p');
         expectText("apple\napricot\napricot\n");
-        listShowing(" apple\n apricot\n");
+        listShowing("apple\napricot\n");
         ctrlKey(widget, 'y');
         noList();
         waitUntil("Eclipse types again", TIMEOUT_MS, session::isEclipseTypingReady);
@@ -191,7 +183,7 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
     @Test
     void escWithTheListOpenLeavesInsertModeAndKeepsTheMatch() {
         ctrlKey(widget, 'n');
-        listShowing(" apple\n apricot\n");
+        listShowing("apple\napricot\n");
         escape(widget);
         waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
         noList();
@@ -206,7 +198,7 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
     @Test
     void dotRepeatsTheTypedTextAndItsCompletion() {
         ctrlKey(widget, 'n');
-        listShowing(" apple\n apricot\n");
+        listShowing("apple\napricot\n");
         ctrlKey(widget, 'y');
         noList();
         escape(widget);
@@ -220,7 +212,7 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
     @Test
     void aClickIntoTheTextEndsTheCompletion() {
         ctrlKey(widget, 'n');
-        listShowing(" apple\n apricot\n");
+        listShowing("apple\napricot\n");
         Event click = new Event();
         click.button = 1;
         click.count = 1;
@@ -244,7 +236,7 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
     @Test
     void anEditEclipseMakesWhileNeovimCompletesIsKept() throws Exception {
         ctrlKey(widget, 'n');
-        listShowing(" apple\n apricot\n");
+        listShowing("apple\napricot\n");
         document.replace(0, 0, "pasted ");
         settle();
         type(widget, "(");
@@ -266,7 +258,7 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
     @Test
     void anEditOnTheCompletedLineEndsTheCompletionAndIsKept() throws Exception {
         ctrlKey(widget, 'n');
-        listShowing(" apple\n apricot\n");
+        listShowing("apple\napricot\n");
         int end = document.getLength() - 1; // after "apple" on the third line
         document.replace(end, 0, ".foo()");
         noList();

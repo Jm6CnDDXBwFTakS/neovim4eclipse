@@ -35,7 +35,6 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
-import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.INewWizard;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
@@ -57,6 +56,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.TextRepairs;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 
 /**
@@ -75,8 +75,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
  *
  * <p>Keyboard focus: the setup makes sure the editor has it ({@link UiTestSupport#requireKeyboardFocus}),
  * so a test that starts without it fails at once with "lost keyboard focus" and where the focus is.
- * The {@code :} box helpers ({@link #openBox}, {@link #runInBox}) do the same for the box, which
- * closes whenever it loses focus.
+ * While Neovim's command line is open ({@link #openCommandLine}) the widget keeps the focus, and
+ * every key still goes through it.
  *
  * <p><b>The text check.</b> Every test also checks that Eclipse's text and Neovim's agree, two ways:
  * <ul>
@@ -155,7 +155,7 @@ abstract class EndToEndTestBase {
             NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
             return c != null && c.getEditor() == editor && !c.isClosed();
         });
-        // Focus-dependent behavior (the Vim key context, the : box closing on focus loss) needs the
+        // Focus-dependent behavior (the Vim key context, the keys typed into Neovim's command line) needs the
         // editor to have keyboard focus in the active window. An earlier test's dialog or shell can
         // leave no window active (xvfb has no window manager to hand the focus back), and a developer
         // may be typing in another window; fail here with a "lost keyboard focus" message instead of
@@ -561,16 +561,50 @@ abstract class EndToEndTestBase {
         return texts;
     }
 
-    /** The message line of {@code target} while Neovim is attached to it; else {@code null}. */
-    static MessageLine messageLineOf(ITextEditor target) {
-        NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
-        return controller != null && controller.getEditor() == target ? controller.messageLine() : null;
+    /**
+     * What Neovim shows in ui2's windows (its {@code cmd}, {@code msg}, {@code pager} and
+     * {@code dialog} buffers), joined with line breaks; {@code ""} if Neovim does not answer, so it
+     * can be a wait's condition.
+     *
+     * <p>Why from Neovim: ui2 ({@code LuaScripts.UI2}) draws the command line, messages, prompts
+     * and the pager itself, as floating windows whose cells the editor copies
+     * ({@code editor/FloatingWindows}); no widget of the plug-in holds a message's text any more.
+     * The integration tests ask ui2's buffers the same way ({@code core/Ui2Text}). Example: after
+     * {@code :bd 999} it contains {@code E516: No buffers were deleted}.
+     *
+     * <p>ui2's buffers keep older messages until ui2 clears them, so a check looks for a text with
+     * {@code contains}, not for the whole of it.
+     */
+    String shownText() {
+        try {
+            Object text = SessionProbe.lua(session, UI2_TEXT);
+            return text == null ? "" : String.valueOf(text);
+        } catch (AssertionError e) {
+            return "";
+        }
     }
 
-    /** The message shown along the bottom of {@code target}; "" when none is. */
-    static String messageText(ITextEditor target) {
-        MessageLine line = messageLineOf(target);
-        return line == null ? "" : line.text();
+    /** {@link #shownText}'s script: ui2's buffers by kind ({@code require('vim._core.ui2').bufs}). */
+    private static final String UI2_TEXT = """
+            local ok, ui2 = pcall(require, 'vim._core.ui2')
+            if not ok then
+              return ''
+            end
+            local all = {}
+            for _, kind in ipairs({ 'cmd', 'msg', 'pager', 'dialog' }) do
+              local buf = ui2.bufs[kind]
+              if buf and vim.api.nvim_buf_is_valid(buf) then
+                all[#all + 1] = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), '\\n')
+              end
+            end
+            return table.concat(all, '\\n')
+            """;
+
+    /** Waits until Neovim shows {@code text} in one of ui2's windows ({@link #shownText}). */
+    void expectShown(String text) {
+        String[] last = { "" };
+        waitUntil("Neovim to show " + text, TIMEOUT_MS, () -> (last[0] = shownText()).contains(text),
+                () -> "; ui2's windows hold \"" + last[0].replace("\n", "\\n") + "\"");
     }
 
     private static void collectLabels(Control control, List<String> texts) {
@@ -585,66 +619,119 @@ abstract class EndToEndTestBase {
     }
 
     /**
-     * Types {@code :} into {@code target}, waits for the box, and puts {@code command} into it.
-     *
-     * <p>The {@code :} goes to Neovim, which opens its command line; the box opens when Neovim
-     * reports it. The command is inserted into the box as a paste would be: the box refuses the edit
-     * and sends the text to Neovim ({@code CommandLineBox.onEdit}), so this waits until Neovim's
-     * report shows it. An Enter sent before then would run a shorter line.
+     * Neovim's command line as it reads now, its type first: {@code ":e ot"} while {@code :e ot} is
+     * typed, {@code "/gamma"} for a search; {@code ""} when no line is open. Asked from Neovim
+     * ({@code getcmdtype()}, {@code getcmdline()}), whose line ui2 draws.
      */
-    Text openBox(StyledText target, String command) {
-        type(target, ':');
-        waitUntil("the : box to open", TIMEOUT_MS, () -> textChildOf(target) != null);
-        Text box = textChildOf(target);
-        // The box closes as soon as it loses keyboard focus (CommandLineBox), so it must have the
-        // focus, in the active window, until Enter; see UiTestSupport.requireKeyboardFocus. This
-        // also fails a test that types into an editor nobody can see (the box opens hidden there).
-        requireKeyboardFocus(box, TIMEOUT_MS);
-        box.insert(command);
-        waitUntil("the command in the : box", TIMEOUT_MS, () -> requireOpen(box, target).getText().equals(":" + command),
-                () -> "; the box shows " + box.getText());
-        return box;
+    String commandLine() {
+        try {
+            Object line = SessionProbe.lua(session, "local t = vim.fn.getcmdtype(); return t == '' and '' or t .. vim.fn.getcmdline()");
+            return line == null ? "" : String.valueOf(line);
+        } catch (AssertionError e) {
+            return "(Neovim did not answer: " + e.getCause() + ")";
+        }
+    }
+
+    /** Waits until Neovim's command line reads {@code expected}, its type included ({@link #commandLine}). */
+    void expectCommandLine(String expected) {
+        String[] last = { "" };
+        waitUntil("Neovim's command line to read " + expected, TIMEOUT_MS,
+                () -> expected.equals(last[0] = commandLine()),
+                () -> "; it reads \"" + last[0] + "\" (mode " + session.getMode() + ")");
     }
 
     /**
-     * {@code box}, or a failure with "lost keyboard focus" if it has closed: the box closes whenever
-     * it loses focus (another window activated, a click elsewhere), and a later call on it would
-     * fail with a bare "Widget is disposed", or an Enter would be lost and the test time out waiting
-     * for the command's effect. {@code target} is the editor widget the box opened in, whose window
-     * the report compares with the active one.
+     * Types {@code :} into {@code target} and puts {@code command} into Neovim's command line.
+     *
+     * <p>The editor's widget keeps the keyboard while the line is open: each key goes to Neovim, and
+     * ui2 draws the line over the editor's last row. The command goes in as a paste
+     * ({@code session.pasteAsync}, Neovim's {@code nvim_paste}), as Eclipse's Paste puts it there
+     * ({@code CommandLineEditHandlers}): one request instead of a key per character. It is sent
+     * only once Neovim's line is open: {@code :} goes in as input, which Neovim reads in its own
+     * time, while a paste acts at once and would land in the buffer. Then this waits until the line
+     * reads {@code :command}: an Enter sent before would run a shorter line.
      */
-    static Text requireOpen(Text box, StyledText target) {
-        if (box.isDisposed()) {
-            fail("The : box closed before Enter: it lost keyboard focus; " + UiTestSupport.focusReport(target));
+    void openCommandLine(StyledText target, String command) {
+        type(target, ':');
+        expectCommandLine(":");
+        if (!command.isEmpty()) {
+            session.pasteAsync(command);
+            expectCommandLine(":" + command);
         }
-        return box;
     }
 
-    /** Runs {@code command} through the box, as typed: {@code :}, the command, Enter. */
-    void runInBox(StyledText target, String command) {
-        Text box = requireOpen(openBox(target, command), target);
+    /** Runs {@code command} on Neovim's command line, as typed: {@code :}, the command, Enter. */
+    void runCommandLine(StyledText target, String command) {
+        openCommandLine(target, command);
+        pressEnter(target);
+        settle();
+    }
+
+    /** Sends Enter to {@code target}, as typed; the plug-in passes it on to Neovim ({@code <CR>}). */
+    static void pressEnter(StyledText target) {
         Event enter = new Event();
         enter.keyCode = SWT.CR;
         enter.character = SWT.CR;
         enter.doit = true;
-        box.notifyListeners(SWT.KeyDown, enter);
-        settle();
+        target.notifyListeners(SWT.KeyDown, enter);
     }
 
-    /** The first {@link Text} below {@code parent}: the {@code :} box, which opens inside the editor. */
-    static Text textChildOf(Composite parent) {
-        for (Control child : parent.getChildren()) {
-            if (child instanceof Text text && !text.isDisposed()) {
-                return text;
-            }
-            if (child instanceof Composite composite) {
-                Text found = textChildOf(composite);
-                if (found != null) {
-                    return found;
-                }
+    /**
+     * Neovim's popup menu as the editor draws it (the {@code :} line's Tab list, insert-mode
+     * completion), or {@code null} while none is drawn: the float of window id {@code -1}
+     * ({@code NeovimSession.floatingWindows}). Example: after {@code :e ot<Tab>} with two matching
+     * files, one row reads {@code other.txt}, the next {@code other2.txt}.
+     */
+    FloatWindow popupMenu() {
+        for (FloatWindow drawn : session.floatingWindows()) {
+            if (drawn.grid().window() == -1) {
+                return drawn;
             }
         }
         return null;
+    }
+
+    /** The text of {@link #popupMenu}'s rows, joined with line breaks; {@code ""} while none is drawn. */
+    String popupMenuText() {
+        FloatWindow menu = popupMenu();
+        if (menu == null) {
+            return "";
+        }
+        List<String> rows = new ArrayList<>();
+        for (int r = 0; r < menu.grid().height(); r++) {
+            rows.add(menu.grid().row(r).stripTrailing());
+        }
+        return String.join("\n", rows);
+    }
+
+    /**
+     * Whether {@code canvas} draws a float that is always there or comes from Neovim itself, not
+     * from a test: one of ui2's windows ({@code require('vim._core.ui2').wins}: cmd, msg, pager,
+     * dialog), which the editor always draws, or Neovim's popup menu (window id {@code -1}). A
+     * test that looks for its own float, or for a panel such as the command-line window's, skips
+     * these. Example: ui2's message window still holds {@code :help help-context} from an earlier
+     * test while a test waits for its own panel of key hints.
+     */
+    boolean isNeovimsOwnFloat(GridCanvas canvas) {
+        if (canvas.grid() == null) {
+            return false;
+        }
+        int window = canvas.grid().window();
+        if (window == -1) {
+            return true;
+        }
+        Object ui2 = SessionProbe.lua(session, """
+                local ok, ui2 = pcall(require, 'vim._core.ui2')
+                if not ok then
+                  return false
+                end
+                for _, win in pairs(ui2.wins) do
+                  if win == WIN then
+                    return true
+                  end
+                end
+                return false""".replace("WIN", String.valueOf(window)));
+        return Boolean.TRUE.equals(ui2);
     }
 
     /**

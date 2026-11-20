@@ -79,25 +79,12 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         settle();
     }
 
+    /**
+     * Waits until Neovim shows {@code expected} in its line (ui2, {@link #expectShown}). One line
+     * serves every editor, so {@code target} only names the editor the message is about.
+     */
     private void expectMessage(ITextEditor target, String expected) {
-        waitUntil("the message " + expected, TIMEOUT_MS, () -> expected.equals(messageText(target)),
-                () -> "; the message line shows " + messageText(target));
-    }
-
-    /** The text of the output popup over {@code parent}, a {@link StyledText} below it, or "none". */
-    private static String popupText(org.eclipse.swt.widgets.Composite parent) {
-        for (org.eclipse.swt.widgets.Control child : parent.getChildren()) {
-            if (child instanceof StyledText text && !text.isDisposed()) {
-                return "\"" + text.getText() + "\"";
-            }
-            if (child instanceof org.eclipse.swt.widgets.Composite composite) {
-                String found = popupText(composite);
-                if (!found.equals("none")) {
-                    return found;
-                }
-            }
-        }
-        return "none";
+        expectShown(expected);
     }
 
     /** Neovim's {@code v:errmsg}: the last error it reported. */
@@ -111,15 +98,15 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     /**
      * The error a {@code :w} that Neovim asked Eclipse for ends with: Neovim's own report of
      * Eclipse's answer ({@code NewFiles.write}), shown as Neovim shows an error in an autocommand,
-     * in the output popup under its {@code Error in BufWriteCmd Autocommands} header. Checked as
-     * what is left, not as a message seen on the way: an error Eclipse showed itself, then
-     * replaced by Neovim's report of a vaguer one ("Eclipse could not save"), would pass a check of
-     * the message line. {@code v:errmsg} is the last error Neovim reported.
+     * in ui2's windows under its {@code Error in BufWriteCmd Autocommands} header. Checked as what
+     * is left, not as a message seen on the way: an error Eclipse showed itself, then replaced by
+     * Neovim's report of a vaguer one ("Eclipse could not save"), would pass a check of the text
+     * shown. {@code v:errmsg} is the last error Neovim reported. One line serves every editor, so
+     * {@code target} only names the editor the error is about.
      */
     private void expectFinalError(ITextEditor target, String expected) {
         waitUntil("v:errmsg " + expected, TIMEOUT_MS, () -> expected.equals(errmsg()), () -> ": " + errmsg());
-        waitUntil("the popup with " + expected, TIMEOUT_MS, () -> popupText(widgetOf(target)).contains(expected),
-                () -> "; the popup shows " + popupText(widgetOf(target)));
+        expectShown(expected);
         settle();
         assertEquals(expected, errmsg(), "the error Neovim reported last, once it is done");
     }
@@ -132,7 +119,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     @Test
     void editOfAMissingFileOpensAnEmptyEditorAndWriteCreatesIt() {
         List<String> dialogs = closeModalDialogsWhile(widget);
-        runInBox(widget, "e new.txt");
+        runCommandLine(widget, "e new.txt");
 
         ITextEditor opened = activeEditorNamed("new.txt");
         expectMessage(opened, "\"new.txt\" [New]");
@@ -143,7 +130,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         StyledText target = widgetOf(opened);
         insert(target, "hello");
         expectText(opened, "hello");
-        runInBox(target, "w");
+        runCommandLine(target, "w");
 
         assertEquals("hello", fileText("new.txt"));
         assertFalse(opened.isDirty());
@@ -152,7 +139,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
 
         type(target, "0x"); // a later :w is an ordinary save
         expectText(opened, "ello");
-        runInBox(target, "w");
+        runCommandLine(target, "w");
         assertEquals("ello", fileText("new.txt"));
         assertTrue(file.isSynchronized(IResource.DEPTH_ZERO), "the workspace knows the saved file (no F5 needed)");
         assertEquals(List.of(), dialogs);
@@ -167,14 +154,14 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     @Test
     void theFirstWriteSwitchesToTheWorkspaceFileAndKeepsNeovimsBuffer() {
         List<String> dialogs = closeModalDialogsWhile(widget);
-        runInBox(widget, "e kept.txt");
+        runCommandLine(widget, "e kept.txt");
         ITextEditor opened = activeEditorNamed("kept.txt");
         StyledText target = widgetOf(opened);
         insert(target, "hello");
         expectText(opened, "hello");
         int bufnr = session.getAttachedBufnr();
 
-        runInBox(target, "w");
+        runCommandLine(target, "w");
 
         IFile file = project.getFile("kept.txt");
         assertEquals(file, opened.getEditorInput().getAdapter(IFile.class), "a workspace-file editor now");
@@ -198,11 +185,11 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     @Test
     void aNewFileWrittenDeletedAndOpenedAgainIsEmpty() throws Exception {
         List<String> dialogs = closeModalDialogsWhile(widget);
-        runInBox(widget, "e again.txt");
+        runCommandLine(widget, "e again.txt");
         ITextEditor first = activeEditorNamed("again.txt");
         insert(widgetOf(first), "hello");
         expectText(first, "hello");
-        runInBox(widgetOf(first), "w");
+        runCommandLine(widgetOf(first), "w");
         IFile file = project.getFile("again.txt");
         assertEquals("hello", fileText("again.txt"));
 
@@ -214,7 +201,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
                 "no file buffer left over from the editor opened by location");
         page().activate(editor);
         waitForAttach(editor, "test.txt");
-        runInBox(widget, "e again.txt");
+        runCommandLine(widget, "e again.txt");
         ITextEditor second = activeEditorNamed("again.txt");
         assertEquals("", documentOf(second).get(), "Eclipse's document");
         assertEquals(List.of(""), session.getBufferLines(), "Neovim's buffer");
@@ -230,7 +217,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     @Test
     void theFirstKeyTypedInANewWorkspaceFileIsKept() throws Exception {
         IFile missing = project.getFile("first.txt");
-        runInBox(widget, "e first.txt");
+        runCommandLine(widget, "e first.txt");
         ITextEditor opened = activeEditorNamed("first.txt");
 
         insert(widgetOf(opened), "hello");
@@ -242,10 +229,10 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     @Test
     void writeOnAnUntouchedNewEditorCreatesAnEmptyFile() {
         List<String> dialogs = closeModalDialogsWhile(widget);
-        runInBox(widget, "e empty.txt");
+        runCommandLine(widget, "e empty.txt");
         ITextEditor opened = activeEditorNamed("empty.txt");
 
-        runInBox(widgetOf(opened), "w");
+        runCommandLine(widgetOf(opened), "w");
 
         assertTrue(project.getFile("empty.txt").exists());
         assertEquals("", fileText("empty.txt"));
@@ -260,12 +247,12 @@ class NewFileEndToEndTest extends EndToEndTestBase {
 
     @Test
     void quittingWithoutWritingLeavesNothing() {
-        runInBox(widget, "e gone.txt");
+        runCommandLine(widget, "e gone.txt");
         ITextEditor opened = activeEditorNamed("gone.txt");
         insert(widgetOf(opened), "text");
 
         StyledText target = widgetOf(opened);
-        runInBox(target, "q!");
+        runCommandLine(target, "q!");
 
         waitUntil("the editor to close", TIMEOUT_MS, () -> target.isDisposed());
         assertFalse(project.getFile("gone.txt").exists());
@@ -285,9 +272,9 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         Path upper = folder.resolveSibling(folder.getFileName().toString().toUpperCase(Locale.ROOT));
         assumeTrue(!upper.toString().equals(folder.toString()) && Files.isDirectory(upper),
                 "file names keep their case here");
-        runInBox(widget, "lcd " + upper.toString().replace(" ", "\\ "));
+        runCommandLine(widget, "lcd " + upper.toString().replace(" ", "\\ "));
 
-        runInBox(widget, "e new.txt");
+        runCommandLine(widget, "e new.txt");
 
         ITextEditor opened = activeEditorNamed("new.txt");
         expectMessage(opened, "\"new.txt\" [New]");
@@ -297,17 +284,17 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     @Test
     void aMissingFolderNeedsPlusPlusP() {
         List<String> dialogs = closeModalDialogsWhile(widget);
-        runInBox(widget, "e sub/new.txt");
+        runCommandLine(widget, "e sub/new.txt");
         ITextEditor opened = activeEditorNamed("new.txt");
         StyledText target = widgetOf(opened);
         insert(target, "x");
 
-        runInBox(target, "w");
+        runCommandLine(target, "w");
         expectFinalError(opened, NewFiles.NO_FOLDER);
         assertFalse(project.getFolder("sub").exists(), "no folder");
         assertTrue(opened.isDirty());
 
-        runInBox(target, "w ++p");
+        runCommandLine(target, "w ++p");
         assertEquals("x", fileText("sub/new.txt"));
         assertFalse(opened.isDirty());
         assertEquals(List.of(), dialogs);
@@ -331,18 +318,18 @@ class NewFileEndToEndTest extends EndToEndTestBase {
                 assumeTrue(false, "cannot make a symbolic link here: " + e);
             }
             List<String> dialogs = closeModalDialogsWhile(widget);
-            runInBox(widget, "e notes.local");
+            runCommandLine(widget, "e notes.local");
             ITextEditor opened = activeEditorNamed("notes.local");
             expectMessage(opened, "\"notes.local\" [New] " + DanglingLinks.newFileNote(link));
             StyledText target = widgetOf(opened);
             insert(target, "x");
 
-            runInBox(target, "w");
+            runCommandLine(target, "w");
             expectFinalError(opened, DanglingLinks.refusal("notes.local", link));
             assertFalse(Files.exists(gone), "nothing written through the link");
             assertTrue(opened.isDirty());
 
-            runInBox(target, "w!");
+            runCommandLine(target, "w!");
             waitUntil("the link's target written", TIMEOUT_MS, () -> Files.exists(gone));
             assertEquals("x", Files.readString(gone, StandardCharsets.UTF_8));
             assertEquals(List.of(), dialogs);
@@ -383,17 +370,17 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             }
             assertTrue(listed.exists(), "the workspace lists the link as an existing file, as on Windows");
             List<String> dialogs = closeModalDialogsWhile(widget);
-            runInBox(widget, "e listed.local");
+            runCommandLine(widget, "e listed.local");
             ITextEditor opened = activeEditorNamed("listed.local");
             expectMessage(opened, "\"listed.local\" [New] " + DanglingLinks.newFileNote(link));
             StyledText target = widgetOf(opened);
             insert(target, "x");
 
-            runInBox(target, "w");
+            runCommandLine(target, "w");
             expectFinalError(opened, DanglingLinks.refusal("listed.local", link));
             assertFalse(Files.exists(gone), "nothing written through the link");
 
-            runInBox(target, "w!");
+            runCommandLine(target, "w!");
             waitUntil("the link's target written", TIMEOUT_MS, () -> Files.exists(gone));
             assertEquals("x", Files.readString(gone, StandardCharsets.UTF_8));
             waitUntil("the editor clean", TIMEOUT_MS, () -> !opened.isDirty());
@@ -427,17 +414,17 @@ class NewFileEndToEndTest extends EndToEndTestBase {
                 assumeTrue(false, "cannot make a symbolic link here: " + e);
             }
             List<String> dialogs = closeModalDialogsWhile(widget);
-            runInBox(widget, "e all.local");
+            runCommandLine(widget, "e all.local");
             ITextEditor opened = activeEditorNamed("all.local");
             StyledText target = widgetOf(opened);
             insert(target, "a");
 
-            runInBox(target, "wa");
+            runCommandLine(target, "wa");
             expectMessage(opened, DanglingLinks.refusal("all.local", link));
             assertFalse(Files.exists(gone), "nothing written through the link");
             assertTrue(opened.isDirty());
 
-            runInBox(target, "wa!");
+            runCommandLine(target, "wa!");
             waitUntil("the link's target written", TIMEOUT_MS, () -> Files.exists(gone));
             assertEquals("a", Files.readString(gone, StandardCharsets.UTF_8));
             assertEquals(List.of(), dialogs);
@@ -468,17 +455,17 @@ class NewFileEndToEndTest extends EndToEndTestBase {
                 assumeTrue(false, "cannot make a symbolic link here: " + e);
             }
             List<String> dialogs = closeModalDialogsWhile(widget);
-            runInBox(widget, "e wq.local");
+            runCommandLine(widget, "e wq.local");
             ITextEditor opened = activeEditorNamed("wq.local");
             StyledText target = widgetOf(opened);
             insert(target, "q");
 
-            runInBox(target, "wq");
+            runCommandLine(target, "wq");
             expectMessage(opened, DanglingLinks.refusal("wq.local", link));
             assertFalse(target.isDisposed(), "the editor stays open");
             assertFalse(Files.exists(gone), "nothing written through the link");
 
-            runInBox(target, "wq!");
+            runCommandLine(target, "wq!");
             waitUntil("the editor to close", TIMEOUT_MS, target::isDisposed);
             assertEquals("q", Files.readString(gone, StandardCharsets.UTF_8));
             assertEquals(List.of(), dialogs);
@@ -496,13 +483,13 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
         Path outside = dir.resolve("outside-new.txt");
         try {
-            runInBox(widget, "e " + outside);
+            runCommandLine(widget, "e " + outside);
             ITextEditor opened = activeEditorNamed("outside-new.txt");
             assertNull(opened.getEditorInput().getAdapter(IFile.class), "not a workspace file");
             insert(widgetOf(opened), "out");
             expectText(opened, "out");
 
-            runInBox(widgetOf(opened), "w");
+            runCommandLine(widgetOf(opened), "w");
 
             assertEquals("out", Files.readString(outside, StandardCharsets.UTF_8));
             assertFalse(opened.isDirty());
@@ -523,18 +510,18 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         Path sub = dir.resolve("sub");
         Path outside = sub.resolve("new.txt");
         try {
-            runInBox(widget, "e " + outside);
+            runCommandLine(widget, "e " + outside);
             ITextEditor opened = activeEditorNamed("new.txt");
             StyledText target = widgetOf(opened);
             insert(target, "out");
             expectText(opened, "out");
 
-            runInBox(target, "w");
+            runCommandLine(target, "w");
             expectFinalError(opened, NewFiles.NO_FOLDER);
             assertFalse(Files.exists(sub), "no folder");
             assertTrue(opened.isDirty());
 
-            runInBox(target, "w ++p");
+            runCommandLine(target, "w ++p");
             assertEquals("out", Files.readString(outside, StandardCharsets.UTF_8));
             assertFalse(opened.isDirty());
             closeAll();
@@ -547,13 +534,13 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     @Test
     void theWrittenMessageCountsBytesInTheFilesEncoding() throws Exception {
         project.setDefaultCharset("ISO-8859-1", null);
-        runInBox(widget, "e enc.txt");
+        runCommandLine(widget, "e enc.txt");
         ITextEditor opened = activeEditorNamed("enc.txt");
         StyledText target = widgetOf(opened);
         insert(target, "é");
         expectText(opened, "é");
 
-        runInBox(target, "w");
+        runCommandLine(target, "w");
 
         expectMessage(opened, "\"enc.txt\" [New] [noeol] 1L, 1B written");
         try (var in = project.getFile("enc.txt").getContents(true)) {
@@ -565,7 +552,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     /** No editor is registered for this extension: the Text Editor opens, never an outside program. */
     @Test
     void anUnknownExtensionOpensInTheTextEditor() {
-        runInBox(widget, "e notes.unknownext");
+        runCommandLine(widget, "e notes.unknownext");
         ITextEditor opened = activeEditorNamed("notes.unknownext");
         assertEquals(NewFiles.TEXT_EDITOR, opened.getSite().getId());
         closeAll();
@@ -574,11 +561,11 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     @Test
     void wqCreatesTheFileAndClosesTheEditor() {
         List<String> dialogs = closeModalDialogsWhile(widget);
-        runInBox(widget, "e wq.txt");
+        runCommandLine(widget, "e wq.txt");
         ITextEditor opened = activeEditorNamed("wq.txt");
 
         StyledText target = widgetOf(opened);
-        runInBox(target, "wq"); // even untouched, as in Vim
+        runCommandLine(target, "wq"); // even untouched, as in Vim
 
         waitUntil("the editor to close", TIMEOUT_MS, () -> target.isDisposed());
         assertTrue(project.getFile("wq.txt").exists());
@@ -588,7 +575,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     @Test
     void zzCreatesAChangedFileAndCloses() {
         List<String> dialogs = closeModalDialogsWhile(widget);
-        runInBox(widget, "e zz.txt");
+        runCommandLine(widget, "e zz.txt");
         ITextEditor opened = activeEditorNamed("zz.txt");
         StyledText target = widgetOf(opened);
         insert(target, "z");
@@ -602,11 +589,11 @@ class NewFileEndToEndTest extends EndToEndTestBase {
 
     @Test
     void xOnAnUntouchedNewEditorClosesWithoutCreatingTheFile() {
-        runInBox(widget, "e x.txt");
+        runCommandLine(widget, "e x.txt");
         ITextEditor opened = activeEditorNamed("x.txt");
 
         StyledText target = widgetOf(opened);
-        runInBox(target, "x");
+        runCommandLine(target, "x");
 
         waitUntil("the editor to close", TIMEOUT_MS, () -> target.isDisposed());
         assertFalse(project.getFile("x.txt").exists());
@@ -617,11 +604,11 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         List<String> dialogs = closeModalDialogsWhile(widget);
         document.replace(0, 0, "1");
         settle();
-        runInBox(widget, "e all.txt");
+        runCommandLine(widget, "e all.txt");
         ITextEditor opened = activeEditorNamed("all.txt");
         insert(widgetOf(opened), "a");
 
-        runInBox(widgetOf(opened), "wa");
+        runCommandLine(widgetOf(opened), "wa");
 
         assertEquals("a", fileText("all.txt"));
         assertEquals("1alpha\nbeta\ngamma\n", fileText("test.txt"));
@@ -639,13 +626,13 @@ class NewFileEndToEndTest extends EndToEndTestBase {
     @Test
     void aNewFileThatWriteAllCreatedInTheBackgroundStillFollowsNeovim() throws Exception {
         List<String> dialogs = closeModalDialogsWhile(widget);
-        runInBox(widget, "e new1.txt");
+        runCommandLine(widget, "e new1.txt");
         ITextEditor first = activeEditorNamed("new1.txt");
         insert(widgetOf(first), "x");
-        runInBox(widgetOf(first), "e new2.txt");
+        runCommandLine(widgetOf(first), "e new2.txt");
         ITextEditor second = activeEditorNamed("new2.txt");
 
-        runInBox(widgetOf(second), "wa");
+        runCommandLine(widgetOf(second), "wa");
         assertEquals("x", fileText("new1.txt"));
         assertEquals(project.getFile("new1.txt"), first.getEditorInput().getAdapter(IFile.class),
                 "new1.txt's editor shows the workspace file now");
@@ -673,14 +660,14 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         ITextEditor nestedEditor = (ITextEditor) IDE.openEditor(page(), nested, TEXT_EDITOR, true);
         waitForAttach(nestedEditor, "src/Nested.txt");
 
-        runInBox(widgetOf(nestedEditor), "e ./Foo.txt");
+        runCommandLine(widgetOf(nestedEditor), "e ./Foo.txt");
         ITextEditor root = activeEditorNamed("Foo.txt");
         assertEquals(project.getFile("Foo.txt"), NewFiles.workspaceFileAt(EditorAttachManager.fileOf(root.getEditorInput())));
         assertEquals("root\n", documentOf(root).get(), "the root's Foo.txt");
         page().activate(nestedEditor);
         waitForAttach(nestedEditor, "src/Nested.txt");
 
-        runInBox(widgetOf(nestedEditor), "e %:h/New.txt");
+        runCommandLine(widgetOf(nestedEditor), "e %:h/New.txt");
         ITextEditor created = activeEditorNamed("New.txt");
         assertEquals(project.getFile("src/New.txt"), NewFiles.workspaceFileAt(EditorAttachManager.fileOf(created.getEditorInput())));
         assertEquals("", documentOf(created).get(), "a new file beside Nested.txt");
@@ -689,11 +676,11 @@ class NewFileEndToEndTest extends EndToEndTestBase {
         // %:h/name puts it beside the file
         page().activate(nestedEditor);
         waitForAttach(nestedEditor, "src/Nested.txt");
-        runInBox(widgetOf(nestedEditor), "w w-copy.txt");
+        runCommandLine(widgetOf(nestedEditor), "w w-copy.txt");
         waitUntil("w-copy.txt at the root", TIMEOUT_MS, () -> project.getFile("w-copy.txt").exists());
-        runInBox(widgetOf(nestedEditor), "w %:h/beside.txt");
+        runCommandLine(widgetOf(nestedEditor), "w %:h/beside.txt");
         waitUntil("beside.txt in src", TIMEOUT_MS, () -> project.getFile("src/beside.txt").exists());
-        runInBox(widgetOf(nestedEditor), "wq wq-copy.txt");
+        runCommandLine(widgetOf(nestedEditor), "wq wq-copy.txt");
         waitUntil("src/Nested.txt to close", TIMEOUT_MS, () -> page().findEditor(nestedEditor.getEditorInput()) == null);
         assertEquals("nested\n", fileText("wq-copy.txt"), "at the root, as :w puts it");
         assertFalse(project.getFile("src/wq-copy.txt").exists());
