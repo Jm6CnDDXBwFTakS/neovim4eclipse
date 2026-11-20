@@ -57,6 +57,7 @@ class NotificationBridgeTest {
             }
             @Override public void onBufferReload(int bufnr, boolean kept) { events.add("reload:" + bufnr + (kept ? " kept" : "")); }
             @Override public void onWindowClosed(int winid) { events.add("winclosed:" + winid); }
+            @Override public void onUi2Windows(List<Integer> wins) { events.add("ui2:" + wins); }
             @Override public void onEcho(int bufnr, boolean starts) { events.add("echo@" + bufnr + ":" + starts); }
             @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
             @Override public void onWrap(int bufnr, boolean wrap, int winid) { events.add("wrap@" + bufnr + ":" + wrap + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid)); }
@@ -311,6 +312,14 @@ class NotificationBridgeTest {
         notify("eclipse_window_closed", 1003);
         notify("eclipse_window_closed");
         assertEquals(List.of("winclosed:1003"), events);
+    }
+
+    /** LuaScripts.UI2's window ids: cmd, msg, pager, dialog; one ui2 has not made (-1) or not a number is left out. */
+    @Test
+    void ui2sWindowsCarryTheirIds() {
+        notify("eclipse_ui2_windows", 1002L, 1003L, 1004L, 1005L);
+        notify("eclipse_ui2_windows", 1002L, -1L, "x", 1005L);
+        assertEquals(List.of("ui2:[1002, 1003, 1004, 1005]", "ui2:[1002, 1005]"), events);
     }
 
     /** The two notifications around Eclipse's write of a buffer (LuaScripts.SET_DOCUMENT_LINES). */

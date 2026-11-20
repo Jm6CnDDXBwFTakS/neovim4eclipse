@@ -2440,6 +2440,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
+        public void onUi2Windows(List<Integer> wins) {
+            grids.ui2Windows(wins); // on the reader thread, as the grids' redraws
+        }
+
+        @Override
         public void onWindowClosed(int winid) {
             if (!closed) {
                 // On the input thread, where the windows change: in order with the shows queued there.

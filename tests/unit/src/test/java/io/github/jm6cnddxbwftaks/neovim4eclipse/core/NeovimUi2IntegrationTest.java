@@ -1,0 +1,119 @@
+// SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
+// SPDX-License-Identifier: EPL-2.0
+
+package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BooleanSupplier;
+
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
+
+/**
+ * Neovim's ui2 ({@link LuaScripts#UI2}) with the session's real UI attached: what ui2 shows comes
+ * with redraws, which the Lua specs' headless Neovim does not make while keys are fed
+ * ({@code ui2_spec.lua} pins the rest). The session reports ui2's windows as floats to draw
+ * ({@code util/Grids}), with the cursor in its line, whatever the switch for plug-ins' floats says.
+ */
+@Tag("integration")
+class NeovimUi2IntegrationTest {
+
+    private static final String NVIM = TestNeovim.PATH;
+    private static final long WAIT_MS = TestWait.millis();
+
+    private static NeovimSession start(String... args) throws Exception {
+        TestNeovim.require();
+        return NeovimSession.start(NVIM, List.of(args));
+    }
+
+    private static void waitFor(BooleanSupplier condition, String what) throws Exception {
+        long deadline = System.currentTimeMillis() + WAIT_MS;
+        while (!condition.getAsBoolean() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(25);
+        }
+        assertTrue(condition.getAsBoolean(), "timed out waiting for " + what);
+    }
+
+    private static long number(NeovimSession s, String lua) {
+        try {
+            return ((Number) s.lua(lua)).longValue();
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    /** The last report's float showing window {@code win}, or null. */
+    private static FloatWindow window(List<List<FloatWindow>> reports, long win) {
+        if (reports.isEmpty()) {
+            return null;
+        }
+        for (FloatWindow f : reports.get(reports.size() - 1)) {
+            if (f.grid().window() == win) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    private static String text(FloatWindow f) {
+        StringBuilder all = new StringBuilder();
+        for (int r = 0; r < f.grid().height(); r++) {
+            all.append(f.grid().row(r)).append('\n');
+        }
+        return all.toString();
+    }
+
+    /** A typed {@code :} line is ui2's cmd window, drawn with the cursor after the typed text. */
+    @Test
+    void theTypedLineIsUi2sWindowDrawnWithTheCursor() throws Exception {
+        for (String floats : List.of("let g:neovim4eclipse_floating_windows = 1", "let g:neovim4eclipse_floating_windows = 0")) {
+            try (NeovimSession s = start("--clean", "--cmd", floats)) {
+                List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
+                s.addFloatingWindowListener(reports::add);
+                long cmd = number(s, "return require('vim._core.ui2').wins.cmd");
+                assertEquals(1L, number(s, "return vim.o.cmdheight"), floats);
+                for (String key : List.of(":", "e", "c", "h")) {
+                    s.input(key);
+                }
+                waitFor(() -> {
+                    FloatWindow line = window(reports, cmd);
+                    return line != null && line.grid().row(0).startsWith(":ech") && line.grid().cursorCol() == 4;
+                }, "ui2's line with ':ech' and the cursor after it (" + floats + "): " + reports);
+                FloatWindow line = window(reports, cmd);
+                assertEquals(0, line.grid().cursorRow());
+                assertEquals(line.hostRows() - 1, line.row(), "over the editor's last row");
+                s.input("<Esc>");
+            }
+        }
+    }
+
+    /** A message of three lines and g< show ui2's text in its floats; g< enters the pager, drawn with the cursor. */
+    @Test
+    void outputAndThePagerAreUi2sFloats() throws Exception {
+        try (NeovimSession s = start("--clean")) {
+            List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
+            s.addFloatingWindowListener(reports::add);
+            for (String key : List.of(":", "e", "c", "h", "o", " ", "\"", "o", "n", "e", "\\", "n", "t", "w", "o", "\"", "<CR>")) {
+                s.input(key);
+            }
+            long pager = number(s, "return require('vim._core.ui2').wins.pager");
+            s.input("g");
+            s.input("<lt>");
+            waitFor(() -> number(s, "return vim.api.nvim_get_current_win()") == pager, "the cursor in the pager");
+            waitFor(() -> {
+                FloatWindow f = window(reports, pager);
+                return f != null && text(f).contains("two") && f.grid().cursorRow() >= 0;
+            }, "the pager drawn with the output and the cursor: " + reports);
+            s.input("q");
+            waitFor(() -> number(s, "return vim.api.nvim_get_current_win()") != pager, "q leaves the pager");
+        }
+    }
+}

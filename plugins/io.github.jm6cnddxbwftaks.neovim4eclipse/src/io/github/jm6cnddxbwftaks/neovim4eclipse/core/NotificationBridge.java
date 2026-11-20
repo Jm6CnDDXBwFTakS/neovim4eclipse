@@ -102,6 +102,14 @@ final class NotificationBridge implements Incoming {
         void onWindowClosed(int winid);
 
         /**
+         * The ids of ui2's windows ({@link LuaScripts#UI2}): the command line, messages, pager and
+         * prompts Neovim draws itself. The editor draws them whatever else it draws of Neovim's
+         * floats, and with the cursor in them. Sent at start and each time ui2 makes one again.
+         * Example: {@code [1002, 1003, 1004, 1005]}.
+         */
+        void onUi2Windows(List<Integer> wins);
+
+        /**
          * Neovim deleted document buffer {@code bufnr}, or is quitting its window, by itself
          * ({@code <Cmd>bd}, {@code vim.cmd.quit()}): the safety nets in {@link LuaScripts#HOST_COMMANDS}
          * and {@link LuaScripts#DOCUMENT_BUFFER}.
@@ -274,6 +282,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_search" -> onSearch(args);
             case "eclipse_highlights" -> onHighlights(args);
             case "eclipse_window_closed" -> onWindowClosed(args);
+            case "eclipse_ui2_windows" -> onUi2Windows(args);
             case "eclipse_view_page" -> onViewPage(args);
             case "eclipse_echo" -> onEcho(args);
             case "eclipse_cmdwin" -> onCommandWindow(args);
@@ -400,6 +409,18 @@ final class NotificationBridge implements Incoming {
             return;
         }
         sink.onViewContent(new PageBuffer(kind, buffer, line));
+    }
+
+    /** Payload: {@code [cmd, msg, pager, dialog]}, the window ids from {@link LuaScripts#UI2}; a window not sent is left out. */
+    private void onUi2Windows(List<?> args) {
+        List<Integer> wins = new ArrayList<>();
+        for (int i = 0; i < args.size(); i++) {
+            int win = window(args, i);
+            if (win != EditorWindow.UNKNOWN && win > 0) {
+                wins.add(win);
+            }
+        }
+        sink.onUi2Windows(List.copyOf(wins));
     }
 
     private void onWindowClosed(List<?> args) {

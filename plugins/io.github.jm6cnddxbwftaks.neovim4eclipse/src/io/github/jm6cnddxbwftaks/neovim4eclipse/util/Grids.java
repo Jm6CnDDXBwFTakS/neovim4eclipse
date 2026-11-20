@@ -80,6 +80,12 @@ public final class Grids {
     private boolean changed;
     private GridSnapshot last;
     private boolean drawFloats;
+    /**
+     * The windows of Neovim's ui2 ({@code LuaScripts.UI2}): its command line, messages, pager and
+     * prompts. Drawn whether {@link #drawFloats} is on or not, and with the cursor in them. Reader
+     * thread.
+     */
+    private Set<Integer> ui2Windows = Set.of();
     private boolean floatsChanged;
     private List<FloatWindow> lastFloats = List.of();
     /** Whether a float left out for the limits was logged: once is enough to explain a missing window. */
@@ -142,7 +148,7 @@ public final class Grids {
     public boolean wantsLines(int grid) {
         Integer win = windowOfGrid.get(grid);
         return win == null || (drawnWindow != -1 && win == drawnWindow) || pages.contains(win)
-                || (drawFloats && isFloat(grid));
+                || ((drawFloats || alwaysDrawn(grid)) && isFloat(grid));
     }
 
     /**
@@ -153,6 +159,19 @@ public final class Grids {
     public void drawFloats(boolean on) {
         if (on != drawFloats) {
             drawFloats = on;
+            floatsChanged = true;
+        }
+    }
+
+    /**
+     * The windows of ui2, from {@code LuaScripts.UI2} (at start, and whenever ui2 makes one
+     * again). They are Neovim's own command line and messages, so the editor draws them as it
+     * draws Neovim's popup menu: always ({@link #alwaysDrawn}). Example: {@code [1002, 1003, 1004, 1005]}.
+     */
+    public void ui2Windows(List<Integer> wins) {
+        Set<Integer> now = Set.copyOf(wins);
+        if (!now.equals(ui2Windows)) {
+            ui2Windows = now;
             floatsChanged = true;
         }
     }
@@ -191,6 +210,7 @@ public final class Grids {
                 pageTouched(e.grid());
                 boolean wasDrawn = isDrawn(cursorGrid);
                 floatsChanged |= cursorGrid != e.grid(); // the focus moved: into a float, out of one, to another window
+                floatsChanged |= alwaysDrawn(e.grid()); // the cursor moved in ui2's line or pager, drawn with it
                 cursorGrid = e.grid();
                 cursorRow = e.row();
                 cursorCol = e.col();
@@ -355,7 +375,9 @@ public final class Grids {
      * The floating windows to draw, lowest in the stack first, if they differ from the last answer;
      * empty otherwise. An answer with no window in it says the last one closed. Called at each
      * {@code flush}. Left out: a float with the focus (the cursor is on its grid), the drawn
-     * command-line window, and everything while {@link #drawFloats} is off.
+     * command-line window, and everything while {@link #drawFloats} is off, except the windows
+     * that are always drawn ({@link #alwaysDrawn}): ui2's and Neovim's popup menu, the cursor's
+     * included, with the cursor.
      *
      * <p>And what goes past the limits ({@link #MAX_FLOATS}, {@link #MAX_FLOAT_CELLS}): the
      * windows are taken highest in the stack first, each one if it still fits; one that does not
@@ -371,40 +393,46 @@ public final class Grids {
         }
         floatsChanged = false;
         List<FloatWindow> floats = new ArrayList<>();
-        if (drawFloats) {
-            GridEvent.WinPos host = host();
-            List<Map.Entry<Integer, GridEvent.WinPos>> candidates = new ArrayList<>();
-            for (Map.Entry<Integer, GridEvent.WinPos> e : placeOfGrid.entrySet()) {
-                GridEvent.WinPos place = e.getValue();
-                if (place.floating() && grids.containsKey(e.getKey()) && e.getKey() != cursorGrid
-                        && place.win() != drawnWindow) {
-                    candidates.add(e);
-                }
+        GridEvent.WinPos host = host();
+        int below = rowsBelow(host);
+        boolean inCommandLine = cursorInUi2();
+        List<Map.Entry<Integer, GridEvent.WinPos>> candidates = new ArrayList<>();
+        for (Map.Entry<Integer, GridEvent.WinPos> e : placeOfGrid.entrySet()) {
+            GridEvent.WinPos place = e.getValue();
+            boolean always = alwaysDrawn(e.getKey());
+            if (place.floating() && grids.containsKey(e.getKey()) && (drawFloats || always)
+                    && (e.getKey() != cursorGrid || always) && (drawnWindow == -1 || place.win() != drawnWindow)) {
+                candidates.add(e);
             }
-            // Highest in the stack first: when the limits leave some out, the ones on top stay.
-            candidates.sort(Comparator.<Map.Entry<Integer, GridEvent.WinPos>>comparingInt(e -> e.getValue().zindex())
-                    .thenComparingInt(e -> e.getValue().win()).reversed());
-            long cells = 0;
-            for (Map.Entry<Integer, GridEvent.WinPos> e : candidates) {
-                GridEvent.WinPos place = e.getValue();
-                GridCells grid = grids.get(e.getKey());
-                long size = (long) grid.width * grid.height; // as long: two large ints would wrap
-                if (floats.size() >= MAX_FLOATS || cells + size > MAX_FLOAT_CELLS) {
-                    if (!limitLogged) {
-                        limitLogged = true;
-                        LOG.info(() -> "a floating window of Neovim's is not drawn: more than " + MAX_FLOATS
-                                + " windows or " + MAX_FLOAT_CELLS + " cells at once (window " + place.win() + ", "
-                                + grid.width + "x" + grid.height + "); said once per session");
-                    }
-                    continue;
-                }
-                cells += size;
-                floats.add(new FloatWindow(snapshot(place.win(), e.getKey(), grid, false),
-                        place.row() - (host == null ? 0 : host.row()), place.col() - (host == null ? 0 : host.col()),
-                        host == null ? 0 : host.height(), host == null ? 0 : host.width(), place.zindex()));
-            }
-            floats.sort(Comparator.comparingInt(FloatWindow::zindex).thenComparingInt(f -> f.grid().window()));
         }
+        // Highest in the stack first: when the limits leave some out, the ones on top stay.
+        candidates.sort(Comparator.<Map.Entry<Integer, GridEvent.WinPos>>comparingInt(e -> e.getValue().zindex())
+                .thenComparingInt(e -> e.getValue().win()).reversed());
+        long cells = 0;
+        for (Map.Entry<Integer, GridEvent.WinPos> e : candidates) {
+            GridEvent.WinPos place = e.getValue();
+            GridCells grid = grids.get(e.getKey());
+            long size = (long) grid.width * grid.height; // as long: two large ints would wrap
+            if (floats.size() >= MAX_FLOATS || cells + size > MAX_FLOAT_CELLS) {
+                if (!limitLogged) {
+                    limitLogged = true;
+                    LOG.info(() -> "a floating window of Neovim's is not drawn: more than " + MAX_FLOATS
+                            + " windows or " + MAX_FLOAT_CELLS + " cells at once (window " + place.win() + ", "
+                            + grid.width + "x" + grid.height + "); said once per session");
+                }
+                continue;
+            }
+            cells += size;
+            // ui2's windows hang from the bottom of Neovim's screen, below the editor's window (its
+            // status line, the command line): moved up by those rows, over the editor's last ones.
+            // So is the popup menu while a ':' line is typed: it hangs from that line.
+            boolean fromBottom = ui2Windows.contains(place.win()) || (place.win() == -1 && inCommandLine);
+            floats.add(new FloatWindow(snapshot(place.win(), e.getKey(), grid, alwaysDrawn(e.getKey())),
+                    place.row() - (host == null ? 0 : host.row()) - (fromBottom ? below : 0),
+                    place.col() - (host == null ? 0 : host.col()),
+                    host == null ? 0 : host.height(), host == null ? 0 : host.width(), place.zindex()));
+        }
+        floats.sort(Comparator.comparingInt(FloatWindow::zindex).thenComparingInt(f -> f.grid().window()));
         if (floats.equals(lastFloats)) {
             return Optional.empty();
         }
@@ -472,6 +500,34 @@ public final class Grids {
         return best;
     }
 
+    /**
+     * How many rows Neovim's screen has below {@code host}, the editor's window: its status line
+     * and the command line ({@code 'cmdheight'} 1). The screen is the default grid, 1. Example: an
+     * editor of 30 rows, a screen of 32: 2. 0 before both are known.
+     */
+    private int rowsBelow(GridEvent.WinPos host) {
+        GridCells screen = grids.get(1);
+        return host == null || screen == null ? 0 : Math.max(0, screen.height - host.row() - host.height());
+    }
+
+    /** Whether the cursor is in one of ui2's windows: a {@code :} line being typed, or the pager entered. */
+    private boolean cursorInUi2() {
+        Integer win = windowOfGrid.get(cursorGrid);
+        return win != null && ui2Windows.contains(win);
+    }
+
+    /**
+     * Whether {@code grid} is drawn whatever {@link #drawFloats} says, and with the cursor in it:
+     * one of ui2's windows ({@link #ui2Windows}), or Neovim's popup menu, the one float without a
+     * window (win -1), which ui2's {@code :} line and insert-mode completion show their lists in.
+     * Without them there is no command line to see, so the switch for plug-ins' floats
+     * ({@code vim.g.neovim4eclipse_floating_windows}) does not hide them.
+     */
+    private boolean alwaysDrawn(int grid) {
+        Integer win = windowOfGrid.get(grid);
+        return win != null && (ui2Windows.contains(win) || (win == -1 && isFloat(grid)));
+    }
+
     private boolean isFloat(int grid) {
         GridEvent.WinPos place = placeOfGrid.get(grid);
         return place != null && place.floating();
@@ -492,7 +548,7 @@ public final class Grids {
         if (drawnWindow != -1 && (isDrawn(grid) || unknown)) {
             changed = true;
         }
-        if (drawFloats && (isFloat(grid) || unknown)) {
+        if ((drawFloats && isFloat(grid)) || alwaysDrawn(grid) || unknown) {
             floatsChanged = true; // a new float's lines come before its win_float_pos
         }
     }

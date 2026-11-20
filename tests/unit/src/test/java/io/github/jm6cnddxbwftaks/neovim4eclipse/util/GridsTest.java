@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -449,5 +450,71 @@ class GridsTest {
         grids.apply(new GridEvent.WinGone(5));
         grids.apply(new GridEvent.Line(1, 5, 0, text("other", 3))); // another window's status line now
         assertTrue(grids.pageStatusIfChanged().isEmpty());
+    }
+
+    // ---- ui2's windows and Neovim's popup menu ----
+
+    /**
+     * Neovim's screen of 25 rows (the default grid, 1) with the editor's window of 23 at its top:
+     * its status line and ui2's command line below it. ui2's command line, window 1010, on grid 8 at
+     * the screen's last row, as wide as the screen.
+     */
+    private void screenWithUi2Line() {
+        grids.apply(new GridEvent.Resize(1, 80, 25));
+        editorWindow();
+        grids.ui2Windows(List.of(1010, 1011, 1012, 1013));
+        grids.apply(new GridEvent.Resize(8, 80, 1));
+        grids.apply(new GridEvent.Line(8, 0, 0, text(":ech", 0)));
+        grids.apply(new GridEvent.WinPos(8, 1010, true, 24, 0, 0, 0, 200));
+    }
+
+    /** The {@code :} line being typed: the cursor is in ui2's line, which is drawn with it. */
+    @Test
+    void ui2sLineIsDrawnWithTheCursorInItOverTheEditorsLastRow() {
+        grids.drawFloats(true);
+        screenWithUi2Line();
+        grids.apply(new GridEvent.CursorGoto(8, 0, 4));
+        List<FloatWindow> floats = grids.floatsIfChanged().orElseThrow();
+        assertEquals(1, floats.size());
+        FloatWindow line = floats.get(0);
+        assertEquals(":ech", line.grid().row(0).strip());
+        assertEquals(0, line.grid().cursorRow());
+        assertEquals(4, line.grid().cursorCol());
+        assertEquals(22, line.row(), "screen row 24, moved up by the 2 rows below the editor's window: its last row");
+        grids.apply(new GridEvent.CursorGoto(8, 0, 2)); // the cursor moved left, no line changed
+        assertEquals(2, grids.floatsIfChanged().orElseThrow().get(0).grid().cursorCol(), "drawn again with the cursor");
+    }
+
+    /** vim.g.neovim4eclipse_floating_windows = 0 hides plug-ins' floats, not Neovim's own line. */
+    @Test
+    void ui2sWindowsAreDrawnWithPlugInsFloatsTurnedOff() {
+        grids.drawFloats(false);
+        screenWithUi2Line();
+        floatAt(5, 1002, 3, 3, 50); // a plug-in's panel
+        assertTrue(grids.wantsLines(8), "ui2's lines are read");
+        assertFalse(grids.wantsLines(5), "a plug-in float's are not");
+        List<FloatWindow> floats = grids.floatsIfChanged().orElseThrow();
+        assertEquals(List.of(1010), floats.stream().map(f -> f.grid().window()).toList());
+    }
+
+    /**
+     * Neovim's popup menu, the one float with no window (-1): drawn with plug-ins' floats off too.
+     * While a {@code :} line is typed it hangs from that line and moves up with it; in insert mode
+     * it stays by the text.
+     */
+    @Test
+    void thePopupMenuMovesWithTheCommandLineButNotInInsertMode() {
+        grids.drawFloats(false);
+        screenWithUi2Line();
+        grids.apply(new GridEvent.Resize(9, 16, 5));
+        grids.apply(new GridEvent.Line(9, 0, 0, text(" echo", 0)));
+        grids.apply(new GridEvent.WinPos(9, -1, true, 19, 0, 0, 0, 250)); // its last row just above the line
+        grids.apply(new GridEvent.CursorGoto(8, 0, 4));
+        List<FloatWindow> typing = grids.floatsIfChanged().orElseThrow();
+        assertEquals(List.of(1010, -1), typing.stream().map(f -> f.grid().window()).toList());
+        assertEquals(17, typing.get(1).row(), "screen row 19, moved up by 2 as the line is");
+        grids.apply(new GridEvent.CursorGoto(2, 4, 0)); // insert-mode completion, by the text
+        List<FloatWindow> inserting = grids.floatsIfChanged().orElseThrow();
+        assertEquals(19, inserting.get(1).row(), "where Neovim put it");
     }
 }
