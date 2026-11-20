@@ -18,16 +18,12 @@
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.Utf8Columns} (Neovim's UTF-8 byte columns
  *       versus Eclipse's UTF-16 character offsets).</li>
  *   <li><b>Modes and commands:</b> {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes},
- *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineEvent} and
- *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.CmdlineWatcher} (command lines Neovim
- *       opens, and which of them the user opened),
+ *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineComposition} (an input method's
+ *       composition on Neovim's command line),
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand} (the commands Neovim hands to
  *       Eclipse),
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.EnewEditors} (the untitled editors
  *       {@code :enew} opened, whose window keeps the folder it copies),
- *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageEvent} and
- *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.MessageRoute} (Neovim's messages, and
- *       where they go: the message line or the output popup),
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay}.</li>
  *   <li><b>Neovim's screen:</b> {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent} (the
  *       grid events of a {@code redraw}), {@link io.github.jm6cnddxbwftaks.neovim4eclipse.util.Grids}

@@ -25,8 +25,8 @@ public final class StartupErrorReport {
     /**
      * The errors noice.nvim reports when it starts under a UI that draws the command line, the
      * popup menu and the messages itself, as the plug-in's UI does ({@code ext_cmdline},
-     * {@code ext_popupmenu}, {@code ext_messages}); noice then turns itself off, and the plug-in's
-     * {@code :} box and message line work as usual. Example, one of the three:
+     * {@code ext_messages}); noice then turns itself off, and Neovim's own command line and messages
+     * (ui2) work as usual. Example, one of the three:
      * {@code You're using a GUI that uses ext_cmdline. Noice can't work when the GUI has ext_cmdline enabled.}
      *
      * <p>Why they are left out: noice is common (LazyVim turns it on), and these lines are no error to

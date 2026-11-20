@@ -38,9 +38,9 @@
  *             floats, completion, host commands, ...) and hands each to the one
  *             {@code FocusTarget} with the focus, the part shown from Neovim's current window;
  *             the document's events stay listeners of the attached editor;</li>
- *         <li>{@code StatusTracker}: status bar parts (showcmd, message, statusline), output for the
- *             popup ({@code CommandOutput}) and macro recording, fired to listeners only when they
- *             change; messages and showcmd come from Neovim's UI events ({@code ext_messages});</li>
+ *         <li>{@code StatusTracker}: the statusline for the status bar, a page's content and macro
+ *             recording, fired to listeners only when they change (Neovim's messages and its
+ *             command line it draws itself, ui2: {@code LuaScripts.UI2});</li>
  *         <li>{@code InputThread}: the single thread for all blocking RPC, which keeps keys in order;</li>
  *         <li>{@code Rpc}: waiting for answers, and Neovim's error text from a failed call;</li>
  *         <li>{@code BoundedSend}: a message written on a thread of its own, for the few callers

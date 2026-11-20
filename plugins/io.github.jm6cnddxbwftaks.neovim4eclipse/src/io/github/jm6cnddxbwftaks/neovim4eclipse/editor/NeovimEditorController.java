@@ -406,12 +406,7 @@ public final class NeovimEditorController implements AutoCloseable {
         }
 
         onModeChanged(session.getMode());
-        // The first editor of a session shows what Neovim showed at its start (the message for a
-        // floating window the config left open): that arrived before any listener was added.
-        StatusInfo atStart = session.takeStartStatus();
-        if (atStart != null) {
-            onStatusChanged(atStart);
-        }
+        onStatusChanged(session.currentStatus()); // the statusline as it stands, until the next one
         Consumer<NeovimEditorController> hook = startedHookForTests;
         if (hook != null) {
             hook.accept(this);
@@ -1071,9 +1066,10 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Shows what Neovim shows now ({@link NeovimSession#currentStatus()}): used when Neovim moved into
-     * this editor by itself, so that a {@code :b}'s message reaches the editor it moved to, as on
-     * Neovim's single screen. UI thread.
+     * Shows Neovim's status as it stands ({@link NeovimSession#currentStatus()}): used when Neovim
+     * moved into this editor by itself ({@code :b}), so that its status bar item shows the statusline
+     * of the window Neovim is in now. Neovim's messages need nothing: ui2 draws them, over whichever
+     * editor has the focus. UI thread.
      */
     void showNeovimsCurrentStatus() {
         onStatusChanged(session.currentStatus());

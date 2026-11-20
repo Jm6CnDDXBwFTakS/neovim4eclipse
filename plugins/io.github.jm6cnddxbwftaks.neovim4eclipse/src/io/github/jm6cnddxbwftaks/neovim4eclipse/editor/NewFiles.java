@@ -410,7 +410,7 @@ final class NewFiles {
      * {@code throughLink} ({@code :w!}): the write would create the link's target, which may be
      * anywhere ({@link DanglingLinks}).
      *
-     * <p>The errors are shown on the editor's message line, for the callers that are Eclipse's own
+     * <p>The errors are shown by Neovim (ui2, through {@code nvim_echo}), for the callers that are Eclipse's own
      * commands ({@code :wa}, {@code :wq}). A {@code :w} that Neovim asked for uses {@link #write}
      * instead, which hands the error back for Neovim to report.
      *

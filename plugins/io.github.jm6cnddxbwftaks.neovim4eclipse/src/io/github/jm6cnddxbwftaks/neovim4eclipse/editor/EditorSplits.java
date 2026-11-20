@@ -142,7 +142,7 @@ final class EditorSplits {
 
     /**
      * Carries out {@code command}, typed in {@code editor}. A command that cannot be carried out
-     * says why in the editor's message line, as Vim shows an error.
+     * says why, shown by Neovim (ui2) as Vim shows an error.
      */
     static void run(ITextEditor editor, WindowCommand command) {
         run(Origin.of(editor), command);
@@ -176,7 +176,7 @@ final class EditorSplits {
         /** {@code :tabclose} of this editor's own tab. */
         void closeSelf(boolean force);
 
-        /** A text editor as the origin: its part, its message line, its caret, its project. */
+        /** A text editor as the origin: its part, its messages, its caret, its project. */
         static Origin of(ITextEditor editor) {
             return new Origin() {
                 @Override public IEditorPart part() { return EditorAttachManager.getInstance().workbenchPartOf(editor); }

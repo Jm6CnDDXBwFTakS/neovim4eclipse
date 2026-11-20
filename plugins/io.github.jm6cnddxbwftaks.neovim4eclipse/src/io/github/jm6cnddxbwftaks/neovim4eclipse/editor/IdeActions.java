@@ -171,7 +171,7 @@ final class IdeActions {
 
         /**
          * Through the editor's handler service, so that the editor's own handler (Java's Open
-         * Declaration) runs. A command that fails while running is shown in the message line
+         * Declaration) runs. A command that fails while running is shown by Neovim (ui2)
          * ({@code grr: References failed: ...}) and counts as run.
          */
         @Override
@@ -199,7 +199,7 @@ final class IdeActions {
             return viewer != null && HyperlinkProbe.isAt(editor, viewer, caret, detectorId);
         }
 
-        /** A link that fails to open (JDT cannot open the type) is shown in the message line and counts as opened. */
+        /** A link that fails to open (JDT cannot open the type) is shown by Neovim (ui2) and counts as opened. */
         @Override
         public boolean openLink(String detectorId) {
             try {

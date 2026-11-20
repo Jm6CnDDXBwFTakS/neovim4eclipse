@@ -221,7 +221,7 @@ public final class KeyMapping {
     /**
      * Whether Alt typed {@code character}, instead of being a modifier for Neovim. On macOS, Option
      * (Alt) types characters: Option+A is {@code å}, Option+5 is {@code [} on a German keyboard, and
-     * the accents of {@code PressAndHold} follow from it. Those are text, not {@code <A-…>}. SWT's
+     * macOS's accents follow from it. Those are text, not {@code <A-…>}. SWT's
      * key code there is the key's character without modifiers, so Option made the character when the
      * two differ (ignoring case, which Shift gives): Option+5 is key {@code 5}, character {@code [}.
      * Elsewhere Alt never types: AltGr is a key of its own on Linux and Ctrl+Alt on Windows.

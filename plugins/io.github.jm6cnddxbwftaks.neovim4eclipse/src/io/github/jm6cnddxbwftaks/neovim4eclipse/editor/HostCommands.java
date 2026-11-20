@@ -110,8 +110,8 @@ public final class HostCommands {
     }
 
     /**
-     * Shows a Vim-style error in the editor's message line ({@link MessageLine}), where Neovim's own
-     * errors appear. Used when a host command cannot be carried out, e.g. {@code :e} with changes.
+     * Shows a Vim-style error as Neovim shows its own (ui2, through {@code nvim_echo}): used when a
+     * host command cannot be carried out, e.g. {@code :e} with changes.
      * Without Neovim attached to {@code editor}, it goes to the window's status line instead.
      */
     static void showError(ITextEditor editor, String message) {
@@ -119,7 +119,7 @@ public final class HostCommands {
     }
 
     /**
-     * Shows a message in the editor's message line, as an error or as a normal message (such as
+     * Shows a message as Neovim shows its own (ui2), as an error or as a normal message (such as
      * {@code "new.txt" [New]}). Without Neovim attached to {@code editor}, it goes to the window's
      * status line instead.
      */

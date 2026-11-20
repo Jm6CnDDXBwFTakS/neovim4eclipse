@@ -33,9 +33,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * see {@link VimKeyContexts}); while a context is active its binding wins over Eclipse's.
  *
  * <p><b>The rule</b> ({@link KeyContextRule}, unit-tested). The contexts are active exactly while
- * Neovim owns the keys and this editor's text widget or its {@code :} box has the keyboard focus (so
- * that {@code <C-r>}, {@code <C-u>}, {@code <C-n>} reach Neovim's command line, see
- * {@link CommandLineBox}). In insert and replace mode they switch on the letters the user gave to
+ * Neovim owns the keys and this editor's text widget or its command-line window's panel has the
+ * keyboard focus (so that {@code <C-r>}, {@code <C-u>}, {@code <C-n>} reach Neovim's command line,
+ * which Neovim draws itself, ui2). In insert and replace mode they switch on the letters the user gave to
  * Neovim for insert mode, in other modes those for normal mode (the Ctrl Keys preference page has
  * both choices per letter); the mode listener calls {@link #update(String)} at each mode change.
  * With Neovim's completion list turned off, {@code Ctrl-N} and {@code Ctrl-P} in an insert Eclipse

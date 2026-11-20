@@ -346,11 +346,11 @@ final class LuaScripts {
             local diagnostics_ns = vim.api.nvim_create_namespace('neovim4eclipse')
             vim.diagnostic.config({ virtual_text = false, virtual_lines = false, signs = false,
               underline = false, update_in_insert = false }, diagnostics_ns)
-            -- After ]d, the message of the problem landed on goes to the message line, as Eclipse's
+            -- After ]d, the message of the problem landed on is shown by Neovim, as Eclipse's
             -- status bar shows it after Ctrl+. (Next Annotation). Neovim's on_jump hook (0.12) runs
             -- after the cursor moved. Only when init.lua set no hook of its own (nor the older
             -- jump.float): a user's choice wins. The hook is global, so this echoes any namespace's
-            -- diagnostic, ours or nvim-lint's. Only the first line: a message line holds one, and a
+            -- diagnostic, ours or nvim-lint's. Only the first line: Neovim's line holds one, and a
             -- longer echo would open the output box on every jump (K shows the whole hover).
             local jump = vim.diagnostic.config().jump or {}
             if jump.on_jump == nil and not jump.float then
@@ -1059,8 +1059,8 @@ final class LuaScripts {
      * Eclipse editor becomes active, and there the message does harm, for technical reasons:
      * <ul>
      *   <li>Eclipse shows nothing when you switch editors; the message would be Neovim's alone.</li>
-     *   <li>Switching away and back gives two messages before the next key, which the output popup
-     *       shows together ({@code util/MessageRoute}); the popup takes the keyboard focus.</li>
+     *   <li>Switching away and back gives two messages before the next key, which Neovim shows as
+     *       two lines, collapsed with a spill count.</li>
      *   <li>Without the focus, Eclipse's Undo does not select the text it brings back (JFace selects
      *       it only in the focused widget), so Neovim's cursor ends up a line off and {@code jdd}
      *       deletes the wrong line ({@code FileInfoEndToEndTest}).</li>
@@ -1800,7 +1800,7 @@ final class LuaScripts {
             -- command-line window ('command'), which has its own rule (SETUP).
             -- A closed quickfix or location list window is shown the Eclipse way instead of the
             -- message, when the quickfix module is there (QUICKFIX: the Problems or Tasks view, or
-            -- the list's :clist in the output popup), so :copen does what it is for.
+            -- the list's :clist, shown by Neovim), so :copen does what it is for.
             -- A floating window is closed too when it opened with the focus (a picker's prompt,
             -- :Lazy, a dashboard): Eclipse does not draw it, and it would take the keys typed in the
             -- editor. Floating windows without the focus stay, unseen and harmless.
@@ -3390,7 +3390,7 @@ final class LuaScripts {
      * closed a {@code quickfix} or {@code loclist} window ({@code :copen}, {@code :cwindow},
      * {@code :lopen}, also from a mapping or a plug-in): with one of our lists current,
      * {@code eclipse_show_view} with its kind, and Eclipse shows the Problems or Tasks view; else the
-     * list's {@code :clist} (or {@code :llist}) as output, which opens the output popup.
+     * list's {@code :clist} (or {@code :llist}) as output, which Neovim shows (ui2).
      *
      * <p>{@code current()}: the current list's kind and argument when it is ours, else nothing
      * ({@link #QUICKFIX_CURRENT}). Neovim has no event for a change of the current list
@@ -5747,8 +5747,8 @@ final class LuaScripts {
      * {@code v:errmsg} holds the text alone
      * ({@code Eclipse could not save A.txt: read-only}); the message Neovim shows puts its usual line
      * in front, {@code Error in BufWriteCmd Autocommands for "<buffer=3>":}, as for any error in an
-     * autocommand. Being two lines, it opens the output popup ({@code util/MessageRoute}), where Vim
-     * would show it above a "Press ENTER" prompt. The buffer stays modified, so {@code :update} tries
+     * autocommand. Neovim shows the two lines (ui2), where Vim would show them above a "Press ENTER"
+     * prompt. The buffer stays modified, so {@code :update} tries
      * again next time.
      *
      * <h2>Deleted by Neovim: a safety net</h2>

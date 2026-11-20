@@ -25,20 +25,22 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
  *
  * <h2>How</h2>
  * One {@link GridCanvas} per window, a child of the editor's {@code StyledText}, so the editor's
- * edges cut off what does not fit, as they do for the {@code :} box. Each is placed by
+ * edges cut off what does not fit. Each is placed by
  * {@link FloatPlacement} from the row and column Neovim gave the window, and placed again when
  * the editor is resized or paints itself. Why at a paint: when the text scrolls, {@code StyledText}
  * moves its children along with it ({@code scroll(..., all = true)}), and a float that does not
  * hang on text (a panel at the bottom) must stay where it is; a scroll repaints, so the paint puts
- * it back, as {@code MessageLine} does. A change of the editor's font, which changes the cell,
+ * it back. A change of the editor's font, which changes the cell,
  * repaints too. Example: {@code <Space>} with which-key installed gives two windows, the
  * panel across the editor's bottom and a one-row line above it; the next key closes both.
  *
  * <h2>They only show</h2>
  * A drawn window never takes the keyboard focus ({@code SWT.NO_FOCUS}): the keys keep going to the
  * editor, and from there to Neovim, which is what a window without the focus means. Clicks and
- * the wheel on it do nothing. The windows lie under the plug-in's own overlays (the {@code :} box,
- * the message line), among themselves in Neovim's order ({@code zindex}).
+ * the wheel on it do nothing. The windows lie under the plug-in's own overlays (the command-line
+ * window's panel), among themselves in Neovim's order ({@code zindex}). Neovim's own command
+ * line, prompts, pager and messages (ui2) are floats too, drawn like the others; the one with
+ * Neovim's cursor is drawn with it ({@link #cursorCell}).
  *
  * <p>UI thread only.
  */

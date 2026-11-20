@@ -68,8 +68,7 @@ final class CommandRunner {
 
     /**
      * Types {@code :cmd<CR>}, waits until it has run, then refreshes buffer, mode and cursor.
-     * Example: {@code run("ls")} types {@code :ls<CR>}; Neovim sends the listing as a
-     * {@code list_cmd} message, which opens the output popup when it has more than one line.
+     * Example: {@code run("ls")} types {@code :ls<CR>}; Neovim shows the listing itself (ui2).
      */
     void run(String cmd) throws Exception {
         typeAndRefresh(NvimKeys.exCommand(cmd));
@@ -78,8 +77,7 @@ final class CommandRunner {
     /**
      * Runs normal-mode {@code keys} without mappings ({@code :normal!}), then refreshes Eclipse.
      * Used for Neovim's own meaning of a key the plug-in maps to an IDE action, for example
-     * {@code gd} in a file that has no Open Declaration. Its messages belong to that key, so the
-     * message line is not cleared.
+     * {@code gd} in a file that has no Open Declaration.
      */
     void normal(String keys) throws Exception {
         nvim.normalWithoutMappings(keys);

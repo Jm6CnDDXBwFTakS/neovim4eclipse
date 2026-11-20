@@ -59,7 +59,7 @@ final class NeovimMouse {
     /** Whether Neovim handles the mouse now (Neovim mode, not insert mode). */
     private final BooleanSupplier forward;
     private final Consumer<MouseInput> neovim;
-    /** Runs on every forwarded press (the message line hides, as on a click it sees itself). */
+    /** Runs on every forwarded press; the editor passes none now (once, it hid the message line). */
     private final Runnable onPress;
     private final Display display;
     private final Listener filter = this::onMouse;

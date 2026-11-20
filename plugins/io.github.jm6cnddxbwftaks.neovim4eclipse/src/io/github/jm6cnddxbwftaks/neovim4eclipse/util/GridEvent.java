@@ -48,7 +48,7 @@ import java.util.function.ToIntFunction;
  * <pre>
  *   ["grid_line", [4, 0, 0, [[":", 0], ["w"], [" ", 7, 118]], false]]
  * </pre>
- * Like {@link CmdlineEvent}, a batch has one entry per event name and one argument list per event:
+ * A batch has one entry per event name and one argument list per event:
  * {@code ["grid_line", args1, args2]}.
  */
 public sealed interface GridEvent {

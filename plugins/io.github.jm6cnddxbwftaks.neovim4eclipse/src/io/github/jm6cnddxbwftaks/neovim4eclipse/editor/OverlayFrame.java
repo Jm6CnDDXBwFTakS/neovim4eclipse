@@ -44,15 +44,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
  * theme, the Text Editors preferences, or a TextMate theme set straight on the widget. Each of
  * these repaints the editor, so the frame looks at the editor's colors at each of its paints, as
  * {@code SearchColors} does, and when they differ from the last ones takes new colors (posted, not
- * during the paint). The content's text color follows unless its owner set one of its own through
- * {@link #useOwnForeground} (the message line's error color), until it calls
- * {@link #followForeground}.
- *
- * <p>The error flash ({@code MessageLine}) tints the editor's background for a moment; that tint is
- * not the editor's color. While it shows, the editor's own background is kept on the widget under
- * {@link #BACKGROUND_UNDER_FLASH}, and {@link #intendedBackground} reads it from there. So an
- * overlay opened during a flash (an error, then {@code :} at once) takes the editor's colors, not
- * the tint's, and an overlay already open does not flash along.
+ * during the paint). The content's text color follows the editor's.
  *
  * <p>Callers position the frame ({@link #control()}), not the content. Disposing the frame disposes
  * the content with it. UI thread only.
@@ -65,11 +57,6 @@ final class OverlayFrame<T extends Control> {
     /** Gap between an overlay and the editor's left and right edges. */
     static final int SIDE_PADDING = 3;
 
-    /**
-     * Key of the widget data ({@link StyledText#setData(String, Object)}) that holds the editor's own
-     * background while the error flash tints it (see the class comment); absent otherwise.
-     */
-    static final String BACKGROUND_UNDER_FLASH = OverlayFrame.class.getName() + ".backgroundUnderFlash";
 
     private final Canvas host;
     private final Composite frame;
@@ -77,13 +64,6 @@ final class OverlayFrame<T extends Control> {
     /** The editor's colors the overlay's colors were last made from. UI thread. */
     private RGB seenBackground;
     private RGB seenForeground;
-    /**
-     * Whether the content's text color follows the editor's; {@code false} while its owner has set
-     * one of its own ({@link #useOwnForeground}). Said by the owner, not guessed from the content's
-     * color: a guess ("still the color last applied?") went wrong once the owner set the editor's
-     * color itself, after a theme switch had happened under its own color. UI thread.
-     */
-    private boolean followsForeground = true;
     private final Listener hostPaint = event -> onHostPaint();
 
     /**
@@ -91,23 +71,14 @@ final class OverlayFrame<T extends Control> {
      * @param factory creates the content control inside the given parent
      */
     OverlayFrame(Canvas host, Function<Composite, T> factory) {
-        this(host, factory, BORDER);
-    }
-
-    /**
-     * @param border the border's width in pixels. Example: the completion list takes 3, since it
-     *               lies in the middle of the code and its background can be nearly the editor's
-     *               ({@link CompletionMenuPopup}); the boxes at the editor's bottom edge take 1.
-     */
-    OverlayFrame(Canvas host, Function<Composite, T> factory, int border) {
         // NO_FOCUS: the frame is only a border. Composite.setFocus offers the focus to its children
         // first, so without it an editor getting the focus could hand it to the frame of an overlay
-        // whose content refuses it (a message, an output popup shown without the focus).
+        // whose content refuses it.
         this.host = host;
         frame = new Composite(host, SWT.NO_FOCUS);
         FillLayout layout = new FillLayout();
-        layout.marginWidth = border;
-        layout.marginHeight = border;
+        layout.marginWidth = BORDER;
+        layout.marginHeight = BORDER;
         frame.setLayout(layout);
 
         content = factory.apply(frame);
@@ -122,14 +93,14 @@ final class OverlayFrame<T extends Control> {
     }
 
     /**
-     * The editor's background as its owner set it: during the error flash the one under the tint
-     * ({@link #BACKGROUND_UNDER_FLASH}), otherwise the widget's.
+     * The editor's background, the one overlays and Neovim's {@code 'background'} follow. Example:
+     * a dark theme's {@code #2F2F2F}.
      */
     static Color intendedBackground(Canvas host) {
-        return host.getData(BACKGROUND_UNDER_FLASH) instanceof Color own ? own : host.getBackground();
+        return host.getBackground();
     }
 
-    /** Border, background and (while it is the editor's) text color from the editor's colors now. */
+    /** Border, background and text color from the editor's colors now. */
     private void applyColors() {
         if (frame.isDisposed() || host.isDisposed()) {
             return;
@@ -140,28 +111,7 @@ final class OverlayFrame<T extends Control> {
         seenForeground = foreground.getRGB();
         frame.setBackground(rgb(OverlayColors.border(rgbOf(background), rgbOf(foreground))));
         content.setBackground(rgb(OverlayColors.background(rgbOf(background))));
-        if (followsForeground) {
-            content.setForeground(foreground);
-        }
-    }
-
-    /**
-     * Gives the content a text color of its owner's, kept through changes of the editor's colors
-     * until {@link #followForeground}. Example: the message line's error color.
-     */
-    void useOwnForeground(Color color) {
-        followsForeground = false;
-        if (!content.isDisposed()) {
-            content.setForeground(color);
-        }
-    }
-
-    /** The content's text color is the editor's again, now and after each change of it. */
-    void followForeground() {
-        followsForeground = true;
-        if (!content.isDisposed() && !host.isDisposed()) {
-            content.setForeground(host.getForeground());
-        }
+        content.setForeground(foreground);
     }
 
     /** At the editor's paint: new colors once its background or text color changed (class comment). */

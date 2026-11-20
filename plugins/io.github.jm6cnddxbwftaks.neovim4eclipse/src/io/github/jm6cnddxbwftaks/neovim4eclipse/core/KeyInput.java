@@ -220,8 +220,8 @@ final class KeyInput {
     /**
      * A completion key was routed and its sync point is about to be queued. Neovim types the
      * insert from this moment ({@link #driveFromNeovim}), not only once the key has been sent:
-     * Neovim's list arrives while the key is being handled, and the session shows a list only in
-     * an insert Neovim types ({@code NeovimSession.showCompletionMenu}). UI thread.
+     * Neovim's popup menu arrives while the key is being handled, and the editor draws it only in
+     * an insert Neovim types ({@code util/Grids.eclipseTypes}). UI thread.
      */
     void completionQueued() {
         completionsQueued.incrementAndGet();

@@ -155,8 +155,7 @@ public final class ProcessorProbe {
     }
 
     /**
-     * Runs {@code command}; its standard output, or {@code null} if it failed or took too long. Also
-     * used by {@link PressAndHoldSetting}.
+     * Runs {@code command}; its standard output, or {@code null} if it failed or took too long.
      */
     static String run(List<String> command) {
         Process process = null;

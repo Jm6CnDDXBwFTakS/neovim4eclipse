@@ -6,7 +6,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -104,8 +103,8 @@ class NeovimWindowsIntegrationTest {
     /**
      * A config that leaves a floating window focused at the start (lazy.nvim's installer on a first
      * start) does not take the home buffer and the editors' keys: the session closes the float,
-     * starts in a plain window that shows the home buffer, and says why on the first editor's
-     * message line ({@link NeovimSession#takeStartStatus}), once only. The Lua side alone is
+     * starts in a plain window that shows the home buffer, and says why: Neovim shows it (ui2,
+     * started before the message). The Lua side alone is
      * windows_spec.lua ("LEAVE_START_FLOAT").
      */
     @Test

@@ -24,8 +24,8 @@
  *   <li>{@link io.github.jm6cnddxbwftaks.neovim4eclipse.editor.SendKeyHandler},
  *       {@link io.github.jm6cnddxbwftaks.neovim4eclipse.editor.VimKeyContexts}: Ctrl keys that Eclipse
  *       would otherwise take first (key bindings and contexts).</li>
- *   <li>{@code CommandLineBox}, {@code OutputPopup}, {@code OverlayFrame}: the widgets drawn over the
- *       editor; {@link io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ModeStatusContribution} and
+ *   <li>{@code FloatingWindows} (Neovim's floats, its command line and messages among them),
+ *       {@code LineInputMethod}, {@code OverlayFrame}: what is drawn over the editor; {@link io.github.jm6cnddxbwftaks.neovim4eclipse.editor.ModeStatusContribution} and
  *       {@code CursorStyleController}: status bar and caret.</li>
  * </ul>
  *

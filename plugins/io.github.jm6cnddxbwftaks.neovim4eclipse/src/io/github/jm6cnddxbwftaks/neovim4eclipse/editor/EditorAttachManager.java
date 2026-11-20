@@ -883,8 +883,8 @@ public final class EditorAttachManager {
      * {@code :bd 3 other.txt}: closes the editors of the named buffers, as {@code :bd} alone closes
      * the current one ({@code HostCommand.Kind.BUFFER_DELETE}). A number is a buffer number; a
      * name is looked up in Neovim with {@code bufnr()} ({@link BufferRefs}), asynchronously, so its
-     * editor closes a moment later. A buffer no editor shows gets Vim's error in {@code from}'s
-     * message line. With two editors on one file (Window > Editor > Clone), the first is closed. UI
+     * editor closes a moment later. A buffer no editor shows gets Vim's error, shown by Neovim
+     * (ui2). With two editors on one file (Window > Editor > Clone), the first is closed. UI
      * thread.
      *
      * @param from    the editor the command was typed in, for error messages
@@ -1057,7 +1057,7 @@ public final class EditorAttachManager {
         if (missing != null) {
             // A new file: its error goes back to Neovim, which reports it (NewFiles.write), so the
             // refusal of a dangling link (:w! may write through it, :w may not; DanglingLinks) or
-            // E212 for a missing folder is what the message line ends on.
+            // E212 for a missing folder is what Neovim shows last.
             return NewFiles.write(text, part, missing, createFolders, true, request.force());
         }
         if (!EclipseFileCommands.savePart(part)) {
