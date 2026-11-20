@@ -476,7 +476,7 @@ class GridsTest {
     private void screenWithUi2Line() {
         grids.apply(new GridEvent.Resize(1, 80, 25));
         editorWindow();
-        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, false);
+        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, 1011, false);
         grids.apply(new GridEvent.Resize(8, 80, 1));
         grids.apply(new GridEvent.Line(8, 0, 0, text(":ech", 0)));
         grids.apply(new GridEvent.WinPos(8, 1010, true, 24, 0, 0, 0, 200));
@@ -491,17 +491,27 @@ class GridsTest {
     void withCmdheightZeroUi2sLineIsDrawnOnlyWhileOpen() {
         grids.drawFloats(true);
         screenWithUi2Line();
-        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, true);
+        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, 1011, true);
         grids.apply(new GridEvent.CursorGoto(2, 3, 0)); // the cursor in the editor's window
         assertEquals(List.of(), grids.floatsIfChanged().orElse(List.of()), "no line open: nothing over the status line");
         grids.apply(new GridEvent.CursorGoto(8, 0, 4)); // ':ech' being typed
         List<FloatWindow> floats = grids.floatsIfChanged().orElseThrow();
         assertEquals(1, floats.size());
         assertEquals(floats.get(0).row() + 1, floats.get(0).hostRows(), "on the screen's last row: the editor's bottom edge");
+        assertEquals(23, floats.get(0).row(), "a row higher: on the status line's row, the editor's last");
+        assertEquals(24, floats.get(0).hostRows(), "the host has no row for the line");
+        // The : line's Tab list, Neovim's popup menu, ends right above the line on Neovim's screen
+        // (row 23, the status line's): it is lifted with the line, so it ends above it here too.
+        grids.apply(new GridEvent.Resize(9, 10, 3));
+        grids.apply(new GridEvent.WinPos(9, -1, true, 21, 0, 0, 0, 250));
+        FloatWindow menu = grids.floatsIfChanged().orElseThrow().stream().filter(f -> f.grid().window() == -1)
+                .findFirst().orElseThrow();
+        assertEquals(20, menu.row(), "rows 20 to 22, above the line on row 23");
         grids.apply(new GridEvent.CursorGoto(2, 3, 0)); // Enter: back in the window
-        assertEquals(List.of(), grids.floatsIfChanged().orElseThrow());
-        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, false); // :set ch=1
-        assertEquals(1, grids.floatsIfChanged().orElseThrow().size(), "with its row back, the line stays drawn");
+        grids.floatsIfChanged();
+        grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, 1011, false); // :set ch=1
+        assertTrue(grids.floatsIfChanged().orElseThrow().stream().anyMatch(f -> f.grid().window() == 1010),
+                "with its row back, the line stays drawn");
     }
 
     /** The {@code :} line being typed: the cursor is in ui2's line, which is drawn with it. */

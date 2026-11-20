@@ -110,8 +110,9 @@ final class NotificationBridge implements Incoming {
          * Example: {@code [1002, 1003, 1004, 1005]}, {@code false}.
          *
          * @param cmd the command line's window, the first of {@code wins}, or {@code -1} if not sent
+         * @param msg the message window, the second, or {@code -1} if not sent
          */
-        void onUi2Windows(List<Integer> wins, int cmd, boolean overlay);
+        void onUi2Windows(List<Integer> wins, int cmd, int msg, boolean overlay);
 
         /**
          * Every window's status line ({@link LuaScripts#STATUS_LINE}), sent when one that is not
@@ -426,7 +427,9 @@ final class NotificationBridge implements Incoming {
             }
         }
         int cmd = args.isEmpty() ? -1 : window(args, 0);
-        sink.onUi2Windows(List.copyOf(wins), cmd > 0 ? cmd : -1, args.size() > 4 && Boolean.TRUE.equals(args.get(4)));
+        int msg = args.size() < 2 ? -1 : window(args, 1);
+        sink.onUi2Windows(List.copyOf(wins), cmd > 0 ? cmd : -1, msg > 0 ? msg : -1,
+                args.size() > 4 && Boolean.TRUE.equals(args.get(4)));
     }
 
     private void onWindowClosed(List<?> args) {

@@ -5473,6 +5473,9 @@ final class LuaScripts {
                 end
                 if zero then
                   vim.schedule(function()
+                    if vim.o.cmdheight ~= 0 then
+                      return -- set again meanwhile (:set ch=0 | set ch=2): that one stands
+                    end
                     restoring = true
                     pcall(function()
                       vim.o.cmdheight = 1

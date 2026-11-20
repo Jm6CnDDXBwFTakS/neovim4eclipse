@@ -56,7 +56,7 @@ class NotificationBridgeTest {
             }
             @Override public void onBufferReload(int bufnr, boolean kept) { events.add("reload:" + bufnr + (kept ? " kept" : "")); }
             @Override public void onWindowClosed(int winid) { events.add("winclosed:" + winid); }
-            @Override public void onUi2Windows(List<Integer> wins, int cmd, boolean overlay) {
+            @Override public void onUi2Windows(List<Integer> wins, int cmd, int msg, boolean overlay) {
                 events.add("ui2:" + wins + (overlay ? " overlay" : "") + (cmd != wins.stream().findFirst().orElse(-1) ? " cmd " + cmd : ""));
             }
             @Override public void onStatusLines(List<GridSnapshot> lines) {

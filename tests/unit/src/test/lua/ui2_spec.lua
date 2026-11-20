@@ -176,3 +176,59 @@ t.test('a line inside a line: when the inner one ends, the outer one is still op
   t.type(':echo <C-r>=1<CR><Esc>')
   t.eq({ { ':' }, { '=' }, { ':' }, { '' } }, t.sent('eclipse_cmdline'))
 end)
+
+--- The fifth value of the last eclipse_ui2_windows: whether the user's 'cmdheight' is 0.
+local function sent_overlay()
+  local sent = t.sent('eclipse_ui2_windows')
+  return sent[#sent][5]
+end
+
+t.test("a user's 'cmdheight' 0 stays a wish: Neovim's is 1, Eclipse hears it, messages move", function()
+  vim.o.cmdheight = 0 -- as init.lua does, before the plug-in's script
+  local ui2 = start()
+  t.eq(1, vim.o.cmdheight, "Neovim's own is 1: a ':' line shrinks no window")
+  t.eq(true, sent_overlay())
+  t.eq('msg', ui2.cfg.msg.target, "messages to ui2's message window: the line has no row to stay on")
+end)
+
+t.test("no 'cmdheight' set by the user: the row stays, messages stay on it", function()
+  local ui2 = start()
+  t.eq(false, sent_overlay())
+  t.eq('cmd', ui2.cfg.msg.target)
+end)
+
+t.test(':set ch=0 and :set ch=1 later switch both ways, and Neovim goes back to 1 after the 0', function()
+  local ui2 = start()
+  vim.cmd('set cmdheight=0')
+  t.wait_for("'cmdheight' back at 1", function()
+    return vim.o.cmdheight == 1
+  end)
+  t.eq(true, sent_overlay())
+  t.eq('msg', ui2.cfg.msg.target)
+  t.ok(not vim.api.nvim_win_get_config(ui2.wins.cmd).hide, "ui2's line window shown again at the 1")
+  vim.cmd('set cmdheight=1')
+  t.eq(false, sent_overlay())
+  t.eq('cmd', ui2.cfg.msg.target, 'moved back')
+end)
+
+t.test(":set ch=0 then ch=2 in one line ends at 2: the restore is for a 0 still there", function()
+  start()
+  vim.cmd('set cmdheight=0 | set cmdheight=2')
+  local after = false
+  vim.schedule(function() -- runs after the restore the 0 scheduled
+    after = true
+  end)
+  t.wait_for('the event loop', function()
+    return after
+  end)
+  t.eq(2, vim.o.cmdheight)
+  t.eq(false, sent_overlay())
+end)
+
+t.test("a config's own message target is kept when 'cmdheight' goes from 0 to 1", function()
+  vim.o.cmdheight = 0
+  require('vim._core.ui2').cfg.msg.target = 'msg'
+  local ui2 = start()
+  vim.cmd('set cmdheight=1')
+  t.eq('msg', ui2.cfg.msg.target, "the config's choice, not moved back to 'cmd'")
+end)

@@ -742,8 +742,10 @@ What the plug-in adds, all in `LuaScripts.UI2`, the one place it talks to ui2:
   of `eclipse_ui2_windows`; `NeovimSession.commandLineRows` 0). The editor then keeps no row for the
   line (`StatusLineRow`, `WindowPane.rowsBelow`): one more text row, Neovim's window one row
   taller, and the screen's last row is not on screen. ui2's line window reaches that row, so it is
-  placed on the editor's bottom edge (`util/FloatPlacement`), over the status line, and drawn only
-  while the cursor is in it, a line being typed (`util/Grids.ui2Windows`); between lines it would
+  drawn a row higher, on the status line's row at the editor's bottom edge, with what Neovim
+  stacks on it (ui2's prompt and pager windows, the popup menu of a line being typed), so that none
+  overlaps it; ui2's message window ends above the status line and stays (`util/Grids.ui2Windows`).
+  The line is drawn only while the cursor is in it, a line being typed; between lines it would
   cover the status line with the last line typed. Messages, which would stay on that hidden row, go
   to ui2's `msg` window (`ui2.cfg.msg.target`), only when the target is ui2's default `'cmd'`, and
   back when the row returns: a config that chose `'msg'` keeps it. The floats lie over the status

@@ -88,6 +88,8 @@ public final class Grids {
     private Set<Integer> ui2Windows = Set.of();
     /** ui2's command line window, or -1. */
     private int cmdWindow = -1;
+    /** ui2's message window, or -1: with {@link #overlay}, the one ui2 window not lifted. */
+    private int msgWindow = -1;
     /**
      * The user's {@code 'cmdheight'} is 0 ({@code LuaScripts.UI2}): the editor keeps no row for the
      * command line, so ui2's line is drawn only while it is open, over the status line.
@@ -178,13 +180,21 @@ public final class Grids {
      * draws Neovim's popup menu: always ({@link #alwaysDrawn}), except that with {@code overlay}
      * the command line's window {@code cmd} is drawn only while the cursor is in it, a line being
      * typed: the editor has no row for it then, and between lines it would cover the status line
-     * with the last line typed. Example: {@code [1002, 1003, 1004, 1005]}, 1002, {@code false}.
+     * with the last line typed. Example: {@code [1002, 1003, 1004, 1005]}, 1002, 1003, {@code false}.
+     *
+     * <p>With {@code overlay} the line's row, Neovim's screen's last, is not on the editor: the line
+     * is drawn a row higher, on the status line's row, and so is what Neovim stacks on the line
+     * (ui2's prompt and pager windows, which end on the status line's row, and the popup menu of a
+     * line being typed), so that none of them overlaps it. ui2's message window ({@code msg}) ends
+     * above the status line and stays. Example: {@code :e } then Tab with {@code 'cmdheight'} 0: the
+     * list of names ends right above the line, as in Neovim.
      */
-    public void ui2Windows(List<Integer> wins, int cmd, boolean overlay) {
+    public void ui2Windows(List<Integer> wins, int cmd, int msg, boolean overlay) {
         Set<Integer> now = Set.copyOf(wins);
-        if (!now.equals(ui2Windows) || cmd != cmdWindow || overlay != this.overlay) {
+        if (!now.equals(ui2Windows) || cmd != cmdWindow || msg != msgWindow || overlay != this.overlay) {
             ui2Windows = now;
             cmdWindow = cmd;
+            msgWindow = msg;
             this.overlay = overlay;
             floatsChanged = true;
         }
@@ -467,10 +477,15 @@ public final class Grids {
             // Neovim lays out its screen (editor/StatusLineRow, WindowPane): so the host counts them,
             // and a window that reaches the screen's last row is drawn on the editor's last row,
             // the command line's (FloatPlacement).
+            // With the overlay the screen's last row (the line's) is not on the editor: the host is
+            // a row shorter, and the line and what Neovim stacks on it are a row higher (ui2Windows).
+            boolean lifted = overlay && (place.win() == -1 ? inCommandLine
+                    : ui2Windows.contains(place.win()) && place.win() != msgWindow);
             floats.add(new FloatWindow(snapshot(place.win(), e.getKey(), grid, alwaysDrawn(e.getKey())),
-                    place.row() - (host == null ? 0 : host.row()),
+                    place.row() - (host == null ? 0 : host.row()) - (lifted ? 1 : 0),
                     place.col() - (host == null ? 0 : host.col()),
-                    host == null ? 0 : host.height() + below, host == null ? 0 : host.width(), place.zindex()));
+                    host == null ? 0 : host.height() + below - (overlay && below > 0 ? 1 : 0),
+                    host == null ? 0 : host.width(), place.zindex()));
         }
         floats.sort(Comparator.comparingInt(FloatWindow::zindex).thenComparingInt(f -> f.grid().window()));
         if (floats.equals(lastFloats)) {

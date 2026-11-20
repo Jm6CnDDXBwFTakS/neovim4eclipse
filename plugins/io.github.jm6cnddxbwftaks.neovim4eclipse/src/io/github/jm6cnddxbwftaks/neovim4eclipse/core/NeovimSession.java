@@ -2404,8 +2404,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onUi2Windows(List<Integer> wins, int cmd, boolean overlay) {
-            grids.ui2Windows(wins, cmd, overlay); // on the reader thread, as the grids' redraws
+        public void onUi2Windows(List<Integer> wins, int cmd, int msg, boolean overlay) {
+            grids.ui2Windows(wins, cmd, msg, overlay); // on the reader thread, as the grids' redraws
             int rows = overlay ? 0 : 1;
             if (rows != commandLineRows) {
                 commandLineRows = rows;

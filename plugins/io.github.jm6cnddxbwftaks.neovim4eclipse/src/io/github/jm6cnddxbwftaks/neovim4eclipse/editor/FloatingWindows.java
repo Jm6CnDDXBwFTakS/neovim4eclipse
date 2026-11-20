@@ -40,8 +40,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
  * editor, and from there to Neovim, which is what a window without the focus means. Clicks and
  * the wheel on it do nothing. The windows lie under the plug-in's own overlays (the command-line
  * window's panel), among themselves in Neovim's order ({@code zindex}), and over the status line's
- * row ({@link #keepUnder}), as Neovim draws a float over a status line: ui2's message window can
- * reach it, and with {@code 'cmdheight'} 0 ui2's {@code :} line lies on it. Neovim's own command
+ * row ({@link #keepUnder}), as Neovim draws a float over a status line: ui2's prompt and pager
+ * windows reach it, and with {@code 'cmdheight'} 0 ui2's {@code :} line lies on it. Neovim's own command
  * line, prompts, pager and messages (ui2) are floats too, drawn like the others; the one with
  * Neovim's cursor is drawn with it ({@link #cursorCell}).
  *

@@ -193,13 +193,21 @@ class SettingsNamesTest {
 
     @Test
     void aRemovedNameIsGoneFromTheCodeAndListedInTheReadme() throws IOException {
-        String code = read(PREFERENCES) + read(LUA) + read(PLUGIN_XML);
+        // Every source file of the plug-in and plugin.xml: a name can be read anywhere, in any spelling
+        // (vim.g.x, vim.g['x'], a key in another class), so the bare name is looked for, as a word.
+        StringBuilder all = new StringBuilder(read(PLUGIN_XML));
+        try (var files = Files.walk(repoRoot().resolve(SRC))) {
+            for (Path file : files.filter(Files::isRegularFile).toList()) {
+                all.append('\n').append(Files.readString(file, StandardCharsets.UTF_8));
+            }
+        }
+        String code = all.toString();
         String settings = readmeSettings();
         List<String> wrong = new ArrayList<>();
         for (Map.Entry<String, String> e : REMOVED.entrySet()) {
             String bare = e.getKey().startsWith("vim.g.") ? e.getKey().substring("vim.g.".length()) : e.getKey();
-            if (code.contains("\"" + bare + "\"") || code.contains("vim.g." + bare)) {
-                wrong.add(e.getKey() + ": still read by the code");
+            if (Pattern.compile("\\b" + Pattern.quote(bare) + "\\b").matcher(code).find()) {
+                wrong.add(e.getKey() + ": still in the plug-in's code (a removed name is not read, nor named in a comment)");
             }
             if (!settings.contains("`" + e.getKey() + "` (" + e.getValue() + ")")) {
                 wrong.add(e.getKey() + ": not listed as `" + e.getKey() + "` (" + e.getValue() + ") in the README");

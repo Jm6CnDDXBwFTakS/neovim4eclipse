@@ -34,7 +34,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
  * The lines come from Neovim, evaluated per window ({@code LuaScripts.STATUS_LINE},
  * {@code util/StatusLines}), for every window; this row shows its own window's ({@code window}).
  * A line of no rows ({@code 'laststatus'} 0 or 1) takes the status row away; the command line's
- * stays.
+ * stays, unless the user's {@code 'cmdheight'} is 0 ({@link #commandLineRows}).
  *
  * <p>UI thread only. Tested in {@code tests/swt} ({@code StatusLineRowTest}).
  */

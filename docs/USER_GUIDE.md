@@ -66,7 +66,7 @@ with a new Neovim.
 ## Messages and errors
 
 Neovim shows its messages and errors itself, on the editor's command line row (its last, under the
-status line), as in a terminal: the
+status line; with `'cmdheight'` 0, at the bottom right instead: [Status line](#status-line)), as in a terminal: the
 editor draws what Neovim's *ui2* draws there (Neovim's newer way of drawing its command line and
 messages, as floating windows; see [Command line](#command-line---)).
 

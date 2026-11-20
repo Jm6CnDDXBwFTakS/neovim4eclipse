@@ -496,7 +496,12 @@ editor chrome, and another application taking the keyboard, need a person.
    the code editors do.
 6. Click into `notes.txt`, `:set ch=0` and <kbd>Enter</kbd>.
    ⇒ The empty row under each status line is gone (also in the help editor): each editor shows one
-   more text row, its status line on its bottom edge.
+   more text row, its status line on its bottom edge. (With the cursor on the editor's last row,
+   the text may scroll by one line here: Neovim is at 0 for a moment before the plug-in sets it
+   back to 1.)
+   Then `:e ` and <kbd>Tab</kbd>.
+   ⇒ The list of names opens right above the line, which lies over the status line; no entry
+   covers the line. <kbd>Esc</kbd>.
 7. Type `:echo "hi"`, then <kbd>Enter</kbd>.
    ⇒ While typing, the line lies over `notes.txt`'s status line, which comes back at
    <kbd>Enter</kbd>; `hi` shows at the right, on the row just above the status line, for a few
