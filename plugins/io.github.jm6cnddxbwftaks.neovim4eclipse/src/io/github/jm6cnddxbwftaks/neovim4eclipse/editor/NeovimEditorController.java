@@ -1072,6 +1072,11 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         session.focus(focusTarget);
         session.focusAttachedAsync();
+        // The line's opening or closing may have gone to the page while it had the focus: set
+        // Paste's handler and the input method's filters from the mode Neovim is in now.
+        boolean lineOpen = VimModes.isCmdline(session.getMode());
+        commandLineEdits.update(lineOpen);
+        lineInput.lineOpen(lineOpen);
         if (viewport != null) {
             viewport.resendSize();
         }

@@ -86,11 +86,33 @@ t.test('a window ui2 lost comes back, and its new id is sent', function()
   t.eq(vim.o.columns, vim.api.nvim_win_get_width(new), 'the new window is fitted too')
 end)
 
-t.test("each of ui2's windows is marked for the plug-in's other scripts", function()
+t.test('a file opened in the pager is announced, so Eclipse opens its editor', function()
   local ui2 = start()
-  for _, kind in ipairs({ 'cmd', 'msg', 'pager', 'dialog' }) do
-    t.eq(kind, vim.w[ui2.wins[kind]].neovim4eclipse_ui2, kind)
+  vim.api.nvim_set_current_win(ui2.wins.pager)
+  t.forget()
+  local file = vim.fn.tempname()
+  vim.fn.writefile({ 'x' }, file)
+  vim.cmd.edit(vim.fn.fnameescape(file)) -- as gf or :e in the pager would
+  local sent = t.sent('eclipse_buf_enter')
+  t.eq(1, #sent, 'one buf enter, for the file')
+  t.eq(vim.fn.bufnr(file), sent[1][1])
+end)
+
+t.test("ui2 turned on by the user's config first: its windows are fitted and sent too", function()
+  local list_uis = vim.api.nvim_list_uis
+  vim.api.nvim_list_uis = function()
+    return { { width = vim.o.columns, height = vim.o.lines } }
   end
+  t.setup()
+  local ui2 = require('vim._core.ui2')
+  ui2.enable({}) -- as an init.lua would, before the plug-in's scripts
+  ui2.check_targets() -- its windows, which it makes at its first event
+  t.eq(true, t.run('UI2'))
+  vim.api.nvim_list_uis = list_uis
+  for _, kind in ipairs({ 'cmd', 'pager', 'dialog' }) do
+    t.eq(vim.o.columns, vim.api.nvim_win_get_width(ui2.wins[kind]), kind .. ' fitted')
+  end
+  t.eq(ui2.wins.pager, sent_windows()[3])
 end)
 
 t.test('entering the pager tells Eclipse nothing, so it does not send Neovim back', function()
@@ -144,4 +166,11 @@ t.test('the type of each command line goes to Eclipse as it opens and closes', f
   t.type('/abc<Esc>')
   t.type(':echo<CR>')
   t.eq({ { '/' }, { '' }, { ':' }, { '' } }, t.sent('eclipse_cmdline'))
+end)
+
+t.test('a line inside a line: when the inner one ends, the outer one is still open', function()
+  start()
+  t.forget()
+  t.type(':echo <C-r>=1<CR><Esc>')
+  t.eq({ { ':' }, { '=' }, { ':' }, { '' } }, t.sent('eclipse_cmdline'))
 end)

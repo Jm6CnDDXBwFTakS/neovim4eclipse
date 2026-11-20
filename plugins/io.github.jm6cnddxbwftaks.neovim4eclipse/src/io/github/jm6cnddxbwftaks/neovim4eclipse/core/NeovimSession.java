@@ -985,11 +985,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Sets Neovim's {@code 'background'} from Eclipse's theme ({@link LuaScripts#SET_BACKGROUND}):
-     * {@code dark} for a dark editor background. Example: the editor attaches in the dark theme;
-     * the user then switches Eclipse to the light one.
-     */
-    /**
      * Shows a message of the plug-in's own as Neovim shows its own ({@link LuaScripts#ECHO}): in
      * ui2's line, kept in {@code :messages}, an error in {@code ErrorMsg}. Example: {@code :e} with
      * changes gives {@code E37: No write since last change (add ! to override)}.
@@ -998,6 +993,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit("a message", Level.FINE, () -> await(api.execLua(LuaScripts.ECHO, List.of(message, error))));
     }
 
+    /**
+     * Sets Neovim's {@code 'background'} from Eclipse's theme ({@link LuaScripts#SET_BACKGROUND}):
+     * {@code dark} for a dark editor background. Example: the editor attaches in the dark theme;
+     * the user then switches Eclipse to the light one.
+     */
     public void setBackgroundAsync(boolean dark) {
         String background = dark ? "dark" : "light";
         submit("'background' " + background, Level.FINE,
@@ -2504,10 +2504,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             grids.drawFloats(floatingWindowsDrawn()); // here, on the grids' own thread; false until the start has read it
             grids.eclipseTypes(isTypingMode() && !isNeovimDrivenInsert());
             for (GridEvent event : gridEvents) {
-                // While a search is typed, Neovim's view follows the match ('incsearch'); its cursor
-                // goes to the editor's caret as any cursor from Neovim does, and Esc or Enter then
-                // sets it for good through the state read after that key.
-                if (event instanceof GridEvent.Viewport viewport && searching) {
+                // While a search is typed, Neovim's view follows the match ('incsearch'); the attached
+                // editor's window's cursor (not ui2's windows', which come in the same redraw) goes to
+                // the editor's caret as any cursor from Neovim does, and Esc or Enter then sets it for
+                // good through the state read after that key.
+                if (event instanceof GridEvent.Viewport viewport && searching && viewport.win() == buffers.attachedWin()) {
                     state.dispatchCursor(viewport.curline() + 1, viewport.curcol());
                 }
                 grids.apply(event);

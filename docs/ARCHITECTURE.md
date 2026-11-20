@@ -701,15 +701,22 @@ What the plug-in adds, all in `LuaScripts.UI2`, the one place it talks to ui2:
   them; a multigrid UI is sent the full width, past the editor's limit on a float's cells.
 - **The windows' ids** go to Eclipse (`eclipse_ui2_windows`) at start and whenever ui2 makes one
   again; `util/Grids.ui2Windows` draws those always ("Neovim's windows drawn from their grids").
-- **A mark on each window** (`w:neovim4eclipse_ui2`): `SETUP`'s `BufEnter` sends Eclipse nothing
-  from one, so entering the pager is not undone (`util/EnterDecision`), and `WINDOWS`' safety net
-  never closes one, also with the cursor in it.
+- **ui2's own buffers left to it** (`ui2.bufs`): `SETUP`'s `BufEnter` sends Eclipse nothing for
+  one, so entering the pager is not undone (`util/EnterDecision`), and `WINDOWS`' safety net never
+  closes a window that shows one, also with the cursor in it. The buffer, not the window: a file
+  opened in the pager (`gf`, `:e`) is announced like any other, so Eclipse opens its editor and
+  Neovim goes back, and Neovim's and Eclipse's text cannot drift in a window Eclipse never heard of.
+- **Windows ui2 made before the plug-in's script ran** (a user's `init.lua` that turns ui2 on) are
+  fitted too, since no `FileType` comes for them.
+- **A line inside a line** (`<C-r>=` on a `:` line): the types are kept as a stack, so when the
+  inner one ends Eclipse hears the outer one's again, and Paste and the input method stay on it.
 - **`:messages`** goes to its page editor, not to ui2's pager: ui2's history handler is wrapped, and
   the history is sent as `eclipse_messages`, each entry as `{kind, text}`, which `StatusTracker` makes
   a `util/ViewText` (errors marked `ErrorMsg`, warnings `WarningMsg`) for the page (decision 10).
   `g<` reaches the same handler with its `prev_cmd` flag and keeps ui2's pager.
 - **The type of each command line** as it opens and closes (`eclipse_cmdline`: `:`, `/`, `?`, then
-  `""`), for what the editor does while a line is open ("Command line").
+  `""`), for what the editor does while a line is open ("Command line"). While a search is typed,
+  the editor follows its window's `win_viewport` only: each redraw brings one for ui2's windows too.
 
 **The plug-in's own messages** (E37 from `:e` with changes, a refused write, `HostCommands.showError`)
 go through Neovim too: `NeovimSession.echoAsync` runs `LuaScripts.ECHO`, `nvim_echo` with history, so

@@ -129,10 +129,17 @@ final class LuaScripts {
                 if vim.fn.getcmdwintype() ~= '' then
                   return
                 end
-                -- One of ui2's windows (UI2): its pager or prompt, entered for a moment. The
+                -- One of ui2's own buffers (UI2): its pager or prompt, entered for a moment. The
                 -- editor draws it where it is; Eclipse is not told, or it would send Neovim back.
-                if vim.w.neovim4eclipse_ui2 then
-                  return
+                -- The buffer, not the window: a file opened in the pager (gf, :e) is announced,
+                -- so Eclipse opens its editor and Neovim goes back, as from any other window.
+                local ui2 = package.loaded['vim._core.ui2']
+                if ui2 then
+                  for _, buf in pairs(ui2.bufs) do
+                    if buf == ev.buf then
+                      return
+                    end
+                  end
                 end
                 local left, jumped = vim.fn.bufnr('#'), false
                 if left > 0 and left ~= ev.buf then
@@ -1770,6 +1777,22 @@ final class LuaScripts {
             M.TABS = "with ! it would discard every other editor tab's changes; :tabonly asks about them"
             --- Why the safety net closed a window, by win_gettype(): '' for a plain one (a split
             --- opened without the command line, which Eclipse never heard of).
+            --- Whether win shows one of ui2's own buffers (its command line, messages, pager or
+            --- prompt; LuaScripts.UI2): Neovim's own windows, which the safety net leaves alone.
+            local function shows_ui2_buffer(win)
+              local ui2 = package.loaded['vim._core.ui2']
+              if not ui2 or not vim.api.nvim_win_is_valid(win) then
+                return false
+              end
+              local buf = vim.api.nvim_win_get_buf(win)
+              for _, own in pairs(ui2.bufs) do
+                if own == buf then
+                  return true
+                end
+              end
+              return false
+            end
+
             local why_closed = {
               [''] = 'Eclipse shows each window as an editor; :split and :vsplit make one',
               quickfix = 'Eclipse cannot show the quickfix window; :cnext, :cprevious and :cc still work',
@@ -1906,8 +1929,9 @@ final class LuaScripts {
                   local quickfix = package.loaded['neovim4eclipse.quickfix']
                   local current = vim.api.nvim_get_current_win()
                   for _, win in ipairs(vim.api.nvim_list_wins()) do
-                    -- ui2's windows (UI2) are Neovim's own command line and messages: never closed.
-                    local new = not seen[win] and not vim.w[win].neovim4eclipse_ui2
+                    -- ui2's windows (UI2) showing ui2's own buffers are Neovim's command line and
+                    -- messages: never closed. One showing another buffer is a float like any other.
+                    local new = not seen[win] and not shows_ui2_buffer(win)
                     seen[win] = true
                     local wintype = vim.fn.win_gettype(win)
                     -- A report taken leaves its window closed: the checks below then pass it by.
@@ -5261,7 +5285,10 @@ final class LuaScripts {
      *       resize; ui2 still narrows the message window to its text.</li>
      *   <li>The windows' ids sent to Eclipse ({@code eclipse_ui2_windows}: cmd, msg, pager,
      *       dialog), at start and each time ui2 makes one again: the editor draws these even with
-     *       the cursor in them and even with plug-ins' floats turned off.</li>
+     *       the cursor in them and even with plug-ins' floats turned off. The plug-in's other
+     *       scripts (SETUP's {@code BufEnter}, WINDOWS' safety net) leave ui2's own
+     *       <em>buffers</em> to it ({@code ui2.bufs}), not its windows: a file opened in the pager
+     *       ({@code gf}, {@code :e}) is a file like any other, and gets its editor.</li>
      *   <li>{@code :messages} shown in its page editor, not in ui2's pager: the history goes to
      *       Eclipse ({@code eclipse_messages}, each entry as {@code {kind, text}}), whose page
      *       keeps it open, searchable and copyable with the mouse (docs/USER_GUIDE.md, "The page
@@ -5306,9 +5333,6 @@ final class LuaScripts {
               pattern = kinds,
               callback = function(ev)
                 for _, win in ipairs(vim.fn.win_findbuf(ev.buf)) do
-                  -- Marks the window as ui2's for the plug-in's other scripts (SETUP's BufEnter,
-                  -- WINDOWS' safety net), which leave it to ui2.
-                  vim.w[win].neovim4eclipse_ui2 = ev.match
                   fit(win)
                 end
                 -- After ui2 stored the new window's id (it fires FileType while making it).
@@ -5327,6 +5351,14 @@ final class LuaScripts {
             local enabled, err = pcall(ui2.enable, {})
             if not enabled then
               return 'ui2 not turned on: ' .. tostring(err)
+            end
+            if not ui2.msg then
+              return 'ui2 not turned on (its enable returned early: no UI, or the config set enable = false)'
+            end
+            -- Windows ui2 made before this ran (the user's init.lua turned ui2 on first): no
+            -- FileType comes for them, so they are fitted here.
+            for _, kind in ipairs(kinds) do
+              fit(ui2.wins[kind])
             end
 
             -- :messages to its page editor; g< (prev_cmd) to ui2's pager as before.
@@ -5350,11 +5382,18 @@ final class LuaScripts {
               vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_messages', sent)
             end
 
+            -- A stack, for a line opened inside another (<C-r>= on a : line): when the inner one
+            -- closes, Eclipse hears the outer one's type again, not "closed".
+            local open_lines = {}
             vim.api.nvim_create_autocmd({ 'CmdlineEnter', 'CmdlineLeave' }, {
               group = group,
               callback = function(ev)
-                local kind = ev.event == 'CmdlineEnter' and vim.fn.getcmdtype() or ''
-                vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_cmdline', kind)
+                if ev.event == 'CmdlineEnter' then
+                  open_lines[#open_lines + 1] = vim.fn.getcmdtype()
+                else
+                  open_lines[#open_lines] = nil
+                end
+                vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_cmdline', open_lines[#open_lines] or '')
               end,
             })
             vim.o.cmdheight = 1

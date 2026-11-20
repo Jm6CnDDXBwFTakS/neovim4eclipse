@@ -82,8 +82,9 @@ public final class KeyRouter {
 
         /**
          * Whether {@code Ctrl-N}, {@code Ctrl-P} and the {@code Ctrl-X} modes are Neovim's own
-         * completion, whose list the editor draws; {@code false} when the user turned that off
-         * ({@code vim.g.neovim4eclipse_completion_menu = 0}): then Eclipse's Word Completion.
+         * completion, whose popup menu the editor draws: always from 0.3.0
+         * ({@code NeovimSession.completesInNeovim}). The branches for {@code false} (Eclipse's Word
+         * Completion) are kept for a session that reports otherwise, and their tests stand.
          */
         boolean completesInNeovim();
 

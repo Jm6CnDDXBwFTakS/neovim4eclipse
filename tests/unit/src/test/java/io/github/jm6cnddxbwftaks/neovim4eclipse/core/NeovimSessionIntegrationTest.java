@@ -1452,7 +1452,7 @@ class NeovimSessionIntegrationTest {
             keys(s, "k", "<CR>"); // up to the history line, and run it
             waitFor(() -> !views.get(views.size() - 1).open(), "closed after Enter: " + views);
             waitFor(() -> Ui2Text.shown(s).contains("from the history"), "the line ran");
-            assertEquals(1L, ((Number) s.lua("return #vim.tbl_filter(function(w) return not vim.w[w].neovim4eclipse_ui2 end, vim.api.nvim_list_wins())")).longValue());
+            assertEquals(1L, ((Number) s.lua("return #vim.tbl_filter(function(w) return not vim.tbl_contains(vim.tbl_values(require('vim._core.ui2').bufs), vim.api.nvim_win_get_buf(w)) end, vim.api.nvim_list_wins())")).longValue());
             assertFalse(s.isCommandWindowOpen());
         }
     }
@@ -1604,7 +1604,7 @@ class NeovimSessionIntegrationTest {
             int gone = s.commandWindowGrid();
             keys(s, "<C-c>", "<C-c>"); // out of the window, nothing run
             waitFor(() -> !s.isCommandWindowOpen() && s.commandWindowGrid() == -1, "closed");
-            String cursors = "return vim.inspect(vim.tbl_map(vim.api.nvim_win_get_cursor, vim.tbl_filter(function(w) return not vim.w[w].neovim4eclipse_ui2 end, vim.api.nvim_list_wins())))"
+            String cursors = "return vim.inspect(vim.tbl_map(vim.api.nvim_win_get_cursor, vim.tbl_filter(function(w) return not vim.tbl_contains(vim.tbl_values(require('vim._core.ui2').bufs), vim.api.nvim_win_get_buf(w)) end, vim.api.nvim_list_wins())))"
                     + " .. vim.fn.mode() .. vim.fn.getcmdwintype()";
 
             clickRows(s, gone); // with only the editor's window open
@@ -1648,7 +1648,7 @@ class NeovimSessionIntegrationTest {
             waitFor(() -> !s.isCommandWindowOpen(), "closed");
             s.lua("return 1"); // the keys typed by the close have been handled
             assertEquals(Boolean.TRUE, s.lua("return vim.g.quit_seen == nil"), "no :quit ran outside the window");
-            assertEquals(1L, ((Number) s.lua("return #vim.tbl_filter(function(w) return not vim.w[w].neovim4eclipse_ui2 end, vim.api.nvim_list_wins())")).longValue());
+            assertEquals(1L, ((Number) s.lua("return #vim.tbl_filter(function(w) return not vim.tbl_contains(vim.tbl_values(require('vim._core.ui2').bufs), vim.api.nvim_win_get_buf(w)) end, vim.api.nvim_list_wins())")).longValue());
         }
     }
 

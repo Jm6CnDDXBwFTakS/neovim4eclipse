@@ -36,6 +36,15 @@ class GridEventTest {
                 "a left-out hl_id is the previous cell's; repeat gives that many cells");
     }
 
+    /** A window's viewport names its window: one redraw brings the editor's and each of ui2's windows'. */
+    @Test
+    void aViewportNamesItsWindowAndCursor() {
+        List<?> redraw = List.of(List.of("win_viewport",
+                List.of(2L, "win1000", 0L, 23L, 41L, 4L, 60L, 0L),
+                List.of(5L, "win1002", 0L, 1L, 0L, 3L, 1L, 0L)));
+        assertEquals(List.of(new GridEvent.Viewport(2, 1000, 41, 4), new GridEvent.Viewport(5, 1002, 0, 3)), read(redraw));
+    }
+
     @Test
     void aDoubleWidthCharacterIsItsTextAndAnEmptyCell() {
         List<?> redraw = List.of(List.of("grid_line", List.of(4L, 1L, 2L, List.of(List.of("日", 3L), List.of("")), false)));
