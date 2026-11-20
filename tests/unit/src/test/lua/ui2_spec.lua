@@ -22,6 +22,10 @@ local function start()
     return { { width = vim.o.columns, height = vim.o.lines } }
   end
   t.setup()
+  -- As the session runs them: the windows module (its safety net) before ui2.
+  local home_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(home_buf)
+  t.run('WINDOWS', tostring(home_buf))
   local ok = t.run('UI2')
   vim.api.nvim_list_uis = list_uis
   t.eq(true, ok, 'UI2 turned ui2 on')
@@ -80,4 +84,40 @@ t.test('a window ui2 lost comes back, and its new id is sent', function()
   t.ok(new ~= old and vim.api.nvim_win_is_valid(new), 'a new pager window')
   t.eq(new, sent_windows()[3])
   t.eq(vim.o.columns, vim.api.nvim_win_get_width(new), 'the new window is fitted too')
+end)
+
+t.test("each of ui2's windows is marked for the plug-in's other scripts", function()
+  local ui2 = start()
+  for _, kind in ipairs({ 'cmd', 'msg', 'pager', 'dialog' }) do
+    t.eq(kind, vim.w[ui2.wins[kind]].neovim4eclipse_ui2, kind)
+  end
+end)
+
+t.test('entering the pager tells Eclipse nothing, so it does not send Neovim back', function()
+  local ui2 = start()
+  local editor = vim.api.nvim_get_current_win()
+  t.forget()
+  vim.api.nvim_set_current_win(ui2.wins.pager)
+  t.eq({}, t.sent('eclipse_buf_enter'), 'no buf enter for the pager')
+  vim.api.nvim_set_current_win(editor)
+  t.eq(1, #t.sent('eclipse_buf_enter'), 'back in the editor, as before')
+end)
+
+t.test("the safety net leaves ui2's window open while the cursor is in it", function()
+  local ui2 = start()
+  vim.api.nvim_set_current_win(ui2.wins.pager)
+  -- Any new window makes the net look at every window; a float the user is in would be closed.
+  local other = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false,
+    { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  -- The net runs scheduled, from WinNew; a callback scheduled after it runs after it.
+  local after = false
+  vim.schedule(function()
+    after = true
+  end)
+  t.wait_for('the net ran', function()
+    return after
+  end)
+  t.ok(vim.api.nvim_win_is_valid(ui2.wins.pager), 'the pager is still open')
+  t.eq(ui2.wins.pager, vim.api.nvim_get_current_win(), 'and still has the cursor')
+  vim.api.nvim_win_close(other, true)
 end)

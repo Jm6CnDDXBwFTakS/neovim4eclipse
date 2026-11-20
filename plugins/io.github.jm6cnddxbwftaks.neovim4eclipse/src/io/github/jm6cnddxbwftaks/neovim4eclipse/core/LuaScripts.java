@@ -129,6 +129,11 @@ final class LuaScripts {
                 if vim.fn.getcmdwintype() ~= '' then
                   return
                 end
+                -- One of ui2's windows (UI2): its pager or prompt, entered for a moment. The
+                -- editor draws it where it is; Eclipse is not told, or it would send Neovim back.
+                if vim.w.neovim4eclipse_ui2 then
+                  return
+                end
                 local left, jumped = vim.fn.bufnr('#'), false
                 if left > 0 and left ~= ev.buf then
                   for _, jump in ipairs(vim.fn.getjumplist()[1]) do
@@ -1899,7 +1904,8 @@ final class LuaScripts {
                   local quickfix = package.loaded['neovim4eclipse.quickfix']
                   local current = vim.api.nvim_get_current_win()
                   for _, win in ipairs(vim.api.nvim_list_wins()) do
-                    local new = not seen[win]
+                    -- ui2's windows (UI2) are Neovim's own command line and messages: never closed.
+                    local new = not seen[win] and not vim.w[win].neovim4eclipse_ui2
                     seen[win] = true
                     local wintype = vim.fn.win_gettype(win)
                     -- A report taken leaves its window closed: the checks below then pass it by.
@@ -5273,6 +5279,9 @@ final class LuaScripts {
               pattern = kinds,
               callback = function(ev)
                 for _, win in ipairs(vim.fn.win_findbuf(ev.buf)) do
+                  -- Marks the window as ui2's for the plug-in's other scripts (SETUP's BufEnter,
+                  -- WINDOWS' safety net), which leave it to ui2.
+                  vim.w[win].neovim4eclipse_ui2 = ev.match
                   fit(win)
                 end
                 -- After ui2 stored the new window's id (it fires FileType while making it).
