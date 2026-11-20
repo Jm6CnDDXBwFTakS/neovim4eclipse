@@ -574,6 +574,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             LOG.info(() -> "Neovim's floating windows " + (session.floatingWindowsDrawn() ? "drawn in the editor"
                     : session.floatingWindowsEnabled ? "not drawn: the viewport is off (g:neovim4eclipse_viewport)"
                             : "off (g:neovim4eclipse_floating_windows)"));
+            // Neovim draws its own command line, prompts, pager and messages (LuaScripts.UI2): always.
+            Object ui2 = await(api.execLua(LuaScripts.UI2, List.of()));
+            if (!Boolean.TRUE.equals(ui2)) {
+                LOG.warning(() -> "Neovim's command line is not shown: " + ui2);
+            }
             // And for the completion list (docs/ARCHITECTURE.md, "The completion list").
             session.completionMenuEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.COMPLETION_MENU, List.of())));
             LOG.info(() -> "Neovim's completion list " + (session.completesInNeovim() ? "drawn in the editor"

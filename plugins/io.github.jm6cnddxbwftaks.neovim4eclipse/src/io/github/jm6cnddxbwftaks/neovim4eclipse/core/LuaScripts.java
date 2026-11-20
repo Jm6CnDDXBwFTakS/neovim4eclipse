@@ -5216,6 +5216,88 @@ final class LuaScripts {
             """;
 
     /**
+     * Turns on Neovim's ui2, which draws the command line, its prompts, the pager and messages
+     * itself, in four floating windows, so that the editor only copies their cells as it does any
+     * float's (docs/ARCHITECTURE.md, "The command line and messages"). Run once at start, after the
+     * user's config and after Eclipse's UI attached: ui2 does nothing without a UI. The one place
+     * the plug-in talks to ui2 ({@code vim._core.ui2}, experimental in Neovim 0.12), so that a
+     * Neovim upgrade that changes it is met here, and in {@code ui2_spec.lua}, which pins each ui2
+     * behavior the plug-in relies on.
+     *
+     * <p><b>ui2's four windows</b>, each a float with its own buffer whose {@code 'filetype'} names
+     * it: {@code cmd} (the command line, and short messages after a command), {@code msg}
+     * (messages while typing), {@code pager} ({@code g<}, long output) and {@code dialog} (prompts
+     * such as {@code confirm()}). ui2 makes them again when one is closed, and fires
+     * {@code FileType} each time.
+     *
+     * <p><b>What this adds to ui2:</b>
+     * <ul>
+     *   <li>{@code 'cmdheight'} 1, set after ui2 is on. ui2 leaves it at 0 and grows it to the
+     *       line's height while a {@code :} line is open; the window above then shrinks a row,
+     *       and with the cursor on its last row Neovim scrolls (0.12) or moves the cursor (0.13).
+     *       At 1 the window keeps its height: the screen is one row taller than the editor, and
+     *       ui2's line lives in that row.</li>
+     *   <li>Each window as wide as the screen. ui2 opens them 10,000 cells wide and lets Neovim
+     *       clip them; a client of multigrid gets the full width, which would pass the editor's
+     *       limit on a float's cells ({@code util/Grids}). Set at {@code FileType} and after a
+     *       resize; ui2 still narrows the message window to its text.</li>
+     *   <li>The windows' ids sent to Eclipse ({@code eclipse_ui2_windows}: cmd, msg, pager,
+     *       dialog), at start and each time ui2 makes one again: the editor draws these even with
+     *       the cursor in them and even with plug-ins' floats turned off.</li>
+     * </ul>
+     *
+     * <p>Returns {@code true}, or the error's text when ui2 cannot be loaded or turned on (a Neovim
+     * without it: the session then logs it and shows Neovim's line nowhere).
+     */
+    static final String UI2 = """
+            local ok, ui2 = pcall(require, 'vim._core.ui2')
+            if not ok then
+              return 'ui2 not available: ' .. tostring(ui2)
+            end
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_ui2', { clear = true })
+            local kinds = { 'cmd', 'msg', 'pager', 'dialog' }
+
+            local function fit(win)
+              if vim.api.nvim_win_is_valid(win) then
+                pcall(vim.api.nvim_win_set_config, win, { width = vim.o.columns })
+              end
+            end
+
+            local function send()
+              local w = ui2.wins
+              vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_ui2_windows', w.cmd, w.msg, w.pager, w.dialog)
+            end
+
+            vim.api.nvim_create_autocmd('FileType', {
+              group = group,
+              pattern = kinds,
+              callback = function(ev)
+                for _, win in ipairs(vim.fn.win_findbuf(ev.buf)) do
+                  fit(win)
+                end
+                -- After ui2 stored the new window's id (it fires FileType while making it).
+                vim.schedule(send)
+              end,
+            })
+            vim.api.nvim_create_autocmd('VimResized', {
+              group = group,
+              callback = function()
+                for _, kind in ipairs({ 'cmd', 'pager', 'dialog' }) do
+                  fit(ui2.wins[kind])
+                end
+              end,
+            })
+
+            local enabled, err = pcall(ui2.enable, {})
+            if not enabled then
+              return 'ui2 not turned on: ' .. tostring(err)
+            end
+            vim.o.cmdheight = 1
+            send()
+            return true
+            """;
+
+    /**
      * Neovim's insert-mode completion list drawn in the editor ({@code util/CompletionMenu},
      * docs/ARCHITECTURE.md, "The completion list"): returns {@code false} when the user's config
      * sets {@code vim.g.neovim4eclipse_completion_menu = 0} (or {@code false}), and then installs
