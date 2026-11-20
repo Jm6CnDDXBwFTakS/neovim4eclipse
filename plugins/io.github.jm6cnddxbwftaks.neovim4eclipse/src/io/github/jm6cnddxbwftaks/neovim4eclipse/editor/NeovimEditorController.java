@@ -730,9 +730,15 @@ public final class NeovimEditorController implements AutoCloseable {
         return folder == null ? null : folder.toString();
     }
 
-    /** The editor's current document (looked up each time; may be {@code null}). */
+    /**
+     * The editor's current document (looked up each time; may be {@code null}). {@code null} too once
+     * the editor is closing: its document provider is gone before this controller is closed, and work
+     * queued for the UI thread before (CaretSync's caret read) may still run then. Example: a second
+     * workbench window closed while Neovim's cursor report for its editor was on its way.
+     */
     private static IDocument documentOf(ITextEditor editor) {
-        return editor.getDocumentProvider().getDocument(editor.getEditorInput());
+        org.eclipse.ui.texteditor.IDocumentProvider provider = editor.getDocumentProvider();
+        return provider == null ? null : provider.getDocument(editor.getEditorInput());
     }
 
     /** The editor's text viewer, if it supports ordered key listeners (all JFace source viewers do). */
