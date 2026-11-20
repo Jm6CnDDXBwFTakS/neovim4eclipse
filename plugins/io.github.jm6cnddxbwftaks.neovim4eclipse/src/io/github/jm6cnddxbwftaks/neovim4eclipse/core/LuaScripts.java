@@ -5459,6 +5459,11 @@ final class LuaScripts {
             -- inside its own OptionSet is not seen by the other handlers (ui2's hides its line
             -- window at 0 and shows it again at the 1).
             local restoring = false
+            -- Counts the user's sets: a restore scheduled for a 0 runs only if no set came after
+            -- it (:set ch=0 | set ch=2 ends at 2). Not the option's value: ui2 changes that itself,
+            -- without autocommands, while a line is open, so a line opened before the restore
+            -- would make it look done, and ui2 would then leave 0 for good.
+            local sets = 0
             vim.api.nvim_create_autocmd('OptionSet', {
               group = group,
               pattern = 'cmdheight',
@@ -5466,6 +5471,8 @@ final class LuaScripts {
                 if restoring then
                   return
                 end
+                sets = sets + 1
+                local mine = sets
                 local zero = tonumber(vim.v.option_new) == 0
                 if zero ~= overlay then
                   overlay = zero
@@ -5473,7 +5480,7 @@ final class LuaScripts {
                 end
                 if zero then
                   vim.schedule(function()
-                    if vim.o.cmdheight ~= 0 then
+                    if sets ~= mine then
                       return -- set again meanwhile (:set ch=0 | set ch=2): that one stands
                     end
                     restoring = true

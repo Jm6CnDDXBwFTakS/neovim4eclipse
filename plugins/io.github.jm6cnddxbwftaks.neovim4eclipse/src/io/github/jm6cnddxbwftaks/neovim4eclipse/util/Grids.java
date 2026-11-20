@@ -185,7 +185,9 @@ public final class Grids {
      * <p>With {@code overlay} the line's row, Neovim's screen's last, is not on the editor: the line
      * is drawn a row higher, on the status line's row, and so is what Neovim stacks on the line
      * (ui2's prompt and pager windows, which end on the status line's row, and the popup menu of a
-     * line being typed), so that none of them overlaps it. ui2's message window ({@code msg}) ends
+     * line being typed), so that none of them overlaps it. With {@code 'laststatus'} 3 ui2 already
+     * ends the pager above the global status line, so it then leaves one text row showing under
+     * it: a cosmetic difference, not an overlap. ui2's message window ({@code msg}) ends
      * above the status line and stays. Example: {@code :e } then Tab with {@code 'cmdheight'} 0: the
      * list of names ends right above the line, as in Neovim.
      */

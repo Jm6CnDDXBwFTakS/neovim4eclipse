@@ -508,7 +508,8 @@ class GridsTest {
                 .findFirst().orElseThrow();
         assertEquals(20, menu.row(), "rows 20 to 22, above the line on row 23");
         grids.apply(new GridEvent.CursorGoto(2, 3, 0)); // Enter: back in the window
-        grids.floatsIfChanged();
+        assertTrue(grids.floatsIfChanged().orElseThrow().stream().noneMatch(f -> f.grid().window() == 1010),
+                "the line goes at Enter");
         grids.ui2Windows(List.of(1010, 1011, 1012, 1013), 1010, 1011, false); // :set ch=1
         assertTrue(grids.floatsIfChanged().orElseThrow().stream().anyMatch(f -> f.grid().window() == 1010),
                 "with its row back, the line stays drawn");
