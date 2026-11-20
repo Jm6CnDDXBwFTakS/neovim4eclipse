@@ -5453,6 +5453,11 @@ final class LuaScripts {
                   text[#text + 1] = chunk[2]
                 end
                 if table.concat(text):find(string.char(10), 1, true) then -- a line break (a backslash escape is Java's too)
+                  -- ui2 forgets the previous message only for windows of its target, now 'msg':
+                  -- the same output again would count as a repeat and not expand the line.
+                  if not messages.cmd_on_key then
+                    messages.prev_msg = ''
+                  end
                   ui2.cfg.msg.target = 'cmd'
                   local ok, err = pcall(msg_show, kind, content, ...)
                   ui2.cfg.msg.target = 'msg'
@@ -5463,6 +5468,17 @@ final class LuaScripts {
                 end
               end
               return msg_show(kind, content, ...)
+            end
+            -- The "[+N]" ui2 keeps for the line's rows past its one is put where its target says,
+            -- 'msg' again by the time the expanded line collapses: it would show beside the next
+            -- message. With the overlay the line's one row is hidden, so the mark has no place.
+            local set_pos = messages.set_pos
+            messages.set_pos = function(tgt, ...)
+              local result = set_pos(tgt, ...)
+              if moved_messages and tgt == 'cmd' then
+                messages.virt.msg[messages.virt.idx.spill][1] = nil
+              end
+              return result
             end
 
             -- A stack, for a line opened inside another (<C-r>= on a : line): when the inner one
@@ -5533,8 +5549,12 @@ final class LuaScripts {
             -- moment Neovim waits for input: one check every route passes, not one per route.
             -- Neovim's own is never 0 otherwise once this script ran (ui2 goes to 0 only after a
             -- 0 it heard through OptionSet, which the handler above sets back to 1).
+            -- Nested: the set back to 1 must fire OptionSet, so that ui2 hears it (its own handler
+            -- would otherwise keep 0 and set Neovim's option to 0 again at each line's end); the
+            -- plug-in's own handler skips it (`restoring`).
             vim.api.nvim_create_autocmd('SafeState', {
               group = group,
+              nested = true,
               callback = function()
                 if vim.o.cmdheight ~= 0 or restoring then
                   return

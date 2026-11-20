@@ -154,9 +154,11 @@ class NeovimUi2IntegrationTest {
             s.lua("vim.o.cmdheight = 1");
             waitFor(() -> s.commandLineRows() == 1, "the row back after :set ch=1");
             assertEquals("cmd", s.lua(target), "messages back on the line's row");
-            s.lua("vim.o.cmdheight = 0");
+            s.input(":set cmdheight=0<CR>");
             waitFor(() -> s.commandLineRows() == 0 && number(s, "return vim.o.cmdheight") == 1,
                     "no row again after :set ch=0, and Neovim's back at 1");
+            waitFor(() -> number(s, "return require('vim._core.ui2').cmdheight") == 1,
+                    "ui2 heard the 1 too: else it sets 0 again at each line's end, and the text moves");
             assertEquals("msg", s.lua(target));
         }
     }
@@ -225,6 +227,7 @@ class NeovimUi2IntegrationTest {
             s.lua("vim.cmd('noautocmd set cmdheight=0')");
             waitFor(() -> s.commandLineRows() == 0 && number(s, "return vim.o.cmdheight") == 1,
                     "the overlay on and Neovim back at 1");
+            waitFor(() -> number(s, "return require('vim._core.ui2').cmdheight") == 1, "ui2 heard the 1 too");
             assertEquals("msg", s.lua("return require('vim._core.ui2').cfg.msg.target"));
         }
     }
@@ -257,6 +260,41 @@ class NeovimUi2IntegrationTest {
                     return false;
                 }
             }, "one line: the message window");
+        }
+    }
+
+    /**
+     * The same output of several lines twice, a key between (a mapping or a plug-in's report): the
+     * second expands the line again, and no "[+N]" of the line is left beside a later message.
+     */
+    @Test
+    void repeatedLongOutputShowsAgainWithCmdheightZero() throws Exception {
+        try (NeovimSession s = start("--clean", "--cmd", "set cmdheight=0",
+                "--cmd", "nnoremap <F2> <Cmd>echo \"one\\ntwo\\nthree\"<CR>", "--cmd", "nnoremap <F3> <Cmd>echo 'hi'<CR>")) {
+            waitFor(() -> s.commandLineRows() == 0, "no row for the line");
+            List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
+            s.addFloatingWindowListener(reports::add);
+            for (int round = 1; round <= 2; round++) {
+                s.input("<F2>");
+                int r = round;
+                waitFor(() -> reports.stream().flatMap(List::stream).anyMatch(f -> f.grid().height() >= 3
+                        && text(f).contains("three")), "the output expanded, round " + r + ": " + reports);
+                reports.clear();
+                s.input("j");
+                waitFor(() -> number(s, "return require('vim._core.ui2').msg.cmd_on_key and 1 or 0") == 0, "collapsed");
+            }
+            s.input("<F3>");
+            String marks = "local m = require('vim._core.ui2'); local all = {}"
+                    + " for _, x in ipairs(vim.api.nvim_buf_get_extmarks(m.bufs.msg, -1, 0, -1, { details = true })) do"
+                    + " for _, c in ipairs(x[4].virt_text or {}) do all[#all + 1] = c[1] end end return table.concat(all)";
+            waitFor(() -> {
+                try {
+                    return String.valueOf(s.lua("return table.concat(vim.api.nvim_buf_get_lines(require('vim._core.ui2').bufs.msg, 0, -1, false))")).contains("hi");
+                } catch (Exception e) {
+                    return false;
+                }
+            }, "hi in the message window");
+            assertTrue(!String.valueOf(s.lua(marks)).contains("[+"), "no spill mark beside it");
         }
     }
 }
