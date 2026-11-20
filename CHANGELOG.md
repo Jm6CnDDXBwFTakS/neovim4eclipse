@@ -66,6 +66,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - On macOS, the press-and-hold accent menu no longer opens on the `:` line (holding `E` offers no
   `é`); dead keys (`Option+E`, then `E`) still work there, and so do input methods.
 
+### Fixed
+
+- Closing an editor (or the workbench window it is in) while Neovim's cursor report for it was on
+  its way no longer logs a `NullPointerException` in Eclipse's Error Log.
+
 ## [0.2.31] - 2026-11-20
 
 ### Changed
