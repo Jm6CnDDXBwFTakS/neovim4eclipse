@@ -26,6 +26,7 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.PicturesFolder;
 
 /**
@@ -175,7 +176,8 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
             ITextEditor java = openJava(invoice);
             StyledText text = widgetOf(java);
             // No search left from an earlier run: the pictures' Neovim keeps its history under pictures.home.
-            session.commandAsync("let @/ = '' | nohlsearch");
+            // Through the API, not typed: a typed line would stay on Neovim's ':' row in the picture.
+            SessionProbe.lua(session, "vim.fn.setreg('/', '') vim.cmd.nohlsearch() return 0");
             settle();
 
             // 1. Visual line mode over the loop: Neovim's selection shown by Eclipse, the mode in the status bar.
@@ -225,8 +227,9 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
             // draws the eye.
             UiTestSupport.escape(firstText);
             waitUntil("normal mode after :clist", TIMEOUT_MS, () -> "n".equals(session.getMode()));
-            session.commandAsync("nohlsearch");
-            session.commandAsync("call search('total(', 'cw')");
+            // Through the API, not typed, as at the start; and the ':' row emptied, where the first
+            // line of :clist's output stays after Esc, so that the picture shows the list only.
+            SessionProbe.lua(session, "vim.cmd.nohlsearch() vim.fn.search('total(', 'cw') vim.cmd.echo('\"\"') return 0");
             settle();
             typeSlowly(firstText, "ciw");
             waitUntil("insert mode, Eclipse typing", TIMEOUT_MS, session::isEclipseTypingReady);
