@@ -36,8 +36,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.sync.SyncProbe;
  *       reaches Neovim only at {@code Esc}. While Eclipse types, the {@code Esc} goes through the
  *       active editor's widget, as a user's would, so the editor ends the insert and pushes; in
  *       another mode (visual, a pending operator) straight to Neovim. Then settle again.</li>
- *   <li>Wait until the active editor is the attached one: an editor a test opened last (an
- *       {@code :e}) gets its buffer only at its attach, a moment after it is active.</li>
  *   <li>For each document with a buffer in the running Neovim (a clone's document once), compare
  *       the lines Neovim should hold ({@link SyncProbe#linesNeovimShouldHave}) with
  *       {@code nvim_buf_get_lines}.</li>
@@ -70,29 +68,6 @@ final class TextCheck {
             }
             UiTestSupport.settle(session, timeoutMs);
         }
-        // The active editor attached first: one a test opened last (an :e) gets its Neovim buffer
-        // only at its attach, a moment after it is active, and the buffer is empty until then.
-        // Not attached when the wait ends (an editor Neovim does not take): compared as it is.
-        UiTestSupport.waitUntilOrGiveUp(timeoutMs, TextCheck::activeEditorAttached);
-        UiTestSupport.settle(session, timeoutMs);
-        return compareAll(session);
-    }
-
-    /** Whether the active part is no text editor, or the one Neovim is attached to. */
-    private static boolean activeEditorAttached() {
-        IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
-        IWorkbenchPage page = window == null ? null : window.getActivePage();
-        IEditorPart active = page == null ? null : page.getActiveEditor();
-        ITextEditor text = active == null ? null : EditorAttachManager.textEditorOf(active);
-        if (text == null || page.getActivePart() != active) {
-            return true;
-        }
-        NeovimEditorController controller = EditorAttachManager.getInstance().getActiveController();
-        return controller != null && !controller.isClosed() && controller.getEditor() == text;
-    }
-
-    /** Every open document against its buffer: what differs, joined; {@code null} when nothing does. */
-    private static String compareAll(NeovimSession session) {
         EditorAttachManager manager = EditorAttachManager.getInstance();
         Set<IDocument> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         List<String> found = new ArrayList<>();

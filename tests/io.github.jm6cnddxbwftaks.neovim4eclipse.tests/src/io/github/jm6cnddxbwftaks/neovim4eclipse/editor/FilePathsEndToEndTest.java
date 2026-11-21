@@ -143,6 +143,9 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             return active != null && active.getEditorInput() instanceof IFileEditorInput input
                     && input.getFile().equals(script) && EditorAttachManager.textEditorOf(active) != null;
         }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getEditorInput()));
+        // Attached too, before the test ends: the end-of-test text check compares the buffer, which
+        // the attach fills a moment after the editor is active.
+        waitForActiveAndAttached(script, "build.zzz attached");
     }
 
     /**
@@ -164,6 +167,9 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             return active != null && active.getEditorInput() instanceof IFileEditorInput input
                     && input.getFile().equals(script) && EditorAttachManager.textEditorOf(active) != null;
         }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getEditorInput()));
+        // Attached too, before the test ends: the end-of-test text check compares the buffer, which
+        // the attach fills a moment after the editor is active.
+        waitForActiveAndAttached(script, "build.bat attached");
     }
 
     /**
@@ -184,6 +190,9 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             return active != null && active.getEditorInput() instanceof IFileEditorInput input
                     && input.getFile().equals(svg) && "org.eclipse.ui.DefaultTextEditor".equals(active.getSite().getId());
         }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getSite().getId()));
+        // Attached too, before the test ends: the end-of-test text check compares the buffer, which
+        // the attach fills a moment after the editor is active.
+        waitForActiveAndAttached(svg, "logo.svg attached");
     }
 
     /**
