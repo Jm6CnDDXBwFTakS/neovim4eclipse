@@ -123,7 +123,10 @@ final class WindowPane {
     private final FocusTarget target = new FocusTarget() {
         @Override
         public void onMode(String mode) {
-            onUi(() -> status.setMode(mode));
+            onUi(() -> {
+                status.setMode(mode);
+                floats.setInsertMode(VimModes.isTyping(mode)); // a float's cursor over the page: a bar in an insert
+            });
         }
 
         @Override

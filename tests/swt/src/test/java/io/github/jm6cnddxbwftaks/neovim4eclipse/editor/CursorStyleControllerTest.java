@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,6 +52,70 @@ class CursorStyleControllerTest {
 
         style.updateForMode("i");
         assertTrue(text.getCaret().getSize().x < block, "thin in insert mode");
+        style.dispose();
+    }
+
+    /**
+     * Hidden while Neovim's cursor is in a plug-in's window: the widget has no caret then, also
+     * after a mode change and a scroll (which would make a merely invisible caret visible again);
+     * shown again in the mode's shape, the same caret.
+     */
+    @Test
+    void aHiddenCaretIsOffTheWidgetUntilShownAgainInTheModesShape() {
+        CursorStyleController style = new CursorStyleController(text);
+        Caret caret = text.getCaret();
+        int block = caret.getSize().x;
+        style.setHidden(true);
+        assertNull(text.getCaret(), "no caret: a StyledText without one draws none");
+        assertTrue(style.isHidden());
+        style.updateForMode("i"); // the prompt's insert
+        text.setText("alpha\n".repeat(50));
+        text.setSize(200, 60);
+        text.setTopIndex(10); // a scroll, which shows a merely invisible caret again
+        text.setSize(220, 80); // and a resize
+        assertNull(text.getCaret(), "a mode change does not bring it back");
+
+        style.setHidden(false);
+        assertSame(caret, text.getCaret(), "the same caret back");
+        assertFalse(style.isHidden());
+        assertTrue(caret.getSize().x < block, "thin: the mode Neovim is in now");
+        style.dispose();
+    }
+
+    /** Detach Neovim while hidden: the caret goes back, with Eclipse's width. */
+    @Test
+    void disposeWhileHiddenGivesEclipsesCaretBack() {
+        CursorStyleController style = new CursorStyleController(text);
+        style.setHidden(true);
+        style.dispose();
+        assertSame(eclipses, text.getCaret());
+        assertEquals(eclipsesWidth, eclipses.getSize().x);
+    }
+
+    /** Eclipse sets a new caret while hidden, and the float list comes again: the new one is hidden too. */
+    @Test
+    void aCaretEclipseSetWhileHiddenIsHiddenAtTheNextHide() {
+        CursorStyleController style = new CursorStyleController(text);
+        style.setHidden(true);
+        Caret fresh = new Caret(text, SWT.NONE);
+        text.setCaret(fresh);
+        style.setHidden(true); // the prompt redrawn
+        assertNull(text.getCaret());
+        style.setHidden(false);
+        assertSame(fresh, text.getCaret(), "the newest caret back, Eclipse's current one");
+        style.dispose();
+    }
+
+    /** Eclipse sets a new caret while hidden (the Insert key): that one stays, in the mode's shape. */
+    @Test
+    void aCaretEclipseSetWhileHiddenStays() {
+        CursorStyleController style = new CursorStyleController(text);
+        style.setHidden(true);
+        Caret fresh = new Caret(text, SWT.NONE);
+        text.setCaret(fresh);
+        style.setHidden(false);
+        assertSame(fresh, text.getCaret());
+        assertTrue(fresh.getSize().x > eclipsesWidth, "the block of normal mode");
         style.dispose();
     }
 

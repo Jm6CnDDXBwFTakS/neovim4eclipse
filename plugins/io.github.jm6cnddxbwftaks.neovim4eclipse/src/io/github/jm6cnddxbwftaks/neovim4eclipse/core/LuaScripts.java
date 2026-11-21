@@ -1889,8 +1889,9 @@ final class LuaScripts {
             -- message, when the quickfix module is there (QUICKFIX: the Problems or Tasks view, or
             -- the list's :clist, shown by Neovim), so :copen does what it is for.
             -- A floating window is closed too when it opened with the focus (a picker's prompt,
-            -- :Lazy, a dashboard): Eclipse does not draw it, and it would take the keys typed in the
-            -- editor. Floating windows without the focus stay, unseen and harmless.
+            -- :Lazy, a dashboard): it would take the keys typed in the editor, which cannot yet
+            -- leave it (a click away, the editor's own text). Floating windows without the focus
+            -- stay, drawn over the text, and so does one entered later, drawn with the cursor.
             -- A :checkhealth report opens in a window of its own however it is asked for (a new
             -- tab, a split with :vert, a float with vim.g.health's style 'float'), and Neovim has
             -- filled it and set its filetype by the time this net runs (after the command). Its
@@ -5308,8 +5309,8 @@ final class LuaScripts {
 
 
     /**
-     * Whether Neovim's floating windows without the focus are drawn in the editor
-     * (docs/ARCHITECTURE.md, "Neovim's windows drawn from their grids"): {@code false} when the
+     * Whether plug-ins' floating windows (with the cursor in the one that has the focus) are
+     * drawn in the editor (docs/ARCHITECTURE.md, "Neovim's windows drawn from their grids"): {@code false} when the
      * user's config sets {@code vim.g.neovim4eclipse_floating_windows = 0} (or {@code false}). Run
      * once at start, after the user's config. Nothing to install in Neovim: the windows' cells
      * come with the redraw events anyway, and the session only stops reading them

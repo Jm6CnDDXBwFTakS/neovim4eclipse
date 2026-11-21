@@ -185,17 +185,43 @@ class GridsTest {
         assertEquals(List.of(1002, 1003), floats.stream().map(f -> f.grid().window()).toList());
     }
 
+    /**
+     * A float with the focus (a picker's prompt) is drawn with the cursor, in the same place,
+     * redrawn when the cursor moves in it, and without the cursor once the focus leaves it.
+     */
     @Test
-    void aFloatWithTheFocusIsNotDrawnAndComesBackWhenTheFocusLeavesIt() {
+    void aFloatWithTheFocusIsDrawnWithTheCursorWhichMovesInItAndLeavesIt() {
         grids.drawFloats(true);
         editorWindow();
         floatAt(5, 1002, 3, 3, 50);
-        assertEquals(1, grids.floatsIfChanged().orElseThrow().size());
-        grids.apply(new GridEvent.CursorGoto(5, 0, 0)); // the user went into it
-        assertEquals(List.of(), grids.floatsIfChanged().orElseThrow());
+        FloatWindow before = grids.floatsIfChanged().orElseThrow().get(0);
+        assertFalse(before.focused());
+        grids.apply(new GridEvent.CursorGoto(5, 0, 2)); // the user went into it
+        FloatWindow in = grids.floatsIfChanged().orElseThrow().get(0);
+        assertEquals(1002, in.grid().window());
+        assertEquals(0, in.grid().cursorRow());
+        assertEquals(2, in.grid().cursorCol());
+        assertEquals(3, in.row(), "where it was, still counted from the editor's window");
+        assertEquals(23, in.hostRows());
+        assertTrue(in.focused(), "a plug-in's window with the cursor: the editor hides its caret");
+        grids.apply(new GridEvent.CursorGoto(5, 0, 3)); // a letter typed, no line event yet
+        assertEquals(3, grids.floatsIfChanged().orElseThrow().get(0).grid().cursorCol(), "drawn again with the cursor");
         grids.apply(new GridEvent.CursorGoto(2, 4, 0));
         FloatWindow back = grids.floatsIfChanged().orElseThrow().get(0);
+        assertEquals(-1, back.grid().cursorRow(), "the focus left it");
+        assertFalse(back.focused());
         assertEquals(3, back.row());
+    }
+
+    /** With plug-ins' floats off, the float with the focus is not drawn either (the net closes it). */
+    @Test
+    void aFloatWithTheFocusIsNotDrawnWhileFloatsAreOff() {
+        editorWindow();
+        floatAt(5, 1002, 3, 3, 50);
+        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        assertTrue(grids.floatsIfChanged().orElse(List.of()).isEmpty(), "no float drawn");
+        grids.apply(new GridEvent.CursorGoto(5, 0, 1));
+        assertTrue(grids.floatsIfChanged().isEmpty(), "a cursor move in an undrawn float changes nothing");
     }
 
     /**
@@ -312,6 +338,21 @@ class GridsTest {
         assertEquals(Grids.MAX_FLOATS, drawn.size());
         assertEquals(2002, drawn.get(0), "the two lowest, 2000 and 2001, are the ones left out");
         assertEquals(2000 + Grids.MAX_FLOATS + 1, drawn.get(drawn.size() - 1));
+    }
+
+    /** The float the keys go to (the cursor's: a picker's prompt) stays drawn when the limits leave some out. */
+    @Test
+    void pastTheWindowLimitTheCursorsFloatStaysThoughItIsTheLowest() {
+        grids.drawFloats(true);
+        editorWindow();
+        for (int i = 0; i < Grids.MAX_FLOATS + 2; i++) {
+            floatOfSize(10 + i, 2000 + i, 4, 1, i);
+        }
+        grids.apply(new GridEvent.CursorGoto(10, 0, 0)); // into 2000, the lowest
+        List<Integer> drawn = drawnWindows();
+        assertEquals(Grids.MAX_FLOATS, drawn.size());
+        assertTrue(drawn.contains(2000), "the cursor's float: " + drawn);
+        assertFalse(drawn.contains(2001) || drawn.contains(2002), "the next lowest are left out: " + drawn);
     }
 
     @Test
@@ -576,6 +617,7 @@ class GridsTest {
         assertEquals(":ech", line.grid().row(0).strip());
         assertEquals(0, line.grid().cursorRow());
         assertEquals(4, line.grid().cursorCol());
+        assertFalse(line.focused(), "ui2's line is Neovim's command line: the editor keeps its caret");
         assertEquals(24, line.row(), "screen row 24: under the editor's window and its status line, as on Neovim's screen");
         assertEquals(line.row() + 1, line.hostRows(), "the host counts the rows the editor draws under its window: the line is its last");
         grids.apply(new GridEvent.CursorGoto(8, 0, 2)); // the cursor moved left, no line changed

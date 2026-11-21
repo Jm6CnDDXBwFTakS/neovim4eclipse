@@ -19,9 +19,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatPlacement;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 
 /**
- * Draws Neovim's floating windows that do not have the focus over the editor's text
- * (docs/ARCHITECTURE.md, "Neovim's windows drawn from their grids"): a plug-in's panel of key
- * hints, hover text, a progress window opened in the background. Eclipse draws the editor, so
+ * Draws Neovim's floating windows over the editor's text (docs/ARCHITECTURE.md, "Neovim's windows
+ * drawn from their grids"): a plug-in's panel of key hints, hover text, a progress window opened in
+ * the background, a float entered later with Neovim's cursor in it ({@code Ctrl-W w}; one that
+ * opens with the focus, a picker's prompt, is still closed by {@code LuaScripts.WINDOWS}). Eclipse draws the editor, so
  * without this such a window exists in Neovim and nobody sees it.
  *
  * <h2>How</h2>
@@ -37,13 +38,17 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
  *
  * <h2>They only show</h2>
  * A drawn window never takes the keyboard focus ({@code SWT.NO_FOCUS}): the keys keep going to the
- * editor, and from there to Neovim, which is what a window without the focus means. Clicks and
+ * editor, and from there to Neovim, also when Neovim's cursor is in the window (one entered with {@code Ctrl-W w}):
+ * Neovim then puts them there itself. Its cursor is drawn as Neovim draws it by default: a block,
+ * a bar at the cell's left edge in Insert and Replace mode ({@link #setInsertMode}). Clicks and
  * the wheel on it do nothing. The windows lie under the plug-in's own overlays (the command-line
  * window's panel), among themselves in Neovim's order ({@code zindex}), and over the status line's
  * row ({@link #keepUnder}), as Neovim draws a float over a status line: ui2's prompt and pager
  * windows reach it, and with {@code 'cmdheight'} 0 ui2's {@code :} line lies on it. Neovim's own command
  * line, prompts, pager and messages (ui2) are floats too, drawn like the others; the one with
- * Neovim's cursor is drawn with it ({@link #cursorCell}).
+ * Neovim's cursor is drawn with it ({@link #cursorCell}). While a plug-in's window has the cursor
+ * ({@link #hasFocusedFloat}), the editor hides its own caret, so that one cursor shows where the
+ * keys go.
  *
  * <p>UI thread only.
  */
@@ -59,6 +64,8 @@ final class FloatingWindows {
     private boolean listening;
     /** A child of the host kept under every window drawn: the status line's row, or {@code null}. */
     private Control under;
+    /** Whether Neovim is in Insert or Replace mode: a cursor in a drawn window is a bar then. */
+    private boolean insert;
 
     FloatingWindows(Canvas host) {
         this.host = host;
@@ -87,6 +94,7 @@ final class FloatingWindows {
             GridCanvas canvas = canvases.get(id);
             if (canvas == null || canvas.isDisposed()) {
                 canvas = new GridCanvas(host, GridCanvas.lookOf(host), SWT.NO_FOCUS);
+                canvas.setInsertCursor(insert);
                 // The wheel over a float does nothing; without this, some platforms scroll the editor under it.
                 canvas.addListener(SWT.MouseVerticalWheel, e -> e.doit = false);
                 canvas.addListener(SWT.MouseHorizontalWheel, e -> e.doit = false);
@@ -116,6 +124,33 @@ final class FloatingWindows {
     /** Removes every window (Neovim mode off, the editor detaches). */
     void clear() {
         show(List.of());
+    }
+
+    /**
+     * Whether Neovim is in Insert or Replace mode ({@code VimModes.isTyping}): the cursor in a drawn
+     * window is a bar then, a block otherwise, as in Neovim's default {@code 'guicursor'}. Example:
+     * a prompt buffer's window entered in Insert mode shows a bar after {@code "> "}; Esc in it, a block on
+     * the last letter. {@code 'guicursor'} itself is not read: the editor's own caret and the
+     * command-line window's panel do the same.
+     */
+    void setInsertMode(boolean insertMode) {
+        if (insertMode == insert) {
+            return;
+        }
+        insert = insertMode;
+        for (GridCanvas canvas : canvases.values()) {
+            if (!canvas.isDisposed()) {
+                canvas.setInsertCursor(insertMode);
+            }
+        }
+    }
+
+    /**
+     * Whether Neovim's cursor is in a plug-in's drawn window ({@link FloatWindow#focused}): a
+     * float entered with {@code Ctrl-W w}, not ui2's command line. The editor hides its caret meanwhile.
+     */
+    boolean hasFocusedFloat() {
+        return shown.stream().anyMatch(FloatWindow::focused);
     }
 
     /** Whether any window is drawn. */

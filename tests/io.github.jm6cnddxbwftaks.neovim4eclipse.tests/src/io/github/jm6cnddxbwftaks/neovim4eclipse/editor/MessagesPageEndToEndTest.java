@@ -268,6 +268,52 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
                 "in a tab group of its own");
     }
 
+    /**
+     * A prompt with the cursor in the code editor hides its caret; the page takes the focus, the
+     * prompt closes meanwhile, and back in the code the caret is there again and the prompt is not
+     * drawn. Here the code hears the cursor leave the prompt before the page takes the focus
+     * events; {@code NeovimEditorController.takeFocusBack} also draws the floats as they are now,
+     * for the other order (a list sent to the page only), which this test does not bring about.
+     */
+    @Test
+    void theCodesCaretComesBackWhenAPromptClosedWhileThePageHadTheFocus() {
+        NeovimPageEditor page = messagesShowing("prompt away");
+        page().activate(editor);
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        try {
+            SessionProbe.lua(session, FloatingWindowsEndToEndTest.OPEN_PROMPT);
+            waitUntil("the code's caret hidden for the prompt", TIMEOUT_MS, () -> {
+                settle();
+                return widget.getCaret() == null;
+            });
+            page().activate(page);
+            waitUntil("Neovim in the page's window", TIMEOUT_MS, () -> ((Number) SessionProbe.lua(session,
+                    "return vim.api.nvim_get_current_win()")).intValue() == page.windowPane().window());
+            SessionProbe.lua(session, "vim.cmd.stopinsert() _G.n4e_real_close(vim.g.n4e_float, true) vim.g.n4e_float = nil");
+            settle();
+            page().activate(editor);
+            waitUntil("the code's caret back, the closed prompt not drawn", TIMEOUT_MS, () -> {
+                settle();
+                return widget.getCaret() != null && !pluginFloatDrawn();
+            });
+        } finally {
+            SessionProbe.lua(session, "vim.cmd.stopinsert()"
+                    + " if _G.n4e_real_close then vim.api.nvim_win_close = _G.n4e_real_close _G.n4e_real_close = nil end"
+                    + " pcall(vim.api.nvim_win_close, vim.g.n4e_float or -1, true) vim.g.n4e_float = nil");
+        }
+    }
+
+    /** Whether a plug-in's float (not one of ui2's windows) is drawn over the code's text. */
+    private boolean pluginFloatDrawn() {
+        for (Control child : widget.getChildren()) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas)
+                    && !isNeovimsOwnFloat(canvas)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** {@code :q} in the page closes that page editor, and the code is still attached. */
     @Test
     void quitInThePageClosesItAndTheCodeStays() {

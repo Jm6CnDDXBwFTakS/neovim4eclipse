@@ -104,7 +104,7 @@ public final class NeovimEditorController implements AutoCloseable {
     private final CommandLineEditHandlers commandLineEdits;
     /** Neovim's command-line window ({@code q:}), drawn over the bottom of the editor while it is open. */
     private final NeovimWindowPanel commandWindowPanel;
-    /** Neovim's floating windows without the focus, drawn over the text. */
+    /** Neovim's floating windows, drawn over the text; the one with the focus with Neovim's cursor. */
     private final FloatingWindows floatingWindows;
     /** An input method's composition on Neovim's command line, while one is open. */
     private final LineInputMethod lineInput;
@@ -884,7 +884,8 @@ public final class NeovimEditorController implements AutoCloseable {
             if (searchHighlighter != null || neovimHighlighter != null) {
                 session.resendSearchAsync(buffer); // cleared in Eclipse mode
             }
-            floatingWindows.show(session.floatingWindows()); // cleared in Eclipse mode too
+            floatingWindows.setInsertMode(VimModes.isTyping(session.getMode()));
+            showFloats(session.floatingWindows()); // cleared in Eclipse mode too
             LOG.info("Mode → NEOVIM (keys to nvim)");
         } else {
             modeStatus.setHostEclipseMode();
@@ -901,6 +902,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 commandWindowPanel.show(CommandWindowView.CLOSED);
             }
             floatingWindows.clear(); // Neovim's windows are not shown in Eclipse mode; they come back with Neovim mode
+            cursorStyle.setHidden(false); // Eclipse's caret, whatever Neovim's cursor was in
             session.endCompletionAsync(); // Neovim would wait for the list's next key, which it no longer gets
             cursorStyle.updateForMode("i"); // thin caret for normal typing
             selectionView.clearBlock();
@@ -1043,9 +1045,9 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Neovim's floating windows without the focus changed (one opened, was redrawn, moved or
-     * closed): they are drawn over this editor's text, which is the one Neovim's window shows. Not
-     * in Eclipse mode, where nothing of Neovim's is shown. RPC thread.
+     * Neovim's floating windows changed (one opened, was redrawn, moved or closed, or Neovim's
+     * cursor went into one or left it): they are drawn over this editor's text, which is the one
+     * Neovim's window shows. Not in Eclipse mode, where nothing of Neovim's is shown. RPC thread.
      */
     private void onFloatingWindows(List<FloatWindow> windows) {
         if (closed || !neovimModeActive) {
@@ -1053,9 +1055,19 @@ public final class NeovimEditorController implements AutoCloseable {
         }
         HostCommands.runOnUi(() -> {
             if (!closed && neovimModeActive && !styledText.isDisposed()) {
-                floatingWindows.show(windows);
+                showFloats(windows);
             }
         });
+    }
+
+    /**
+     * Draws {@code windows}, and hides the editor's caret while Neovim's cursor is in one of them
+     * that a plug-in opened ({@code FloatingWindows.hasFocusedFloat}: one entered with {@code Ctrl-W w}), shows it
+     * again once the cursor is back. UI thread.
+     */
+    private void showFloats(List<FloatWindow> windows) {
+        floatingWindows.show(windows);
+        cursorStyle.setHidden(floatingWindows.hasFocusedFloat());
     }
 
     /**
@@ -1126,6 +1138,13 @@ public final class NeovimEditorController implements AutoCloseable {
         lineInput.lineOpen(lineOpen);
         if (viewport != null) {
             viewport.resendSize();
+        }
+        if (neovimModeActive) {
+            // The floats changed while the page had the focus events (a picker closed as Neovim
+            // left its window): draw them as they are now, and show the caret again if the float
+            // with the cursor is gone. Neovim sends no new list when it equals the page's last.
+            floatingWindows.setInsertMode(VimModes.isTyping(session.getMode()));
+            showFloats(session.floatingWindows());
         }
         session.refreshStatusAsync();
     }
@@ -1272,6 +1291,12 @@ public final class NeovimEditorController implements AutoCloseable {
             return; // status shows ECLIPSE until user toggles back
         }
         keyContext.updateFromAnyThread(mode);
+        boolean typingNow = VimModes.isTyping(mode);
+        HostCommands.runOnUi(() -> {
+            if (!closed && !styledText.isDisposed()) {
+                floatingWindows.setInsertMode(typingNow); // the cursor in a drawn window: a bar in an insert
+            }
+        });
         if (commandWindowShown) {
             // The command-line window's mode: its cursor shows it; the editor keeps its own state
             // (no thin caret, no Eclipse typing) until the window closes (onCommandWindow).

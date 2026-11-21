@@ -6,6 +6,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.swt.graphics.Rectangle;
@@ -18,10 +19,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 
 /**
- * Neovim's floating windows without the focus in a real editor ({@link FloatingWindows}): a window
- * a plug-in opens without entering it is drawn over the text where Neovim put it, the keys stay
- * the editor's, and it goes when Neovim closes it. No real plug-in runs here; the float is opened
- * the way one opens its panel ({@code nvim_open_win} with {@code enter = false}).
+ * Neovim's floating windows in a real editor ({@link FloatingWindows}): a window a plug-in opens
+ * without entering it is drawn over the text where Neovim put it, the keys stay the editor's, and
+ * it goes when Neovim closes it; a picker's prompt the cursor is in is drawn with Neovim's cursor,
+ * while the editor's caret is hidden. No real plug-in runs here; the float is opened the way one
+ * opens its panel ({@code nvim_open_win} with {@code enter = false}), or its prompt (entered, then
+ * {@code startinsert}).
  */
 class FloatingWindowsEndToEndTest extends EndToEndTestBase {
 
@@ -35,9 +38,34 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
               width = vim.api.nvim_win_get_width(win), height = 2, style = 'minimal', focusable = false })
             """;
 
+    /**
+     * Opens a picker's prompt as a picker does: a scratch prompt buffer in a float, entered, then
+     * {@code startinsert}. The WinNew safety net of {@code LuaScripts.WINDOWS} still closes such a
+     * float, through {@code vim.api.nvim_win_close} (looked up at each close, so a stand-in set here
+     * takes its place); its close of this one is refused (the stand-in below), so that
+     * the prompt stays open to be drawn. {@link #closeTheFloat} puts the real close back.
+     */
+    static final String OPEN_PROMPT = """
+            local close = vim.api.nvim_win_close
+            _G.n4e_real_close = close
+            vim.api.nvim_win_close = function(win, force)
+              if win == vim.g.n4e_float then error('the test keeps its prompt open') end
+              return close(win, force)
+            end
+            local buf = vim.api.nvim_create_buf(false, true)
+            vim.bo[buf].buftype = 'prompt'
+            vim.fn.prompt_setprompt(buf, '> ')
+            vim.g.n4e_prompt = buf
+            vim.g.n4e_float = vim.api.nvim_open_win(buf, true,
+              { relative = 'editor', row = 2, col = 4, width = 30, height = 1, border = 'single' })
+            vim.cmd.startinsert()
+            """;
+
     @AfterEach
     void closeTheFloat() {
-        SessionProbe.lua(session, "pcall(vim.api.nvim_win_close, vim.g.n4e_float or -1, true) vim.g.n4e_float = nil"
+        SessionProbe.lua(session, "vim.cmd.stopinsert()"
+                + " if _G.n4e_real_close then vim.api.nvim_win_close = _G.n4e_real_close _G.n4e_real_close = nil end"
+                + " pcall(vim.api.nvim_win_close, vim.g.n4e_float or -1, true) vim.g.n4e_float = nil"
                 + " pcall(vim.cmd.delmarks, 'q')");
         waitUntil("no float drawn", TIMEOUT_MS, () -> {
             settle();
@@ -143,6 +171,42 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
             return canvas != null && rowsOf(canvas.grid()).contains(text);
         }, () -> canvas() == null ? "; no float" : "; it shows " + rowsOf(canvas().grid()));
         return canvas();
+    }
+
+    /**
+     * A picker's prompt with Neovim's cursor in it: drawn with the cursor, a bar in its insert and
+     * a block after Esc, the cursor moving with the letters typed (which are Neovim's, not the
+     * document's), the editor's caret hidden meanwhile and back once the prompt is closed.
+     */
+    @Test
+    void aPromptWithTheCursorIsDrawnWithItAndTheEditorsCaretIsHiddenMeanwhile() {
+        String text = document.get();
+        assertNotNull(widget.getCaret(), "the editor shows its caret");
+        SessionProbe.lua(session, OPEN_PROMPT);
+        GridCanvas prompt = floatShowing("> ");
+        waitUntil("the prompt drawn with Neovim's cursor, a bar, the editor's caret hidden", TIMEOUT_MS, () -> {
+            settle();
+            return prompt.grid().cursorRow() >= 0 && prompt.isInsertCursor() && widget.getCaret() == null;
+        }, () -> "; cursor row " + prompt.grid().cursorRow() + ", bar " + prompt.isInsertCursor() + ", caret "
+                + widget.getCaret());
+        int start = prompt.grid().cursorCol();
+        type(widget, "abc"); // Neovim's insert in the prompt (KeyInput): every key to Neovim
+        floatShowing("> abc");
+        waitUntil("the cursor after the letters", TIMEOUT_MS, () -> {
+            settle();
+            return canvas().grid().cursorCol() == start + 3;
+        }, () -> "; the cursor is at column " + canvas().grid().cursorCol() + ", it started at " + start);
+        type(widget, "\u001b"); // normal mode, still in the prompt
+        waitUntil("a block cursor in normal mode, the caret still hidden", TIMEOUT_MS, () -> {
+            settle();
+            return !canvas().isInsertCursor() && canvas().grid().cursorRow() >= 0 && widget.getCaret() == null;
+        });
+        assertEquals(text, document.get(), "the letters went to the prompt, not the document");
+        SessionProbe.lua(session, "_G.n4e_real_close(vim.g.n4e_float, true) vim.g.n4e_float = nil");
+        waitUntil("the prompt gone, the editor's caret back", TIMEOUT_MS, () -> {
+            settle();
+            return canvas() == null && widget.getCaret() != null;
+        });
     }
 
     @Test

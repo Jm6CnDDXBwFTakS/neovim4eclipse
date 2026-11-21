@@ -12,6 +12,12 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- A plug-in's floating window you enter (`Ctrl-W w` into hover documentation) is drawn with
+  Neovim's cursor in it, a bar in Insert mode, and the editor's caret is hidden while the cursor
+  is there. Before, an entered window was not drawn at all.
+
 ## [0.3.2] - 2026-11-21
 
 ### Changed

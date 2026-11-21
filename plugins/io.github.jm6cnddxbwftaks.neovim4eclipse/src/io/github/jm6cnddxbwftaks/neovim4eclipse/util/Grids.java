@@ -23,19 +23,21 @@ import java.util.logging.Logger;
  * <h2>Which grids</h2>
  * Each Neovim window has a grid. Eclipse draws the command-line window's ({@link #draw}), the pages'
  * windows ({@link #drawPage}, {@link #pagesIfChanged}: a page editor shown from this Neovim) and,
- * when asked to ({@link #drawFloats}), those of the floating windows without the focus
- * ({@link #floatsIfChanged}); the text editors' windows are shown by the editors themselves. Every
+ * when asked to ({@link #drawFloats}), those of the floating windows ({@link #floatsIfChanged}); the
+ * text editors' windows are shown by the editors themselves. Every
  * grid's size is kept, and the cells of the grids that may be drawn ({@link #wantsLines}): Neovim
  * says which window a grid shows ({@code win_pos}, {@code win_float_pos}) at the end of a redraw,
  * after that grid's lines, so a new grid's lines are kept until its window is known; then those of
  * an editor's window are left out.
  *
  * <h2>Floating windows</h2>
- * A floating window is drawn while it does not have the focus: Neovim's cursor is on another
- * grid. A float's place is counted from the first row and column of the editor's window
- * ({@link FloatWindow}), the one window of the layout that is on screen. Example: a plug-in's
- * panel of key hints (which-key) is two floats, neither entered; a picker's prompt is a float
- * with the cursor in it, and is not drawn.
+ * A floating window is drawn with or without the focus; the one with Neovim's cursor on its grid
+ * is drawn with the cursor. A float's place is counted from the first row and column of the
+ * editor's window ({@link FloatWindow}), the one window of the layout that is on screen. Example:
+ * a plug-in's panel of key hints (which-key) is two floats, neither entered, drawn without a
+ * cursor; a float entered with {@code Ctrl-W w} has the cursor in it, and is drawn with it
+ * (a picker's prompt would be too, but {@code LuaScripts.WINDOWS} closes it as it opens), so that the user
+ * sees where the letters typed go.
  *
  * <h2>Example</h2>
  * <pre>
@@ -268,7 +270,9 @@ public final class Grids {
                 pageTouched(e.grid());
                 boolean wasDrawn = isDrawn(cursorGrid);
                 floatsChanged |= cursorGrid != e.grid(); // the focus moved: into a float, out of one, to another window
-                floatsChanged |= alwaysDrawn(e.grid()); // the cursor moved in ui2's line or pager, drawn with it
+                // The cursor moved in a window drawn with it: ui2's line or pager, or a float that has
+                // the focus (one entered with Ctrl-W w).
+                floatsChanged |= alwaysDrawn(e.grid()) || (drawFloats && isFloat(e.grid()));
                 cursorGrid = e.grid();
                 cursorRow = e.row();
                 cursorCol = e.col();
@@ -327,7 +331,7 @@ public final class Grids {
             return Optional.empty(); // its win_pos has not come yet: stays changed until it does
         }
         changed = false;
-        GridSnapshot snapshot = snapshot(drawnWindow, gridId, grid, true);
+        GridSnapshot snapshot = snapshot(drawnWindow, gridId, grid);
         if (snapshot.equals(last)) {
             return Optional.empty();
         }
@@ -359,7 +363,7 @@ public final class Grids {
                 continue; // its win_pos has not come yet: stays changed until it does
             }
             pagesChanged.remove(win);
-            GridSnapshot snapshot = snapshot(win, gridId, grid, true);
+            GridSnapshot snapshot = snapshot(win, gridId, grid);
             if (!snapshot.equals(lastPage.get(win))) {
                 lastPage.put(win, snapshot);
                 changedPages.add(snapshot);
@@ -436,14 +440,17 @@ public final class Grids {
     /**
      * The floating windows to draw, lowest in the stack first, if they differ from the last answer;
      * empty otherwise. An answer with no window in it says the last one closed. Called at each
-     * {@code flush}. Left out: a float with the focus (the cursor is on its grid), the drawn
-     * command-line window, and everything while {@link #drawFloats} is off, except the windows
-     * that are always drawn ({@link #alwaysDrawn}): ui2's and Neovim's popup menu, the cursor's
-     * included, with the cursor.
+     * {@code flush}. The float with the focus (the cursor is on its grid) is drawn with the
+     * cursor ({@link FloatWindow#focused}). Left out: the drawn command-line window, and every
+     * float while {@link #drawFloats} is off, except the windows that are always drawn
+     * ({@link #alwaysDrawn}): ui2's and Neovim's popup menu, the cursor's included, with the
+     * cursor. Example: a picker's prompt entered, with {@code vim.g.neovim4eclipse_floating_windows}
+     * 0: not drawn (the safety net of {@code LuaScripts.WINDOWS} closes it).
      *
      * <p>And what goes past the limits ({@link #MAX_FLOATS}, {@link #MAX_FLOAT_CELLS}): the
-     * windows are taken highest in the stack first, each one if it still fits; one that does not
-     * is left out, undrawn as every float was before they were drawn at all, and the lower ones
+     * windows are taken Neovim's own first ({@link #alwaysDrawn}), then the cursor's (the one the
+     * keys go to), then highest in the stack,
+     * each one if it still fits; one that does not is left out, undrawn as every float was before they were drawn at all, and the lower ones
      * are still tried. Example: three floats of 150,000, 125,000 and 75,000 cells, the first on
      * top: the first and the third are drawn (225,000 cells), the second is not. A single float of
      * more than {@link #MAX_FLOAT_CELLS} cells is never drawn. Its cells are counted before they
@@ -471,12 +478,16 @@ public final class Grids {
                 continue; // no row for the line, none open, no output expanding it: the status line shows (ui2Windows)
             }
             if (place.floating() && grids.containsKey(e.getKey()) && (drawFloats || always)
-                    && (e.getKey() != cursorGrid || always) && (drawnWindow == -1 || place.win() != drawnWindow)) {
+                    && (drawnWindow == -1 || place.win() != drawnWindow)) {
                 candidates.add(e);
             }
         }
-        // Highest in the stack first: when the limits leave some out, the ones on top stay.
-        candidates.sort(Comparator.<Map.Entry<Integer, GridEvent.WinPos>>comparingInt(e -> e.getValue().zindex())
+        // Neovim's own windows first (ui2's line, the popup menu: without them no command line
+        // shows), then the cursor's float, then highest in the stack: when the limits leave some
+        // out, the window the keys go to stays, then the ones on top.
+        candidates.sort(Comparator.<Map.Entry<Integer, GridEvent.WinPos>>comparingInt(e -> alwaysDrawn(e.getKey()) ? 1 : 0)
+                .thenComparingInt(e -> e.getKey() == cursorGrid ? 1 : 0)
+                .thenComparingInt(e -> e.getValue().zindex())
                 .thenComparingInt(e -> e.getValue().win()).reversed());
         long cells = 0;
         for (Map.Entry<Integer, GridEvent.WinPos> e : candidates) {
@@ -502,11 +513,14 @@ public final class Grids {
             // a row shorter, and the line and what Neovim stacks on it are a row higher (ui2Windows).
             boolean lifted = overlay && (place.win() == -1 ? inCommandLine
                     : ui2Windows.contains(place.win()) && place.win() != msgWindow);
-            floats.add(new FloatWindow(snapshot(place.win(), e.getKey(), grid, alwaysDrawn(e.getKey())),
+            // With the cursor when it is on this grid: ui2's line being typed, a float entered.
+            floats.add(new FloatWindow(snapshot(place.win(), e.getKey(), grid),
                     place.row() - (host == null ? 0 : host.row()) - (lifted ? 1 : 0),
                     place.col() - (host == null ? 0 : host.col()),
                     host == null ? 0 : host.height() + below - (overlay && below > 0 ? 1 : 0),
                     host == null ? 0 : host.width(), place.zindex(),
+                    // fromBottom: ui2's windows and the : line's list. FloatWindow.focused relies on it
+                    // to tell Neovim's own windows with the cursor from a plug-in's.
                     ui2Windows.contains(place.win()) || (place.win() == -1 && inCommandLine)));
         }
         floats.sort(Comparator.comparingInt(FloatWindow::zindex).thenComparingInt(f -> f.grid().window()));
@@ -517,8 +531,8 @@ public final class Grids {
         return Optional.of(lastFloats);
     }
 
-    /** {@code grid} as it stands, with the highlights it uses; the cursor only when asked for and on it. */
-    private GridSnapshot snapshot(int win, int gridId, GridCells grid, boolean withCursor) {
+    /** {@code grid} as it stands, with the highlights it uses; the cursor when it is on it. */
+    private GridSnapshot snapshot(int win, int gridId, GridCells grid) {
         Set<Integer> used = new HashSet<>();
         for (int id : grid.hl) {
             used.add(id);
@@ -530,7 +544,7 @@ public final class Grids {
                 usedAttrs.put(id, attr);
             }
         }
-        boolean cursorHere = withCursor && gridId == cursorGrid;
+        boolean cursorHere = gridId == cursorGrid;
         return new GridSnapshot(win, grid.width, grid.height, new ArrayList<>(Arrays.asList(grid.text)), grid.hl,
                 usedAttrs, defaultColors, cursorHere ? cursorRow : -1, cursorHere ? cursorCol : -1);
     }

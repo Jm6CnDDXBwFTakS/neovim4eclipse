@@ -619,6 +619,10 @@ the cursor into it.
 - **They only show.** Your keys go to the editor and on to Neovim, as if the window were not
   there: with which-key, the next key runs the mapping and the panel closes. A click or the wheel
   on a floating window does nothing.
+- **A window you enter** (`Ctrl-W w` into a plug-in's hover documentation) is drawn with Neovim's
+  cursor in it, a bar in Insert mode, and the editor's caret is hidden meanwhile: your keys go to
+  that window, as in Neovim. The caret comes back when you leave it. An input method has no place
+  to show its candidates there.
 - **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In
   insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your
   typing (signature help, a completion plug-in's documentation) does not appear, or lags; Eclipse's

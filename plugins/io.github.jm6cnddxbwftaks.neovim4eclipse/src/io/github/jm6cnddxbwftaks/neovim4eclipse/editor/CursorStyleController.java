@@ -26,6 +26,13 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  * normal mode although its keys were Eclipse's again. Example: Eclipse's caret is 1 pixel wide;
  * Neovim's normal mode makes it one {@code M} wide; after Detach Neovim it is 1 pixel again.
  *
+ * <p><b>Hidden while Neovim's cursor is elsewhere.</b> While Neovim's cursor is in a plug-in's
+ * window drawn over the text (a picker's prompt, {@code FloatingWindows.hasFocusedFloat}), the
+ * keys go there, not to the text, so the caret is hidden ({@link #setHidden}): one cursor shows
+ * where they go. How: the widget's caret is taken off it ({@code setCaret(null)}; a
+ * {@code StyledText} without a caret draws none) and put back after. Not {@code setVisible(false)}:
+ * {@code StyledText} shows its caret again by itself whenever it scrolls or is resized.
+ *
  * <p>SWT only, no workbench: {@code CursorStyleControllerTest} (tests/swt) runs it on a real
  * {@link StyledText}.
  */
@@ -51,6 +58,10 @@ public final class CursorStyleController {
      * UI thread.
      */
     private Caret ownCaret;
+    /** Whether the caret is hidden ({@link #setHidden}); any thread sets it, the UI thread applies it. */
+    private volatile boolean hidden;
+    /** The caret taken off the widget while hidden, to be put back; {@code null} when none is. UI thread. */
+    private Caret hiddenCaret;
 
     public CursorStyleController(StyledText styledText) {
         this.styledText = styledText;
@@ -71,11 +82,73 @@ public final class CursorStyleController {
         if (display == null) {
             return;
         }
-        if (display.getThread() == Thread.currentThread()) {
+        Runnable restore = () -> {
+            showHiddenCaret(); // a caret hidden for a float goes back first, then gets its width back
             restoreOriginalCaret();
+        };
+        if (display.getThread() == Thread.currentThread()) {
+            restore.run();
         } else {
-            display.asyncExec(this::restoreOriginalCaret);
+            display.asyncExec(restore);
         }
+    }
+
+    /**
+     * Hides the caret ({@code true}) or shows it again: hidden while Neovim's cursor is in a
+     * plug-in's window drawn over the text (see the class comment). Any thread; applied on the UI
+     * thread in the order called. Example: a picker's prompt opens with the cursor in it: hidden;
+     * the prompt closes, the cursor back in the editor's window: shown, in the shape of the mode
+     * Neovim is in then.
+     */
+    public void setHidden(boolean hide) {
+        if (disposed) {
+            return;
+        }
+        hidden = hide;
+        runOnUi(() -> {
+            if (disposed || isWidgetDisposed()) {
+                return;
+            }
+            if (hidden) {
+                hideCaret();
+            } else if (showHiddenCaret()) {
+                apply(block); // the mode may have changed meanwhile
+            }
+        });
+    }
+
+    /** Whether the caret is hidden now; for tests. UI thread. */
+    boolean isHidden() {
+        return hiddenCaret != null;
+    }
+
+    /** Takes the widget's caret off it, keeping it to put back. UI thread. */
+    private void hideCaret() {
+        Caret caret = styledText.getCaret();
+        // Also when one is hidden already: Eclipse may have set a new caret meanwhile (the
+        // overwrite toggle, a caret preference), which is then the one to keep; the old one is
+        // Eclipse's to dispose.
+        if (caret != null && !caret.isDisposed()) {
+            hiddenCaret = caret;
+            styledText.setCaret(null);
+        }
+    }
+
+    /**
+     * Puts the caret taken off by {@link #hideCaret} back, unless the widget got another one
+     * meanwhile (Eclipse made a new one: it stays, and the kept one is Eclipse's old one, which it
+     * may still dispose itself). Whether one was hidden. UI thread.
+     */
+    private boolean showHiddenCaret() {
+        Caret caret = hiddenCaret;
+        if (caret == null) {
+            return false;
+        }
+        hiddenCaret = null;
+        if (!isWidgetDisposed() && styledText.getCaret() == null && !caret.isDisposed()) {
+            styledText.setCaret(caret);
+        }
+        return true;
     }
 
     /**
@@ -145,8 +218,8 @@ public final class CursorStyleController {
     }
 
     private void apply(boolean blockCaret) {
-        if (isWidgetDisposed()) {
-            return;
+        if (isWidgetDisposed() || hiddenCaret != null) {
+            return; // hidden: setHidden(false) applies the mode's shape when it puts the caret back
         }
         measureCharWidth();
         Caret caret = styledText.getCaret();

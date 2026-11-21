@@ -44,9 +44,10 @@ The Neovim side:
   the plug-in did not open that is neither floating nor special, and also the quickfix, location
   list and preview windows: Eclipse cannot show them, and in the editor's tab they took its rows,
   so `H` and `L` no longer matched the editor. It also closes a floating window that is new and
-  has the focus (it opened with it: a picker's prompt, `:Lazy`), which Eclipse does not draw and
-  which would take the keys; floats without the focus stay, and so does one entered later
-  (`Ctrl-W w` into hover documentation), which the net has seen before (`seen`). At start,
+  has the focus (it opened with it: a picker's prompt, `:Lazy`), which would take the keys while
+  the editor cannot yet leave it; floats without the focus stay, and so does one entered later
+  (`Ctrl-W w` into hover documentation), which the net has seen before (`seen`), and which is
+  then drawn with Neovim's cursor while the editor's caret is hidden. At start,
   before the home buffer goes anywhere (`LuaScripts.LEAVE_START_FLOAT`, the session's first script
   after `PATHS`), a floating window the config left the focus in (lazy.nvim's installer on a first
   start) is closed and a plain window is made current: left current, it got the home buffer and

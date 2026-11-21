@@ -63,6 +63,40 @@ class FloatingWindowsTest {
         return new FloatWindow(grid, row, col, 10, 40, zindex);
     }
 
+    /** {@code window(...)} with Neovim's cursor at {@code cursorRow}, {@code cursorCol} of its grid. */
+    private static FloatWindow withCursor(int win, int cursorRow, int cursorCol, boolean fromBottom) {
+        GridSnapshot grid = new GridSnapshot(win, 6, 2, Collections.nCopies(12, "x"), new int[12], Map.of(),
+                new GridEvent.DefaultColors(GridEvent.NO_COLOR, GridEvent.NO_COLOR), cursorRow, cursorCol);
+        return new FloatWindow(grid, 3, 4, 10, 40, 50, fromBottom);
+    }
+
+    /**
+     * A picker's prompt with Neovim's cursor in it: drawn with the cursor, a bar in Insert mode
+     * (also on a canvas made after the mode came) and a block otherwise; it still never takes the
+     * focus, and only a plug-in's window counts as one the editor hides its caret for.
+     */
+    @Test
+    void aWindowWithTheCursorDrawsItAsABarInInsertModeAndCountsAsFocused() {
+        floats.setInsertMode(true);
+        floats.show(List.of(window(1002, 6, 2, 0, 0, 40), withCursor(1003, 0, 2, false)));
+        GridCanvas prompt = floats.canvas(1003);
+        assertTrue(prompt.isInsertCursor(), "a canvas made in Insert mode draws a bar");
+        assertTrue((prompt.getStyle() & SWT.NO_FOCUS) != 0, "the keys stay the editor's, which sends them to Neovim");
+        assertTrue(floats.hasFocusedFloat());
+        assertNotNull(floats.cursorCell());
+
+        floats.setInsertMode(false); // Esc in the prompt
+        assertFalse(prompt.isInsertCursor(), "a block in normal mode");
+        assertFalse(floats.canvas(1002).isInsertCursor());
+
+        floats.show(List.of(window(1002, 6, 2, 0, 0, 40), window(1003, 6, 2, 3, 4, 50)));
+        assertFalse(floats.hasFocusedFloat(), "the cursor left it: the editor shows its caret again");
+        floats.show(List.of(withCursor(1004, 0, 4, true)));
+        assertFalse(floats.hasFocusedFloat(), "ui2's line with the cursor is Neovim's command line, not a plug-in's window");
+        floats.clear();
+        assertFalse(floats.hasFocusedFloat());
+    }
+
     @Test
     void aWindowGetsACanvasWhereNeovimPutIt() {
         floats.show(List.of(window(1002, 6, 2, 3, 4, 50)));

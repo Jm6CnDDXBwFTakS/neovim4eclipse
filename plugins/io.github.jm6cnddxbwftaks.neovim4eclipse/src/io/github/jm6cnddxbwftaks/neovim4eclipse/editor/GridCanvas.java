@@ -148,6 +148,11 @@ final class GridCanvas extends Canvas {
         return grid;
     }
 
+    /** Whether the cursor is drawn as a bar ({@link #setInsertCursor}); for tests. */
+    boolean isInsertCursor() {
+        return insertCursor;
+    }
+
     /** One cell's width: the editor font's average character width, measured once per font. */
     int cellWidth() {
         Font font = look.font();
@@ -241,7 +246,9 @@ final class GridCanvas extends Canvas {
                 }
             }
         }
-        if (insertCursor && grid.cursorRow() >= 0) {
+        if (insertCursor && grid.cursorRow() >= 0 && grid.cursorRow() < grid.height() && grid.cursorCol() < grid.width()) {
+            // (Within the grid: Neovim's cursor can be past it for a moment, a grid shrunk after the
+            // cursor was put; hlAt would read another row's cell, or past the end.)
             int[] colors = grid.colors(grid.hlAt(grid.cursorRow(), grid.cursorCol()), editorFg, editorBg);
             gc.setBackground(color(colors[0]));
             gc.fillRectangle(grid.cursorCol() * w, grid.cursorRow() * h, BAR_WIDTH, h);
