@@ -136,6 +136,22 @@ final class ViewportFollower {
     }
 
     /**
+     * Sends the editor's size now, before the attach's document push is queued: Neovim's screen
+     * then has the editor's rows when the push puts its cursor on the caret's line, and the view
+     * Neovim makes for that cursor fits the editor. Without it a new Neovim placed the cursor in
+     * its first screen ({@code NeovimConnection}'s 120 × 40), its window scrolled for 38 rows, the
+     * editor followed, and Eclipse, revealing the caret in its fewer rows, scrolled the editor
+     * once more on its own, which was then sent as the user's scroll and undid the attach's top
+     * line. Example: a restart with lines 141 to 155 shown and the caret on 151 ended at 137 to
+     * 151. {@link #start} sends nothing more when the size is the same. UI thread.
+     */
+    void sendSizeFirst() {
+        if (!started && !text.isDisposed()) {
+            update();
+        }
+    }
+
+    /**
      * Sends the editor's size again, even when it did not change: a page had Neovim's screen
      * ({@code WindowPane}), sized to the page, and the code takes the focus back. UI thread.
      */

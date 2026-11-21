@@ -22,7 +22,13 @@ window to a clicked line that is not on Neovim's screen (docs/ARCHITECTURE.md).
 
 Each editor has its own Neovim window ([WINDOWS.md](WINDOWS.md)), and "Neovim's window" below is
 the attached editor's. Each window keeps its view between editor switches, and the editor ignores
-Neovim's top lines while an attach places the cursor (WINDOWS.md, section 4).
+Neovim's top lines while an attach places the cursor (WINDOWS.md, section 4). The attach sends the
+editor's size before it places the cursor, and the push sizes Neovim's screen on the editor's
+window right before (`ViewportFollower.sendSizeFirst`, `DocumentPush`'s third step): a new Neovim's
+first screen is `NeovimConnection`'s 120 × 40, and a cursor placed in that scrolled Neovim's window
+for 38 rows. The editor, with fewer, then revealed its caret by scrolling on its own, and that
+scroll went to Neovim as the user's, after the attach's top line. Example: a restart with lines 141
+to 155 shown and the caret on 151 ended at 137 to 151.
 
 The experiments (section 2) used Neovim 0.12.6, the plug-in's minimum, on Linux (arm64), through a
 small msgpack client attached with the plug-in's own UI options (`NeovimConnection.TERMINAL_UI`).

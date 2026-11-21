@@ -1745,6 +1745,22 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * Measures Neovim's screen again for the current window at the editor size last given
+     * ({@link #setEditorSizeAsync}), and resizes it if that changed: the columns beside the text
+     * (line numbers, signs) are the window's own, so they are measured once the document's window
+     * is current. The attach's push runs this right after switching to that window and before
+     * placing the cursor ({@code sync/DocumentPush}), so that the cursor lands in a window of the
+     * editor's size. Nothing before any size was given, with the viewport off, or while a page
+     * editor has the focus: the screen is the page's then, as for {@link #setEditorSizeAsync}'s
+     * caller. Input thread.
+     */
+    public void fitScreenToWindow() throws Exception {
+        if (viewportEnabled && !pageHasFocus()) {
+            resizeGrid();
+        }
+    }
+
+    /**
      * Resizes Neovim's screen for the last editor size: asks Neovim what its screen has besides the
      * window ({@link LuaScripts#VIEWPORT_OVERHEAD}), adds it ({@link ViewportSize#forEditor}) and
      * sends the grid if it changed. Skipped while Neovim waits for the rest of a command

@@ -72,6 +72,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - Closing an editor (or the workbench window it is in) while Neovim's cursor report for it was on
   its way no longer logs a `NullPointerException` in Eclipse's Error Log.
+- *Restart Neovim*, or opening an editor whose caret is far down the file, no longer leaves the
+  editor scrolled a few lines up, with the caret's line at the bottom (seen in a small editor on
+  macOS): Neovim now has the editor's size before it places its cursor.
 
 ## [0.2.31] - 2026-11-20
 

@@ -60,6 +60,11 @@ class DocumentPushTest {
         }
 
         @Override
+        public void fitScreen() throws Exception {
+            step("fit screen");
+        }
+
+        @Override
         public void setCursor(int line1, int col0) throws Exception {
             step("cursor " + line1 + ":" + col0);
         }
@@ -139,7 +144,7 @@ class DocumentPushTest {
         push.start(4, INDENT, 2, 3, false);
         fake.runQueued();
 
-        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "fit screen", "push",
                 "start listening", "cursor 2:3", "follow cursor reports"), fake.calls);
     }
 
@@ -153,7 +158,7 @@ class DocumentPushTest {
         push.start(4, INDENT, 1, 0, false);
         fake.runQueued();
 
-        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "fit screen", "push",
                 "start listening", "last position", "follow cursor reports", "take Neovim's cursor",
                 "follow cursor reports"), fake.calls);
     }
@@ -167,7 +172,7 @@ class DocumentPushTest {
             push.start(4, INDENT, 2, 3, false);
             fake.runQueued();
 
-            assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+            assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "fit screen", "push",
                     "start listening", "last position", "cursor 2:3", "follow cursor reports"), fake.calls);
             log.assertLogged(Level.WARNING, "Could not put Neovim's cursor where the reopened file was left");
         }
@@ -193,7 +198,7 @@ class DocumentPushTest {
         new DocumentPush(unchanged, unchanged, unchanged).start(4, INDENT, 2, 3, false);
         unchanged.runQueued();
 
-        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4",
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "fit screen",
                 "compare", "start listening", "cursor 2:3", "follow cursor reports"), unchanged.calls);
     }
 
@@ -219,7 +224,7 @@ class DocumentPushTest {
         stamp[0] = 43; // Eclipse changed the document meanwhile
         changing.runQueued();
 
-        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "fit screen", "push",
                 "start listening", "cursor 2:3", "follow cursor reports"), changing.calls);
     }
 
@@ -228,7 +233,7 @@ class DocumentPushTest {
         push.start(4, INDENT, 2, 3, true);
         fake.runQueued();
 
-        assertEquals(List.of("stop listening", "queue", "showBuffer", "indent 4", "push", "start listening",
+        assertEquals(List.of("stop listening", "queue", "showBuffer", "indent 4", "fit screen", "push", "start listening",
                 "take Neovim's cursor"), fake.calls);
     }
 
@@ -253,9 +258,26 @@ class DocumentPushTest {
             push.start(4, INDENT, 2, 3, false);
             fake.runQueued();
 
-            assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+            assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "fit screen", "push",
                     "start listening", "cursor 2:3", "follow cursor reports"), fake.calls);
             log.assertLogged(Level.WARNING, "Could not set Neovim's tab and indent options");
+        }
+    }
+
+    /**
+     * The screen is sized for the editor before the cursor is placed (see {@code DocumentPush},
+     * step 3), and a failure there is only logged: the push and the cursor still go out.
+     */
+    @Test
+    void aFailedScreenSizingDoesNotStopThePush() {
+        try (ExpectedLog log = ExpectedLog.of(DocumentPush.class)) {
+            fake.failing = "fit screen";
+            push.start(4, INDENT, 2, 3, false);
+            fake.runQueued();
+
+            assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "fit screen", "push",
+                    "start listening", "cursor 2:3", "follow cursor reports"), fake.calls);
+            log.assertLogged(Level.WARNING, "Could not size Neovim's screen for the editor");
         }
     }
 
@@ -265,7 +287,7 @@ class DocumentPushTest {
         push.start(4, INDENT, 2, 3, false);
 
         assertThrows(IllegalStateException.class, fake::runQueued); // the input thread logs it
-        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "push",
+        assertEquals(List.of("stop listening", "ignore cursor reports", "queue", "showBuffer", "indent 4", "fit screen", "push",
                 "start listening", "follow cursor reports"), fake.calls, "the caret follows Neovim again");
     }
 

@@ -24,6 +24,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
  *           overwrite whatever buffer Neovim is in, another file's text and undo history;</li>
  *       <li>set the tab width and indent options (a failure is only logged: Neovim then indents
  *           with its defaults);</li>
+ *       <li>size Neovim's screen for the editor, measured on this window ({@link Neovim#fitScreen}),
+ *           so that placing the cursor below scrolls Neovim's window for the editor's rows (a
+ *           failure is only logged);</li>
  *       <li>push the document, unless neither it nor the buffer changed since the editor was
  *           detached (its modification stamp, {@code DocumentBuffer.isInSyncAt}): an editor
  *           switch then reads neither the whole document nor the whole buffer;</li>
@@ -38,8 +41,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
  *
  * <p><b>The caret stays put meanwhile.</b> When the caret is to be kept, Neovim's cursor reports
  * are ignored from the start until Neovim's cursor is placed ({@link Caret}). A buffer Neovim has
- * just made has its cursor on line 1, and switching to it reports that line before step 5 moves
- * the cursor to the caret. Followed, the report sent the caret to line 1 and step 5 back, and
+ * just made has its cursor on line 1, and switching to it reports that line before step 6 moves
+ * the cursor to the caret. Followed, the report sent the caret to line 1 and step 6 back, and
  * Eclipse, scrolling as little as it can to show the caret again, left the caret's line at the
  * bottom of the editor. Example: a restart of Neovim with the caret on line 150 of 300, lines 140
  * to 160 on screen; afterward the screen showed 129 to 150. The reports are taken again in every
@@ -65,6 +68,14 @@ public final class DocumentPush {
 
         /** Sets Neovim's {@code 'tabstop'} and indent options for the buffer. */
         void setIndentation(int tabWidth, Indentation indentation) throws Exception;
+
+        /**
+         * Sizes Neovim's screen for the editor, measured on the document's window, which is current
+         * now: done before the cursor is placed, so that Neovim scrolls its window for the
+         * editor's rows, not for an earlier screen's. Nothing by default.
+         */
+        default void fitScreen() throws Exception {
+        }
 
         /** Moves Neovim's cursor; {@code col0} is a 0-based UTF-8 byte column. */
         void setCursor(int line1, int col0) throws Exception;
@@ -184,6 +195,11 @@ public final class DocumentPush {
             nvim.setIndentation(tabWidth, indentation);
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Could not set Neovim's tab and indent options", e);
+        }
+        try {
+            nvim.fitScreen();
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Could not size Neovim's screen for the editor", e);
         }
         try {
             // The stamp now, where the push would read the document: one read when start() was

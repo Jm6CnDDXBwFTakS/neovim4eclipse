@@ -403,6 +403,9 @@ public final class NeovimEditorController implements AutoCloseable {
 
         int[] lineCol = DocumentPositions.offsetToCursor(documentOf(editor), offsets.caretModelOffset());
 
+        if (viewport != null) {
+            viewport.sendSizeFirst(); // before the push: Neovim places its cursor in the editor's rows
+        }
         pushDocumentAndCursorAsync(lineCol[0], lineCol[1], takeNeovimCursor);
         if (viewport != null) {
             viewport.start(); // after the push: the wrap is for this editor's buffer
@@ -1501,6 +1504,11 @@ public final class NeovimEditorController implements AutoCloseable {
         @Override
         public void setIndentation(int tabWidth, Indentation indentation) throws Exception {
             session.setIndentation(tabWidth, indentation);
+        }
+
+        @Override
+        public void fitScreen() throws Exception {
+            session.fitScreenToWindow();
         }
 
         @Override

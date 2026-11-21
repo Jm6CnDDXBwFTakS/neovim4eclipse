@@ -120,6 +120,23 @@ class ViewportFollowerTest {
                 "Eclipse's word wrap wins on attach (D2); the top line needs the window's height");
     }
 
+    /**
+     * The attach sends the size before the document push, so that Neovim places its cursor in the
+     * editor's rows; {@code start} then sends the wrap and the top line, not the same size again.
+     * Once started, the early send does nothing.
+     */
+    @Test
+    void theSizeSentFirstIsNotSentAgainAtStart() {
+        lines(200);
+        text.setTopIndex(30);
+        follower.sendSizeFirst();
+        assertEquals(List.of(size()), sent, "only the size, before the push");
+        follower.start();
+        assertEquals(List.of(size(), "wrap false", "top 31"), sent);
+        follower.sendSizeFirst();
+        assertEquals(List.of(size(), "wrap false", "top 31"), sent, "nothing once started");
+    }
+
     @Test
     void neovimsTopLineScrollsTheEditorOnce() {
         lines(200);
