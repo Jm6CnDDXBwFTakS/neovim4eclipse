@@ -27,7 +27,9 @@ import org.eclipse.swt.widgets.Listener;
  * Switching to another application keeps the line, as in a terminal: one may come back with
  * something to paste into it. One check, after the focus has moved ({@code asyncExec}): Eclipse
  * then has no active shell. Any of Eclipse's own windows taking the keyboard (a detached view, a
- * dialog) counts as another part, so its line is abandoned too: it would be as invisible.
+ * dialog) counts as another part, so its line is abandoned too: it would be as invisible. The
+ * keyboard going to a control inside the widget (the command-line window's panel, a float) does
+ * not: that is still the editor.
  *
  * <p>UI thread only. Tested in {@code tests/swt} ({@code LineOnFocusLossTest}).
  */
@@ -53,13 +55,28 @@ final class LineOnFocusLoss {
     private void later() {
         Display display = widget.getDisplay();
         display.asyncExec(() -> {
-            if (widget.isDisposed() || widget.isFocusControl()) {
-                return; // back already, or never really left (a transient focus change)
+            if (widget.isDisposed() || insideWidget(display.getFocusControl())) {
+                return; // back already, never really left (a transient focus change), or inside it
             }
             if (display.getActiveShell() != null && lineOpen.getAsBoolean()) { // null: another application
                 abandon.run();
             }
         });
+    }
+
+    /**
+     * Whether {@code focus} is the widget or one of its children: the command-line window's panel
+     * and Neovim's floats are drawn inside the editor's widget, so the keyboard going there has not
+     * left the editor. Example: {@code q:} opens the panel, which takes the keyboard; abandoning
+     * the line then would send {@code <C-c>} and close the window it just opened.
+     */
+    private boolean insideWidget(Control focus) {
+        for (Control c = focus; c != null; c = c.getParent()) {
+            if (c == widget) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Stops watching. */

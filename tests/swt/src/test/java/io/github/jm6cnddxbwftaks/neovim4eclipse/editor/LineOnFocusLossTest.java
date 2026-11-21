@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.layout.FillLayout;
+import org.eclipse.swt.widgets.Canvas;
+import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
@@ -85,6 +87,24 @@ class LineOnFocusLossTest {
     void withNoLineOpenNothingIsAbandoned() {
         lineOpen = false;
         KeyboardFocus.require(other, TIMEOUT_MS);
+        drain();
+        assertEquals(0, abandoned.get());
+    }
+
+    /**
+     * The keyboard going to a control inside the widget (the command-line window's panel that
+     * {@code q:} opens, a float) has not left the editor: nothing is abandoned. Abandoning would
+     * send {@code <C-c>} and close the window just opened.
+     */
+    @Test
+    void theKeyboardGoingInsideTheWidgetKeepsTheLine() {
+        // As the real panel lies: a canvas in a frame that takes no focus, in the widget.
+        Composite frame = new Composite(text, SWT.NO_FOCUS);
+        frame.setBounds(0, 0, 60, 30);
+        Canvas panel = new Canvas(frame, SWT.NONE);
+        panel.setBounds(0, 0, 50, 20);
+        KeyboardFocus.require(panel, TIMEOUT_MS);
+        text.notifyListeners(SWT.FocusOut, new org.eclipse.swt.widgets.Event());
         drain();
         assertEquals(0, abandoned.get());
     }
