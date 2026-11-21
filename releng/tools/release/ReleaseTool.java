@@ -72,7 +72,10 @@ import maven.MavenFiles;
  *       {@code main} to the branch and watches the Build that starts there: that run is the
  *       release's test run, which the Release workflow reuses instead of testing again.</li>
  *   <li><b>tag</b>: tags {@code main} as {@code v0.2.3} and pushes the tag, which starts the Release
- *       workflow, and watches it to the end (it publishes the update site too). Then checks the
+ *       workflow, and watches it to the end. Never while the Build on {@code main} at that commit has
+ *       failed or runs again (a rerun): {@code go} and the status then name {@code promote}, which
+ *       follows that run, and {@code tag} itself refuses. With no Build run on {@code main} at all,
+ *       the Release workflow runs every test itself (it publishes the update site too). Then checks the
  *       outcome as a user would meet it: the run reused the Build on {@code main}, the GitHub
  *       Release has the ZIP and its {@code .asc}, both signatures verify
  *       ({@code releng/verify-zip.sh}, {@code releng/verify-signatures.sh}), and the public update
@@ -193,9 +196,37 @@ public final class ReleaseTool {
             List<String> assets = gh.releaseAssets(v.tag());
             released = assets.contains(zipName(v)) && assets.contains(zipName(v) + ".asc");
         }
+        boolean onMain = head.equals(git.commitOf("origin/main"));
+        List<GitHub.Run> builds = onMain && !tagged && Shell.onPath("gh") ? mainBuildRunsOrNone(head) : List.of();
+        boolean mainNotGreen = ReleaseState.notGreen(builds);
         return new ReleaseState(v, testsCover(head), ReleaseFiles.hasRelease(read("CHANGELOG.md"), v),
-                head.equals(git.commitOf("origin/main")), tagged, released,
-                git.commitOf("origin/" + nextVersion(v).branch()) != null);
+                onMain, mainNotGreen, tagged, released, git.commitOf("origin/" + nextVersion(v).branch()) != null);
+    }
+
+    /**
+     * {@link #mainBuildRuns}, or none when {@code gh} cannot answer (signed out, offline): the state
+     * is then not known, the next step stays {@code tag}, and {@code tag} itself asks {@code gh}
+     * again ({@code requireReady}) and says what is wrong.
+     */
+    private List<GitHub.Run> mainBuildRunsOrNone(String commit) {
+        try {
+            return mainBuildRuns(commit);
+        } catch (RuntimeException e) {
+            return List.of();
+        }
+    }
+
+    /**
+     * The Build's runs on {@code main} at {@code commit}: a push or a Run workflow
+     * (workflow_dispatch) on main. A rerun is the same run, read as its newest attempt. A run counts
+     * as passed only when the whole run passed: stricter than the Release workflow, which reuses a
+     * run whose Linux jobs passed, so a red macOS or Windows job stops the release here too.
+     */
+    private List<GitHub.Run> mainBuildRuns(String commit) {
+        String build = settings.get("build.workflow");
+        List<GitHub.Run> runs = new ArrayList<>(gh.runs(build, commit, "push", "main"));
+        runs.addAll(gh.runs(build, commit, "workflow_dispatch", "main"));
+        return ReleaseState.newestFirst(runs);
     }
 
     /** Whether {@code InstallCheck} passed for {@code v} on this machine ({@code checks.InstallCheckTool.RECORD}). */
@@ -236,7 +267,8 @@ public final class ReleaseTool {
         String tested = testedCommit();
         row("local tests", s.tested() ? "passed (LikeCi " + settings.get("tests") + ") at " + short7(tested)
                 : tested.isEmpty() ? "not run for this release" : "passed at " + short7(tested) + ", not this commit");
-        row("main", s.onMain() ? "at this commit" : "not at this commit");
+        row("main", !s.onMain() ? "not at this commit"
+                : s.mainNotGreen() ? "at this commit; its Build there has not passed (promote follows it)" : "at this commit");
         row(v.tag(), s.tagged() ? "on origin" : "not made");
         row("GitHub Release", s.released() ? "has the ZIP and its signature" : "none yet");
         // InstallCheck runs after next, on the next release's branch: there the row names the
@@ -601,10 +633,24 @@ public final class ReleaseTool {
         } else {
             ok("main is at " + head.substring(0, 7));
         }
-        if (options.mode() != Ask.Mode.DRY_RUN) {
-            awaitAndWatch("the Build on main", settings.get("build.workflow"), head, "push", "main", olderOnMain,
-                    List.of("rerun only the failed jobs, for a runner hiccup", "or fix the cause on " + v.branch()
-                            + ", then run check and promote again (main moves on by fast-forward)"));
+        List<String> recovery = List.of("rerun only the failed jobs, for a runner hiccup", "or fix the cause on " + v.branch()
+                + ", then run check and promote again (main moves on by fast-forward)");
+        // Main at this commit already (promote run again): a passed Build there, of either kind (a
+        // push, or a Run workflow), counts, as the status counts it; else the newest is followed,
+        // a rerun among them (ReleaseState.runToFollow).
+        List<GitHub.Run> onMainRuns = head.equals(main) ? mainBuildRuns(head) : List.of();
+        boolean passedAlready = onMainRuns.stream().anyMatch(GitHub.Run::passed);
+        Optional<GitHub.Run> pending = ReleaseState.runToFollow(onMainRuns);
+        if (options.mode() == Ask.Mode.DRY_RUN) {
+            System.out.println("[dry run] would " + (passedAlready ? "find the Build on main passed" : "follow the Build on main"));
+        } else if (passedAlready) {
+            ok("the Build passed on main: the release's test run");
+        } else {
+            if (pending.isPresent()) {
+                watchOrStop("the Build on main", pending.get(), recovery);
+            } else {
+                awaitAndWatch("the Build on main", settings.get("build.workflow"), head, "push", "main", olderOnMain, recovery);
+            }
             ok("the Build passed on main: the release's test run");
         }
     }
@@ -682,10 +728,16 @@ public final class ReleaseTool {
         Set<Long> older = Set.of(); // the tag on origin already: follow the run that is there
         if (tagged == null) {
             older = gh.runIds(workflow, main, "push", v.tag());
-            // As the Release workflow counts them: a push or a Run workflow (workflow_dispatch) on main.
-            String build = settings.get("build.workflow");
-            boolean tested = gh.runs(build, main, "push", "main").stream().anyMatch(GitHub.Run::passed)
-                    || gh.runs(build, main, "workflow_dispatch", "main").stream().anyMatch(GitHub.Run::passed);
+            // A push or a Run workflow (workflow_dispatch) on main; passed as a whole run (mainBuildRuns).
+            List<GitHub.Run> builds = mainBuildRuns(main);
+            boolean tested = builds.stream().anyMatch(GitHub.Run::passed);
+            if (!tested && !builds.isEmpty()) {
+                // Failed, or running again: the tag waits for a pass (promote follows the run).
+                GitHub.Run newest = builds.get(0);
+                throw new ToolFailure("the Build on main at " + main.substring(0, 7) + " has not passed (" + newest.url()
+                        + "): rerun its failed jobs (gh run rerun " + newest.id() + " --failed) or fix the cause, then run promote,"
+                        + " which follows it; no tag is made before it passes");
+            }
             List<String> commands = List.of("git tag " + v.tag() + " " + main.substring(0, 12), "git push origin " + v.tag());
             if (!tested) {
                 System.out.println("note: no green Build on main for " + main.substring(0, 7) + ", so the Release workflow runs every test itself");
@@ -1045,7 +1097,11 @@ public final class ReleaseTool {
      */
     private GitHub.Run awaitAndWatch(String what, String workflow, String commit, String event, String branch, Set<Long> older,
             List<String> recovery) {
-        GitHub.Run run = gh.awaitRun(workflow, commit, event, branch, older);
+        return watchOrStop(what, gh.awaitRun(workflow, commit, event, branch, older), recovery);
+    }
+
+    /** Follows {@code run} to its end ({@link GitHub#watch}); a failure stops with what failed and {@code recovery}. */
+    private GitHub.Run watchOrStop(String what, GitHub.Run run, List<String> recovery) {
         if (gh.watch(run)) {
             return run;
         }

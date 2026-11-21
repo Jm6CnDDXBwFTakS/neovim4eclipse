@@ -806,12 +806,16 @@ release 0.2.3, on `release/0.2.3`:
    workflow finds it and only builds the ZIP instead of running every test again, Windows and macOS
    included. `promote` wants the local tests of `check` on this commit, or on one that differs only
    in the changelog and README. With `--ci-on-branch` it also runs the *Build* on the release
-   branch first, for a change that should not reach `main` untested.
+   branch first, for a change that should not reach `main` untested. Run again with `main` already
+   at the commit, it follows the newest *Build* there that has not passed (a rerun among them).
 4. **tag**: tags `main`, pushes the tag, and watches the *Release* workflow to the end (it publishes
-   the update site too). Then it checks the release as a user meets it: the run reused the *Build*
-   on `main`, the GitHub Release has `neovim4eclipse-0.2.3.zip` and its `.asc`, both kinds of
-   signature verify (`releng/verify-zip.sh`, `releng/verify-signatures.sh`), and the public update
-   site lists the version.
+   the update site too). Not while the *Build* on `main` at that commit has failed or runs again:
+   `status` and `go` then name `promote`, and `tag` refuses with the rerun command. With no *Build*
+   run on `main` at all, the *Release* workflow runs every test itself. Then it checks the release
+   as a user meets it: the run reused the *Build* on `main`, the GitHub Release has
+   `neovim4eclipse-0.2.3.zip` and its `.asc`, both kinds of signature verify
+   (`releng/verify-zip.sh`, `releng/verify-signatures.sh`), and the public update site lists the
+   version.
 5. **next**: cuts `release/0.2.4` from `main`, sets its version (`0.2.4-SNAPSHOT`), commits and
    pushes it; then deletes `release/0.2.3` and the `fix/`, `feature/` and `rehearse/` branches that
    `main` already has (`--next 0.3.0` starts another version). Last of all, it offers

@@ -157,16 +157,42 @@ class ReleaseToolTest {
 
     @Test
     void theNextStepFollowsWhatIsDone() {
-        assertEquals("check", new ReleaseState(V, false, false, false, false, false, false).nextStep());
-        assertEquals("prepare", new ReleaseState(V, true, false, false, false, false, false).nextStep());
-        assertEquals("check", new ReleaseState(V, false, true, false, false, false, false).nextStep(), "prepared but untested");
-        assertEquals("promote", new ReleaseState(V, true, true, false, false, false, false).nextStep());
-        assertEquals("tag", new ReleaseState(V, true, true, true, false, false, false).nextStep());
-        assertEquals("tag", new ReleaseState(V, true, true, true, true, false, false).nextStep(), "tagged, the Release not out yet");
-        assertEquals("next", new ReleaseState(V, true, true, true, true, true, false).nextStep());
-        assertEquals("done", new ReleaseState(V, true, true, true, true, true, true).nextStep());
-        assertEquals("Next step: java releng/tools/release/Release.java promote", new ReleaseState(V, true, true, false, false, false, false).nextLine("releng/tools/release/Release.java"));
-        assertEquals("Release " + V + " is done.", new ReleaseState(V, true, true, true, true, true, true).nextLine("releng/tools/release/Release.java"));
+        assertEquals("check", new ReleaseState(V, false, false, false, false, false, false, false).nextStep());
+        assertEquals("prepare", new ReleaseState(V, true, false, false, false, false, false, false).nextStep());
+        assertEquals("check", new ReleaseState(V, false, true, false, false, false, false, false).nextStep(), "prepared but untested");
+        assertEquals("promote", new ReleaseState(V, true, true, false, false, false, false, false).nextStep());
+        assertEquals("tag", new ReleaseState(V, true, true, true, false, false, false, false).nextStep());
+        assertEquals("tag", new ReleaseState(V, true, true, true, false, true, false, false).nextStep(), "tagged, the Release not out yet");
+        assertEquals("next", new ReleaseState(V, true, true, true, false, true, true, false).nextStep());
+        assertEquals("promote", new ReleaseState(V, true, true, true, true, false, false, false).nextStep(),
+                "on main, but its Build failed or runs again: followed, not tagged");
+        assertEquals("done", new ReleaseState(V, true, true, true, false, true, true, true).nextStep());
+        assertEquals("Next step: java releng/tools/release/Release.java promote", new ReleaseState(V, true, true, false, false, false, false, false).nextLine("releng/tools/release/Release.java"));
+        assertEquals("Release " + V + " is done.", new ReleaseState(V, true, true, true, false, true, true, true).nextLine("releng/tools/release/Release.java"));
+    }
+
+    /**
+     * Which Build on main promote follows, and when the status sends it there: none passed (failed,
+     * or running again) means not green; a pass of either kind counts; else the newest is followed.
+     */
+    @Test
+    void theBuildOnMainThatPromoteFollows() {
+        common.GitHub.Run failedPush = run("101\tcompleted\tfailure\thttps://x/101\tpush\tmain");
+        common.GitHub.Run rerunning = run("102\tin_progress\t\thttps://x/102\tworkflow_dispatch\tmain");
+        common.GitHub.Run passed = run("100\tcompleted\tsuccess\thttps://x/100\tworkflow_dispatch\tmain");
+        List<common.GitHub.Run> runs = ReleaseState.newestFirst(List.of(failedPush, rerunning));
+        assertEquals(102, runs.get(0).id(), "newest first, of either kind");
+        assertTrue(ReleaseState.notGreen(runs));
+        assertEquals(102, ReleaseState.runToFollow(runs).orElseThrow().id(), "the newest, running");
+        List<common.GitHub.Run> withPass = ReleaseState.newestFirst(List.of(failedPush, passed));
+        assertFalse(ReleaseState.notGreen(withPass), "a pass counts, though older");
+        assertTrue(ReleaseState.runToFollow(withPass).isEmpty());
+        assertFalse(ReleaseState.notGreen(List.of()), "no run: the Release workflow tests itself");
+        assertTrue(ReleaseState.runToFollow(List.of()).isEmpty());
+    }
+
+    private static common.GitHub.Run run(String line) {
+        return common.GitHub.parseRun(line).orElseThrow();
     }
 
     // ------------------------------------------------------------ the command line and the gate
