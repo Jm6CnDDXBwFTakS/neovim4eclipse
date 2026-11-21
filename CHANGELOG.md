@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-21
+
 ### Fixed
 
 - With `'cmdheight'` 0 in your `init.lua`, *Restart Neovim* no longer scrolls the editor by a
