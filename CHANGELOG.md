@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-21
+
 ### Changed
 
 - The README starts with installing and the first five minutes, and names *Get Neovim*'s two
