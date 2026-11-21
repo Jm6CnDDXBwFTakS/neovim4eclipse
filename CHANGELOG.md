@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- The README starts with installing and the first five minutes, and names *Get Neovim*'s two
+  ways side by side: *Download*, or *Install from File…* with the official archive you download
+  yourself (checked against its pinned SHA-256). Running a Neovim of your own
+  (`-Dneovim4eclipse.nvim`) is described further down, with its details in the user guide's new
+  section [A Neovim of your own](docs/USER_GUIDE.md#a-neovim-of-your-own).
+
 ## [0.3.1] - 2026-11-21
 
 ### Fixed
