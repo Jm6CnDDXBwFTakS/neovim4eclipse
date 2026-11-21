@@ -67,6 +67,9 @@ final class StatusRows {
         /** The command line's rows now (0 or 1; {@code StatusLineRow#commandLineRows}). */
         int commandLineRows();
 
+        /** Whether {@link #commandLineRows} is the Neovim's report, not its starting guess. */
+        boolean commandLineRowsReported();
+
         /** Window {@code window}'s line last sent, or {@code null}. */
         GridSnapshot statusLine(int window);
 
@@ -117,10 +120,17 @@ final class StatusRows {
             if (entry.text() == text) {
                 if (entry.windowToken() == windowToken) {
                     if (newNeovim) {
-                        // Kept as it is: its line stays until the new Neovim sends one. Its width
-                        // goes to the new Neovim, which knows none, and so do the command line's rows.
+                        // Kept as it is: its line stays until the new Neovim sends one, and so do
+                        // the command line's rows until it reports its own (its first report is
+                        // always passed on): taken now, the new Neovim's guess of 1 would make a
+                        // user's 'cmdheight' 0 grow a row and shrink back, and Neovim's window could
+                        // scroll. The report may have come already (during the start, before this
+                        // listened): then it is taken now; listening came first, so none is lost.
+                        // Its width goes to the new Neovim, which knows none.
                         entry.row().forgetWidth();
-                        entry.row().commandLineRows(from.commandLineRows());
+                        if (from.commandLineRowsReported()) {
+                            entry.row().commandLineRows(from.commandLineRows());
+                        }
                     } else {
                         showLast(entry);
                     }

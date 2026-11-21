@@ -250,6 +250,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private volatile String cmdlineType = "";
     /** {@link #commandLineRows()}: written on the reader thread, read on the UI thread. */
     private volatile int commandLineRows = 1;
+    /**
+     * Whether ui2 has reported the rows yet ({@code eclipse_ui2_windows}): until then
+     * {@link #commandLineRows} is a guess, Neovim's own default. The first report is passed on even
+     * when it equals the guess, so that an editor that kept another Neovim's rows (a restart,
+     * {@code editor/StatusRows}) hears this one's. Written on the reader thread, read on any.
+     */
+    private volatile boolean commandLineRowsReported;
     /** Neovim's screen grids, from its UI events ({@code ext_multigrid}); RPC reader thread only. */
     private final Grids grids = new Grids();
     /**
@@ -1096,6 +1103,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public int commandLineRows() {
         return commandLineRows;
+    }
+
+    /**
+     * Whether ui2 has reported {@link #commandLineRows()} yet; until then it is Neovim's default, a
+     * guess. Its first report may come before an editor listens (during the start). Any thread.
+     */
+    public boolean commandLineRowsReported() {
+        return commandLineRowsReported;
     }
 
     /**
@@ -2423,8 +2438,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         public void onUi2Windows(List<Integer> wins, int cmd, int msg, boolean overlay) {
             grids.ui2Windows(wins, cmd, msg, overlay); // on the reader thread, as the grids' redraws
             int rows = overlay ? 0 : 1;
-            if (rows != commandLineRows) {
+            if (rows != commandLineRows || !commandLineRowsReported) {
                 commandLineRows = rows; // before the floats: the editor places them by its rows
+                commandLineRowsReported = true; // after the rows: a reader seeing it sees them
                 events.commandLineRows(rows);
             }
             // A new ui2 window (ui2 makes its line's window anew after expanded output, and the

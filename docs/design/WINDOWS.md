@@ -324,7 +324,11 @@ VIEWPORT.md was built for one window; with a window per editor:
   not used.
 - **Top line on attach:** entering an editor's window reports that window's remembered top line
   (its `CursorMoved`) before the attach sends Eclipse's. The editor ignores Neovim's top lines while
-  the attach places Neovim's cursor, as it ignores the cursor reports then.
+  the attach places Neovim's cursor, as it ignores the cursor reports then. That span ends with the
+  push's last request: a report Neovim sends after it (an autocommand fired when Neovim is next
+  idle, e.g. `WinScrolled`) still arrives, and is followed. It does no harm, since Neovim has the
+  editor's size before the cursor is placed (`DocumentPush`), so that view already fits the editor
+  and shows the caret's line.
 - **Remembered views:** switching back to an editor finds Neovim's window where it was.
 - **Word wrap:** `'wrap'`, `'linebreak'` and `w:neovim4eclipse_saved` are per window; a travelling
   window takes them along, and the attach sets the receiving editor's.

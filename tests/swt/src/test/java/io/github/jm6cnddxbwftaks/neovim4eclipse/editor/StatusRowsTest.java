@@ -61,6 +61,7 @@ class StatusRowsTest {
         final List<Consumer<Integer>> rowsListeners = new CopyOnWriteArrayList<>();
         final Map<Integer, GridSnapshot> last = new HashMap<>();
         int commandLineRows = 1;
+        boolean commandLineRowsReported;
 
         void send(GridSnapshot line) {
             last.put(line.window(), line);
@@ -72,6 +73,7 @@ class StatusRowsTest {
         @Override public void addCommandLineRowsListener(Consumer<Integer> l) { rowsListeners.add(l); }
         @Override public void removeCommandLineRowsListener(Consumer<Integer> l) { rowsListeners.remove(l); }
         @Override public int commandLineRows() { return commandLineRows; }
+        @Override public boolean commandLineRowsReported() { return commandLineRowsReported; }
         @Override public GridSnapshot statusLine(int window) { return last.get(window); }
         final List<String> widths = new CopyOnWriteArrayList<>();
         @Override public void setStatusLineWidthAsync(int window, int columns) { widths.add(window + "x" + columns); }
@@ -153,6 +155,48 @@ class StatusRowsTest {
         assertEquals("notes.txt [new]", shown(kept));
         assertTrue(!after.widths.isEmpty() && after.widths.stream().allMatch(w -> w.startsWith("1000x")),
                 "the editor's width reported again, to the new Neovim: " + after.widths);
+    }
+
+    /**
+     * A restarted Neovim's guess of the command line's rows (1, Neovim's default) does not reach
+     * the kept row: a user's {@code 'cmdheight'} 0 stays 0 until the new Neovim reports its own,
+     * so the editor's text does not grow a row and shrink back.
+     */
+    @Test
+    void aKeptRowWaitsForTheNewNeovimsCommandLineRows() {
+        FakeSource before = new FakeSource();
+        before.commandLineRows = 0;
+        Object window = new Object();
+        StatusLineRow kept = rows.rowFor(first, window, () -> 1000, before);
+        before.send(line(1000, "notes.txt"));
+        int margin = first.getBottomMargin();
+        FakeSource after = new FakeSource(); // commandLineRows 1: the guess
+        rows.rowFor(first, window, () -> 1000, after);
+        assertEquals(margin, first.getBottomMargin(), "not the guess");
+        after.rowsListeners.forEach(l -> l.accept(0)); // its first report: 0, the user's again
+        assertEquals(margin, first.getBottomMargin());
+        after.rowsListeners.forEach(l -> l.accept(1)); // a later :set ch=1
+        assertTrue(first.getBottomMargin() > margin, "a real change still goes through");
+        assertEquals("notes.txt", shown(kept));
+    }
+
+    /**
+     * The new Neovim reported its rows before the kept row listened (during its start): the report
+     * is taken at once. Example: init.lua changed from 'cmdheight' 0 to 1 before Restart Neovim.
+     */
+    @Test
+    void aKeptRowTakesAReportThatCameBeforeItListened() {
+        FakeSource before = new FakeSource();
+        before.commandLineRows = 0;
+        Object window = new Object();
+        rows.rowFor(first, window, () -> 1000, before);
+        before.send(line(1000, "notes.txt"));
+        int margin = first.getBottomMargin();
+        FakeSource after = new FakeSource();
+        after.commandLineRows = 1;
+        after.commandLineRowsReported = true; // reported already, as 1
+        rows.rowFor(first, window, () -> 1000, after);
+        assertTrue(first.getBottomMargin() > margin, "the new Neovim's row: " + first.getBottomMargin() + " vs " + margin);
     }
 
     /**

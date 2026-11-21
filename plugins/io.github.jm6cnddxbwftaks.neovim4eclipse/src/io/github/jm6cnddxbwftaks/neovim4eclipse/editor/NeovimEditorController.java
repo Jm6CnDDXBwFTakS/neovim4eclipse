@@ -585,7 +585,9 @@ public final class NeovimEditorController implements AutoCloseable {
         // entering the editor's window reports the view the window remembers, before the attach
         // sends the editor's own (docs/design/WINDOWS.md, "The viewport"), and following it would
         // scroll the editor to the old view and back. (An attach that follows a jump of Neovim's
-        // takes Neovim's cursor and view instead, and drops nothing.)
+        // takes Neovim's cursor and view instead, and drops nothing.) The span ends with the push's
+        // last request, so a report Neovim queued during it and sends after it is followed: harmless,
+        // since Neovim had the editor's size before the cursor (DocumentPush), so its view fits.
         if (closed || !neovimModeActive || top.bufnr() != buffer.bufnr() || eclipseTyping()
                 || session.isLeavingInsertMode() || caretSync.isPlacingNeovimCursor()) {
             return;
@@ -1471,6 +1473,11 @@ public final class NeovimEditorController implements AutoCloseable {
         @Override
         public int commandLineRows() {
             return session.commandLineRows();
+        }
+
+        @Override
+        public boolean commandLineRowsReported() {
+            return session.commandLineRowsReported();
         }
 
         @Override

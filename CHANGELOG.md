@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Fixed
+
+- With `'cmdheight'` 0 in your `init.lua`, *Restart Neovim* no longer scrolls the editor by a
+  line: the editor keeps its rows until the new Neovim reports its own.
+- For contributors: the Release tool no longer tags a commit whose Build on `main` failed or is
+  running again (a rerun): `go` and the status name `promote`, which follows that run, and `tag`
+  refuses until it passes.
+
 ## [0.3.0] - 2026-11-20
 
 ### Added
