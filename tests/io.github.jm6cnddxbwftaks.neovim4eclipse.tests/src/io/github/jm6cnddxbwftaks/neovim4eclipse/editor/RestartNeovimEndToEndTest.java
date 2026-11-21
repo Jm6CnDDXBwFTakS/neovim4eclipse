@@ -12,11 +12,14 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.swt.graphics.Point;
+import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IFileEditorInput;
 import org.eclipse.ui.part.FileEditorInput;
@@ -201,5 +204,59 @@ class RestartNeovimEndToEndTest extends EndToEndTestBase {
         assertEquals(150, widget.getLineAtOffset(widget.getCaretOffset()), "the caret's line (0-based)");
         assertEquals(140, widget.getTopIndex(), "the editor did not scroll");
         assertFalse(caretLines.contains(0), "the caret never went to line 1: " + caretLines);
+    }
+
+    /**
+     * A restart keeps the scroll position at every editor height, not only at this window's: the
+     * editor's rows seldom fill its height exactly, and how much is left over decides whether a
+     * change of the rows under the text (the status line's row made anew) makes Neovim scroll. So
+     * the restart runs at as many heights in a row as a line is high, one pixel apart, which covers
+     * every leftover. A small window, as on a CI runner: the restart once scrolled the editor by a
+     * line at most heights of one ({@code StatusRows}: the attached editor keeps its row).
+     */
+    @Test
+    void aRestartKeepsTheScrollPositionAtEveryEditorHeight() {
+        StringBuilder text = new StringBuilder();
+        for (int i = 1; i <= 300; i++) {
+            text.append("line ").append(i).append('\n');
+        }
+        document.set(text.toString());
+        settle();
+        Shell shell = widget.getShell();
+        Point size = shell.getSize();
+        boolean maximized = shell.getMaximized();
+        List<String> scrolled = new ArrayList<>();
+        try {
+            for (int h = 520; h < 520 + widget.getLineHeight(); h++) {
+                shell.setSize(size.x, h);
+                NeovimSession now = Activator.getDefault().currentSession();
+                UiTestSupport.settle(now, TIMEOUT_MS);
+                widget.setCaretOffset(widget.getOffsetAtLine(150));
+                waitUntil("Neovim's cursor on the caret's line", TIMEOUT_MS, () -> "151".equals(eval(now, "line('.')")));
+                UiTestSupport.settle(now, TIMEOUT_MS);
+                widget.setTopIndex(140);
+                waitUntil("Neovim and the editor at the same top line", TIMEOUT_MS,
+                        () -> widget.getTopIndex() == 140 && "141".equals(eval(now, "line('w0')")),
+                        () -> "; the editor's " + widget.getTopIndex() + ", Neovim's " + eval(now, "line('w0')"));
+                UiTestSupport.settle(now, TIMEOUT_MS);
+                String beforeRestart = "editor " + widget.getTopIndex() + " nvim w0 " + eval(now, "line('w0')")
+                        + " winh " + eval(now, "winheight(0)");
+
+                Activator.getDefault().restartNeovim();
+                NeovimSession fresh = Activator.getDefault().currentSession();
+                waitUntil("the new Neovim's cursor on the caret's line", TIMEOUT_MS,
+                        () -> "151".equals(eval(fresh, "line('.')")));
+                UiTestSupport.settle(fresh, TIMEOUT_MS);
+                if (widget.getTopIndex() != 140) {
+                    scrolled.add(h + "px: top " + widget.getTopIndex() + " (before: " + beforeRestart + "; after: nvim w0 "
+                            + eval(fresh, "line('w0')") + " winh " + eval(fresh, "winheight(0)") + ")");
+                }
+            }
+        } finally {
+            shell.setSize(size);
+            shell.setMaximized(maximized);
+            UiTestSupport.settle(Activator.getDefault().currentSession(), TIMEOUT_MS);
+        }
+        assertEquals(List.of(), scrolled, "the window heights at which the restart scrolled the editor");
     }
 }

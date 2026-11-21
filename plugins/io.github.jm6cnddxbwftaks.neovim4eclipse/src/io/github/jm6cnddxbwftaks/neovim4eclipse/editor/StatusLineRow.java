@@ -113,6 +113,17 @@ final class StatusLineRow {
         place();
     }
 
+    /**
+     * Forgets the width last reported, so that the next layout (a line shown, a paint) reports it
+     * again: to a new Neovim (a restart), which knows none. Not reported here: at a restart the
+     * editor's window token still reads the old Neovim's window id until the new window opens, so
+     * the next layout reports the right one. UI thread.
+     */
+    void forgetWidth() {
+        widthWindow = -1;
+        widthColumns = -1;
+    }
+
     /** Keeps {@code rows} rows for the command line (0 or 1; see {@link #commandLineRows}). UI thread. */
     void commandLineRows(int rows) {
         if (rows != commandLineRows) {

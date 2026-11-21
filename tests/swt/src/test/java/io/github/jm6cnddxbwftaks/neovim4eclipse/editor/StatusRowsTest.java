@@ -4,7 +4,6 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,7 +73,8 @@ class StatusRowsTest {
         @Override public void removeCommandLineRowsListener(Consumer<Integer> l) { rowsListeners.remove(l); }
         @Override public int commandLineRows() { return commandLineRows; }
         @Override public GridSnapshot statusLine(int window) { return last.get(window); }
-        @Override public void setStatusLineWidthAsync(int window, int columns) { }
+        final List<String> widths = new CopyOnWriteArrayList<>();
+        @Override public void setStatusLineWidthAsync(int window, int columns) { widths.add(window + "x" + columns); }
     }
 
     /** A line of {@code window} as {@code LuaScripts.STATUS_LINE} answers it. */
@@ -129,19 +129,30 @@ class StatusRowsTest {
         assertEquals(null, shown(row));
     }
 
-    /** A restarted Neovim: the old rows go (their window ids are the old Neovim's), the listeners move. */
+    /**
+     * A restarted Neovim: the editor it attaches to keeps its row, its height and its line (made
+     * anew, it would start a row lower and resize Neovim's window twice); the other editors' rows go
+     * (their window ids are the old Neovim's); the listeners move.
+     */
     @Test
-    void anotherNeovimMakesTheRowsAnew() {
+    void anotherNeovimKeepsTheAttachedEditorsRowAndDropsTheOthers() {
         FakeSource before = new FakeSource();
         Object window = new Object();
-        StatusLineRow old = rows.rowFor(first, window, () -> 1000, before);
+        StatusLineRow kept = rows.rowFor(first, window, () -> 1000, before);
         rows.rowFor(second, new Object(), () -> 1001, before);
+        before.send(line(1000, "notes.txt"));
+        int margin = first.getBottomMargin();
         FakeSource after = new FakeSource();
-        StatusLineRow fresh = rows.rowFor(first, window, () -> 1000, after);
-        assertNotSame(old, fresh);
+        assertSame(kept, rows.rowFor(first, window, () -> 1000, after));
+        assertEquals("notes.txt", shown(kept), "its line until the new Neovim sends one");
+        assertEquals(margin, first.getBottomMargin(), "the same height");
         assertEquals(1, rows.size(), "the other editor's old row went");
         assertEquals(0, before.lineListeners.size(), "no longer listening to the old Neovim");
         assertEquals(1, after.lineListeners.size());
+        after.send(line(1000, "notes.txt [new]"));
+        assertEquals("notes.txt [new]", shown(kept));
+        assertTrue(!after.widths.isEmpty() && after.widths.stream().allMatch(w -> w.startsWith("1000x")),
+                "the editor's width reported again, to the new Neovim: " + after.widths);
     }
 
     /**

@@ -678,8 +678,12 @@ Each code editor draws its Neovim window's status line in a row under its text
   back. A closed window's line is sent as one of no rows, and a window that travelled away
   leaves its editor's token without an id: the row goes. Detach Neovim, a form page and a failed
   attach take the editor's row away (`StatusRows.release`), as Neovim leaves that editor. When
-  the plug-in stops or restarts Neovim its window ids mean nothing any more: the old rows go
-  (after a crash, at the next attach), and each editor gets one again at its next attach. Eclipse's Toggle Split Editor gives one editor two
+  the plug-in stops Neovim its window ids mean nothing any more: the rows go (after a crash, at the
+  next attach), and each editor gets one again at its next attach. A restart keeps the attached
+  editor's row, its height and its last line until the new Neovim sends one, and the others go:
+  made anew, the row would start without a line, a row shorter, and Neovim's window would be
+  resized twice and could scroll by a line (`RestartNeovimEndToEndTest`, at every leftover
+  height). Eclipse's Toggle Split Editor gives one editor two
   text widgets on one window, so both halves show that window's line.
 
 - **Where:** the `StyledText`'s bottom margin, one line higher while a line is shown, with a

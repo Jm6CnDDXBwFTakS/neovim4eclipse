@@ -40,8 +40,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines;
  * line is sent as one of no rows too, and a window that closed or travelled away leaves its token
  * with no id ({@link #NO_WINDOW}): the row hides. A row goes with its widget, when Neovim leaves
  * its editor for good ({@link #release(StyledText)}: Detach Neovim, a form page, a failed attach),
- * and every row goes when its Neovim ends ({@link #release(Source)}) or another serves the editors
- * (a restart): the window ids are not the old ones.
+ * and every row goes when its Neovim ends ({@link #release(Source)}): the window ids mean nothing
+ * any more. When another Neovim serves the editors (a restart), the editor it attaches to keeps its
+ * row, its height and its last line until the new Neovim sends one ({@link #rowFor}), and the other
+ * editors' rows go.
  *
  * <p>UI thread, but for the listeners, which the session calls on its own threads. Tested in
  * {@code tests/swt} ({@code StatusRowsTest}) and, with two editors side by side, in
@@ -94,26 +96,40 @@ final class StatusRows {
     /**
      * The row of the editor whose widget is {@code text}: the one it has, or a new one. A row made
      * for another window token (the widget now shows another editor's window, which does not happen
-     * today) or another Neovim is made anew. The row shows the window's last line at once, so an
-     * editor that comes back to the front keeps what it showed. UI thread.
+     * today) is made anew. The row shows the window's last line at once, so an editor that comes
+     * back to the front keeps what it showed.
+     *
+     * <p>Another Neovim (a restart): the other editors' rows go (their window ids are the old
+     * Neovim's, and the new one's may be the same numbers), but this editor keeps its row, its
+     * height and its last line until the new Neovim sends its own. Made anew, the row would start
+     * without a line, one row lower, and grow back when the line came: Neovim's window would be
+     * resized twice and could scroll by a line (seen at most heights of a small editor). UI thread.
      *
      * @param windowToken the editor's {@code EditorWindow}, the same object for the editor's lifetime
      * @param window      reads the window's id from it, at each line
      */
     StatusLineRow rowFor(StyledText text, Object windowToken, IntSupplier window, Source from) {
-        if (!from.equals(source)) {
-            useSource(from);
+        boolean newNeovim = !from.equals(source);
+        if (newNeovim) {
+            useSource(from, text);
         }
         for (Entry entry : entries) {
             if (entry.text() == text) {
                 if (entry.windowToken() == windowToken) {
-                    showLast(entry);
+                    if (newNeovim) {
+                        // Kept as it is: its line stays until the new Neovim sends one. Its width
+                        // goes to the new Neovim, which knows none, and so do the command line's rows.
+                        entry.row().forgetWidth();
+                        entry.row().commandLineRows(from.commandLineRows());
+                    } else {
+                        showLast(entry);
+                    }
                     return entry.row();
                 }
                 drop(entry);
             }
         }
-        StatusLineRow row = new StatusLineRow(text, window, from::setStatusLineWidthAsync);
+        StatusLineRow row = new StatusLineRow(text, window, this::setWidth);
         Listener onDispose = e -> entries.removeIf(entry -> entry.text() == text);
         Entry entry = new Entry(text, windowToken, window, row, onDispose);
         text.addListener(SWT.Dispose, onDispose);
@@ -158,13 +174,28 @@ final class StatusRows {
         return entries.size();
     }
 
-    /** Listens to {@code from} instead of the Neovim before, whose rows go. UI thread. */
-    private void useSource(Source from) {
+    /** Fits window {@code window}'s line to {@code columns} in the Neovim the rows show now. */
+    private void setWidth(int window, int columns) {
+        Source now = source;
+        if (now != null) {
+            now.setStatusLineWidthAsync(window, columns);
+        }
+    }
+
+    /**
+     * Listens to {@code from} instead of the Neovim before, whose rows go, but {@code keep}'s (see
+     * {@link #rowFor}). UI thread.
+     */
+    private void useSource(Source from, StyledText keep) {
         if (source != null) {
             source.removeStatusLineListener(lineListener);
             source.removeCommandLineRowsListener(rowsListener);
         }
-        entries.forEach(this::drop);
+        for (Entry entry : entries) {
+            if (entry.text() != keep) {
+                drop(entry);
+            }
+        }
         source = from;
         from.addStatusLineListener(lineListener);
         from.addCommandLineRowsListener(rowsListener);
