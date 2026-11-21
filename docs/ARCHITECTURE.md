@@ -200,7 +200,12 @@ flicking through all of them. A switch to a file that has no editor (`gf`, `'A`,
 of a closed file, a quickfix entry) opens that file's editor (`editor/ProjectFileEditors`: a
 project's file as a workspace file, any other by its location, as *File › Open File...* does) and is
 followed the same way; a switch to any other buffer (`:help`, a scratch buffer) is undone
-(`returnToAttachedBufferAsync`). When
+(`returnToAttachedBufferAsync`), except in a plug-in's float that has just opened with the focus,
+as a picker's prompt does (`LuaScripts.WINDOWS`' `new_float`, sent with the `BufEnter` report: a
+focused float the safety net has not looked at yet, entered outside an insert, showing no document
+or project file), where Neovim is left, so that the insert the picker
+starts begins there; the WinNew safety net still closes that float right after, and the window
+Neovim enters next decides as usual. When
 a document's last editor closes, its buffer is unloaded and unlisted, as by Vim's `:bd`, not wiped
 (`closeBufferAsync`, `LuaScripts.CLOSE_DOCUMENT_BUFFER`), and the file's next editor gets the same
 buffer back, with its number and marks (`LuaScripts.CREATE_DOCUMENT_BUFFER`;
@@ -1123,7 +1128,13 @@ Neovim types it, in order, and the keys after it, since mixing the two could let
 an earlier key overwrite a later one typed by Eclipse. Once Neovim has them all (no key queued for it),
 the same handshake hands typing back to Eclipse (`KeyInput.handBackToEclipse`); it is called off when
 the editor applies the sync if a key was queued meanwhile, and the next key tries again. An insert from
-blockwise visual or while recording stays Neovim's to Esc. People rarely type that fast;
+blockwise visual, while recording, or begun in a plug-in's focused floating window (a picker's
+prompt, whose buffer is no document; today the WinNew safety net still closes such a float right
+away) stays Neovim's to Esc. Where an insert begins is told by
+Neovim's mode report itself (`eclipse_mode`'s second value), not by window events: the plug-in
+switches windows quietly in places, and pickers start their insert after the key that opened them
+was answered (Telescope with `nvim_feedkeys("A")`, others from a `vim.schedule` callback), so only
+the report sees it (`KeyInput.onModeReport`, `FloatInsertIntegrationTest`). People rarely type that fast;
 `EditorEndToEndTest` does. Keys sent before Neovim even reports insert mode simply reach Neovim in order
 and are inserted there.
 

@@ -20,7 +20,7 @@ class ModeTransitionTest {
     private static final String BLOCK = String.valueOf(VimModes.CTRL_V);
 
     private static ModeTransition after(String before, String now, String key) {
-        return ModeTransition.after(before, now, false, false, key);
+        return ModeTransition.after(before, now, false, false, false, key);
     }
 
     @Test
@@ -39,18 +39,36 @@ class ModeTransitionTest {
 
     @Test
     void enteringInsertWhileRecordingIsTypedByNeovim() {
-        assertEquals(ENTER_NEOVIM_INSERT, ModeTransition.after("n", "i", false, true, "i"));
+        assertEquals(ENTER_NEOVIM_INSERT, ModeTransition.after("n", "i", false, true, false, "i"));
+    }
+
+    /**
+     * A picker's prompt (Telescope) or {@code :Lazy}: the float is current when the insert begins.
+     * Its buffer is no document, so Neovim types the whole insert, as after a block selection.
+     */
+    @Test
+    void enteringInsertInAFocusedFloatIsTypedByNeovim() {
+        assertEquals(ENTER_NEOVIM_INSERT, ModeTransition.after("n", "i", false, false, true, "i"));
+        assertEquals(ENTER_NEOVIM_INSERT, ModeTransition.after("c", "i", false, false, true, "<CR>")); // :Telescope<CR>
+        assertEquals(ENTER_INSERT, ModeTransition.after("n", "i", false, false, false, "i"), "the editor's window: Eclipse types");
+    }
+
+    /** The float matters only where an insert begins: one going on stays as it is. */
+    @Test
+    void aFocusedFloatChangesNoInsertAlreadyGoingOn() {
+        assertEquals(NONE, ModeTransition.after("i", "i", false, false, true, "a"));
+        assertEquals(LEAVE_NEOVIM_INSERT, ModeTransition.after("i", "n", true, false, true, "<Esc>"));
     }
 
     @Test
     void leavingANeovimTypedInsertResyncs() {
-        assertEquals(LEAVE_NEOVIM_INSERT, ModeTransition.after("i", "n", true, false, "<Esc>"));
+        assertEquals(LEAVE_NEOVIM_INSERT, ModeTransition.after("i", "n", true, false, false, "<Esc>"));
     }
 
     @Test
     void leavingAnEclipseTypedInsertNeedsNothingHere() {
         // Eclipse's text reaches Neovim by the push at Esc, not by a sync from Neovim.
-        assertEquals(NONE, ModeTransition.after("i", "n", false, false, "<Esc>"));
+        assertEquals(NONE, ModeTransition.after("i", "n", false, false, false, "<Esc>"));
     }
 
     @Test
@@ -65,13 +83,13 @@ class ModeTransitionTest {
     void motionsAndStayingInInsertNeedNothing() {
         assertEquals(NONE, after("n", "n", "j"));
         assertEquals(NONE, after("n", "v", "v"));
-        assertEquals(NONE, ModeTransition.after("i", "i", true, false, "a")); // Neovim typing on
+        assertEquals(NONE, ModeTransition.after("i", "i", true, false, false, "a")); // Neovim typing on
     }
 
     @Test
     void keysTypedByNeovimInsideInsertAreNotTextChanges() {
         // "x" while Neovim types the insert is text, but line events carry it.
-        assertEquals(NONE, ModeTransition.after("i", "i", true, false, "x"));
+        assertEquals(NONE, ModeTransition.after("i", "i", true, false, false, "x"));
     }
 
     @Test

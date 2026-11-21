@@ -273,7 +273,7 @@ t.test('BufEnter says whether the move is in the jump history', function()
   vim.cmd('buffer ' .. b)
   vim.cmd('keepjumps buffer ' .. c)
   local win = vim.api.nvim_get_current_win()
-  t.eq({ { b, win, true, '', false }, { c, win, false, '', false } }, t.sent('eclipse_buf_enter'), ':b is a jump, :keepjumps b not')
+  t.eq({ { b, win, true, '', false, false }, { c, win, false, '', false, false } }, t.sent('eclipse_buf_enter'), ':b is a jump, :keepjumps b not')
   t.eq(true, a > 0)
 end)
 

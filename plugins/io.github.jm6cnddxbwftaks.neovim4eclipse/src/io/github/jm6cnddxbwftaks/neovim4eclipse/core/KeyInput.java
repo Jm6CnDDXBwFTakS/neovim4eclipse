@@ -115,12 +115,42 @@ final class KeyInput {
      */
     private volatile boolean neovimDrivenInsert;
     /**
-     * True while insert mode was entered from blockwise visual ({@code I}, {@code A}, {@code c}, ...)
-     * or while recording a macro. Vim repeats the text typed on the first line onto every line of the
-     * block when Esc is pressed, and a macro must contain every typed key; both only work if Neovim
-     * itself sees the typing, to the end of the insert. Cleared when the insert ends.
+     * True while insert mode was entered from blockwise visual ({@code I}, {@code A}, {@code c}, ...),
+     * while recording a macro, or in a plug-in's focused floating window ({@link #inFocusedFloat}).
+     * Vim repeats the text typed on the first line onto every line of the block when Esc is pressed,
+     * a macro must contain every typed key, and a picker's prompt is no document Eclipse could type
+     * into; all three only work if Neovim itself sees the typing, to the end of the insert. Cleared
+     * when the insert ends.
      */
     private volatile boolean neovimOwnsInsert;
+    /**
+     * Whether Neovim's current window was a plug-in's focused floating window (a picker's prompt,
+     * {@code :Lazy}) at its last mode report ({@link #onModeReport}, reader thread). An insert that
+     * begins there is Neovim's to its end. Example: Telescope opens its prompt and starts insert
+     * mode with {@code nvim_feedkeys("A")}, other pickers from a {@code vim.schedule} callback:
+     * either way after the key that opened it was answered;
+     * the report of that insert says it began in the float, and every key typed then goes to the
+     * prompt, none into the document.
+     *
+     * <p>Why with the mode, and not from {@code WinEnter}: the plug-in switches windows quietly in
+     * places ({@code 'eventignore'}), so a value kept from window events could be stale; one read
+     * by Neovim at the mode change is current. The mode read after a key ({@link #inputKey},
+     * {@code nvim_get_mode}) may be answered before Neovim has handled the key, but when it does
+     * show the insert, the report of it was sent before that answer, and the reader thread hands
+     * notices on in order: then this value is the insert's.
+     *
+     * <p>Today the WinNew safety net ({@code LuaScripts.WINDOWS}) still closes a float that opens
+     * with the focus right away; an insert begun in one, by a picker that uses a plain buffer
+     * rather than a prompt, may so go on in the editor's window, still Neovim's until Esc: its text
+     * reaches Eclipse by line events, as a block insert's does, and Esc syncs.
+     */
+    private volatile boolean inFocusedFloat;
+    /**
+     * The mode of the last report ({@link #onModeReport}), to tell where an insert begins. Written
+     * on the reader thread only, in the order Neovim sent the reports (not by the mode reads of
+     * {@code StateSync.publishState}, which may be older).
+     */
+    private volatile String reportedMode = "n";
     /**
      * Set when an insert Eclipse types became Neovim-driven for a moment, so that typing goes back to
      * Eclipse once Neovim is in plain insert mode again ({@link #handBackToEclipse}):
@@ -249,12 +279,31 @@ final class KeyInput {
      * ({@link VimModes#isCompleting}) in an insert it drives for a while. While it holds, every key
      * is Neovim's ({@link #mayHandBack}), the {@code Ctrl} letters too ({@code util/KeyContextRule}):
      * {@code Ctrl-Y} accepts and {@code Ctrl-E} cancels, where Eclipse would redo and switch editors.
-     * Not for an insert Neovim owns to its end (recording a macro, a block-visual {@code I}): there
+     * Not for an insert Neovim owns to its end (recording a macro, a block-visual {@code I}, one
+     * begun in a plug-in's focused floating window): there
      * the keys are Neovim's anyway, and the Ctrl Keys page's choice stands as before. Any thread.
      */
     boolean isCompleting() {
         return completionsQueued.get() > 0
                 || (neovimDrivenInsert && !neovimOwnsInsert && VimModes.isCompleting(state.mode()));
+    }
+
+    /**
+     * Neovim reported {@code mode}, made in a plug-in's focused floating window or not
+     * ({@link #inFocusedFloat}): an insert that begins in one is Neovim's to its end. Only where it
+     * begins: an insert Eclipse already types stays Eclipse's when the current window changes during
+     * it, since handing it over there would need Eclipse's typed text sent first. Called with each
+     * report, before the mode is dispatched ({@link #onModeChanged}). Reader thread.
+     */
+    void onModeReport(String mode, boolean focusedFloat) {
+        inFocusedFloat = focusedFloat;
+        boolean began = !VimModes.isTyping(reportedMode) && VimModes.isTyping(mode);
+        reportedMode = mode;
+        if (began && focusedFloat) {
+            neovimDrivenInsert = true;
+            neovimOwnsInsert = true;
+            handBackPending = false;
+        }
     }
 
     /** Called with every mode change: leaving insert mode ends a Neovim-driven insert. */
@@ -422,7 +471,7 @@ final class KeyInput {
             return;
         }
         ModeTransition transition = ModeTransition.after(modeBefore, state.mode(), neovimDrivenInsert,
-                !status.recordingRegister().isEmpty(), keys);
+                !status.recordingRegister().isEmpty(), inFocusedFloat, keys);
         switch (transition) {
             case ENTER_NEOVIM_INSERT -> {
                 neovimDrivenInsert = true;

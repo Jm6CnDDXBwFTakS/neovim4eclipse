@@ -625,6 +625,81 @@ class KeyInputTest {
         assertTrue(keys.isNeovimDrivenInsert());
     }
 
+    // ---- an insert that begins in a plug-in's focused floating window (a picker's prompt) ----
+
+    /** Neovim's report of a mode, as the session hands it on: where it was made, then the mode. */
+    private void report(String mode, boolean inFocusedFloat) {
+        keys.onModeReport(mode, inFocusedFloat);
+        state.dispatchMode(mode);
+    }
+
+    /**
+     * Telescope starts insert mode in its prompt from a {@code vim.schedule} callback, after the key
+     * that opened it was answered: only the report says so. The insert is Neovim's at once, and a
+     * key typed before Eclipse could type is not handed back: Eclipse never types into the document.
+     */
+    @Test
+    void anInsertReportedFromAFocusedFloatIsNeovimsToItsEnd() throws Exception {
+        report("i", true);
+
+        assertTrue(keys.isNeovimDrivenInsert(), "every key goes to the prompt");
+        keys.driveFromNeovim(); // a key typed before Eclipse had Neovim's text, as KeyRouter does
+        nvim.mode = new Mode("i", false);
+        queue("x");
+        assertFalse(nvim.calls.contains("bufferLines"), "no hand-back to Eclipse: " + nvim.calls);
+        assertTrue(keys.isNeovimDrivenInsert());
+        assertFalse(state.isEclipseTypingReady());
+    }
+
+    /** A picker that starts insert mode within its command: the mode read after the key decides, the same way. */
+    @Test
+    void anInsertAfterAKeyInAFocusedFloatIsNeovimsToItsEnd() throws Exception {
+        nvim.after.put("<CR>", new Mode("i", false));
+        keys.onModeReport("n", true); // Neovim's report of the float, made while it handled the key
+
+        queue("<CR>");
+
+        assertTrue(keys.isNeovimDrivenInsert());
+        keys.driveFromNeovim();
+        nvim.calls.clear();
+        queue("x");
+        assertFalse(nvim.calls.contains("bufferLines"), "no hand-back to Eclipse: " + nvim.calls);
+        assertTrue(keys.isNeovimDrivenInsert());
+    }
+
+    @Test
+    void anInsertReportedFromTheEditorsWindowIsEclipsesAsBefore() {
+        report("i", false);
+
+        assertFalse(keys.isNeovimDrivenInsert());
+    }
+
+    /**
+     * Only where an insert begins counts: Eclipse's insert stays Eclipse's when a float takes the
+     * focus during it (the WinNew safety net closes that float), since Eclipse's typed text is not
+     * in Neovim yet.
+     */
+    @Test
+    void anInsertEclipseTypesStaysEclipsesWhenAFloatTakesTheFocus() {
+        report("i", false);
+        report("ic", true); // still an insert, now reported from a float
+
+        assertFalse(keys.isNeovimDrivenInsert());
+    }
+
+    /** Esc in the prompt ends the insert; the next one, in the editor's window, is Eclipse's again. */
+    @Test
+    void theNextInsertInTheEditorsWindowIsEclipsesAgain() {
+        report("i", true);
+        report("n", true);
+        assertFalse(keys.isNeovimDrivenInsert());
+
+        report("n", false); // the picker closed: back in the editor's window
+        report("i", false);
+
+        assertFalse(keys.isNeovimDrivenInsert());
+    }
+
     /** While recording, the macro must hold every typed key: Neovim types to the end. */
     @Test
     void anInsertWhileRecordingIsNotHandedBack() throws Exception {

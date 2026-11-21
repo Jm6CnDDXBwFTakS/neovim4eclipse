@@ -25,7 +25,26 @@ class EnterDecisionTest {
     private static Action entered(int window, int buffer, int focused) {
         boolean page = window == PAGE_WIN;
         return EnterDecision.decide(new Enter(window, buffer, CODE_WIN, CODE_BUF, focused, page ? PAGE_BUF : NONE,
-                buffer == CODE_BUF || buffer == OTHER_DOC, buffer == 20));
+                buffer == CODE_BUF || buffer == OTHER_DOC, buffer == 20, false));
+    }
+
+    /** Neovim entered {@code buffer} in a plug-in's float just opened with the focus (window 1009), a picker's prompt. */
+    private static Action inNewFloat(int buffer) {
+        return EnterDecision.decide(new Enter(1009, buffer, CODE_WIN, CODE_BUF, NONE, NONE,
+                buffer == CODE_BUF || buffer == OTHER_DOC, buffer == 20, true));
+    }
+
+    /**
+     * A float just opened with the focus (a picker's prompt) keeps Neovim, so that the insert its
+     * plug-in starts begins there; a document or a project file shown in it goes the usual way
+     * (any window but the attached one is sent back).
+     */
+    @Test
+    void aNewFloatKeepsNeovimButNotADocumentOrAFile() {
+        assertEquals(Action.ACCEPT, inNewFloat(SCRATCH));
+        assertEquals(Action.RETURN_BACK, inNewFloat(OTHER_DOC));
+        assertEquals(Action.RETURN_BACK, inNewFloat(CODE_BUF));
+        assertEquals(Action.RETURN_BACK, inNewFloat(20));
     }
 
     @Test

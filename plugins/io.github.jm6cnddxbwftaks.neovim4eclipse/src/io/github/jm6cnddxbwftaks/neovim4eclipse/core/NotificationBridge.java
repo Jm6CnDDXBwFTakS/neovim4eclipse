@@ -27,7 +27,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
  *
  * <p>The RPC layer hands every message to {@link #notification} or {@link #request} (see
  * {@link Incoming}), which pick the handler by the message's name with a {@code switch}. Example:
- * {@code notification("eclipse_mode", ["i"])} becomes {@code sink.onMode("i")}. (These used to be
+ * {@code notification("eclipse_mode", ["i", false])} becomes {@code sink.onMode("i", false)}. (These used to be
  * annotated methods that neovim-java found by reflection; a {@code switch} shows every name in one
  * place and needs no {@code public} methods.)
  *
@@ -52,7 +52,13 @@ final class NotificationBridge implements Incoming {
 
     /** Typed destination for notifications. */
     interface Sink {
-        void onMode(String mode);
+        /**
+         * @param mode            Neovim's mode, as {@code nvim_get_mode()} says it ({@code "i"})
+         * @param inFocusedFloat  whether Neovim's current window was a plug-in's focused floating
+         *                        window at the change ({@code LuaScripts.WINDOWS}' {@code focused_float}:
+         *                        a picker's prompt); {@code false} when the report did not say
+         */
+        void onMode(String mode, boolean inFocusedFloat);
 
         /**
          * @param line1 1-based line; @param col0 0-based UTF-8 byte column (Neovim's convention)
@@ -84,8 +90,11 @@ final class NotificationBridge implements Incoming {
          * {@code pageFollows}: {@code winid} is a help page's window, and Neovim's help put this
          * other help buffer there ({@code Ctrl-]}), which is now the page's
          * ({@link LuaScripts#WINDOWS}' {@code follow_page}); false if not sent.
+         * {@code newFloat}: {@code winid} is a plug-in's float just opened with the focus, as a
+         * picker's prompt ({@link LuaScripts#WINDOWS}' {@code new_float}); false if not sent.
          */
-        void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows);
+        void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows,
+                boolean newFloat);
 
         /**
          * A document's buffer was unloaded and loaded again by Neovim ({@code :edit!} from a script;
@@ -313,7 +322,7 @@ final class NotificationBridge implements Incoming {
 
     private void onMode(List<?> args) {
         if (!args.isEmpty()) {
-            sink.onMode(String.valueOf(args.get(0)));
+            sink.onMode(String.valueOf(args.get(0)), args.size() > 1 && Boolean.TRUE.equals(args.get(1)));
         }
     }
 
@@ -333,13 +342,13 @@ final class NotificationBridge implements Incoming {
         }
     }
 
-    /** Payload: {@code [bufnr, winid, jumped, projectFile, pageFollows]} (see {@link Sink#onBufferEnter}). */
+    /** Payload: {@code [bufnr, winid, jumped, projectFile, pageFollows, newFloat]} (see {@link Sink#onBufferEnter}). */
     private void onBufEnter(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
             String file = args.size() > 3 && args.get(3) instanceof String name ? name : "";
             sink.onBufferEnter(buf, window(args, 1), args.size() > 2 && Boolean.TRUE.equals(args.get(2)), file,
-                    args.size() > 4 && Boolean.TRUE.equals(args.get(4)));
+                    args.size() > 4 && Boolean.TRUE.equals(args.get(4)), args.size() > 5 && Boolean.TRUE.equals(args.get(5)));
         }
     }
 

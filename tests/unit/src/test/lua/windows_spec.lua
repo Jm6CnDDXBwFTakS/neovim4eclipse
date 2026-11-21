@@ -193,7 +193,7 @@ t.test('showing a window enters it, and BufEnter says which window', function()
   local win = open(a)
   t.eq(win, show(win, a))
   t.eq(win, vim.api.nvim_get_current_win())
-  t.eq({ { a, win, false, '', false } }, t.sent('eclipse_buf_enter'))
+  t.eq({ { a, win, false, '', false, false } }, t.sent('eclipse_buf_enter'))
   t.forget()
   t.eq(home, show(-1, a), '-1 is the home window')
   t.eq(a, vim.api.nvim_win_get_buf(home), 'the home window shows the buffer asked for')
@@ -205,7 +205,7 @@ t.test('a window showing another buffer gets the right one quietly before it is 
   local win = open(b)
   show(win, a)
   t.eq(a, vim.api.nvim_win_get_buf(win))
-  t.eq({ { a, win, false, '', false } }, t.sent('eclipse_buf_enter'), 'one BufEnter, with the buffer Eclipse expects')
+  t.eq({ { a, win, false, '', false, false } }, t.sent('eclipse_buf_enter'), 'one BufEnter, with the buffer Eclipse expects')
 end)
 
 t.test('a window closed in Neovim is not shown: -1, and nothing changes', function()
@@ -876,6 +876,96 @@ local function enter_float()
   vim.api.nvim_set_current_win(float)
   return float
 end
+
+--- The modes SETUP reported since the last t.forget(), each as { mode, in a focused float }.
+local function modes()
+  return t.sent('eclipse_mode')
+end
+
+--- Fires SETUP's ModeChanged report as a mode change would. (A real insert cannot be begun and
+--- held open from inside a test; that the report of an insert begun in a float comes after the
+--- WinEnter into it, its mode i, is the session's integration test, FloatInsertIntegrationTest.)
+local function report_mode()
+  vim.api.nvim_exec_autocmds('ModeChanged', {})
+end
+
+t.test('a mode report made in a focused floating window says so', function()
+  commands()
+  enter_float()
+  t.forget()
+  report_mode()
+  t.eq({ { 'n', true } }, modes(), 'an insert begun here is Neovim\'s')
+end)
+
+t.test("a mode report made in an editor's window says it is no float", function()
+  commands()
+  t.forget()
+  report_mode()
+  t.eq({ { 'n', false } }, modes(), 'an insert begun here is typed by Eclipse')
+end)
+
+--- The sixth value of each BufEnter report since the last t.forget(): a float just opened with
+--- the focus (a picker's prompt).
+local function new_floats()
+  local found = {}
+  for _, sent in ipairs(t.sent('eclipse_buf_enter')) do
+    found[#found + 1] = sent[6]
+  end
+  return found
+end
+
+t.test('a float opened with the focus is reported as new, for Eclipse to leave Neovim there', function()
+  commands()
+  t.forget()
+  vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  t.eq({ true }, new_floats())
+end)
+
+t.test("Telescope's order is a new float too: opened without the focus, entered, made a prompt after", function()
+  commands()
+  local buf = vim.api.nvim_create_buf(false, true) -- plenary's popup: a scratch buffer
+  local float = vim.api.nvim_open_win(buf, false, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  t.forget()
+  vim.api.nvim_set_current_win(float) -- within the same command, before the net looks
+  vim.bo[buf].buftype = 'prompt'
+  t.eq({ true }, new_floats())
+end)
+
+t.test('a float opened without autocommands schedules no pass of the net, so it is not new either', function()
+  commands()
+  flush() -- the pass the editors' windows scheduled is over
+  local float = vim.api.nvim_open_win(buffer(1), false,
+    { relative = 'editor', row = 1, col = 1, width = 5, height = 1, noautocmd = true })
+  t.forget()
+  vim.api.nvim_set_current_win(float)
+  t.eq({ false }, new_floats(), 'nothing would close it: Neovim is sent back')
+end)
+
+t.test('a float entered after the net saw it is not new: Neovim is sent back as before', function()
+  commands()
+  local float = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  flush() -- the net has seen it: a float there already, as a hover float focused by a second K
+  t.forget()
+  vim.api.nvim_set_current_win(float)
+  t.eq({ false }, new_floats())
+end)
+
+t.test('before WINDOWS runs, no window is a focused float', function()
+  t.setup()
+  t.forget()
+  report_mode()
+  t.eq({ { 'n', false } }, modes())
+end)
+
+t.test("the plug-in's own windows and plain windows are no focused floats", function()
+  local win, home = commands()
+  local focused_float = require('neovim4eclipse.windows').focused_float
+  t.eq(false, focused_float(win), "an editor's window")
+  t.eq(false, focused_float(home), 'the home window')
+  local float = enter_float()
+  t.eq(true, focused_float(0), 'the float, current')
+  t.eq(true, focused_float(float))
+end)
 
 t.test('a floating window that opens with the focus is closed again: it would take the keys unseen', function()
   local win = commands()

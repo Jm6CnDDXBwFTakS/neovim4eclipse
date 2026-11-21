@@ -2370,7 +2370,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Routes {@link NotificationBridge} events into this session. */
     private final class EventSink implements NotificationBridge.Sink {
         @Override
-        public void onMode(String mode) {
+        public void onMode(String mode, boolean inFocusedFloat) {
+            // First, on this reader thread, in the order Neovim reported: where an insert began.
+            keyInput.onModeReport(mode, inFocusedFloat);
             state.dispatchMode(mode);
         }
 
@@ -2412,8 +2414,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows) {
-            buffers.onEntered(bufnr, winid, jumped, projectFile, pageFollows, NeovimSession.this::returnToAttachedBufferAsync,
+        public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows,
+                boolean newFloat) {
+            buffers.onEntered(bufnr, winid, jumped, projectFile, pageFollows, newFloat,
+                    NeovimSession.this::returnToAttachedBufferAsync,
                     () -> restorePageAsync(winid));
         }
 

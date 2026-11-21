@@ -25,7 +25,9 @@ final class LuaScripts {
      *       definition, E388) instead of the diagnostics mapping, as it does in plain Neovim when
      *       the pause is longer than the wait.</li>
      *   <li>{@code showmode=false}: Eclipse shows the mode in its own status line.</li>
-     *   <li>Autocmds emit {@code eclipse_mode}, {@code eclipse_cursor} (with the buffer number,
+     *   <li>Autocmds emit {@code eclipse_mode} (the mode, and whether the current window is a
+     *       plug-in's focused floating window: {@link #WINDOWS}' {@code focused_float}),
+     *       {@code eclipse_cursor} (with the buffer number,
      *       the window's top line, {@code line('w0')}, and the window id),
      *       {@code eclipse_buf_enter} (the buffer and the window id: with a window per editor,
      *       docs/design/WINDOWS.md, the window tells two editors on one file apart; whether the move
@@ -102,9 +104,16 @@ final class LuaScripts {
             -- The user's insert-mode mappings and abbreviations stay: the text Eclipse typed is
             -- re-typed into Neovim with nvim_feedkeys(text, 'n'), which applies none of them, so a
             -- `jk` -> <Esc> mapping cannot end that re-typing half way (docs/design/INSERT_CTRL_KEYS.md, section 3).
+            -- The second value: whether the current window is a focused floating window of a
+            -- plug-in (a picker's prompt, :Lazy), as WINDOWS' focused_float says. Sent with every
+            -- mode, not on its own at WinEnter: the plug-in switches windows quietly in places
+            -- ('eventignore'), so only a value read at the mode change itself is sure to be current
+            -- when Eclipse decides who types an insert that begins (KeyInput.onModeReport).
             vim.api.nvim_create_autocmd('ModeChanged', {
               callback = function()
-                vim.rpcnotify(0, 'eclipse_mode', vim.api.nvim_get_mode().mode)
+                local windows = package.loaded['neovim4eclipse.windows']
+                vim.rpcnotify(0, 'eclipse_mode', vim.api.nvim_get_mode().mode,
+                  windows ~= nil and windows.focused_float(0))
               end
             })
             -- The window's top line comes along: Neovim has already scrolled when CursorMoved fires,
@@ -159,8 +168,11 @@ final class LuaScripts {
                 local windows = package.loaded['neovim4eclipse.windows']
                 local win = vim.api.nvim_get_current_win()
                 local follows = windows ~= nil and windows.follow_page(win, ev.buf)
+                -- The sixth: whether win is a plug-in's float that has just opened and taken the focus
+                -- (WINDOWS' new_float: a picker's prompt), which Eclipse leaves Neovim in rather than
+                -- sending it back, so that the insert its plug-in starts begins there.
                 vim.rpcnotify(0, 'eclipse_buf_enter', ev.buf, win, jumped,
-                  project and project.file_of(ev.buf) or '', follows)
+                  project and project.file_of(ev.buf) or '', follows, windows ~= nil and windows.new_float(win))
               end
             })
             vim.api.nvim_create_autocmd('TextYankPost', {
@@ -1259,6 +1271,10 @@ final class LuaScripts {
             for _, win in ipairs(vim.api.nvim_list_wins()) do
               seen[win] = true
             end
+            -- Whether a pass of the safety net is scheduled and has not begun (M.new_float): set by
+            -- WinNew, cleared as the pass begins, so that a new float is left the focus only while a
+            -- pass is sure to come and look at it.
+            local net_pending = false
             -- The window each new window was opened from (the WinNew net below): kept per window,
             -- since a check scheduled for an earlier window may be the one that finds a report.
             local opened_from = {}
@@ -1810,6 +1826,33 @@ final class LuaScripts {
               return false
             end
 
+            --- Whether win (0: the current one) is a floating window of a plug-in, not the
+            --- plug-in's own and not one of ui2's: a picker's prompt (Telescope), :Lazy, a hover
+            --- float the user entered. An insert that begins in one is Neovim's to its end
+            --- (SETUP's ModeChanged report): its buffer is no document, so Eclipse must not type it.
+            function M.focused_float(win)
+              win = win == 0 and vim.api.nvim_get_current_win() or win
+              return not own[win] and vim.fn.win_gettype(win) == 'popup' and not shows_ui2_buffer(win)
+            end
+
+            --- Whether win is a plug-in's float that has just opened and taken the focus, as a
+            --- picker's prompt does: a focused float the safety net below has not looked at yet,
+            --- while a pass of the net is scheduled to (a new one; the net runs only from
+            --- vim.schedule, after the command that opened it), current, entered outside an insert.
+            --- A float opened without WinNew (noautocmd) schedules no pass, and one entered during
+            --- a pass is not new either: Neovim is sent back from both, as before. SETUP's BufEnter report says so, and Eclipse leaves
+            --- Neovim there (util/EnterDecision) instead of sending it back to the editor's window,
+            --- where the insert the picker starts next would begin and Eclipse would type it. Not the
+            --- buffer's kind: Telescope makes its prompt buffer a prompt only after entering the
+            --- window (plenary's popup opens a scratch buffer, then Telescope sets 'buftype'). Narrow
+            --- on purpose: a float entered later (a hover float focused by a second K) or one entered
+            --- during an insert is sent back as before. Today the net closes such a float right after,
+            --- as every float that opens with the focus.
+            function M.new_float(win)
+              return net_pending and M.focused_float(win) and not seen[win] and win == vim.api.nvim_get_current_win()
+                and not vim.api.nvim_get_mode().mode:match('^[iR]')
+            end
+
             --- Why the safety net closed a window, by win_gettype(): '' for a plain one (a split
             --- opened without the command line, which Eclipse never heard of).
             local why_closed = {
@@ -1943,7 +1986,9 @@ final class LuaScripts {
                 if current ~= left_from then
                   opened_from[current] = left_from
                 end
+                net_pending = true
                 vim.schedule(function()
+                  net_pending = false -- first: a window entered while this pass closes one is not new
                   local why, list, float
                   local quickfix = package.loaded['neovim4eclipse.quickfix']
                   local current = vim.api.nvim_get_current_win()

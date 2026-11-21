@@ -1064,10 +1064,13 @@ final class DocumentBuffers {
      * @param projectFile the buffer's file when it is a project's and no document's, else {@code ""}
      * @param pageFollows whether {@code winid} is a help page's window that took this help buffer as
      *                    its page ({@code Ctrl-]} in the help editor): it is the page's buffer now
+     * @param newFloat    whether {@code winid} is a plug-in's float just opened with the focus, as a
+     *                    picker's prompt ({@code LuaScripts.WINDOWS}' {@code new_float}): Neovim is
+     *                    left there, unless it shows a document or a project file
      * @param restorePage puts the page's own buffer back into {@code winid}, a page's window
      */
-    void onEntered(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows, Runnable returnBack,
-            Runnable restorePage) {
+    void onEntered(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows, boolean newFloat,
+            Runnable returnBack, Runnable restorePage) {
         if (pageFollows && pageWindows.containsKey(winid)) {
             pageWindows.put(winid, bufnr);
         }
@@ -1079,7 +1082,7 @@ final class DocumentBuffers {
         BiConsumer<Integer, String> fileHandler = projectFileHandler;
         EnterDecision.Action action = EnterDecision.decide(new EnterDecision.Enter(winid, bufnr, attachedWin,
                 attachedBufnr, focusedPage, pageBuffer == null ? EnterDecision.NONE : pageBuffer,
-                handler != null && created.containsKey(bufnr), fileHandler != null && !projectFile.isEmpty()));
+                handler != null && created.containsKey(bufnr), fileHandler != null && !projectFile.isEmpty(), newFloat));
         switch (action) {
             // Eclipse's own switch, Neovim came back, or the focus moved to a page. Never a reason
             // to take the focus from a page: this notice can be older than the page's focusPage

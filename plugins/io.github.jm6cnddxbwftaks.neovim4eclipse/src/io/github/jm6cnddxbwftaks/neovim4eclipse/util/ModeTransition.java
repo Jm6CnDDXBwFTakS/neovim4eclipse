@@ -21,8 +21,10 @@ public enum ModeTransition {
     ENTER_INSERT,
     /**
      * Insert mode began and Neovim must type it, so every key goes to Neovim: after a blockwise
-     * selection (at Esc Vim repeats the text on every line of the block), or while recording a
-     * macro (the macro must contain every typed key). Sync first, as for {@link #ENTER_INSERT}.
+     * selection (at Esc Vim repeats the text on every line of the block), while recording a macro
+     * (the macro must contain every typed key), or in a plug-in's focused floating window (a
+     * picker's prompt: its buffer is no document, so Eclipse has nothing to type it into). Sync
+     * first, as for {@link #ENTER_INSERT}.
      */
     ENTER_NEOVIM_INSERT,
     /** An insert typed by Neovim ended: sync, since Esc may have repeated the text on every line of a block. */
@@ -40,14 +42,16 @@ public enum ModeTransition {
      * @param modeAfter          the mode after it
      * @param neovimDrivenInsert whether the insert that was going on (if any) is typed by Neovim
      * @param recording          whether a macro is being recorded
+     * @param inFocusedFloat     whether Neovim's current window is a plug-in's focused floating
+     *                           window, as its last mode report said ({@code KeyInput})
      * @param key                the key, in Neovim notation
      */
     public static ModeTransition after(String modeBefore, String modeAfter, boolean neovimDrivenInsert,
-            boolean recording, String key) {
+            boolean recording, boolean inFocusedFloat, String key) {
         boolean wasTyping = VimModes.isTyping(modeBefore);
         boolean nowTyping = VimModes.isTyping(modeAfter);
         if (!wasTyping && nowTyping) {
-            return VimModes.isBlockVisual(modeBefore) || recording ? ENTER_NEOVIM_INSERT : ENTER_INSERT;
+            return VimModes.isBlockVisual(modeBefore) || recording || inFocusedFloat ? ENTER_NEOVIM_INSERT : ENTER_INSERT;
         }
         if (wasTyping && !nowTyping && neovimDrivenInsert) {
             return LEAVE_NEOVIM_INSERT;
