@@ -184,6 +184,21 @@ guard above, placed before it loads (`if vim.g.neovim4eclipse then ... return en
 `require('config.lazy')`), or give Eclipse a small config of its own (*A separate config for
 Eclipse*, below).
 
+**Install new plug-ins in a terminal first.** lazy.nvim installs missing plug-ins while Neovim
+starts: on a config's first start, and again at the first start after you add a plug-in. That
+works in Eclipse too, but the editor is of no use until it is done: the installer is drawn over
+it, and the keys you type wait. In a terminal it is quicker and you see all of it:
+
+1. After you add or change plug-ins in your config (and before the first Eclipse start with a new
+   config, such as the LazyVim starter), run `nvim` in a terminal, wait until lazy.nvim's window
+   says it is done, and quit with `:qa`.
+2. Then start Eclipse, or choose *Neovim → Restart Neovim...* if it is running. Nothing is left
+   to install, so Neovim starts as fast as usual.
+
+With a separate config for Eclipse (below), run that one: `NVIM_APPNAME=eclipse-nvim nvim` (in
+PowerShell, `$env:NVIM_APPNAME = 'eclipse-nvim'; nvim`). Both Neovims then use the same plug-ins,
+installed once.
+
 **Errors in your config.** If `init.lua` reports an error while Neovim starts (a typo, or a
 Vimscript line such as `nnoremap ; :` in a Lua file: write `vim.keymap.set('n', ';', ':')`, or wrap
 it in `vim.cmd[[...]]`), Neovim starts anyway, with what your config set up before the error (after

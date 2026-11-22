@@ -13,6 +13,13 @@ stopped. Eclipse waits for it, with the busy cursor: usually well under a second
 typed while it starts deletes a line. Keys typed before that, while Eclipse is still opening the
 editor, are Eclipse's own, as in an editor without Neovim.
 
+A config that installs plug-ins as it starts (lazy.nvim on a first start, or after you add a
+plug-in) keeps Neovim starting until the install is done: the installer is drawn over the editor,
+and your keys wait ([Floating windows](#floating-windows), "A window that takes the keyboard").
+Install new plug-ins in a terminal first, then restart Neovim in Eclipse: the README's
+*Install new plug-ins in a terminal first*, under [Your `init.lua` in Eclipse](../README.md#your-initlua-in-eclipse),
+says how.
+
 ## Status bar
 
 *Window → Preferences → Neovim → Status Bar* chooses whether the Eclipse status bar shows Vim's
