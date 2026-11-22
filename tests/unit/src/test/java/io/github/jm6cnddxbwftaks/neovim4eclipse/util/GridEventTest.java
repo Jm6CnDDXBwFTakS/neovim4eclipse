@@ -90,13 +90,15 @@ class GridEventTest {
                 List.of("default_colors_set", List.of(0xE0E2EAL, 0x14161BL, 0xFF0000L, 15L, 0L)),
                 List.of("hl_attr_define",
                         List.of(7L, Map.of("foreground", 0x8CF8F7L, "bold", true, "undercurl", true), Map.of(), List.of()),
-                        List.of(8L, Map.of("reverse", true), Map.of(), List.of())),
+                        List.of(8L, Map.of("reverse", true), Map.of(), List.of()),
+                        List.of(9L, Map.of("background", 0L, "blend", 60L), Map.of(), List.of())),
                 List.of("default_colors_set", List.of(-1L, -1L, -1L, -1L, -1L)));
         assertEquals(List.of(new GridEvent.DefaultColors(0xE0E2EA, 0x14161B),
                 new GridEvent.HlAttr(7, 0x8CF8F7, GridEvent.NO_COLOR, false, true, false, true, false),
                 new GridEvent.HlAttr(8, GridEvent.NO_COLOR, GridEvent.NO_COLOR, true, false, false, false, false),
+                new GridEvent.HlAttr(9, GridEvent.NO_COLOR, 0x000000, false, false, false, false, false, 60),
                 new GridEvent.DefaultColors(GridEvent.NO_COLOR, GridEvent.NO_COLOR)), read(redraw),
-                "an undercurl underlines; -1 is no color");
+                "an undercurl underlines; -1 is no color; blend is how much shows through ('winblend')");
     }
 
     @Test

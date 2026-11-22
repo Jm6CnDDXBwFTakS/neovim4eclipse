@@ -466,6 +466,16 @@ public final class Grids {
      * top: the first and the third are drawn (225,000 cells), the second is not. A single float of
      * more than {@link #MAX_FLOAT_CELLS} cells is never drawn. Its cells are counted before they
      * are copied, so a window of any size costs nothing here.
+     *
+     * <p>And a plug-in's float that is there only to dim the text below it ({@link #dimsOnly}):
+     * every cell blank, in a highlight with {@code blend} ({@code 'winblend'}). Neovim draws the
+     * text below through it, darker; the editor draws a window over the text, never through it,
+     * so drawn it would hide the editor behind a block of its color. Example: lazy.nvim's
+     * backdrop under {@code :Lazy} with a colorscheme that sets {@code Normal}'s background and
+     * {@code 'termguicolors'} on (LazyVim): left out, {@code :Lazy}'s own window drawn over the
+     * text. A blended float with text (a completion menu's {@code 'winblend'}) is drawn, without
+     * the blend, and so is the float with the cursor, blank or not: the keys go to it, so it must
+     * be drawn (left out, {@link #unseenCursor} would close it).
      */
     public Optional<List<FloatWindow>> floatsIfChanged() {
         if (!floatsChanged) {
@@ -489,7 +499,8 @@ public final class Grids {
                 continue; // no row for the line, none open, no output expanding it: the status line shows (ui2Windows)
             }
             if (place.floating() && grids.containsKey(e.getKey()) && (drawFloats || always)
-                    && (drawnWindow == -1 || place.win() != drawnWindow)) {
+                    && (drawnWindow == -1 || place.win() != drawnWindow)
+                    && (always || e.getKey() == cursorGrid || !dimsOnly(grids.get(e.getKey())))) {
                 candidates.add(e);
             }
         }
@@ -714,6 +725,27 @@ public final class Grids {
         } else if (pages.contains(win)) {
             pagesChanged.add(win);
         }
+    }
+
+    /**
+     * Whether {@code grid} only dims what lies below it: it has cells, every one blank (a space, or
+     * nothing: the right half of a wide character), each in a highlight that blends
+     * ({@code blend} above 0; the default highlight, 0, never does). Example: a backdrop of 120x40
+     * spaces in {@code LazyBackdrop} with {@code 'winblend'} 60: yes; the same with one letter, or
+     * with {@code 'winblend'} 0: no.
+     */
+    private boolean dimsOnly(GridCells grid) {
+        if (grid.text.length == 0) {
+            return false;
+        }
+        for (int i = 0; i < grid.text.length; i++) {
+            String text = grid.text[i];
+            GridEvent.HlAttr attr = attrs.get(grid.hl[i]);
+            if ((text != null && !text.isBlank()) || attr == null || attr.blend() <= 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void withGrid(int id, java.util.function.Consumer<GridCells> action) {

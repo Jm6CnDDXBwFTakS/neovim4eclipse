@@ -24,6 +24,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   file, where before some could reach the installer's window. One the editor cannot draw (past the limits in
   the user guide's *Floating windows*), or that its plug-in hides, is closed with a message.
 
+### Fixed
+
+- A floating window that is there only to dim the text below it (every cell blank and
+  see-through, `'winblend'`), such as lazy.nvim's backdrop under `:Lazy` with LazyVim's colors,
+  was drawn as a solid block over the whole editor. It is now left out, and `:Lazy`'s own window
+  is drawn over the text.
+
 ### Removed
 
 - `vim.g.neovim4eclipse_floating_windows`: plug-ins' floating windows are always drawn, as a

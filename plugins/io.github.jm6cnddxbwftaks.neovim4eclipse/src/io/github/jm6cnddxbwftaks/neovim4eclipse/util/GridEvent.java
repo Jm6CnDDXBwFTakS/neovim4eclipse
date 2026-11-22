@@ -145,10 +145,20 @@ public sealed interface GridEvent {
     /**
      * {@code hl_attr_define}: what highlight {@code id} looks like, from its RGB attributes (the
      * plug-in attaches with {@code rgb}). Colors are {@code 0xRRGGBB}, {@link #NO_COLOR} when the
-     * highlight leaves them to the default colors.
+     * highlight leaves them to the default colors. {@code blend} is how much of what lies below
+     * shows through, 0 to 100 (a window's {@code 'winblend'}, the popup menu's {@code 'pumblend'}):
+     * the editor draws no window see-through, and uses it only to leave out a window that is
+     * there only to dim the text below ({@link Grids#floatsIfChanged}). Example: lazy.nvim's
+     * backdrop, every cell blank with {@code blend} 60.
      */
     record HlAttr(int id, int foreground, int background, boolean reverse, boolean bold, boolean italic,
-            boolean underline, boolean strikethrough) implements GridEvent {
+            boolean underline, boolean strikethrough, int blend) implements GridEvent {
+
+        /** A highlight nothing shows through ({@code blend} 0). */
+        public HlAttr(int id, int foreground, int background, boolean reverse, boolean bold, boolean italic,
+                boolean underline, boolean strikethrough) {
+            this(id, foreground, background, reverse, bold, italic, underline, strikethrough, 0);
+        }
     }
 
     /** {@code default_colors_set}: Neovim's default text and background colors, or {@link #NO_COLOR}. */
@@ -257,7 +267,7 @@ public sealed interface GridEvent {
                 flag(m, "bold"), flag(m, "italic"),
                 flag(m, "underline") || flag(m, "undercurl") || flag(m, "underdouble") || flag(m, "underdotted")
                         || flag(m, "underdashed"),
-                flag(m, "strikethrough"));
+                flag(m, "strikethrough"), m.get("blend") instanceof Number n ? Math.max(0, n.intValue()) : 0);
     }
 
     private static boolean flag(Map<?, ?> m, String key) {

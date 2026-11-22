@@ -178,14 +178,66 @@ class NeovimWindowsIntegrationTest {
     }
 
     /**
+     * Lua that sets lazy.nvim up (the pinned copy at {@code lazy}) with the plug-ins {@code specs}
+     * (a Lua table), its own folders under {@code tmp} (the rest of Neovim's are this module's,
+     * under {@code target/}: the root pom.xml), nothing checked or watched, no
+     * {@code .lazy.lua} looked for in the folders above (it would run one, or ask whether to
+     * trust it, and the test would wait), and missing plug-ins installed only if {@code install}.
+     */
+    private static String lazySetup(Path lazy, String tmp, String specs, boolean install) {
+        return PinnedPlugins.onRuntimePath(lazy) + " local tmp = [==[" + tmp + "]==]"
+                + " require('lazy').setup(" + specs + ", { root = tmp .. '/plugins', lockfile = tmp .. '/lazy-lock.json',"
+                + "   state = tmp .. '/state.json', readme = { enabled = false }, pkg = { cache = tmp .. '/pkg-cache.lua' },"
+                + "   rocks = { enabled = false }, install = { missing = " + install + " }, checker = { enabled = false },"
+                + "   change_detection = { enabled = false }, local_spec = false,"
+                + "   performance = { cache = { enabled = false }, reset_packpath = false, rtp = { reset = false } } })";
+    }
+
+    /** The windows the editor draws over the text, by window ID. */
+    private static List<Integer> drawnFloats(NeovimSession s) {
+        return s.floatingWindows().stream().map(f -> f.grid().window()).toList();
+    }
+
+    /** The window showing a buffer of {@code filetype}, or 0. */
+    private static int windowOf(NeovimSession s, String filetype) throws Exception {
+        return number(s, "for _, w in ipairs(vim.api.nvim_list_wins()) do"
+                + " if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == '" + filetype + "' then return w end end return 0");
+    }
+
+    /**
+     * lazy.nvim's backdrop, the window it opens under {@code :Lazy}'s to dim the text (with
+     * {@code 'termguicolors'} on and a {@code Normal} background, as LazyVim's colorschemes have):
+     * every cell blank and blended, so the editor leaves it out (util/Grids' dimsOnly), and draws
+     * {@code :Lazy}'s window over the text, not a block of the backdrop's color over all of it.
+     */
+    @Test
+    void lazysBackdropIsLeftOutAndItsWindowDrawnOverTheText(@TempDir Path dir) throws Exception {
+        TestNeovim.require();
+        Optional<Path> lazy = PinnedPlugins.find("lazy");
+        assumeTrue(lazy.isPresent(), "lazy is not fetched at its pinned commit: " + PinnedPlugins.HOW);
+        String tmp = dir.toAbsolutePath().toString();
+        assumeTrue(!tmp.contains("]==]"), "a folder Lua cannot be given in a long string");
+        try (NeovimSession s = start()) {
+            s.showWindow(new DocumentBuffer(""), new EditorWindow(), "");
+            s.setBufferLines(List.of("some text"));
+            s.lua("vim.o.termguicolors = true vim.api.nvim_set_hl(0, 'Normal', { fg = '#c0c0c0', bg = '#202030' })");
+            s.lua(lazySetup(lazy.get(), tmp, "{}", false));
+            waitFor(() -> number(s, "return vim.fn.exists(':Lazy') == 2 and 1 or 0") == 1, ":Lazy defined");
+            s.command("Lazy");
+            int window = windowOf(s, "lazy");
+            int backdrop = windowOf(s, "lazy_backdrop");
+            assertNotEquals(0, backdrop, "lazy.nvim made its backdrop");
+            waitFor(() -> drawnFloats(s).contains(window), ":Lazy's window drawn");
+            assertFalse(drawnFloats(s).contains(backdrop), "the backdrop left out: " + drawnFloats(s));
+        }
+    }
+
+    /**
      * lazy.nvim's {@code :Lazy}, a real plug-in's window that takes the keyboard in Normal mode, at
      * the commit pinned and vetted in {@code releng/test-plugins.properties}: it stays open with
      * Neovim in it, its own {@code q} closes it, and opened again, leaving the editor closes it
      * ({@link NeovimSession#leaveFloatAsync}); the document keeps its text. lazy.nvim is set up
-     * with no plug-ins, its own folders under {@code dir} (the rest of Neovim's are this module's,
-     * under {@code target/}: the root pom.xml), nothing installed, checked or watched, and no
-     * {@code .lazy.lua} looked for in the folders above (it would run one, or ask whether to trust
-     * it, and the test would wait). Skipped when it is not fetched.
+     * with no plug-ins ({@link #lazySetup}). Skipped when it is not fetched.
      */
     @Test
     void lazysWindowTakesTheKeysAndCloses(@TempDir Path dir) throws Exception {
@@ -196,13 +248,7 @@ class NeovimWindowsIntegrationTest {
         assumeTrue(!tmp.contains("]==]"), "a folder Lua cannot be given in a long string");
         try (NeovimSession s = start()) {
             s.setBufferLines(List.of("one"));
-            s.lua(PinnedPlugins.onRuntimePath(lazy.get()) + " local tmp = [==[" + tmp + "]==]"
-                    + " require('lazy').setup({}, { root = tmp .. '/plugins', lockfile = tmp .. '/lazy-lock.json',"
-                    + "   state = tmp .. '/state.json', readme = { enabled = false }, pkg = { cache = tmp .. '/pkg-cache.lua' },"
-                    + "   rocks = { enabled = false }, install = { missing = false }, checker = { enabled = false },"
-                    + "   change_detection = { enabled = false }, local_spec = false," // no .lazy.lua of a folder above
-                    + "   performance = { cache = { enabled = false }, reset_packpath = false, rtp = { reset = false } } })"
-                    + " vim.keymap.set('n', 'gl', '<Cmd>Lazy<CR>') return 0");
+            s.lua(lazySetup(lazy.get(), tmp, "{}", false) + " vim.keymap.set('n', 'gl', '<Cmd>Lazy<CR>') return 0");
             // lazy.nvim makes :Lazy from a vim.schedule after its setup.
             waitFor(() -> number(s, "return vim.fn.exists(':Lazy') == 2 and 1 or 0") == 1, ":Lazy defined");
             KeyRouter router = new KeyRouter(s);

@@ -194,6 +194,39 @@ class GridsTest {
     }
 
     /**
+     * A float there only to dim the text below (lazy.nvim's backdrop: every cell blank, blended) is
+     * left out, as the editor cannot draw through it; one with a letter in it, or not blended, is
+     * drawn. Its window above it is drawn either way.
+     */
+    @Test
+    void aFloatThatOnlyDimsTheTextBelowIsLeftOut() {
+        grids.drawFloats(true);
+        editorWindow();
+        grids.apply(new GridEvent.HlAttr(3, GridEvent.NO_COLOR, 0x000000, false, false, false, false, false, 60));
+        grids.apply(new GridEvent.HlAttr(4, GridEvent.NO_COLOR, 0x000000, false, false, false, false, false, 0));
+        grids.apply(new GridEvent.Resize(5, 4, 2));
+        grids.apply(new GridEvent.Line(5, 0, 0, text("    ", 3)));
+        grids.apply(new GridEvent.Line(5, 1, 0, text("    ", 3)));
+        grids.apply(new GridEvent.WinPos(5, 1002, true, 0, 0, 0, 0, 49));
+        floatAt(6, 1003, 1, 1, 50);
+        assertEquals(List.of(1003), grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList(),
+                "the backdrop left out, the window over it drawn");
+        grids.apply(new GridEvent.Line(5, 1, 2, text("x", 3)));
+        assertEquals(List.of(1002, 1003), grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList(),
+                "with a letter in it, drawn");
+        grids.apply(new GridEvent.Line(5, 1, 2, text(" ", 4)));
+        assertEquals(List.of(1002, 1003), grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList(),
+                "a cell not blended: drawn");
+        grids.apply(new GridEvent.Line(5, 1, 2, text(" ", 3)));
+        assertEquals(List.of(1003), grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList(),
+                "blank and blended again: left out");
+        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        assertEquals(List.of(1002, 1003), grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList(),
+                "with the cursor in it, drawn: the keys go to it");
+        assertTrue(grids.unseenCursor().isEmpty(), "so no float the keys go to is undrawn");
+    }
+
+    /**
      * A float with the focus (a picker's prompt) is drawn with the cursor, in the same place,
      * redrawn when the cursor moves in it, and without the cursor once the focus leaves it.
      */

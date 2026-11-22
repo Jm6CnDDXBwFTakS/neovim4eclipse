@@ -404,7 +404,9 @@ picker, fzf-lua, snacks.picker), lazy.nvim and which-key; skip a step whose plug
 2. Open the picker again and switch to another application, then back to Eclipse.
    ⇒ The picker is still open, with the cursor in its prompt.
 3. Run `:Lazy`, move with `j` and `k`, and close it with `q`.
-   ⇒ The window is drawn with the cursor on its lines; `q` closes it, and the caret is back.
+   ⇒ The window is drawn with the cursor on its lines, the editor's text visible around it (no
+   dark block over the editor, with a colorscheme that sets a background too); `q` closes it,
+   and the caret is back.
 4. With an input method on (Japanese: IBus or fcitx on Linux, the system's on macOS and Windows),
    open the picker and type a word.
    ⇒ The candidates are not shown in the prompt (no place for them there), and the committed

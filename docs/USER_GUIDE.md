@@ -549,7 +549,7 @@ its own popup menu, is drawn under the word, as Neovim draws it. Example: after 
   message. In the command-line window of `:` commands (`q:`) the lines are your own commands,
   and `Tab` completes them as before.
 - **How it looks:** as in a terminal: Neovim draws its popup menu in a grid of its own, in your
-  colorscheme's `Pmenu`, `PmenuSel` and the other groups (`'pumblend'` included),
+  colorscheme's `Pmenu`, `PmenuSel` and the other groups,
   and the editor copies it as it does a [floating window](#floating-windows), in the editor's font.
   `'pumheight'` limits its rows; otherwise it takes the room there is, below the line or above it.
   `'completeopt'` works as in Vim (`noinsert`, `noselect`, `fuzzy`); the extra window `popup` opens
@@ -639,7 +639,12 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
 - **Not drawn:** a window a plug-in opens as a split (a file tree), which is closed
   ([README](../README.md#known-limitations), "Neovim plug-ins that draw"), and a hidden floating
   window; one that has the keyboard, hidden as it opens or later by its plug-in, is closed, with
-  a message.
+  a message. Nor one that is there only to dim the text below it, every cell blank and
+  see-through (`'winblend'`), such as lazy.nvim's backdrop under `:Lazy`: the editor draws a
+  window over the text, never through it, so it would hide the text behind a block of its color.
+  Unless your keys go to it (it has Neovim's cursor): then it is drawn, as a solid block.
+- **`'winblend'` is not honored:** a see-through floating window with text in it (a completion
+  plug-in's menu) is drawn solid, in its own colors. `'pumblend'` likewise.
 - **Limits:** at most 16 floating windows are drawn at once, and at most 250,000 cells in all of
   them together (a window covering an editor on a 4K screen is about 46,000). Past that, the windows on top
   in Neovim's order stay and the others are not drawn (the window your keys go to is kept first,
