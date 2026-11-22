@@ -167,12 +167,9 @@ public final class NeovimEditorController implements AutoCloseable {
      * opt-out) or the editor cannot fold (no {@link ProjectionViewer}). See {@link #sendFolds()}.
      */
     private final FoldMirror foldMirror;
-    /**
-     * Neovim's window kept the size of this editor's text area, and {@code 'wrap'} its word wrap;
-     * {@code null} when the user turned the viewport off ({@code vim.g.neovim4eclipse_viewport = 0}).
-     */
+    /** Neovim's window kept the size of this editor's text area, and {@code 'wrap'} its word wrap. */
     private final ViewportFollower viewport;
-    /** The wheel through Neovim; {@code null} with the viewport off. */
+    /** The wheel through Neovim: it scrolls Neovim's window, as in a terminal. */
     private final NeovimWheel wheel;
     private volatile boolean closed;
     /**
@@ -242,9 +239,7 @@ public final class NeovimEditorController implements AutoCloseable {
         if (foldMirror != null) {
             caret.setFoldCaption(foldMirror::captionOffset); // a closed fold's caption, without unfolding
         }
-        this.viewport = session.viewportEnabled()
-                ? new ViewportFollower(styledText, new ViewportSession(session, buffer), new ViewportEditor())
-                : null;
+        this.viewport = new ViewportFollower(styledText, new ViewportSession(session, buffer), new ViewportEditor());
         this.caretSync = new CaretSync(caret, session, SwtUiExecutor.INSTANCE,
                 () -> documentOf(editor), this::isNeovimModeActive, synchronizer::isApplyingRemote);
         this.synchronizer.setCaretRestorer(() -> caretSync.showNeovimCursor(session.getLastCursor()));
@@ -314,9 +309,8 @@ public final class NeovimEditorController implements AutoCloseable {
         this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, session::pasteAsync);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
                 this::neovimHandlesMouse, session::mouseAsync, this::abandonLineAndFloat);
-        this.wheel = viewport == null ? null
-                : new NeovimWheel(styledText, this::neovimHandlesMouse, viewport::rows,
-                        lines -> session.scrollLinesAsync(buffer, lines));
+        this.wheel = new NeovimWheel(styledText, this::neovimHandlesMouse, viewport::rows,
+                lines -> session.scrollLinesAsync(buffer, lines));
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
         keyInterceptor.setSyncPointSupplier(this::consumeSyncPoint);
         keyInterceptor.setCompletion(this::runCompletion);
@@ -356,25 +350,23 @@ public final class NeovimEditorController implements AutoCloseable {
                 LOG.log(Level.WARNING, "push on leave insert failed", e);
             }
         });
-        if (viewport != null) {
-            // Eclipse scrolled alone while it typed (D6): its view is kept, and Neovim's window,
-            // which has the lines and the final cursor now, is scrolled to it; a cursor the view
-            // left behind is dragged in, as Neovim's own wheel would have dragged it. Read on the
-            // UI thread, which never waits for the session's threads (no deadlock).
-            session.setLeaveInsertView(() -> {
-                int[] top = { 0 };
-                SwtUiExecutor.INSTANCE.syncExec(() -> {
-                    if (!closed && !styledText.isDisposed()) {
-                        top[0] = viewport.eclipseTopLine();
-                    }
-                });
-                try {
-                    session.showTopLine(buffer, top[0]);
-                } catch (Exception e) {
-                    LOG.log(Level.FINE, "the editor's view at Esc", e);
+        // Eclipse scrolled alone while it typed (D6): its view is kept, and Neovim's window,
+        // which has the lines and the final cursor now, is scrolled to it; a cursor the view
+        // left behind is dragged in, as Neovim's own wheel would have dragged it. Read on the
+        // UI thread, which never waits for the session's threads (no deadlock).
+        session.setLeaveInsertView(() -> {
+            int[] top = { 0 };
+            SwtUiExecutor.INSTANCE.syncExec(() -> {
+                if (!closed && !styledText.isDisposed()) {
+                    top[0] = viewport.eclipseTopLine();
                 }
             });
-        }
+            try {
+                session.showTopLine(buffer, top[0]);
+            } catch (Exception e) {
+                LOG.log(Level.FINE, "the editor's view at Esc", e);
+            }
+        });
 
         session.focus(focusTarget);
         styledText.addListener(SWT.Paint, themeFollower);
@@ -389,10 +381,8 @@ public final class NeovimEditorController implements AutoCloseable {
         if (foldMirror != null) {
             session.addFoldStateListener(foldListener);
         }
-        if (viewport != null) {
-            session.addWrapListener(wrapListener);
-            session.addTopLineListener(topLineListener);
-        }
+        session.addWrapListener(wrapListener);
+        session.addTopLineListener(topLineListener);
         if (searchHighlighter != null) {
             session.addSearchListener(searchListener); // the attach's window switch has them sent (SEARCH)
         }
@@ -404,13 +394,9 @@ public final class NeovimEditorController implements AutoCloseable {
 
         int[] lineCol = DocumentPositions.offsetToCursor(documentOf(editor), offsets.caretModelOffset());
 
-        if (viewport != null) {
-            viewport.sendSizeFirst(); // before the push: Neovim places its cursor in the editor's rows
-        }
+        viewport.sendSizeFirst(); // before the push: Neovim places its cursor in the editor's rows
         pushDocumentAndCursorAsync(lineCol[0], lineCol[1], takeNeovimCursor);
-        if (viewport != null) {
-            viewport.start(); // after the push: the wrap is for this editor's buffer
-        }
+        viewport.start(); // after the push: the wrap is for this editor's buffer
         // After the push, which makes the buffer: the lines this editor shows, then its matches and
         // highlights, asked for whether or not Neovim's window changed (a re-attach to the same
         // window fires no WinEnter, and Neovim would send nothing new). Without search highlighting
@@ -1156,9 +1142,7 @@ public final class NeovimEditorController implements AutoCloseable {
         boolean lineOpen = neovimModeActive && session.commandLineOpen();
         commandLineEdits.update(lineOpen);
         lineInput.lineOpen(lineOpen);
-        if (viewport != null) {
-            viewport.resendSize();
-        }
+        viewport.resendSize();
         if (neovimModeActive) {
             // The floats changed while the page had the focus events (a picker closed as Neovim
             // left its window): draw them as they are now, and show the caret again if the float
@@ -1413,9 +1397,7 @@ public final class NeovimEditorController implements AutoCloseable {
             session.removeTopLineListener(topLineListener);
             session.removeSearchListener(searchListener);
             session.removeHighlightsListener(highlightsListener);
-            if (viewport != null) {
-                session.setLeaveInsertView(null); // the next editor's attach sets its own
-            }
+            session.setLeaveInsertView(null); // the next editor's attach sets its own
         } catch (Exception e) {
             LOG.log(Level.FINE, "remove listeners", e);
         }
@@ -1423,14 +1405,10 @@ public final class NeovimEditorController implements AutoCloseable {
             if (foldMirror != null) {
                 foldMirror.close();
             }
-            if (viewport != null) {
-                viewport.close();
-            }
+            viewport.close();
             caretSync.dispose();
             mouse.dispose();
-            if (wheel != null) {
-                wheel.dispose();
-            }
+            wheel.dispose();
             commandLineEdits.dispose();
             lineInput.dispose();
             commandWindowPanel.dispose();

@@ -58,11 +58,10 @@ NeovimEditorController ─UI thread─▶ SearchHighlighter.show ─▶ invalida
 - **Which lines are visible.** The window's own (`w0` to `w$`) and the editor's, which Eclipse
   reports whenever its view changes (a scroll, a resize: `SearchHighlighter.setViewListener`,
   `SearchPort.setSearchViewAsync`, `LuaScripts.SEARCH_VIEW`); both ranges are searched. The
-  viewport feature keeps the two the same, but they differ when it is off
-  (`vim.g.neovim4eclipse_viewport = 0`, a fixed 120 × 40 screen), when Eclipse scrolled alone in
+  viewport feature keeps the two the same, but they differ when Eclipse scrolled alone in
   insert mode, when Neovim does not know Eclipse's folds (`vim.g.neovim4eclipse_folds = 0`), and by
-  a last line the editor shows only in part. Two ranges apart (the viewport off, the editor far
-  from Neovim's window) are searched one by one, not with every line between them.
+  a last line the editor shows only in part. Two ranges apart (Eclipse scrolled alone, far from
+  Neovim's window) are searched one by one, not with every line between them.
 - **Across lines.** `matchbufline()` matches within one line. A pattern that can span lines (`\n`,
   `\_x`) is found with a `searchpos()` walk inside `nvim_win_call`: the start, then the end
   (`'e'` flag), then the view is put back as it was. Each next match is looked for after the end of

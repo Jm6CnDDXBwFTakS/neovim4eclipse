@@ -142,7 +142,7 @@ t.test('a window that is not current is fitted to the width its editor reported'
   local line = M.line(other)
   t.eq(20, #line[2], 'twenty cells, not the screen\'s width')
   t.eq('R', line[2][20], 'the right part at the editor\'s right edge')
-  -- The current window too: with the viewport off its window is not its editor's width either.
+  -- The current window too, before its editor reported, and after.
   local fresh = vim.api.nvim_open_win(vim.api.nvim_create_buf(true, false), true, { split = 'right' })
   t.eq(fresh, vim.api.nvim_get_current_win(), 'the new window is current')
   t.eq(vim.api.nvim_win_get_width(fresh), #M.line(fresh)[2], 'before its editor reported: the window\'s width')

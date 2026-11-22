@@ -4,7 +4,6 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -61,7 +60,6 @@ class NeovimViewportIntegrationTest {
     @Test
     void theWindowGetsTheEditorsSizeAndLGoesToItsLastLine() throws Exception {
         try (NeovimSession s = start()) {
-            assertTrue(s.viewportEnabled(), "on by default");
             s.setBufferLines(IntStream.rangeClosed(1, 200).mapToObj(i -> "line " + i).toList());
             s.setEditorSizeAsync(100, 30);
             waitFor(() -> windowIs(s, 100, 30), "a window of 100 × 30, below Neovim's status line");
@@ -158,16 +156,6 @@ class NeovimViewportIntegrationTest {
                                           // anything meanwhile: it would not answer until the Esc
             s.inputAsync("<Esc>");
             waitFor(() -> windowIs(s, 80, 20), "the size, sent after the command ended");
-        }
-    }
-
-    @Test
-    void theOptOutKeepsNeovimsFixedScreen() throws Exception {
-        try (NeovimSession s = start("--cmd", "let g:neovim4eclipse_viewport = 0")) {
-            assertFalse(s.viewportEnabled());
-            s.setEditorSizeAsync(100, 30);
-            NeovimBarrier.pass(s); // everything queued before, the size included, is done
-            assertEquals(List.of(120L, 40L), s.lua("return { vim.o.columns, vim.o.lines }"));
         }
     }
 }

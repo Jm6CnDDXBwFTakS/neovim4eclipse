@@ -321,19 +321,4 @@ class NeovimCompletionIntegrationTest {
             assertFalse(s.isCompleting(), "Eclipse types: the keys stay its own");
         }
     }
-
-    /**
-     * The list does not need the viewport ({@code vim.g.neovim4eclipse_viewport = 0}: Neovim keeps
-     * a screen of its own): Neovim's popup menu is drawn whatever the switches for floats say.
-     */
-    @Test
-    void theListIsDrawnWithoutTheViewportToo() throws Exception {
-        try (NeovimSession s = start("--cmd", "let g:neovim4eclipse_viewport = 0")) {
-            assertFalse(s.viewportEnabled());
-            s.setBufferLines(WORDS);
-            keys(s, "4", "G", "q", "q", "i", "a", "l", "<C-n>"); // recorded: Neovim types and completes
-            waitFor(() -> menuShown(s), "the list");
-            assertEquals(List.of("alpha", "alphabet", "alpine"), words(s));
-        }
-    }
 }

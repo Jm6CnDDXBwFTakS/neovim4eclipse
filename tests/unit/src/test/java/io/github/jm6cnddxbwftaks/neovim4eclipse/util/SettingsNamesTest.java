@@ -61,7 +61,6 @@ class SettingsNamesTest {
             // init.lua switches (README, Settings: "In init.lua")
             Map.entry("vim.g.neovim4eclipse_ide_keys", List.of(LUA, "vim.g.neovim4eclipse_ide_keys")),
             Map.entry("vim.g.neovim4eclipse_folds", List.of(LUA, "vim.g.neovim4eclipse_folds")),
-            Map.entry("vim.g.neovim4eclipse_viewport", List.of(LUA, "vim.g.neovim4eclipse_viewport")),
             Map.entry("vim.g.neovim4eclipse_problems", List.of(LUA, "vim.g.neovim4eclipse_problems")),
             Map.entry("vim.g.neovim4eclipse_search_highlight", List.of(LUA, "vim.g.neovim4eclipse_search_highlight")),
             Map.entry("vim.g.neovim4eclipse_highlights", List.of(LUA, "vim.g.neovim4eclipse_highlights")),
@@ -110,6 +109,7 @@ class SettingsNamesTest {
      * replaced. The code must not read them again: a user's old value would come back.
      */
     private static final Map<String, String> REMOVED = Map.of(
+            "vim.g.neovim4eclipse_viewport", "0.3.3",
             "vim.g.neovim4eclipse_completion_menu", "0.3.0",
             "flashOnError", "0.3.0",
             "statusShowcmd", "0.3.0",

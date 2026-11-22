@@ -257,8 +257,6 @@ send the `wheel count=… detail=…` lines from the Error Log with your system 
   one you see. A change of one of them shows a message once per Neovim session and is set back;
   your value applies again when wrap is off. Eclipse measures pixels and Neovim cells, so a line can
   still wrap one word apart now and then.
-- **To keep Neovim's own fixed screen** (120 × 40, as before 0.2.0): `vim.g.neovim4eclipse_viewport = 0`
-  in `init.lua`. The setting is read once when Neovim starts (*Neovim → Restart Neovim...*).
 - Lines made taller by code minings (the Java editor's reference counts) are not measured: there
   `L` can land a line or two below the editor's last line.
 - With `vim.g.neovim4eclipse_folds = 0` Neovim does not know Eclipse's folds, so where code is
@@ -661,8 +659,7 @@ the cursor into it.
   replace them with plain text (see its documentation).
 
 `vim.g.neovim4eclipse_floating_windows = 0` in `init.lua` turns the drawing off; the windows then
-exist unseen, as before 0.2.23, except one that takes the keyboard, which is closed. Nothing is drawn either with `vim.g.neovim4eclipse_viewport = 0`:
-Neovim's screen is then not the editor's size, and a window "at the bottom" would land anywhere.
+exist unseen, as before 0.2.23, except one that takes the keyboard, which is closed.
 
 Neovim's own floating windows are drawn whatever these say: ui2's command line, messages, pager
 and prompts ([Command line](#command-line---)) and Neovim's popup menu
@@ -1149,8 +1146,7 @@ narrowly as it can, and it is listed here.
 - **`'linebreak'`, `'breakindent'` and `'showbreak'`, window-local, while word wrap is on.** On,
   off and `NONE`, so that lines wrap where Eclipse wraps them ([The editor's size, scrolling and
   word wrap](#the-editors-size-scrolling-and-word-wrap-h-l-ctrl-d-zz)); your values come back when wrap goes off, and
-  `'wrap'` itself is the editor's word wrap. With `vim.g.neovim4eclipse_viewport = 0`, none of this
-  is set.
+  `'wrap'` itself is the editor's word wrap.
 
 - **`vim.diagnostic`'s `jump.on_jump`, only if your config sets none.** After `]d` it shows the
   first line of the problem's message on Neovim's line ([Problems](#problems-d-d)). Set your own

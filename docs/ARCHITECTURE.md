@@ -95,8 +95,7 @@ select a word (from a bracket, up to its match), three the line (`V`), four a bl
 extends, `'mouse'`, `'mousetime'` and `<2-LeftMouse>` mappings apply, and a click while recording is recorded.
 
 - *A click off Neovim's screen.* Neovim's window shows what the editor shows (section 9), so a clicked character
-  is normally on its screen. It may not be with the viewport turned off (`vim.g.neovim4eclipse_viewport = 0`,
-  Neovim's fixed 120 × 40 screen), past the end of the document (Neovim can scroll further than Eclipse), or for a
+  is normally on its screen. It may not be past the end of the document (Neovim can scroll further than Eclipse), or for a
   moment while a scroll is on its way. The script then scrolls Neovim's window for a press; for a drag in visual
   mode it moves the cursor there (which extends the selection, as the drag would; scrolling first would lose the
   drag's start); a first drag goes to the nearest edge of Neovim's screen. Measured: about 0.2 ms per event, the state
@@ -407,7 +406,7 @@ number and sign columns, the user's own settings), adds it (`util/ViewportSize`)
 `nvim_ui_try_resize`; an `OptionSet` on such an option (`:set number`) makes it resize again. With
 no editor attached the last size stays. The same follower keeps `'wrap'` and Eclipse's word wrap
 one setting (`SET_WRAP` one way, the `eclipse_wrap` notification the other, neither echoed), with
-`'linebreak'` while wrapping. `vim.g.neovim4eclipse_viewport = 0` keeps the fixed 120 × 40 screen.
+`'linebreak'` while wrapping.
 
 Neovim decides where its window is scrolled, and the editor follows. The `CursorMoved` report
 (`eclipse_cursor`) carries `line('w0')`, which Neovim has already updated then, and a `WinScrolled`
@@ -731,8 +730,7 @@ Each code editor draws its Neovim window's status line in a row under its text
   `statusline`, scheduled once per moment; on each attach (`NeovimSession.refreshStatusLinesAsync`);
   and when an editor's width in columns changes.
 - **Width:** every tabpage shares Neovim's one screen, sized to the focused editor, so a background
-  editor's window is as wide as that editor, not its own (and with the viewport off no window is
-  its editor's width). Each row reports its editor's columns (`NeovimSession.setStatusLineWidthAsync`,
+  editor's window is as wide as that editor, not its own. Each row reports its editor's columns (`NeovimSession.setStatusLineWidthAsync`,
   Lua `set_width`), and every window's line is fitted to its editor's; to the window's own width
   until the editor reported.
 - **Colors:** a group that leaves a color unset (`%#Identifier#`, a text color only) takes it from
@@ -1335,8 +1333,8 @@ then content assist opens, since a proposal accepted while Neovim still typed wo
 completion does not know of. In an insert Neovim types to its end (a recorded one) the keys go to
 Neovim, where the guard drops the `Ctrl-O`: a proposal would be missing from the recording.
 
-The viewport being off (`vim.g.neovim4eclipse_viewport = 0`) turns nothing of it off: the list
-hangs on the cursor's line, which Neovim keeps on its own screen whatever the editor shows.
+The list hangs on the cursor's line, which Neovim keeps on its own screen whatever the editor
+shows.
 
 ## Blockwise visual
 

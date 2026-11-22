@@ -16,8 +16,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewportSize;
 /**
  * Keeps Neovim's window the size of the editor's text area, Neovim's {@code 'wrap'} the same as the
  * editor's word wrap, in both directions, and the editor scrolled to Neovim's top line
- * (docs/design/VIEWPORT.md, 3.1, 3.2 and D2). One per attached editor; created only when the
- * viewport is on ({@code vim.g.neovim4eclipse_viewport}, D5).
+ * (docs/design/VIEWPORT.md, 3.1, 3.2 and D2). One per attached editor.
  *
  * <p><b>Size.</b> The text area is measured in cells: its width over the font's average character
  * width, its height over the line height ({@link #cells}). Example: 720 × 520 pixels of a font

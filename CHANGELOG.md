@@ -23,6 +23,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   the user guide's *Floating windows*), or that its plug-in hides, is closed with a message. With `vim.g.neovim4eclipse_floating_windows = 0` they
   are closed with a message, also one entered later, which was sent back to the editor before.
 
+### Removed
+
+- `vim.g.neovim4eclipse_viewport`: Neovim's window always follows the editor (its size, scrolling
+  with the wheel, word wrap), as Neovim follows a terminal's size; no GUI of Neovim's keeps a
+  screen of its own beside its window. A value still set in `init.lua` is not read, and nothing
+  fails.
+
 ## [0.3.2] - 2026-11-21
 
 ### Changed

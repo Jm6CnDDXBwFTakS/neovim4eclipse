@@ -26,7 +26,7 @@ class ProblemReportTest {
     @Test
     void theReportListsEveryFactWithTheHomeFolderAsATilde() {
         String text = report("Found: dedicated Neovim 0.12.6, checked, /home/pat/.local/share/neovim4eclipse-plugin/neovim/la/bin/nvim",
-                "0.12.6", Map.of("vim.g.neovim4eclipse_viewport", "0", "vim.g.neovim4eclipse_folds", "0"),
+                "0.12.6", Map.of("vim.g.neovim4eclipse_problems", "0", "vim.g.neovim4eclipse_folds", "0"),
                 List.of("14:03:12 WARNING TextRepairs: in /home/pat/ws/p")).text("/home/pat");
         assertEquals("""
                 ### Neovim for Eclipse problem report
@@ -39,7 +39,7 @@ class ProblemReportTest {
                 - Running: Neovim 0.12.6
                 - NVIM_APPNAME: not set
                 - Errors in the config at start: none
-                - init.lua settings: vim.g.neovim4eclipse_folds = 0, vim.g.neovim4eclipse_viewport = 0
+                - init.lua settings: vim.g.neovim4eclipse_folds = 0, vim.g.neovim4eclipse_problems = 0
                 - Preferences changed: showMenu = false, statusMode = false
                 - Active editor: a .java file in the Java Editor, Neovim mode on
 

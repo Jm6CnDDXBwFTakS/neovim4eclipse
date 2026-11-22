@@ -218,7 +218,6 @@ where the table says otherwise. `0` or `false` turns a part off:
 |------|--------------|
 | `vim.g.neovim4eclipse_ide_keys = 0` | Keeps Neovim's own `gd`, `Ctrl-]`, `K`, `grn`, `gra`, `grr`, `gri`, `grt`, `gO`, `gt`, `gT` instead of Eclipse's Open Declaration, Rename and the others; `ZZ` and `ZQ` stay Eclipse's ([docs/KEYBOARD.md](docs/KEYBOARD.md)) |
 | `vim.g.neovim4eclipse_folds = 0` | Leaves Neovim's folding alone: Eclipse's folds are not copied, and no `z` key is refused ([Folding](docs/USER_GUIDE.md#folding-zo-zc-zm)) |
-| `vim.g.neovim4eclipse_viewport = 0` | Neovim keeps a fixed screen of its own instead of the editor's size, scrolling and word wrap ([The editor's size](docs/USER_GUIDE.md#the-editors-size-scrolling-and-word-wrap-h-l-ctrl-d-zz)) |
 | `vim.g.neovim4eclipse_problems = 0` | Eclipse's errors and warnings are not sent to Neovim, so `]d` and `[d` are Neovim's own ([Problems](docs/USER_GUIDE.md#problems-d-d)) |
 | `vim.g.neovim4eclipse_search_highlight = 0` | The editor does not highlight search matches; search itself works as before ([Command line](docs/USER_GUIDE.md#command-line---)) |
 | `vim.g.neovim4eclipse_highlights = 0` | The editor does not show the flash after a yank, your `:match` highlights or a jump plug-in's labels ([Command line](docs/USER_GUIDE.md#command-line---)) |
@@ -278,6 +277,9 @@ which an administrator can set for everyone in the product's `plugin_customizati
 
 **Removed**, with the release, and what took the part's place:
 
+- `vim.g.neovim4eclipse_viewport` (0.3.3): Neovim's window always follows the editor, its size,
+  scrolling and word wrap, as Neovim follows a terminal's size
+  ([The editor's size](docs/USER_GUIDE.md#the-editors-size-scrolling-and-word-wrap-h-l-ctrl-d-zz)).
 - `vim.g.neovim4eclipse_completion_menu` (0.3.0): `Ctrl-N` and `Ctrl-P` are always Neovim's
   completion, in Neovim's own popup menu
   ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)).
@@ -373,9 +375,8 @@ gets in your way:
    [Your `init.lua` in Eclipse](#your-initlua-in-eclipse)).
 8. **Neovim's command line and messages are always drawn.** Neovim draws them itself, with its
    experimental ui2, as floating windows over the editor's last row; the editor copies them. So
-   `vim.g.neovim4eclipse_floating_windows = 0` and `vim.g.neovim4eclipse_viewport = 0` do not hide
-   them, or Neovim's popup menu (the `:` line's Tab list, `Ctrl-N`): those switches cover only
-   plug-ins' floats. There is no switch back to a command line of Eclipse's own.
+   `vim.g.neovim4eclipse_floating_windows = 0` does not hide them, or Neovim's popup menu (the `:`
+   line's Tab list, `Ctrl-N`): that switch covers only plug-ins' floats. There is no switch back to a command line of Eclipse's own.
 9. **macOS: no press-and-hold accent menu on the `:` line.** Holding a key such as `E` there
    does not offer `é`, `è`, `ê`. Dead keys still work (`Option+E`, then `E` gives `é`), and so do
    input methods such as Japanese.

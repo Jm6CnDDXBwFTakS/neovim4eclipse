@@ -17,8 +17,7 @@ Without this, Neovim's screen would be the fixed 120 × 40 cells the plug-in att
 | `'scrolloff'` | keep N lines around the cursor | kept in Neovim's window, not the editor's |
 | `gj` `gk` | screen lines | Neovim wraps at 120 columns (`'wrap'` is on), Eclipse usually does not wrap at all |
 
-That is still how it is with the opt-out (D5), and there `LuaScripts.MOUSE` scrolls Neovim's
-window to a clicked line that is not on Neovim's screen (docs/ARCHITECTURE.md).
+That was also how it was with the opt-out (D5) until it was removed in 0.3.3.
 
 Each editor has its own Neovim window ([WINDOWS.md](WINDOWS.md)), and "Neovim's window" below is
 the attached editor's. Each window keeps its view between editor switches, and the editor ignores
@@ -68,9 +67,6 @@ small msgpack client attached with the plug-in's own UI options (`NeovimConnecti
 - Horizontal scrolling stays Eclipse's (D4): `zl` `zh` `zs` `ze` change nothing visible.
 - With no editor attached (after *Detach*, or with every editor closed) Neovim keeps the last
   editor's size (D8); nobody sees its screen then.
-- `vim.g.neovim4eclipse_viewport = 0` in `init.lua` turns the feature off (D5): the fixed
-  120 × 40 grid, no scroll sync, the wheel Eclipse's, `'wrap'` left alone. Read once at start, like
-  `vim.g.neovim4eclipse_problems` and `_folds`; a change needs a Neovim restart.
 
 ## 2. Background, with the experiments
 
@@ -283,9 +279,10 @@ conversion (bytes, cells, pixels) is its own work.
 - **D4, horizontal scrolling**: out of scope. Eclipse keeps its own horizontal scroll (it reveals
   the caret); `zl` `zh` `zs` `ze` change nothing visible. `leftcol` could be synced through
   `WinScrolled`, which reports it (`win_viewport` does not).
-- **D5, an opt-out**: `vim.g.neovim4eclipse_viewport = 0`, read at start like the other
-  `vim.g.neovim4eclipse_*` switches. The feature changes the wheel for everyone, so there is a way
-  back. When off, no other viewport script is sent and no `ViewportFollower` is created.
+- **D5, an opt-out, removed in 0.3.3**: `vim.g.neovim4eclipse_viewport = 0` kept the fixed
+  120 × 40 screen and Eclipse's wheel. It went because Neovim follows its screen's size in a
+  terminal and in every GUI, and none offers a way back: a second mode that every feature
+  touching the screen had to be right in, for a behavior Neovim does not have.
 - **D6, the wheel in insert mode**: Eclipse's, the caret stays (section 1). Rejected: dragging the
   caret along as Vim does (it closes an open content-assist popup and moves the typing to another
   line), and ending insert mode on the first wheel step (a scroll would quietly leave insert mode,

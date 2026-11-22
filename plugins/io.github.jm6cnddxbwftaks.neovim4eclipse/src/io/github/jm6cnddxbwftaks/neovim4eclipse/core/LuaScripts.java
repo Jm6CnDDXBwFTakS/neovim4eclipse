@@ -2028,8 +2028,7 @@ final class LuaScripts {
             --- whatever route led there (a float that opens with the focus, one entered later, one its
             --- plug-in hides), and it acts only on what it finds here itself: the current window, a
             --- plug-in's float (M.focused_float), and why it is undrawn. Hidden by its plug-in (config
-            --- hide); floats not drawn at all (floats_drawn false: off in the user's config, or the
-            --- viewport off); or past util/Grids' limits, which only the session can tell: then win, the
+            --- hide); floats not drawn at all (floats_drawn false: off in the user's config); or past util/Grids' limits, which only the session can tell: then win, the
             --- window the session saw on that grid, is this one, and past_limits words the limits. Else
             --- nothing: a float the session has not placed yet (its position comes with a later redraw),
             --- or Neovim has moved on. Not by force (M.leave_float, close_float): a changed buffer stays,
@@ -4317,13 +4316,9 @@ final class LuaScripts {
             """;
 
     /**
-     * Installs the viewport module, {@code require('neovim4eclipse.viewport')}, unless the user's
-     * config turned the feature off with {@code vim.g.neovim4eclipse_viewport = 0} (or
-     * {@code false}), and returns whether it is on. The session runs it once at start, after
-     * {@link #SETUP} (so after {@code init.lua}), and keeps the answer
-     * ({@code NeovimSession.viewportEnabled()}): when off, Neovim keeps its fixed 120 × 40 screen and
-     * no other viewport script is sent (docs/design/VIEWPORT.md, D5). Changing the variable later
-     * needs a Neovim restart.
+     * Installs the viewport module, {@code require('neovim4eclipse.viewport')}. The session runs it
+     * once at start, after {@link #SETUP} (so after {@code init.lua}): Neovim's window then follows
+     * the editor, as it follows a terminal's size there (docs/design/VIEWPORT.md).
      *
      * <p><b>What it is for.</b> Neovim's window is made the size of the editor
      * ({@code nvim_ui_try_resize}, sent by the session), so that {@code H}, {@code L},
@@ -4377,10 +4372,6 @@ final class LuaScripts {
      * </ul>
      */
     static final String VIEWPORT = """
-            local enabled = vim.g.neovim4eclipse_viewport
-            if enabled == 0 or enabled == false then
-              return false
-            end
             local M = {}
             -- True while the plug-in sets options itself: their OptionSet is not the user's.
             local applying = false
@@ -4443,7 +4434,7 @@ final class LuaScripts {
               assert(ok, err)
             end
 
-            local group = vim.api.nvim_create_augroup('neovim4eclipse_viewport', { clear = true })
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_view', { clear = true })
             vim.api.nvim_create_autocmd('OptionSet', {
               group = group,
               pattern = 'wrap',
@@ -4568,7 +4559,6 @@ final class LuaScripts {
               end,
             })
             package.loaded['neovim4eclipse.viewport'] = M
-            return true
             """;
 
     /**
@@ -4614,8 +4604,8 @@ final class LuaScripts {
      * <p><b>Which lines.</b> Only the visible lines: 0.1 to 0.2 ms whatever the file's size, where
      * the whole of a 100,000-line file takes over 100 ms. Those are the window's ({@code w0} to
      * {@code w$}) and the lines the editor shows, which Eclipse reports when its view changes
-     * ({@code M.set_view}, {@link #SEARCH_VIEW}): the two differ when the viewport feature is off,
-     * when Eclipse scrolled alone in insert mode, when Neovim does not know Eclipse's folds, and
+     * ({@code M.set_view}, {@link #SEARCH_VIEW}): the two differ when Eclipse scrolled alone in
+     * insert mode, when Neovim does not know Eclipse's folds, and
      * by a partly shown last line. Two ranges apart are searched one by one, not with every line
      * between them. A pattern that can match across lines ({@code \n},
      * {@code \_x}) is found with a {@code searchpos()} walk instead, as {@code matchbufline()}
@@ -5055,7 +5045,7 @@ final class LuaScripts {
                   local last = vim.api.nvim_buf_line_count(buf)
                   local vtop, vbottom = math.max(1, view[1]), math.min(last, view[2])
                   if vtop > bottom + 1 or vbottom < top - 1 then
-                    -- Apart (the viewport off, the editor far from Neovim's window): two searches, top first,
+                    -- Apart (Eclipse scrolled alone, far from Neovim's window): two searches, top first,
                     -- not one over every line between them.
                     local first, second = { top, bottom }, { vtop, vbottom }
                     if vtop < top then
@@ -5526,8 +5516,8 @@ final class LuaScripts {
 
     /**
      * Tells {@link #WINDOWS} whether the editor draws plug-ins' floats (argument {@code "true"} or
-     * {@code "false"}: {@code NeovimSession.floatingWindowsDrawn}, {@link #FLOATING_WINDOWS} and
-     * the viewport on): drawn, a float with the focus is drawn with the cursor (a picker's
+     * {@code "false"}: {@code NeovimSession.floatingWindowsDrawn}, {@link #FLOATING_WINDOWS}):
+     * drawn, a float with the focus is drawn with the cursor (a picker's
      * prompt), else {@code close_undrawn} closes it ({@link #CLOSE_UNDRAWN_FLOAT}); second
      * argument, why not, for that message ("" when drawn). Run once at start, right after
      * {@link #FLOATING_WINDOWS}.
@@ -6052,8 +6042,8 @@ final class LuaScripts {
      * The lines the editor shows, which {@link #SEARCH} searches, and {@link #HIGHLIGHTS} looks at,
      * along with the window's own (arguments: the buffer number, the first and the last line,
      * 1-based, as strings). Nothing when that buffer is not in the editor's window ({@link #WINDOWS}' {@code editor_window}: the current one, or the one under a plug-in's float Neovim is in). Example: with the
-     * viewport feature off, Neovim's window shows lines 1 to 40 and the editor, scrolled with its
-     * scroll bar, 200 to 240; both ranges are searched, so the editor's lines are highlighted. Each
+     * editor scrolled alone in insert mode (its view is kept, D6), Neovim's window shows lines 1 to
+     * 40 and the editor 200 to 240; both ranges are searched, so the editor's lines are highlighted. Each
      * module only when it is on (it is then loaded).
      */
     static final String SEARCH_VIEW = """
@@ -6626,8 +6616,7 @@ final class LuaScripts {
      *
      * <p><b>Why a script.</b> {@code nvim_input_mouse} takes a <em>screen</em> cell, not a buffer
      * position, and the plug-in draws nothing of Neovim's screen. Neovim's window shows what the
-     * editor shows ({@link #VIEWPORT}), but not always: with the viewport off (a fixed 40 rows),
-     * past the end of the document, or while a scroll is on its way. So the script asks Neovim where the
+     * editor shows ({@link #VIEWPORT}), but not always: past the end of the document, or while a scroll is on its way. So the script asks Neovim where the
      * character is on its screen ({@code screenpos()}), which also accounts for tabs, wide
      * characters and wrapped lines. A character that is not on Neovim's screen is brought there:
      * <ul>
@@ -6811,7 +6800,7 @@ final class LuaScripts {
      * Which of the plug-in's {@code init.lua} settings are set, for the problem report
      * ({@code util/ProblemReport}). Argument: the names, without {@code g:}. Answers a list of
      * {@code {"vim.g.<name>", value}} pairs, the value as {@code vim.inspect} prints it, for the set
-     * ones only. Example: {@code ({"neovim4eclipse_folds", "neovim4eclipse_viewport"})} with
+     * ones only. Example: {@code ({"neovim4eclipse_folds", "neovim4eclipse_task_tags"})} with
      * {@code vim.g.neovim4eclipse_folds = 0} answers {@code {{"vim.g.neovim4eclipse_folds", "0"}}}.
      * A list of pairs, not a table by name: an empty Lua table reaches Java as a list.
      */
@@ -6934,8 +6923,7 @@ final class LuaScripts {
             local DEFAULT = '%<%f %h%m%r%=%-14.(%l,%c%V%) %P'
             -- Each editor's width in columns, sent by its row (set_width): every tabpage shares one
             -- screen, sized to the focused editor, so a background editor's window is that wide,
-            -- not as wide as its own editor; and with the viewport off (a fixed 120 x 40 screen)
-            -- not even the focused editor's window is its editor's width.
+            -- not as wide as its own editor.
             M.widths = {}
 
             function M.set_width(win, cols)

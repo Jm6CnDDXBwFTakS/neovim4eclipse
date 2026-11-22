@@ -19,13 +19,6 @@ import java.util.function.Consumer;
 public interface ViewportPort {
 
     /**
-     * Whether Neovim's window follows the editor: {@code true} unless the user's config sets
-     * {@code vim.g.neovim4eclipse_viewport = 0} (or {@code false}). Read once when the session starts;
-     * when false, nothing else in this interface needs to be used, and none of it costs anything.
-     */
-    boolean viewportEnabled();
-
-    /**
      * The attached editor shows {@code columns} × {@code rows} cells of text (its font's average
      * character width and line height). Neovim's screen is resized so that its window shows the
      * same, on the input thread, after every key queued before. Returns at once; sizes that arrive

@@ -62,7 +62,7 @@ public record ProblemReport(String plugin, String eclipse, String java, String s
      * table that a user sets ({@code SettingsNamesTest} keeps the two lists equal).
      */
     public static final List<String> INIT_SETTINGS = List.of("neovim4eclipse_ide_keys", "neovim4eclipse_folds",
-            "neovim4eclipse_viewport", "neovim4eclipse_problems", "neovim4eclipse_search_highlight",
+            "neovim4eclipse_problems", "neovim4eclipse_search_highlight",
             "neovim4eclipse_highlights", "neovim4eclipse_jump_label_group_prefixes", "neovim4eclipse_floating_windows",
             "neovim4eclipse_task_tags");
 

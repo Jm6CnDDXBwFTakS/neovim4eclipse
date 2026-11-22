@@ -1550,14 +1550,13 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * {@code vim.g.neovim4eclipse_floating_windows = 0} turns the drawing off, and so does the
-     * viewport being off: a float's place is a cell of Neovim's screen, which is then not the
-     * editor's size. The float still opens in Neovim; no listener hears of it. (Neovim's own
+     * {@code vim.g.neovim4eclipse_floating_windows = 0} turns the drawing off. The float still
+     * opens in Neovim; no listener hears of it. (Neovim's own
      * command line and messages, ui2's windows, are drawn all the same: they are left out here.)
      */
     @Test
-    void floatingWindowsAreNotReportedWhenTurnedOffOrWithoutTheViewport() throws Exception {
-        for (String off : List.of("let g:neovim4eclipse_floating_windows = 0", "let g:neovim4eclipse_viewport = 0")) {
+    void floatingWindowsAreNotReportedWhenTurnedOff() throws Exception {
+        for (String off : List.of("let g:neovim4eclipse_floating_windows = 0")) {
             try (NeovimSession s = start(List.of("--clean", "--cmd", off))) {
                 assertFalse(s.floatingWindowsDrawn(), off);
                 s.setBufferLines(sixtyLines());

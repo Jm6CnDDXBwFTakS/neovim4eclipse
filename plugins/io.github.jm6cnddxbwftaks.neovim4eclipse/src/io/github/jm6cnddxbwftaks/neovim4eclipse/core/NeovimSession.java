@@ -151,12 +151,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     private volatile boolean problemsEnabled;
     /**
-     * Whether Neovim's window follows the editor ({@link ViewportPort#viewportEnabled()}): the answer
-     * of {@link LuaScripts#VIEWPORT}, run once at start after the user's config. Written once, in
-     * {@link #initialize}, before the session is handed out.
-     */
-    private volatile boolean viewportEnabled;
-    /**
      * Whether search matches are reported ({@link SearchPort#searchEnabled()}): the answer of
      * {@link LuaScripts#SEARCH}, run once at start after the user's config. Written once, in
      * {@link #initialize}, before the session is handed out.
@@ -199,8 +193,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * the user's config turned them off.
      */
     static final String FLOATS_OFF_WHY = "plug-ins' floating windows are off (vim.g.neovim4eclipse_floating_windows)";
-    /** As {@link #FLOATS_OFF_WHY}: the viewport is off, so a float's place would mean nothing. */
-    static final String VIEWPORT_OFF_WHY = "the editor's view does not follow Neovim's (vim.g.neovim4eclipse_viewport)";
     /** Editor sizes not sent yet: only the newest counts (a window being dragged larger). */
     private final LatestValue<int[]> pendingEditorSize = new LatestValue<>();
     /** Wheel lines not sent yet, added up ({@link #scrollLinesAsync}); and the buffer they are for. */
@@ -572,9 +564,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             // The same for the problems (docs/design/DIAGNOSTICS.md, "Turning it off").
             session.problemsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.PROBLEMS, List.of())));
             LOG.info(() -> "Eclipse's problems " + (session.problemsEnabled ? "sent to Neovim" : "off (g:neovim4eclipse_problems)"));
-            // And for the viewport (docs/design/VIEWPORT.md, D5): when off, the screen stays 120 × 40.
-            session.viewportEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.VIEWPORT, List.of())));
-            LOG.info(() -> "viewport " + (session.viewportEnabled ? "follows the editor" : "off (g:neovim4eclipse_viewport)"));
+            // Neovim's window follows the editor: its size, scrolling and word wrap (docs/design/VIEWPORT.md).
+            await(api.execLua(LuaScripts.VIEWPORT, List.of()));
             // And for search highlighting (docs/design/SEARCH_HIGHLIGHTING.md, "Turning it off").
             session.searchEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.SEARCH, List.of())));
             LOG.info(() -> "search matches " + (session.searchEnabled ? "highlighted in the editor" : "off (g:neovim4eclipse_search_highlight)"));
@@ -585,8 +576,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             LOG.info(() -> "Neovim's highlights " + (session.highlightsEnabled ? "shown in the editor" : "off (g:neovim4eclipse_highlights)"));
             // And for the floating windows (docs/ARCHITECTURE.md, "Neovim's windows drawn from their grids").
             session.floatingWindowsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.FLOATING_WINDOWS, List.of())));
-            String floatsOffWhy = session.floatingWindowsDrawn() ? ""
-                    : session.floatingWindowsEnabled ? VIEWPORT_OFF_WHY : FLOATS_OFF_WHY;
+            String floatsOffWhy = session.floatingWindowsDrawn() ? "" : FLOATS_OFF_WHY;
             await(api.execLua(LuaScripts.FLOATS_DRAWN, List.of(String.valueOf(session.floatingWindowsDrawn()), floatsOffWhy)));
             session.floatsDrawnSaid = true;
             if (startFloat instanceof Number win && win.intValue() > 0) {
@@ -1041,13 +1031,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Whether floating windows are drawn at all: unless the user's config sets
-     * {@code vim.g.neovim4eclipse_floating_windows = 0}, and only while Neovim's window follows the
-     * editor ({@link #viewportEnabled()}). Why the viewport: a float's place is a row and column
-     * of Neovim's screen ({@code util/FloatPlacement}); with a screen of another size than the
-     * editor, a panel "at the bottom" would land in the middle of the text or outside it.
+     * {@code vim.g.neovim4eclipse_floating_windows = 0}. A float's place is a row and column of
+     * Neovim's screen ({@code util/FloatPlacement}), which is the editor's size
+     * (docs/design/VIEWPORT.md), so a panel "at the bottom" lands at the editor's bottom.
      */
     public boolean floatingWindowsDrawn() {
-        return floatingWindowsEnabled && viewportEnabled;
+        return floatingWindowsEnabled;
     }
 
     /** Whether Neovim's command-line window is open. */
@@ -1724,11 +1713,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     @Override
-    public boolean viewportEnabled() {
-        return viewportEnabled;
-    }
-
-    @Override
     public boolean searchEnabled() {
         return searchEnabled;
     }
@@ -1790,9 +1774,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     @Override
     public void setEditorSizeAsync(int columns, int rows) {
-        if (!viewportEnabled) {
-            return;
-        }
         if (pendingEditorSize.offer(new int[] { columns, rows })) {
             submit("editor size", Level.FINE, () -> {
                 int[] latest = pendingEditorSize.take();
@@ -1810,12 +1791,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * (line numbers, signs) are the window's own, so they are measured once the document's window
      * is current. The attach's push runs this right after switching to that window and before
      * placing the cursor ({@code sync/DocumentPush}), so that the cursor lands in a window of the
-     * editor's size. Nothing before any size was given, with the viewport off, or while a page
+     * editor's size. Nothing before any size was given, or while a page
      * editor has the focus: the screen is the page's then, as for {@link #setEditorSizeAsync}'s
      * caller. Input thread.
      */
     public void fitScreenToWindow() throws Exception {
-        if (viewportEnabled && !pageHasFocus()) {
+        if (!pageHasFocus()) {
             resizeGrid();
         }
     }
@@ -1859,9 +1840,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     @Override
     public void setWrapAsync(DocumentBuffer buffer, boolean wrap) {
-        if (!viewportEnabled) {
-            return;
-        }
         submit("wrap " + wrap + " for " + buffer.name(), Level.FINE, () -> {
             if (buffers.handleOf(buffer) == null || !buffer.loaded) {
                 return; // not created yet, or gone; SET_WRAP itself skips a buffer not shown
@@ -1872,7 +1850,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     @Override
     public void setTopLineAsync(DocumentBuffer buffer, int line1) {
-        if (!viewportEnabled || line1 < 1) {
+        if (line1 < 1) {
             return;
         }
         submit("top line " + line1 + " for " + buffer.name(), Level.FINE, () -> sendTopLine(buffer, line1, "keep"));
@@ -1880,7 +1858,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     @Override
     public void scrollToAsync(DocumentBuffer buffer, int line1) {
-        if (!viewportEnabled || line1 < 1) {
+        if (line1 < 1) {
             return;
         }
         if (pendingScroll.offer(new Scroll(buffer, line1))) {
@@ -1895,7 +1873,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     @Override
     public void scrollLinesAsync(DocumentBuffer buffer, int lines) {
-        if (!viewportEnabled || lines == 0) {
+        if (lines == 0) {
             return;
         }
         wheelBuffer = buffer;
@@ -1932,8 +1910,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** {@link LuaScripts#SET_TOPLINE}: {@code mode} is {@code keep}, {@code drag} or {@code show}. Input thread. */
     private void sendTopLine(DocumentBuffer buffer, int line1, String mode) throws Exception {
-        if (!viewportEnabled || line1 < 1 || buffers.handleOf(buffer) == null || !buffer.loaded) {
-            return; // off, not created yet, or gone; SET_TOPLINE itself skips a buffer not shown
+        if (line1 < 1 || buffers.handleOf(buffer) == null || !buffer.loaded) {
+            return; // not created yet, or gone; SET_TOPLINE itself skips a buffer not shown
         }
         await(api.execLua(LuaScripts.SET_TOPLINE,
                 List.of(String.valueOf(buffer.bufnr), String.valueOf(line1), mode)));
@@ -2605,7 +2583,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         @Override
         public void onTopLine(int bufnr, int line1, int winid) {
-            if (viewportEnabled && buffers.isAttached(winid, bufnr)) {
+            if (buffers.isAttached(winid, bufnr)) {
                 LOG.finest(() -> "Neovim's top line " + line1 + " in buffer " + bufnr);
                 events.topLine(new TopLine(bufnr, line1));
             }
@@ -2629,7 +2607,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
         @Override
         public void onViewportOverheadChanged() {
-            if (!closed && viewportEnabled) {
+            if (!closed) {
                 submit("viewport overhead", Level.FINE, NeovimSession.this::resizeGrid);
             }
         }

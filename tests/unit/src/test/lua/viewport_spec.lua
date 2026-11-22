@@ -12,7 +12,7 @@ local t = ...
 --- The viewport module, installed as the session does: SETUP (the channel), then VIEWPORT.
 local function start()
   t.setup()
-  t.eq(true, t.run('VIEWPORT'), 'the viewport is on by default')
+  t.run('VIEWPORT')
   t.forget()
 end
 
@@ -28,15 +28,6 @@ end
 local function messages()
   return vim.api.nvim_exec2('messages', { output = true }).output
 end
-
-t.test('vim.g.neovim4eclipse_viewport = 0 turns it off', function()
-  t.setup()
-  vim.g.neovim4eclipse_viewport = 0
-  t.eq(false, t.run('VIEWPORT'))
-  t.eq(nil, package.loaded['neovim4eclipse.viewport'], 'no module, so no other script is sent')
-  vim.cmd('set wrap')
-  t.eq({}, t.sent('eclipse_wrap'), "'wrap' is left to the user")
-end)
 
 t.test('the overhead is the status line rows and the number columns, as the user has them', function()
   start()
