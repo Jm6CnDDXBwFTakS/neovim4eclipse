@@ -161,9 +161,11 @@ public final class RpcChannel implements RpcRequests, AutoCloseable {
 Neovim's stderr is a separate stream, not merged into stdout: stdout carries MessagePack, and stray
 output would corrupt it. A small daemon thread logs each stderr line at WARNING.
 
-The channel's `Incoming` is a small forwarder, so `NotificationBridge` can be connected with
-`setIncoming` after `open`; until then notifications are dropped and requests answered with an
-error. `NotificationBridge` implements `Incoming`, dispatching by name with a `switch`. Unknown
+The channel's `Incoming` is `core/EarlyIncoming`, so `NotificationBridge` can be connected with
+`setIncoming` after `open`; every notification that comes before then (Neovim's `redraw`s from
+`nvim_ui_attach` on, while the configuration runs) is kept and handed on first, in order, and
+requests before then are answered with an error. `NotificationBridge` implements `Incoming`,
+dispatching by name with a `switch`. Unknown
 notification names (`redraw`, `nvim_buf_changedtick_event`, ...) are ignored and logged at FINEST;
 a notification handler that throws is logged at WARNING; a request whose handler throws is answered
 with an error.

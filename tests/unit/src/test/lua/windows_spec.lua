@@ -1140,6 +1140,33 @@ t.test('a floating window the user enters later stays, so :q in it stays Neovim\
   t.eq(float, vim.api.nvim_get_current_win())
 end)
 
+t.test("while Neovim starts, the plug-ins' floats come along to the editor shown; once started they stay", function()
+  -- As lazy.nvim's installer and its backdrop: opened in the home window's tab page before any
+  -- editor was there. M.show passes starting = (v:vim_did_enter ~= 1); a spec runs past the start,
+  -- so it says so itself.
+  local home = start()
+  local windows = package.loaded['neovim4eclipse.windows']
+  local float_at = { relative = 'editor', row = 2, col = 2, width = 10, height = 2 }
+  local installer = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false, float_at)
+  local on_window = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false,
+    { relative = 'win', win = home, row = 1, col = 1, width = 5, height = 1 })
+  local editor = open(buffer(3))
+  t.eq(editor, show(editor, buffer(3)))
+  local editor_tab = vim.api.nvim_win_get_tabpage(editor)
+  t.ok(vim.api.nvim_win_get_tabpage(installer) ~= editor_tab, 'past the start (the spec): not moved by M.show')
+  windows.bring_start_floats(editor, true)
+  t.eq(editor_tab, vim.api.nvim_win_get_tabpage(installer), "starting: in the editor's tab page")
+  t.eq({ 2, 2 }, { vim.api.nvim_win_get_config(installer).row, vim.api.nvim_win_get_config(installer).col },
+    'where it was on the screen')
+  t.ok(vim.api.nvim_win_get_tabpage(on_window) ~= editor_tab, 'one hanging on a window stays with it')
+  t.ok(vim.api.nvim_win_get_tabpage(home) ~= editor_tab, "the plug-in's own windows never move")
+  t.eq(editor, vim.api.nvim_get_current_win(), 'the focus where it was')
+  windows.bring_start_floats(home, false)
+  t.eq(editor_tab, vim.api.nvim_win_get_tabpage(installer), 'started: it stays')
+  vim.api.nvim_win_close(installer, true)
+  vim.api.nvim_win_close(on_window, true)
+end)
+
 t.test('a floating window the config left the focus in is left before the home buffer goes anywhere, then closed', function()
   -- The session's order: LEAVE_START_FLOAT, then SHOW_BUFFER with the home buffer, then WINDOWS;
   -- then CLOSE_START_FLOAT, once ui2 shows messages: here Neovim has entered, so it closes at once.

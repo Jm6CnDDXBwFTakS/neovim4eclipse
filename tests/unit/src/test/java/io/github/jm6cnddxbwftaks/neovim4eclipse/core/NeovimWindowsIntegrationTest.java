@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -229,6 +230,72 @@ class NeovimWindowsIntegrationTest {
             assertNotEquals(0, backdrop, "lazy.nvim made its backdrop");
             waitFor(() -> drawnFloats(s).contains(window), ":Lazy's window drawn");
             assertFalse(drawnFloats(s).contains(backdrop), "the backdrop left out: " + drawnFloats(s));
+        }
+    }
+
+    /** Runs git in {@code dir} with a placeholder identity, no signing; whether it worked. */
+    private static boolean git(Path dir, String... args) throws Exception {
+        List<String> cmd = new ArrayList<>(List.of("git", "-c", "user.name=test", "-c", "user.email=test@example.org",
+                "-c", "commit.gpgsign=false"));
+        cmd.addAll(List.of(args));
+        try {
+            Process p = new ProcessBuilder(cmd).directory(dir.toFile()).redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+            return p.waitFor() == 0;
+        } catch (java.io.IOException noGit) {
+            return false;
+        }
+    }
+
+    /**
+     * lazy.nvim installing a missing plug-in as Neovim starts, as on LazyVim's first start (here
+     * from a git repository of the test's own, so nothing is downloaded): its window opens in the
+     * home window's tab page before any editor is there, what Neovim draws of it before the
+     * session listens is kept (core/EarlyIncoming), and the editor shown brings it along
+     * (WINDOWS' bring_start_floats), so it is drawn over the editor while the configuration still
+     * runs. The key typed meanwhile waits; when the start is over the window is closed, with the
+     * message, and the key goes to the document. The configuration waits after the install until
+     * the test says so, never on a clock. Skipped without lazy.nvim fetched or without git.
+     */
+    @Test
+    void lazysInstallerIsDrawnOverTheEditorWhileNeovimStarts(@TempDir Path dir) throws Exception {
+        TestNeovim.require();
+        Optional<Path> lazy = PinnedPlugins.find("lazy");
+        assumeTrue(lazy.isPresent(), "lazy is not fetched at its pinned commit: " + PinnedPlugins.HOW);
+        String tmp = dir.toAbsolutePath().toString();
+        assumeTrue(!tmp.contains("]==]"), "a folder Lua cannot be given in a long string");
+        Path repo = dir.resolve("demo");
+        Files.createDirectories(repo.resolve("plugin"));
+        Files.writeString(repo.resolve("plugin/demo.lua"), "vim.g.demo_loaded = 1\n");
+        assumeTrue(git(repo, "init", "-q") && git(repo, "add", ".") && git(repo, "commit", "-q", "-m", "demo"),
+                "git is not there to make the plug-in's repository");
+        Path config = dir.resolve("install.lua");
+        Files.writeString(config, lazySetup(lazy.get(), tmp, "{ { url = tmp .. '/demo', name = 'demo' } }", true)
+                + "\nvim.wait(600000, function() return vim.g.installer_go == 1 end, 5)\n");
+        try (NeovimSession s = NeovimSession.start(NVIM,
+                List.of("--clean", "-c", "lua dofile([==[" + config + "]==])"))) {
+            assertEquals(0, number(s, "return vim.v.vim_did_enter"), "the session is ready before Neovim's start is over");
+            EditorWindow editor = new EditorWindow();
+            s.showWindow(new DocumentBuffer(""), editor, "");
+            s.setBufferLines(List.of("abc"));
+            // The install may still be going on (the session is ready first), its window open by then.
+            waitFor(() -> windowOf(s, "lazy") != 0, "lazy.nvim's window open");
+            int installer = windowOf(s, "lazy");
+            waitFor(() -> drawnFloats(s).contains(installer), "lazy.nvim's window drawn over the editor: " + drawnFloats(s));
+            assertEquals(0, number(s, "return vim.v.vim_did_enter"), "while Neovim still starts");
+            s.inputAsync("x");
+            s.runAsync("the start's end", () -> { // on the input thread after the x
+                try {
+                    s.lua("vim.g.installer_go = 1");
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+            waitFor(() -> List.of("bc").equals(s.getBufferLines()), "the key went to the document");
+            assertEquals(editor.winid(), currentWin(s), "Neovim in the editor's window");
+            assertEquals(0, windowOf(s, "lazy"), "lazy.nvim's window closed");
+            waitFor(() -> Ui2Text.shown(s).contains(startMessage(s)), "the message, shown by Neovim: " + Ui2Text.shown(s));
+            assertEquals(1, number(s, "return vim.g.demo_loaded or 0"), "lazy.nvim installed the plug-in and loaded it");
         }
     }
 

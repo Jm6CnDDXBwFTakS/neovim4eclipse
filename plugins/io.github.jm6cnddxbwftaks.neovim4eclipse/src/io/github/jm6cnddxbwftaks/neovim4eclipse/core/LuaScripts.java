@@ -1742,6 +1742,8 @@ final class LuaScripts {
               if win ~= current then
                 vim.api.nvim_set_current_win(win) -- BufEnter, with the buffer Eclipse expects
               end
+              -- After entering win: a float moved while current would take Neovim back to its tab page.
+              M.bring_start_floats(win, vim.v.vim_did_enter ~= 1)
               return win
             end
 
@@ -1860,6 +1862,34 @@ final class LuaScripts {
                 end
               end
               return false
+            end
+
+            --- While Neovim is still starting (v:vim_did_enter 0: a configuration still running,
+            --- lazy.nvim installing missing plug-ins in vim.wait), brings the plug-ins' floating
+            --- windows of the other tab pages into win's, the editor Eclipse shows: a float belongs to
+            --- one tab page, and one the configuration opened before any editor was there (lazy.nvim's
+            --- installer and its backdrop, in the home window's tab page) would otherwise be drawn
+            --- nowhere, the install looking like Eclipse hung. Moved as they are, placed on the screen
+            --- (relative 'editor'; one hanging on a window or the cursor stays where it is), with
+            --- the focus where it was. Once Neovim has started, floats stay in their own tab page,
+            --- as in Neovim. Neither the plug-in's own windows nor ui2's are moved. What closes such
+            --- a float at the start's end is close_start_floats. Example: lazy.nvim's window 1001 in
+            --- tab page 1, the first editor shown in tab page 2: 1001 moves to tab page 2, drawn
+            --- over the editor with its progress. starting: whether Neovim is still starting (M.show
+            --- passes v:vim_did_enter ~= 1; a spec passes it, being past the start).
+            function M.bring_start_floats(win, starting)
+              if not starting or not vim.api.nvim_win_is_valid(win) then
+                return
+              end
+              local tab = vim.api.nvim_win_get_tabpage(win)
+              for _, w in ipairs(vim.api.nvim_list_wins()) do
+                local config = vim.api.nvim_win_get_config(w)
+                if not own[w] and config.relative == 'editor' and not shows_ui2_buffer(w)
+                    and vim.api.nvim_win_get_tabpage(w) ~= tab then
+                  config.win = win
+                  pcall(vim.api.nvim_win_set_config, w, config)
+                end
+              end
             end
 
             --- Whether win (0: the current one) is a floating window of a plug-in, not the
