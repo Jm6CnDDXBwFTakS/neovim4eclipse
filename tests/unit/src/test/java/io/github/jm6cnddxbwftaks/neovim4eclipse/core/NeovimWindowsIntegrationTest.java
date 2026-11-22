@@ -301,6 +301,48 @@ class NeovimWindowsIntegrationTest {
                     "no window of the rounds is left with the keyboard");
             waitFor(() -> Ui2Text.shown(s).contains(startMessage(s)),
                     "the message, shown by Neovim: " + Ui2Text.shown(s));
+            // Said once UIEnter is over (still as an error), so that Neovim does not head it with
+            // "Error in UIEnter Autocommands for "*":", as if the check had failed.
+            assertFalse(Ui2Text.shown(s).contains("Autocommands"), Ui2Text.shown(s));
+        }
+    }
+
+    /**
+     * An operator typed while Neovim starts and its motion typed after: {@code d} waits in Neovim's
+     * input until the start is over, then is read, pending; the message about the float closed
+     * at the start's end comes meanwhile (said once UIEnter is over, as any event between two
+     * keys), and the {@code w} typed then still ends the {@code d}: one word deleted. The config
+     * waits until the test says so, never on a clock.
+     */
+    @Test
+    void anOperatorTypedWhileNeovimStartsTakesTheMotionTypedAfter(@TempDir Path dir) throws Exception {
+        TestNeovim.require();
+        Path config = dir.resolve("waits.lua");
+        Files.writeString(config, """
+                local b = vim.api.nvim_create_buf(false, true)
+                vim.bo[b].filetype = 'lazy'
+                vim.api.nvim_open_win(b, true, { relative = 'editor', row = 1, col = 1, width = 20, height = 3 })
+                vim.wait(600000, function() return vim.g.waits_go == 1 end, 5)
+                """);
+        try (NeovimSession s = NeovimSession.start(NVIM,
+                List.of("--clean", "-c", "lua dofile([==[" + config + "]==])"))) {
+            assertEquals(0, number(s, "return vim.v.vim_did_enter"), "the session is ready before Neovim's start is over");
+            DocumentBuffer doc = new DocumentBuffer("");
+            s.showWindow(doc, new EditorWindow(), "");
+            s.setBufferLines(List.of("one two"));
+            s.inputAsync("d");
+            s.runAsync("the start's end", () -> { // on the input thread after the d
+                try {
+                    s.lua("vim.g.waits_go = 1");
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+            waitFor(() -> Ui2Text.shown(s).contains(startMessage(s)), "the message, shown by Neovim: " + Ui2Text.shown(s));
+            assertEquals("no", s.lua("return vim.api.nvim_get_mode().mode"), "the d pending, in operator-pending mode");
+            s.inputAsync("w");
+            waitFor(() -> List.of("two").equals(s.getBufferLines()), "dw deleted the first word");
+            assertEquals(List.of("two"), s.getBufferLines());
         }
     }
 

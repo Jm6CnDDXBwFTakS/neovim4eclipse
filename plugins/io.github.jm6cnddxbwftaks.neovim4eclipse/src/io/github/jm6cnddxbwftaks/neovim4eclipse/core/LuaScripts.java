@@ -2075,7 +2075,14 @@ final class LuaScripts {
                   pcall(vim.api.nvim_set_current_win, attached)
                 end
                 if name then
-                  vim.api.nvim_echo({ { M.float_closed_message(name, AT_START) } }, true, { err = true })
+                  -- Said once the caller is over (vim.schedule): an error message from inside UIEnter
+                  -- gets Neovim's "Error in UIEnter Autocommands for "*":" above it, as if the check
+                  -- had failed. Said as an error still, as the other closes are (and ui2 shows a long
+                  -- one in full). The keys typed meanwhile are read before it, already in the file.
+                  local message = M.float_closed_message(name, AT_START)
+                  vim.schedule(function()
+                    vim.api.nvim_echo({ { message } }, true, { err = true })
+                  end)
                 end
                 return name ~= nil
               end

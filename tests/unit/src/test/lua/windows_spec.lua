@@ -1160,7 +1160,10 @@ t.test('a floating window the config left the focus in is left before the home b
   t.eq(true, t.run('CLOSE_START_FLOAT', tostring(float)))
   t.ok(not vim.api.nvim_win_is_valid(float))
   local windows = package.loaded['neovim4eclipse.windows']
-  t.ok(vim.v.errmsg:find(windows.float_closed_message('lazy', windows.AT_START), 1, true), vim.v.errmsg)
+  local message = windows.float_closed_message('lazy', windows.AT_START)
+  t.wait_for('the message, said once the call is over', function()
+    return vim.v.errmsg:find(message, 1, true) ~= nil
+  end)
   t.eq(false, t.run('CLOSE_START_FLOAT', tostring(float)), 'closed already: nothing')
 end)
 
