@@ -1,8 +1,8 @@
 -- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 -- SPDX-License-Identifier: EPL-2.0
 
--- Neovim's window follows the editor (docs/design/VIEWPORT.md): LuaScripts.VIEWPORT (the module
--- and the opt-out), VIEWPORT_OVERHEAD (what the screen has besides the window's text) and SET_WRAP
+-- Neovim's window follows the editor (docs/design/VIEWPORT.md): LuaScripts.VIEWPORT (the module),
+-- VIEWPORT_OVERHEAD (what the screen has besides the window's text) and SET_WRAP
 -- ('wrap' and 'linebreak' from Eclipse's word wrap, D2 and D7). The grid size itself is
 -- ViewportSizeTest; nvim_ui_try_resize needs an attached UI, so it is tested through the session
 -- (NeovimSessionIntegrationTest).

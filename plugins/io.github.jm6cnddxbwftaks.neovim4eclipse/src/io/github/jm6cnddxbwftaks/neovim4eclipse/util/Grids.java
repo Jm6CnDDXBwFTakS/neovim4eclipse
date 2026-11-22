@@ -562,18 +562,19 @@ public final class Grids {
      * known set: a window of Neovim's layout (no float: an editor's, shown by the editor itself,
      * another editor's in a switch, a page's, the command-line window), Neovim's own floats
      * ({@link #alwaysDrawn}) and the floats of the last {@link #floatsIfChanged}, so call this
-     * after that. Anything else is unseen: a plug-in's float past the limits, any float while
-     * floats are not drawn ({@link #drawFloats} off, before the start is done: the session does not
-     * ask then), and a grid whose window is not known, as a
-     * float its plug-in hid ({@code win_hide} forgets its place: window -1). The session hands
+     * after that. Anything else is unseen: a plug-in's float past the limits, and a grid whose
+     * window is not known, as a float its plug-in hid ({@code win_hide} forgets its place: window
+     * -1). Nothing is unseen while floats are not drawn at all ({@link #drawFloats} off, before the
+     * session's start is done): one value decides the drawing and this, so a redraw never finds a
+     * float left out of the drawing for that reason. The session hands
      * this to Neovim ({@code LuaScripts.CLOSE_UNDRAWN_FLOAT}), which decides from its own state
      * whether it is a plug-in's float to close; for anything else it does nothing (a new float
      * whose place comes with a later redraw: asked again then, with its window).
      * Example: Telescope's prompt too large to draw: its grid and window.
      */
     public Optional<UnseenCursor> unseenCursor() {
-        if (cursorGrid < 0) {
-            return Optional.empty();
+        if (!drawFloats || cursorGrid < 0) {
+            return Optional.empty(); // before the start no plug-in's float is drawn, nor a key typed
         }
         Integer win = windowOfGrid.get(cursorGrid);
         boolean drawn = win != null && (!isFloat(cursorGrid) || alwaysDrawn(cursorGrid)

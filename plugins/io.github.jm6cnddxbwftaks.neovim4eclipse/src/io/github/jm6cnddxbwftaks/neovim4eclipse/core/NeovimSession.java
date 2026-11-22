@@ -165,8 +165,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /**
      * Whether plug-ins' floating windows are drawn ({@link #floatingWindowsDrawn()}): false until the
      * start is done ({@link #initialize}), then for good. Before, Neovim's windows are not set up,
-     * no editor shows them, and no key is typed, so nothing is drawn, and nothing is closed for
-     * being undrawn ({@link #unseenAsked}). Written once, read on the reader thread.
+     * no editor shows them, and no key is typed, so no plug-in's float is drawn, and none is closed
+     * for being undrawn ({@code Grids.unseenCursor}, which follows the same value). Written once,
+     * read on the reader thread.
      */
     private volatile boolean floatsDrawn;
     /** The floating windows last reported to the listeners, lowest in the stack first. */
@@ -994,8 +995,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * Hears which of Neovim's floating windows to draw, lowest in the stack first, each time they
      * change (one opened, was redrawn, moved or closed), on the RPC reader thread: the listener
      * hops to the UI thread itself. An empty list says the last one closed. The one with Neovim's
-     * cursor in it carries the cursor ({@code FloatWindow.focused}); nothing is ever reported
-     * unless {@link #floatingWindowsDrawn()}.
+     * cursor in it carries the cursor ({@code FloatWindow.focused}); no plug-in's float is
+     * reported before {@link #floatingWindowsDrawn()}; Neovim's own floats, ui2's and the popup
+     * menu, are reported from the start.
      * Example: a plug-in's panel of key hints after {@code <Space>}, gone again with the next key.
      */
     public void addFloatingWindowListener(Consumer<List<FloatWindow>> listener) {
@@ -2649,7 +2651,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
          */
         @Override
         public void onGridEvents(List<GridEvent> gridEvents) {
-            grids.drawFloats(floatingWindowsDrawn()); // here, on the grids' own thread; false until the start has read it
+            // Read once per batch, here on the grids' own thread: the drawing and the check for an
+            // undrawn float (Grids.unseenCursor) both follow it. False until the start is done.
+            grids.drawFloats(floatingWindowsDrawn());
             grids.eclipseTypes(isTypingMode() && !isNeovimDrivenInsert());
             for (GridEvent event : gridEvents) {
                 // While a search is typed, Neovim's view follows the match ('incsearch'); the attached
@@ -2691,9 +2695,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 events.floatingWindows(floats);
             });
             focusedFloat = grids.focusedFloat();
-            if (!floatsDrawn) {
-                return; // nothing drawn yet, nor typed: the start is not done
-            }
             Optional<Grids.UnseenCursor> unseen = grids.unseenCursor(); // the decision: util/Grids, GridsTest
             if (unseen.isEmpty()) {
                 // Asked again once the cursor has been on a drawn grid: a float Neovim refused to

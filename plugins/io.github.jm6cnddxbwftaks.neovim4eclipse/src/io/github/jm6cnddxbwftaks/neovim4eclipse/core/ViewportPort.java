@@ -7,9 +7,9 @@ import java.util.function.Consumer;
 
 /**
  * What keeping Neovim's window the size of the editor needs from the session
- * (docs/design/VIEWPORT.md): whether the feature is on, the editor's size, its word wrap in both
- * directions, and the window's top line (Neovim's to the editor, the editor's on attach and Esc). An interface, rather than the whole {@link NeovimSession}, so that the editor's side
- * is tested with a small fake. {@link NeovimSession} implements it.
+ * (docs/design/VIEWPORT.md): the editor's size, its word wrap in both directions, and the window's
+ * top line (Neovim's to the editor, the editor's on attach and Esc). An interface, rather than the
+ * whole {@link NeovimSession}, so that the editor's side is tested with a small fake. {@link NeovimSession} implements it.
  *
  * <p>The flow, for an editor made taller: the editor measures its text area (40 → 50 lines) and
  * calls {@link #setEditorSizeAsync}; the session asks Neovim what its screen has besides the window
@@ -73,8 +73,8 @@ public interface ViewportPort {
     /**
      * Hears Neovim's window scroll ({@code Ctrl-E}, {@code zz}, {@code 50G}, a resize), on a session
      * thread, before the cursor of the same key is reported (docs/design/VIEWPORT.md, 3.2): the
-     * editor scrolls to {@link TopLine#line1()}, then places the caret. Only for attached buffers,
-     * and only when the viewport is on. The same top line may come twice for one key; the second
+     * editor scrolls to {@link TopLine#line1()}, then places the caret. Only for attached buffers.
+     * The same top line may come twice for one key; the second
      * changes nothing.
      */
     void addTopLineListener(Consumer<TopLine> listener);

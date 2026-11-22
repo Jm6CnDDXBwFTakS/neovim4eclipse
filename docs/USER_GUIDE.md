@@ -607,8 +607,7 @@ What to know:
 
 A Neovim plug-in can open a *floating window*: a small window over the text, such as the panel of
 key hints which-key shows after `<Space>`. Eclipse draws the editor, so it has to draw these too.
-It draws the ones that do **not take the keyboard**: the plug-in opened the window without moving
-the cursor into it.
+It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's cursor in it.
 
 - **What you see:** the window's text in Neovim's colors for floating windows (`NormalFloat`,
   `FloatBorder`, your colorscheme's), over the editor's text, where Neovim put it. A window across

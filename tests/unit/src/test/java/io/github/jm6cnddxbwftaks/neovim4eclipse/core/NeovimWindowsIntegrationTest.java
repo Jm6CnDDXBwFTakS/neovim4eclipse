@@ -165,7 +165,7 @@ class NeovimWindowsIntegrationTest {
         return number(s, "return vim.api.nvim_win_is_valid(" + win + ") and 1 or 0") == 1;
     }
 
-    /** As above, with floats drawn: a float its plug-in hides while Neovim is in it. */
+    /** The one check, end to end: a float its plug-in hides while Neovim is in it is closed. */
     @Test
     void aFloatItsPlugInHidesWhileNeovimIsInItIsClosed() throws Exception {
         try (NeovimSession s = start()) {

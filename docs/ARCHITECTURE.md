@@ -95,8 +95,9 @@ select a word (from a bracket, up to its match), three the line (`V`), four a bl
 extends, `'mouse'`, `'mousetime'` and `<2-LeftMouse>` mappings apply, and a click while recording is recorded.
 
 - *A click off Neovim's screen.* Neovim's window shows what the editor shows (section 9), so a clicked character
-  is normally on its screen. It may not be past the end of the document (Neovim can scroll further than Eclipse), or for a
-  moment while a scroll is on its way. The script then scrolls Neovim's window for a press; for a drag in visual
+  is normally on its screen. It is not when Neovim's window is scrolled further than Eclipse can scroll
+  (near the end of the document: `Ctrl-E` on the last lines), or for a moment while a scroll is on its
+  way. The script then scrolls Neovim's window for a press; for a drag in visual
   mode it moves the cursor there (which extends the selection, as the drag would; scrolling first would lose the
   drag's start); a first drag goes to the nearest edge of Neovim's screen. Measured: about 0.2 ms per event, the state
   read included.
@@ -210,10 +211,10 @@ editor, since `WINDOWS`' `close` leaves its tab's float before closing the tab q
 window Neovim enters next decides as usual. Keys go only to a window Eclipse draws, checked in one
 place for every route: each redraw that ends with Neovim's cursor on a grid the editor does not
 draw (`Grids.unseenCursor`, a known set allowed: any window of Neovim's layout, which Eclipse
-shows as an editor or page or the command-line window, Neovim's own floats, and the floats drawn) asks
-Neovim, once for each grid and window, to close the plug-in's float it is in (`NeovimSession`,
+shows as an editor or page or the command-line window, Neovim's own floats, and the floats
+drawn) asks Neovim, once for each grid and window, to close the plug-in's float it is in (`NeovimSession`,
 `LuaScripts.CLOSE_UNDRAWN_FLOAT`). Neovim decides from its own state (`WINDOWS`' `close_undrawn`):
-a plug-in's float that is hidden (`hide`), or while floats are not drawn, or past `Grids`' limits
+a plug-in's float that is hidden (`hide`), or past `Grids`' limits
 (the window the session saw is the one), is closed with a message, never by force; anything else,
 such as a float not placed yet, is left. Keys typed
 before that redraw reaches Eclipse still go to the float. When
@@ -730,8 +731,8 @@ Each code editor draws its Neovim window's status line in a row under its text
   `statusline`, scheduled once per moment; on each attach (`NeovimSession.refreshStatusLinesAsync`);
   and when an editor's width in columns changes.
 - **Width:** every tabpage shares Neovim's one screen, sized to the focused editor, so a background
-  editor's window is as wide as that editor, not its own. Each row reports its editor's columns (`NeovimSession.setStatusLineWidthAsync`,
-  Lua `set_width`), and every window's line is fitted to its editor's; to the window's own width
+  editor's window is as wide as that editor, not its own. Each row reports its editor's columns
+  (`NeovimSession.setStatusLineWidthAsync`, Lua `set_width`), and every window's line is fitted to its editor's; to the window's own width
   until the editor reported.
 - **Colors:** a group that leaves a color unset (`%#Identifier#`, a text color only) takes it from
   `StatusLine` or `StatusLineNC`, as Neovim draws it over the status line.
@@ -1332,9 +1333,6 @@ then content assist opens, since a proposal accepted while Neovim still typed wo
 completion does not know of. In an insert Neovim types to its end (a recorded one) the keys go to
 Neovim, where the guard drops the `Ctrl-O`: a proposal would be missing from the recording.
 
-The list hangs on the cursor's line, which Neovim keeps on its own screen whatever the editor
-shows.
-
 ## Blockwise visual
 
 - **Geometry:** Neovim's. In blockwise mode `STATE_SNAPSHOT` adds `getregionpos(getpos('v'), getpos('.'),
@@ -1521,7 +1519,7 @@ reason is gone.
 | Indent style per document | `util/Indentation` | `IndentationTest`, `NeovimSessionIntegrationTest`, `EditorEndToEndTest` |
 | Tab arithmetic, `:e` / `:wq` file names | `util/TabNavigation`, `LuaScripts.HOST_COMMANDS` (Neovim expands the name), `util/EditPath` (fallback) | `TabNavigationTest`, `host_commands_spec.lua`, `EditPathTest` |
 | The command-line window (`q:`) drawn from its grid | `util/GridEvent`, `util/Grids`, `util/GridSnapshot`, `util/CommandWindowView`, `editor/GridCanvas`, `editor/NeovimWindowPanel` | `GridEventTest`, `GridsTest`, `NotificationBridgeTest`, `NeovimSessionIntegrationTest` (real Neovim: drawn, Enter runs the line, closed in insert mode runs nothing), `tests/swt` `GridCanvasTest` (pixels: colors, cursor, text wider than its cell), `NeovimWindowPanelTest` (keys, focus), UI `CommandWindowEndToEndTest` |
-| Floating windows, drawn over the text (the focused one with Neovim's cursor, the editor's caret hidden) | `util/GridEvent` (`WinPos`), `util/Grids` (`floatsIfChanged`, `host`), `util/FloatWindow`, `util/FloatPlacement`, `core/NeovimConnection` (`Forwarder`: the first window's place), `editor/FloatingWindows`, `editor/GridCanvas`, `editor/CursorStyleController` (`setHidden`) | `GridEventTest`, `GridsTest`, `FloatPlacementTest`, `NeovimSessionIntegrationTest` (real Neovim: reported, moves with its text, gone when closed, off by either setting), `tests/swt` `FloatingWindowsTest` (place, order, no focus, the cursor's shape, dispose) and `CursorStyleControllerTest` (the caret hidden and back), UI `FloatingWindowsEndToEndTest` (a prompt drawn with the cursor, the caret hidden), gallery picture `float` |
+| Floating windows, drawn over the text (the focused one with Neovim's cursor, the editor's caret hidden) | `util/GridEvent` (`WinPos`), `util/Grids` (`floatsIfChanged`, `host`), `util/FloatWindow`, `util/FloatPlacement`, `core/NeovimConnection` (`Forwarder`: the first window's place), `editor/FloatingWindows`, `editor/GridCanvas`, `editor/CursorStyleController` (`setHidden`) | `GridEventTest`, `GridsTest`, `FloatPlacementTest`, `NeovimSessionIntegrationTest` (real Neovim: reported, moves with its text, gone when closed), `tests/swt` `FloatingWindowsTest` (place, order, no focus, the cursor's shape, dispose) and `CursorStyleControllerTest` (the caret hidden and back), UI `FloatingWindowsEndToEndTest` (a prompt drawn with the cursor, the caret hidden), gallery picture `float` |
 | Neovim's completion (`Ctrl-N`, `Ctrl-P`, `Ctrl-X` modes): the keys, the hand-back, the list | `core/KeyRouter` (`completeInNeovim`, `afterCtrlX`, `whileCompleting`), `LuaScripts.CTRL_X_GUARD` and `NO_MODELINES` (`ctrl_x_guard_spec.lua`), `core/KeyInput` (`isCompleting`, `syncInsertThenComplete`, `endCompletion`), `util/VimModes.isCompleting`, `util/KeyContextRule.toNeovim`; the list is Neovim's popup menu, drawn as a float (`util/Grids.alwaysDrawn`, `eclipseTypes`) | `KeyRouterTest`, `KeyInputTest`, `KeyContextRuleTest`, `VimModesTest`, `GridsTest`, `NotificationBridgeTest`, `NeovimCompletionIntegrationTest` |
 | Neovim's command line, prompts, pager and messages drawn by ui2: turning it on, the windows' ids, `'cmdheight'`, `:messages` to its page | `LuaScripts.UI2`, `core/NotificationBridge` (`eclipse_ui2_windows`, `eclipse_cmdline`, `eclipse_messages`), `util/Grids` (`ui2Windows`, `alwaysDrawn`, `rowsBelow`), `NeovimSession.echoAsync` | `ui2_spec.lua`, `GridsTest`, `NotificationBridgeTest`, `NeovimUi2IntegrationTest` (a real UI attached: the typed line, the pager), `NeovimSessionIntegrationTest` (typing, history, Tab, prompts, search preview, `q:`, `:lcd`) |
 | Eclipse's Paste, Copy, Cut and Select All while a line is open; an input method on the line | `editor/CommandLineEditHandlers`, `editor/LineInputMethod`, `util/LineComposition`, `editor/FloatingWindows.cursorCell` | `LineCompositionTest`, `tests/swt` `LineInputMethodTest` (synthetic `ImeComposition` events); a real input method: docs/MANUAL_CHECKS.md, `ime-compose`, `ime-keys` |

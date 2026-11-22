@@ -308,7 +308,7 @@ class GridsTest {
     }
 
     @Test
-    void withFloatsOffNothingIsDrawnAndTheirLinesAreNotWanted() {
+    void beforeFloatsAreDrawnNoneIsAndTheirLinesAreNotWanted() {
         editorWindow();
         floatAt(5, 1002, 9, 2, 50);
         assertTrue(grids.floatsIfChanged().isEmpty());
@@ -408,7 +408,10 @@ class GridsTest {
      * {@link #A_GRID_NOT_PLACED_YET} costs one call and changes nothing.
      */
     enum CursorPlace {
-        THE_EDITORS_WINDOW(null, t -> t.editorWindow()),
+        THE_EDITORS_WINDOW(null, t -> {
+            t.grids.drawFloats(true);
+            t.editorWindow();
+        }),
         A_DRAWN_FLOAT(null, t -> {
             t.grids.drawFloats(true);
             t.editorWindow();
@@ -427,8 +430,11 @@ class GridsTest {
             t.floatOfSize(5, 1002, 1000, Grids.MAX_FLOAT_CELLS / 1000 + 1, 50); // one row too many
             t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
         }),
-        /** Before the start is done (the session does not ask then). */
-        A_FLOAT_BEFORE_FLOATS_ARE_DRAWN(new Grids.UnseenCursor(5, 1002), t -> {
+        /**
+         * Before the start is done: left out of the drawing, and not unseen either, as both follow
+         * the one value, so a float only not drawn yet is never closed as undrawn.
+         */
+        A_FLOAT_BEFORE_FLOATS_ARE_DRAWN(null, t -> {
             t.editorWindow();
             t.floatAt(5, 1002, 3, 3, 50);
             t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
@@ -447,22 +453,26 @@ class GridsTest {
             t.grids.floatsIfChanged();
             t.grids.apply(new GridEvent.WinPos(5, 1002, true, 3, 3, 0, 0, 50));
         }),
-        UI2S_LINE_BEFORE_FLOATS_ARE_DRAWN(null, t -> {
+        UI2S_LINE(null, t -> {
+            t.grids.drawFloats(true);
             t.editorWindow();
             t.grids.ui2Windows(List.of(1002), 1002, -1, false);
             t.floatAt(5, 1002, 3, 3, 50);
             t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
         }),
         A_PAGES_WINDOW(null, t -> {
+            t.grids.drawFloats(true);
             t.editorWindow();
             t.pageDrawn();
         }),
         THE_COMMAND_LINE_WINDOW(null, t -> {
+            t.grids.drawFloats(true);
             t.editorWindow();
             t.commandWindow();
         }),
         /** A window of Neovim's layout, another editor's during a switch: the editors show their own. */
         ANOTHER_EDITORS_WINDOW(null, t -> {
+            t.grids.drawFloats(true);
             t.editorWindow();
             t.grids.apply(new GridEvent.Resize(3, 80, 23));
             t.grids.apply(new GridEvent.WinPos(3, 1001, false, 0, 0, 80, 23, 0));

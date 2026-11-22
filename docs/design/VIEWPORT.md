@@ -17,7 +17,9 @@ Without this, Neovim's screen would be the fixed 120 × 40 cells the plug-in att
 | `'scrolloff'` | keep N lines around the cursor | kept in Neovim's window, not the editor's |
 | `gj` `gk` | screen lines | Neovim wraps at 120 columns (`'wrap'` is on), Eclipse usually does not wrap at all |
 
-That was also how it was with the opt-out (D5) until it was removed in 0.3.3.
+That was also how it was with the opt-out (D5) until it was removed in 0.3.3. A click can still
+be off Neovim's screen when Neovim's window is scrolled further than Eclipse can scroll (`Ctrl-E`
+on the last lines): `LuaScripts.MOUSE` then scrolls Neovim's window to it (docs/ARCHITECTURE.md).
 
 Each editor has its own Neovim window ([WINDOWS.md](WINDOWS.md)), and "Neovim's window" below is
 the attached editor's. Each window keeps its view between editor switches, and the editor ignores
@@ -320,7 +322,7 @@ conversion (bytes, cells, pixels) is its own work.
 - `tests/unit`: `ViewportSizeTest` (grid from cells and overhead, the minimum, impossible sizes
   refused, an editor's cells: whole characters and lines, at least 1 × 1); `WheelScrollTest` (the X10 and X11 events as cases, a page as `Ctrl-F`);
   `LatestValueTest`.
-- Lua (`tests/unit/src/test/lua/viewport_spec.lua`): the opt-out; `VIEWPORT_OVERHEAD` with the
+- Lua (`tests/unit/src/test/lua/viewport_spec.lua`): `VIEWPORT_OVERHEAD` with the
   user's status line and number column; `SET_WRAP` with `'linebreak'`, `'breakindent'` and
   `'showbreak'`, the user's values back, no echo, `'nolinebreak'` set back with one message, a
   modeline too, `eclipse_viewport` once per batch; `SET_TOPLINE` keeps the cursor visible, drags it
@@ -330,8 +332,7 @@ conversion (bytes, cells, pixels) is its own work.
   `nvim_ui_try_resize` needs an attached UI and the autocmds of X12 need Neovim's main loop): the
   window gets the editor's size and `L` its last line; `set number` widens the screen; a jump
   reports the top line before the cursor; `Ctrl-E` reports the top line without a cursor move; the
-  editor's top line comes back; a size arriving mid-command is sent when the command ends; the
-  opt-out keeps the fixed screen.
+  editor's top line comes back; a size arriving mid-command is sent when the command ends.
 - `tests/swt`: `ViewportFollowerTest` (cells, sizes sent once, wrap both ways without echo, top
   lines both ways without echo); `NeovimWheelTest` (the wheel goes to Neovim, a page, insert mode
   and modifiers stay Eclipse's).

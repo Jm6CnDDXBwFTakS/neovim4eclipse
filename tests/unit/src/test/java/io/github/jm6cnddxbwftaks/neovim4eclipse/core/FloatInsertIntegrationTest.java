@@ -34,7 +34,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * insert only after the key that opened the picker was answered, so only the report decides.
  *
  * <p>As in the product: the WinNew safety net of {@link LuaScripts#WINDOWS} leaves the prompt
- * open while floats are drawn, and the session leaves Neovim in it ({@code util/EnterDecision},
+ * open, and the session leaves Neovim in it ({@code util/EnterDecision},
  * {@code entered_float}), so the keys must end up in the prompt, and the document must keep its
  * text. Each round ends as leaving the editor does ({@link NeovimSession#leaveFloatAsync}): the
  * prompt closed, its insert ended.

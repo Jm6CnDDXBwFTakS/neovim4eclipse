@@ -959,7 +959,7 @@ t.test("the plug-in's own windows and plain windows are no focused floats", func
   t.eq(true, focused_float(float))
 end)
 
-t.test('with floats drawn, a floating window that opens with the focus stays', function()
+t.test('a floating window that opens with the focus stays', function()
   local win = commands()
   local float = vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
   flush()

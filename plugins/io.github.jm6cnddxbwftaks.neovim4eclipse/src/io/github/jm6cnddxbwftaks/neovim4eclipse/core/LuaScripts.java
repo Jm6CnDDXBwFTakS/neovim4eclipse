@@ -4278,7 +4278,7 @@ final class LuaScripts {
     /**
      * Installs the viewport module, {@code require('neovim4eclipse.viewport')}. The session runs it
      * once at start, after {@link #SETUP} (so after {@code init.lua}): Neovim's window then follows
-     * the editor, as it follows a terminal's size there (docs/design/VIEWPORT.md).
+     * the editor, as in a terminal it follows the terminal's size (docs/design/VIEWPORT.md).
      *
      * <p><b>What it is for.</b> Neovim's window is made the size of the editor
      * ({@code nvim_ui_try_resize}, sent by the session), so that {@code H}, {@code L},
@@ -4394,7 +4394,7 @@ final class LuaScripts {
               assert(ok, err)
             end
 
-            local group = vim.api.nvim_create_augroup('neovim4eclipse_view', { clear = true })
+            local group = vim.api.nvim_create_augroup('neovim4eclipse_follow_editor', { clear = true })
             vim.api.nvim_create_autocmd('OptionSet', {
               group = group,
               pattern = 'wrap',
@@ -5427,8 +5427,7 @@ final class LuaScripts {
 
     /**
      * The rows and columns Neovim's screen has besides the text of the editor's window ({@link #WINDOWS}' {@code editor_window}: the current one, or the one under a plug-in's float Neovim is in),
-     * {@code { rows, columns }}; see {@link #VIEWPORT}'s {@code overhead}. Sent only when the
-     * viewport is on, so the module is there.
+     * {@code { rows, columns }}; see {@link #VIEWPORT}'s {@code overhead}.
      */
     static final String VIEWPORT_OVERHEAD = """
             local windows = package.loaded['neovim4eclipse.windows']
@@ -6549,7 +6548,9 @@ final class LuaScripts {
      *
      * <p><b>Why a script.</b> {@code nvim_input_mouse} takes a <em>screen</em> cell, not a buffer
      * position, and the plug-in draws nothing of Neovim's screen. Neovim's window shows what the
-     * editor shows ({@link #VIEWPORT}), but not always: past the end of the document, or while a scroll is on its way. So the script asks Neovim where the
+     * editor shows ({@link #VIEWPORT}), but not always: when Neovim's window is scrolled further
+     * than Eclipse can scroll (near the end of the document), or while a scroll is on its way. So
+     * the script asks Neovim where the
      * character is on its screen ({@code screenpos()}), which also accounts for tabs, wide
      * characters and wrapped lines. A character that is not on Neovim's screen is brought there:
      * <ul>

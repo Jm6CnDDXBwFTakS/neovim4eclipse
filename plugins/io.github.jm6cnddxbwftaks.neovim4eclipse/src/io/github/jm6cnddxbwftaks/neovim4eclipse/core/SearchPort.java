@@ -66,8 +66,8 @@ public interface SearchPort {
     /**
      * The editor of {@code buffer} shows lines {@code top1} to {@code bottom1} (1-based): Neovim
      * searches them along with its window's own visible lines, which differ from the editor's when
-     * Eclipse scrolled alone in insert mode, when Neovim does not
-     * know Eclipse's folds, and by a partly shown last line. After every key queued before; views
+     * Eclipse scrolled alone in insert mode, when Neovim does not know Eclipse's folds, and by a
+     * partly shown last line. After every key queued before; views
      * that arrive faster than Neovim answers replace each other. Nothing when {@code buffer} is no
      * longer the one shown.
      */

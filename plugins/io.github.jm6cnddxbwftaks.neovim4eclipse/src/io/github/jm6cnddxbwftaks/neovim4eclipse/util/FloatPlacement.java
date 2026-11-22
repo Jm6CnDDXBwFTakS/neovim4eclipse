@@ -9,9 +9,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * <h2>The rule</h2>
  * One rule for every float: the row and column Neovim worked out for it, counted from the editor's
  * window ({@link FloatWindow}), times Eclipse's cell (the editor font's average character width,
- * the editor's line height). Neovim's window has the editor's rows and columns while the viewport
- * is on ({@code LuaScripts.VIEWPORT}; without it no float is drawn), so a cell of Neovim's is a
- * cell of the editor's.
+ * the editor's line height). Neovim's window has the editor's rows and columns
+ * ({@code LuaScripts.VIEWPORT}), so a cell of Neovim's is a cell of the editor's.
  *
  * <p>Three corrections, because the editor is measured in pixels and its last row and column are
  * seldom whole:
