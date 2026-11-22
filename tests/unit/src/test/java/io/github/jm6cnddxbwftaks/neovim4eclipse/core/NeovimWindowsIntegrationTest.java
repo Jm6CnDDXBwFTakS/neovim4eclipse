@@ -100,25 +100,68 @@ class NeovimWindowsIntegrationTest {
         }
     }
 
+    /** A config's command opening lazy.nvim's installer as it does: a float with the focus. */
+    private static final String OPEN_START_FLOAT = "lua local b = vim.api.nvim_create_buf(false, true); vim.bo[b].filetype = 'lazy';"
+            + " vim.g.n4e_start_float = vim.api.nvim_open_win(b, true, {relative = 'editor', row = 1, col = 1, width = 20, height = 3})";
+
     /**
      * A config that leaves a floating window focused at the start (lazy.nvim's installer on a first
-     * start) does not take the home buffer and the editors' keys: the session closes the float,
-     * starts in a plain window that shows the home buffer, and says why: Neovim shows it (ui2,
-     * started before the message). The Lua side alone is
-     * windows_spec.lua ("LEAVE_START_FLOAT").
+     * start) does not take the home buffer: the session starts in a plain window that shows the
+     * home buffer, keeps the float, and shows it in the first editor: moved into that editor's tab
+     * page, Neovim in it. The Lua side alone is windows_spec.lua ("LEAVE_START_FLOAT").
      */
     @Test
-    void aFloatFocusedAtTheStartIsClosedAndTheFirstEditorIsToldWhy() throws Exception {
+    void aFloatFocusedAtTheStartIsShownInTheFirstEditor() throws Exception {
         TestNeovim.require();
-        String openFloat = "lua local b = vim.api.nvim_create_buf(false, true); vim.bo[b].filetype = 'lazy';"
-                + " vim.api.nvim_open_win(b, true, {relative = 'editor', row = 1, col = 1, width = 20, height = 3})";
-        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "-c", openFloat))) {
-            assertEquals(0, number(s, "return #vim.tbl_filter(function(w) return vim.api.nvim_win_get_config(w).relative ~= '' end,"
-                    + " vim.tbl_filter(function(w) return not vim.tbl_contains(vim.tbl_values(require('vim._core.ui2').bufs), vim.api.nvim_win_get_buf(w)) end, vim.api.nvim_list_wins()))"), "the float is closed (ui2's own windows aside)");
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "-c", OPEN_START_FLOAT))) {
+            int lazy = number(s, "return vim.g.n4e_start_float");
             assertEquals("", s.lua("return vim.api.nvim_win_get_config(0).relative"), "a plain window is current");
             assertEquals(currentWin(s), s.getAttachedWinid(), "and it is the home window");
             assertEquals(number(s, "return package.loaded['neovim4eclipse.windows'].home_buffer()"),
                     number(s, "return vim.api.nvim_get_current_buf()"), "it shows the home buffer");
+            assertEquals(1, number(s, "return vim.api.nvim_win_is_valid(vim.g.n4e_start_float) and 1 or 0"), "the float is kept");
+            EditorWindow editor = new EditorWindow();
+            DocumentBuffer doc = new DocumentBuffer("");
+            // As an editor's attach does: the show, then the document's push, in one attach setup on
+            // the input thread. They work on the current window and buffer, the editor's: the float
+            // is entered only after, as a task of its own.
+            java.util.concurrent.atomic.AtomicReference<Object> setup = new java.util.concurrent.atomic.AtomicReference<>();
+            s.runAttachSetup(() -> {
+                try {
+                    s.showWindow(doc, editor, "");
+                    int current = number(s, "return vim.api.nvim_get_current_win()");
+                    s.setBufferLines(List.of("the document's text"));
+                    setup.set(current);
+                } catch (Exception e) {
+                    setup.set(e);
+                }
+            });
+            waitFor(() -> setup.get() != null, "the attach setup done");
+            assertEquals(editor.winid(), setup.get(), "the editor's window current during its attach setup");
+            waitFor(() -> number(s, "return vim.api.nvim_get_current_win()") == lazy, "Neovim in the float, over the first editor");
+            assertEquals("the document's text", s.lua("return vim.api.nvim_buf_get_lines(" + doc.bufnr + ", 0, 1, false)[1]"),
+                    "the document's text in its own buffer");
+            assertEquals(0, number(s, "return #vim.tbl_filter(function(l) return l == \"the document's text\" end,"
+                    + " vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(vim.g.n4e_start_float), 0, -1, false))"),
+                    "none of it in the float's buffer");
+            assertEquals(number(s, "return vim.api.nvim_win_get_tabpage(" + editor.winid() + ")"),
+                    number(s, "return vim.api.nvim_win_get_tabpage(vim.g.n4e_start_float)"), "in the editor's tab page");
+            assertEquals(editor.winid(), s.getAttachedWinid(), "the editor stays attached");
+        }
+    }
+
+    /**
+     * With plug-ins' floats off, the float focused at the start is closed, and Neovim says why
+     * (ui2, started before the message).
+     */
+    @Test
+    void withFloatsOffAFloatFocusedAtTheStartIsClosedAndTheFirstEditorIsToldWhy() throws Exception {
+        TestNeovim.require();
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "-c", "let g:neovim4eclipse_floating_windows = 0",
+                "-c", OPEN_START_FLOAT))) {
+            assertEquals(0, number(s, "return vim.api.nvim_win_is_valid(vim.g.n4e_start_float) and 1 or 0"), "the float is closed");
+            assertEquals("", s.lua("return vim.api.nvim_win_get_config(0).relative"), "a plain window is current");
+            assertEquals(currentWin(s), s.getAttachedWinid(), "and it is the home window");
             waitFor(() -> Ui2Text.shown(s).contains("Closed the floating window of lazy: "),
                     "the message about the float, shown by Neovim: " + Ui2Text.shown(s));
         }

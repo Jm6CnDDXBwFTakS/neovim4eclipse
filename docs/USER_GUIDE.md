@@ -619,20 +619,32 @@ the cursor into it.
 - **They only show.** Your keys go to the editor and on to Neovim, as if the window were not
   there: with which-key, the next key runs the mapping and the panel closes. A click or the wheel
   on a floating window does nothing.
-- **A window you enter** (`Ctrl-W w` into a plug-in's hover documentation) is drawn with Neovim's
-  cursor in it, a bar in Insert mode, and the editor's caret is hidden meanwhile: your keys go to
-  that window, as in Neovim. The caret comes back when you leave it. An input method has no place
-  to show its candidates there.
+- **A window that takes the keyboard** (a picker's prompt, `:Lazy`, hover documentation entered
+  with a second `K`, with Neovim's own `K`: `vim.g.neovim4eclipse_ide_keys = 0`) is drawn with Neovim's cursor in it, a bar in Insert mode, and the editor's
+  caret is hidden meanwhile: your keys go to that window, as in Neovim, Esc and Enter included.
+  Leaving the editor closes it, its insert ended: another editor or view, a click in the editor's
+  text (which then lands there), Eclipse mode, closing the editor. Switching to another application keeps it. A
+  window on a file with unsaved changes closes and the changes stay, in a hidden buffer (`:ls`);
+  if closing would unload or wipe that buffer (`'bufhidden'`, `'nohidden'`), the window stays,
+  drawn, and Neovim leaves it; closing the editor then closes it, the buffer kept hidden.
+  Only the keys reach it: a click on it does nothing, and an input method has no place to show
+  its candidates there. `Ctrl-W` and its window commands stay Eclipse's, so `Ctrl-W w` moves to
+  the next editor and closes the window. lazy.nvim's installer at a first start is shown over the
+  first editor. One too large to draw (past the *Limits* below) is closed, with a
+  message. With `vim.g.neovim4eclipse_floating_windows = 0` such a window is closed as it opens,
+  with a message.
 - **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In
   insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your
   typing (signature help, a completion plug-in's documentation) does not appear, or lags; Eclipse's
   own content assist and parameter hints do that job.
-- **Not drawn:** a floating window that opens *with* the keyboard focus (a picker's prompt, `:Lazy`,
-  a file tree). It is closed at once, with a message, since it would take the keys you type in the
-  editor ([README](../README.md#known-limitations), "Neovim plug-ins that draw").
+- **Not drawn:** a window a plug-in opens as a split (a file tree), which is closed
+  ([README](../README.md#known-limitations), "Neovim plug-ins that draw"), and a hidden floating
+  window; one that has the keyboard, hidden as it opens or later by its plug-in, is closed, with
+  a message.
 - **Limits:** at most 16 floating windows are drawn at once, and at most 250,000 cells in all of
   them together (a window covering an editor on a 4K screen is about 46,000). Past that, the windows on top
-  in Neovim's order stay and the others are not drawn; the plug-in's log says so once
+  in Neovim's order stay and the others are not drawn (the window your keys go to is kept first,
+  and one that cannot be drawn is closed with a message); the plug-in's log says so once
   ([The plug-in's log](#the-plug-ins-log)). The limits keep a plug-in gone wrong, with a window of
   5000 by 5000 cells or thousands of windows, from slowing Eclipse down.
 - **A row off, sometimes.** A window anchored to a text position is placed by Neovim's rows. Where

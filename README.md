@@ -354,20 +354,21 @@ gets in your way:
    `vim.g.neovim4eclipse_folds = 0` leaves these keys alone everywhere.
 7. **Neovim plug-ins that draw are shown only in part.** Eclipse draws the editor, not Neovim, so
    only some of what plug-ins draw appears:
-   - **Shown:** floating windows that do not take the keyboard (a panel of key hints such as
-     which-key's, a note or progress window opened in the background; see
+   - **Shown:** floating windows (a panel of key hints such as which-key's, a note or progress
+     window opened in the background, and one that takes the keyboard, such as a picker's prompt
+     or `:Lazy`, drawn with Neovim's cursor; see
      [Floating windows](docs/USER_GUIDE.md#floating-windows)), Neovim's own popup menu for `Ctrl-N`
      and for Tab on the `:` line ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and the labels of
      jump plug-ins (flash, leap, hop, mini.jump2d; see [Jump labels](docs/USER_GUIDE.md#jump-labels)).
-   - **Not shown:** windows that take the keyboard (pickers such as Telescope and fzf-lua, file
-     trees, dashboards, `:Lazy`), the menus of completion plug-ins (nvim-cmp, blink.cmp), and
-     windows that follow typing in insert mode.
+   - **Not shown:** split windows plug-ins open (file trees),
+     the menus of completion plug-ins (nvim-cmp, blink.cmp), and windows that follow typing in
+     insert mode.
 
    Plug-ins that work on text (surround, commentary, text objects, mappings of your own) work as in
-   a terminal. A floating window that opens with the focus (a picker's prompt, `:Lazy`) is closed
-   again at once, with a message, since it would take the keys typed in the editor. A plug-in can
-   still slip one past (a window opened without autocommands, or focused a moment later); if keys
-   seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave such plug-ins out
+   a terminal. A floating window that takes the keyboard gets only the keys (no clicks, no input
+   method), and leaving the editor closes it. With `vim.g.neovim4eclipse_floating_windows = 0` it
+   is closed at once, with a message, since it would take the keys unseen. If keys seem to do
+   nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave plug-ins that do not work out
    in Eclipse (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in
    [Your `init.lua` in Eclipse](#your-initlua-in-eclipse)).
 8. **Neovim's command line and messages are always drawn.** Neovim draws them itself, with its

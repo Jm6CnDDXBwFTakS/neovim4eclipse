@@ -43,15 +43,16 @@ The Neovim side:
   than `TabClosedPre` because it covers that and any other close. A `WinNew` net closes any window
   the plug-in did not open that is neither floating nor special, and also the quickfix, location
   list and preview windows: Eclipse cannot show them, and in the editor's tab they took its rows,
-  so `H` and `L` no longer matched the editor. It also closes a floating window that is new and
-  has the focus (it opened with it: a picker's prompt, `:Lazy`), which would take the keys while
-  the editor cannot yet leave it; floats without the focus stay, and so does one entered later
-  (`Ctrl-W w` into hover documentation), which the net has seen before (`seen`), and which is
-  then drawn with Neovim's cursor while the editor's caret is hidden. At start,
+  so `H` and `L` no longer matched the editor. A floating window that opens with the focus (a
+  picker's prompt, `:Lazy`) stays while the editor draws floats, drawn with Neovim's cursor while
+  the editor's caret is hidden, and leaving the editor closes it (`leave_float`); with plug-ins'
+  floats off the net closes it, since its keys would go to a window nobody sees. At start,
   before the home buffer goes anywhere (`LuaScripts.LEAVE_START_FLOAT`, the session's first script
   after `PATHS`), a floating window the config left the focus in (lazy.nvim's installer on a first
-  start) is closed and a plain window is made current: left current, it got the home buffer and
-  then the editors' keys. Its message is shown once Neovim's messages reach the session, and
+  start) is left and a plain window is made current: left current, it got the home buffer. The
+  float stays, and is moved into the first editor's tab page and entered (`BRING_START_FLOAT`; a
+  float belongs to one tab page), or, with floats off, closed (`CLOSE_START_FLOAT`), with a
+  message, shown once Neovim's messages reach the session, and
   the first editor that attaches shows it (`NeovimSession.takeStartStatus`): it came before any
   editor listened, and only a key would otherwise show a message.
   Not caught: a float opened with `noautocmd` (no `WinNew`), or entered a moment after it opened. The net cannot use the current window (in `WinNew`

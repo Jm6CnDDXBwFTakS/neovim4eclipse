@@ -7,8 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 
@@ -213,6 +217,23 @@ class GridsTest {
         assertEquals(3, back.row());
     }
 
+    /**
+     * The plug-in's float the cursor is in, drawn or not (the session closes an undrawable one):
+     * not the editor's window, not ui2's line.
+     */
+    @Test
+    void theFocusedFloatIsTheCursorsPluginFloatWhetherDrawnOrNot() {
+        editorWindow();
+        floatAt(5, 1002, 3, 3, 50);
+        assertEquals(-1, grids.focusedFloat(), "the cursor in the editor's window");
+        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        assertEquals(1002, grids.focusedFloat(), "floats off: not drawn, still the one the keys go to");
+        grids.drawFloats(true);
+        assertEquals(1002, grids.focusedFloat());
+        grids.ui2Windows(List.of(1002), 1002, -1, false);
+        assertEquals(-1, grids.focusedFloat(), "ui2's line is Neovim's own");
+    }
+
     /** With plug-ins' floats off, the float with the focus is not drawn either (the net closes it). */
     @Test
     void aFloatWithTheFocusIsNotDrawnWhileFloatsAreOff() {
@@ -304,7 +325,26 @@ class GridsTest {
         return grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList();
     }
 
-    /** 150,000 + 125,000 is over the 250,000 cells; the lowest, 75,000, still fits beside the top one. */
+    /**
+     * The limits have one source, Grids; the words that name them are built from it, and the one
+     * copy that cannot be (the user guide's *Limits*) is held to it here.
+     */
+    @Test
+    void theLimitsAreWordedFromTheirOneSourceAndTheUserGuideSaysTheSame() throws IOException {
+        String cells = String.format(Locale.ROOT, "%,d", Grids.MAX_FLOAT_CELLS);
+        assertEquals("more than " + Grids.MAX_FLOATS + " floating windows or " + cells + " cells at once",
+                Grids.PAST_LIMITS);
+        Path dir = Path.of("").toAbsolutePath();
+        while (dir != null && !Files.isRegularFile(dir.resolve("docs/USER_GUIDE.md"))) {
+            dir = dir.getParent();
+        }
+        assertTrue(dir != null, "no docs/USER_GUIDE.md above the working folder");
+        String guide = Files.readString(dir.resolve("docs/USER_GUIDE.md")).replaceAll("\\s+", " ");
+        assertTrue(guide.contains("**Limits:** at most " + Grids.MAX_FLOATS + " floating windows are drawn at once, and at most "
+                + cells + " cells"), "docs/USER_GUIDE.md, Limits: the numbers of Grids.MAX_FLOATS and MAX_FLOAT_CELLS");
+    }
+
+    /** 150,000 + 125,000 is over {@link Grids#MAX_FLOAT_CELLS}; the lowest, 75,000, still fits beside the top one. */
     @Test
     void pastTheCellLimitTheWindowsOnTopStayAndASmallerLowerOneStillFits() {
         grids.drawFloats(true);
@@ -353,6 +393,69 @@ class GridsTest {
         assertEquals(Grids.MAX_FLOATS, drawn.size());
         assertTrue(drawn.contains(2000), "the cursor's float: " + drawn);
         assertFalse(drawn.contains(2001) || drawn.contains(2002), "the next lowest are left out: " + drawn);
+    }
+
+    /** A float with the cursor too large to draw is undrawn: the session closes it. Others are not. */
+    @Test
+    void aFocusedFloatPastTheCellLimitIsUndrawnAndOnlyThen() {
+        grids.drawFloats(true);
+        editorWindow();
+        floatOfSize(5, 1002, 1000, 251, 50); // 251,000 cells: one more row than the limit allows
+        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        assertTrue(grids.floatsIfChanged().orElse(List.of()).isEmpty(), "too large: not drawn");
+        assertEquals(1002, grids.undrawnFocusedFloat());
+        grids.apply(new GridEvent.Resize(5, 1000, 250)); // exactly the limit: drawn
+        assertEquals(List.of(1002), drawnWindows());
+        assertEquals(-1, grids.undrawnFocusedFloat());
+        grids.apply(new GridEvent.CursorGoto(2, 4, 0));
+        grids.floatsIfChanged();
+        assertEquals(-1, grids.undrawnFocusedFloat(), "the cursor in the editor's window");
+        grids.drawFloats(false);
+        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        grids.floatsIfChanged();
+        assertEquals(-1, grids.undrawnFocusedFloat(), "floats off: Neovim is sent back instead");
+    }
+
+    /**
+     * A float its plug-in hides ({@code hide}, Neovim's {@code win_hide}) while the cursor is in
+     * it keeps the keys, Neovim's cursor with them: it is still the focused float, and undrawn, so
+     * that the session closes it, until it is shown again or the cursor leaves.
+     */
+    @Test
+    void aFloatHiddenWithTheCursorInItIsStillTheFocusedOneAndUndrawn() {
+        grids.drawFloats(true);
+        editorWindow();
+        floatAt(5, 1002, 3, 3, 50);
+        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        assertEquals(List.of(1002), drawnWindows());
+        grids.apply(new GridEvent.WinGone(5));
+        assertTrue(grids.floatsIfChanged().orElseThrow().isEmpty(), "hidden: not drawn");
+        assertEquals(1002, grids.focusedFloat(), "the keys still go to it");
+        assertEquals(1002, grids.undrawnFocusedFloat(), "so the session closes it");
+        grids.apply(new GridEvent.WinPos(5, 1002, true, 3, 3, 0, 0, 50));
+        assertEquals(List.of(1002), drawnWindows(), "shown again");
+        assertEquals(-1, grids.undrawnFocusedFloat());
+        grids.apply(new GridEvent.WinGone(5));
+        grids.apply(new GridEvent.CursorGoto(2, 4, 0));
+        assertEquals(-1, grids.focusedFloat(), "the cursor left it");
+        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        assertEquals(-1, grids.focusedFloat(), "back on a grid without a window: no float known");
+    }
+
+    /** A float that closes takes the cursor along (Neovim's cursor_goto elsewhere): none is left. */
+    @Test
+    void aClosedFloatIsNoFocusedFloatOnceTheCursorMoves() {
+        grids.drawFloats(true);
+        editorWindow();
+        floatAt(5, 1002, 3, 3, 50);
+        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        grids.apply(new GridEvent.WinGone(5)); // win_close
+        grids.apply(new GridEvent.CursorGoto(2, 4, 0));
+        assertEquals(-1, grids.focusedFloat());
+        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        grids.apply(new GridEvent.WinGone(5));
+        grids.apply(new GridEvent.Destroy(5)); // grid_destroy, the cursor not moved yet
+        assertEquals(-1, grids.focusedFloat());
     }
 
     @Test

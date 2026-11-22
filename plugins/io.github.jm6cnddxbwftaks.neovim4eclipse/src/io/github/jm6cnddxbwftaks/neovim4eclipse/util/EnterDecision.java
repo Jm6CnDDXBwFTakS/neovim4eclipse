@@ -25,7 +25,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  *   <tr><td>the attached editor's</td><td>another open document</td><td>{@link Action#FOLLOW}</td></tr>
  *   <tr><td>the attached editor's</td><td>a file without an editor</td><td>{@link Action#OPEN_FILE}</td></tr>
  *   <tr><td>the attached editor's</td><td>anything else (help, a scratch buffer)</td><td>{@link Action#RETURN_BACK}</td></tr>
- *   <tr><td>a plug-in's float just opened with the focus, a picker's prompt ({@code LuaScripts.WINDOWS}' {@code new_float})</td><td>no
+ *   <tr><td>a plug-in's float Neovim stays in, a picker's prompt or a hover float entered ({@code LuaScripts.WINDOWS}' {@code entered_float})</td><td>no
  *       document, no project file</td><td>{@link Action#ACCEPT}: the prompt is Neovim's while it is
  *       open; when it closes, Neovim enters a window again, and that enter decides</td></tr>
  *   <tr><td>any other</td><td>anything</td><td>{@link Action#RETURN_BACK}</td></tr>
@@ -69,20 +69,22 @@ public final class EnterDecision {
      * @param pageBuffer   the page's buffer when {@code window} is a page's window, else {@link #NONE}
      * @param document     whether {@code buffer} is an open document's
      * @param projectFile  whether {@code buffer} is a file Eclipse can open that has no editor yet
-     * @param newFloat     whether {@code window} is a plug-in's float just opened with the focus, as a
-     *                     picker's prompt ({@code LuaScripts.WINDOWS}' {@code new_float})
+     * @param floatEntered whether {@code window} is a plug-in's float Neovim stays in: a picker's
+     *                     prompt, {@code :Lazy}, a hover float entered by a second {@code K}
+     *                     ({@code LuaScripts.WINDOWS}' {@code entered_float})
      */
     public record Enter(int window, int buffer, int attachedWin, int attachedBuf, int focusedPage, int pageBuffer,
-            boolean document, boolean projectFile, boolean newFloat) {
+            boolean document, boolean projectFile, boolean floatEntered) {
     }
 
     private EnterDecision() {
     }
 
     public static Action decide(Enter e) {
-        if (e.newFloat() && !e.document() && !e.projectFile()) {
-            // A picker's prompt: sent back at once, the insert its plug-in starts would begin in the
-            // editor's window, where Eclipse types (KeyInput.onModeReport). Telescope's picks come
+        if (e.floatEntered() && !e.document() && !e.projectFile()) {
+            // A plug-in's float with the cursor (a picker's prompt): sent back at once, the insert its
+            // plug-in starts would begin in the editor's window, where Eclipse types
+            // (KeyInput.onModeReport). Leaving the editor closes it (WINDOWS' leave_float). Telescope's picks come
             // from the window it returns to (:edit there), which this decides as any other enter.
             // A document or a file shown in it goes the usual way below.
             return Action.ACCEPT;

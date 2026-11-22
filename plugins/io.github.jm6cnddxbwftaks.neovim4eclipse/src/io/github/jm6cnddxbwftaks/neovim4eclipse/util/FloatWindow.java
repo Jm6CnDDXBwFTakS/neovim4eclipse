@@ -10,8 +10,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  *
  * <p>Floating windows are drawn with or without the focus (docs/ARCHITECTURE.md, "Neovim's windows
  * drawn from their grids"): a plug-in's panel of key hints, hover text, a progress window opened in
- * the background, and a float the cursor is in ({@link #focused}: one entered later, {@code Ctrl-W w}
- * into hover documentation). Example, a panel of 5 rows across the bottom of an editor whose Neovim window has
+ * the background, and a float the cursor is in ({@link #focused}: a picker's prompt, hover
+ * documentation entered with a second {@code K}). Example, a panel of 5 rows across the bottom of an editor whose Neovim window has
  * 23 rows and 80 columns: {@code FloatWindow(grid 80x5, 18, 0, 23, 80, 1000)}.
  *
  * @param grid     the window's cells, its border included; with Neovim's cursor when the cursor
@@ -33,10 +33,8 @@ public record FloatWindow(GridSnapshot grid, int row, int col, int hostRows, int
         boolean fromBottom) {
 
     /**
-     * Whether this is a plug-in's float with Neovim's cursor in it: one entered later
-     * ({@code Ctrl-W w} into hover documentation), not one that opens with the focus,
-     * which the {@code WinNew} net of {@code LuaScripts.WINDOWS} still closes (a picker's
-     * prompt). The editor's caret is hidden meanwhile, so that one cursor shows where the keys go. Not one of ui2's windows, which also carry the cursor (a {@code :}
+     * Whether this is a plug-in's float with Neovim's cursor in it: a picker's prompt,
+     * {@code :Lazy}, hover documentation entered with a second {@code K}. The editor's caret is hidden meanwhile, so that one cursor shows where the keys go. Not one of ui2's windows, which also carry the cursor (a {@code :}
      * line being typed, the pager entered) but are Neovim's command line, with the editor's caret
      * shown as before; ui2's windows are the ones placed {@link #fromBottom}, and so is the
      * {@code :} line's list, which never has the cursor.

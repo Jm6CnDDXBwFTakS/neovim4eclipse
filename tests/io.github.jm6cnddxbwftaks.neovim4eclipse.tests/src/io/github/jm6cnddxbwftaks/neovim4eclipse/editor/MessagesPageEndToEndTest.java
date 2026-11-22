@@ -269,11 +269,10 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * A prompt with the cursor in the code editor hides its caret; the page takes the focus, the
-     * prompt closes meanwhile, and back in the code the caret is there again and the prompt is not
-     * drawn. Here the code hears the cursor leave the prompt before the page takes the focus
-     * events; {@code NeovimEditorController.takeFocusBack} also draws the floats as they are now,
-     * for the other order (a list sent to the page only), which this test does not bring about.
+     * A prompt with the cursor in the code editor hides its caret; the page takes the focus, which
+     * closes the prompt (the code's {@code LineOnFocusLoss}), and back in the code the caret is
+     * there again and the prompt is not drawn ({@code NeovimEditorController.takeFocusBack} draws
+     * the floats as they are now, also when their last list went to the page).
      */
     @Test
     void theCodesCaretComesBackWhenAPromptClosedWhileThePageHadTheFocus() {
@@ -287,10 +286,11 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
                 return widget.getCaret() == null;
             });
             page().activate(page);
-            waitUntil("Neovim in the page's window", TIMEOUT_MS, () -> ((Number) SessionProbe.lua(session,
-                    "return vim.api.nvim_get_current_win()")).intValue() == page.windowPane().window());
-            SessionProbe.lua(session, "vim.cmd.stopinsert() _G.n4e_real_close(vim.g.n4e_float, true) vim.g.n4e_float = nil");
-            settle();
+            waitUntil("the prompt closed as the code was left", TIMEOUT_MS, () -> {
+                settle();
+                return Long.valueOf(-1).equals(SessionProbe.lua(session, "return vim.fn.bufwinid(vim.g.n4e_prompt)"))
+                        && !"i".equals(session.getMode());
+            }, () -> "; mode " + session.getMode() + " (the prompt's insert must end, not go on in the page)");
             page().activate(editor);
             waitUntil("the code's caret back, the closed prompt not drawn", TIMEOUT_MS, () -> {
                 settle();
@@ -298,7 +298,6 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
             });
         } finally {
             SessionProbe.lua(session, "vim.cmd.stopinsert()"
-                    + " if _G.n4e_real_close then vim.api.nvim_win_close = _G.n4e_real_close _G.n4e_real_close = nil end"
                     + " pcall(vim.api.nvim_win_close, vim.g.n4e_float or -1, true) vim.g.n4e_float = nil");
         }
     }

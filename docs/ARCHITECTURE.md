@@ -200,12 +200,18 @@ flicking through all of them. A switch to a file that has no editor (`gf`, `'A`,
 of a closed file, a quickfix entry) opens that file's editor (`editor/ProjectFileEditors`: a
 project's file as a workspace file, any other by its location, as *File › Open File...* does) and is
 followed the same way; a switch to any other buffer (`:help`, a scratch buffer) is undone
-(`returnToAttachedBufferAsync`), except in a plug-in's float that has just opened with the focus,
-as a picker's prompt does (`LuaScripts.WINDOWS`' `new_float`, sent with the `BufEnter` report: a
-focused float the safety net has not looked at yet, entered outside an insert, showing no document
-or project file), where Neovim is left, so that the insert the picker
-starts begins there; the WinNew safety net still closes that float right after, and the window
-Neovim enters next decides as usual. When
+(`returnToAttachedBufferAsync`), except in a plug-in's float with the cursor, as a picker's prompt
+(`LuaScripts.WINDOWS`' `entered_float`, sent with the `BufEnter` report: a plug-in's float, while
+the editor draws floats, entered outside an insert, showing no document or project file), where
+Neovim is left, so that the insert the picker starts begins there. Leaving the editor closes the
+float (`WINDOWS`' `leave_float`, from the two places every leave passes: `editor/LineOnFocusLoss`
+as the keyboard goes to another part, the float read as it goes, and the click handler before a
+click in the text, `NeovimEditorController.abandonLineAndFloat`; Eclipse mode too; and closing the
+editor, since `WINDOWS`' `close` leaves its tab's float before closing the tab quietly), and the
+window Neovim enters next decides as usual. A float with the cursor the editor cannot draw (past
+`Grids`' limits), or one its plug-in hides while the cursor is in it (`win_hide`: `Grids` keeps
+naming it as the focused float), is closed with a message (`NeovimSession` after each redraw,
+`WINDOWS`' `close_undrawn`), so that no key goes into a window nobody sees. When
 a document's last editor closes, its buffer is unloaded and unlisted, as by Vim's `:bd`, not wiped
 (`closeBufferAsync`, `LuaScripts.CLOSE_DOCUMENT_BUFFER`), and the file's next editor gets the same
 buffer back, with its number and marks (`LuaScripts.CREATE_DOCUMENT_BUFFER`;
@@ -262,11 +268,13 @@ area; [design/SPLITS.md](design/SPLITS.md)); the tab commands are refused throug
 hook; a `WinNew` safety
 net closes any other window that is not the plug-in's, floating or special, and the quickfix,
 location list and preview windows, which Eclipse cannot show (the quickfix and location list
-windows are then shown the Eclipse way, section 8); a floating window is closed too when it opens
-with the focus (a picker's prompt, `:Lazy`), since it would take the keys while the editor
-cannot yet leave it (a click away, the editor's own text), and so is one the user's config leaves the focus in at start (lazy.nvim's installer), before
-the home buffer goes into it (`LuaScripts.LEAVE_START_FLOAT`); in a floating window the user entered later, `:q` and
-`:close` are left to Neovim (the host commands' `leave_to_neovim` hook).
+windows are then shown the Eclipse way, section 8); a floating window that opens with the focus
+(a picker's prompt, `:Lazy`) stays while the editor draws floats (`LuaScripts.FLOATS_DRAWN`), and
+is closed with plug-ins' floats off, since its keys would go to a window nobody sees. One the
+user's config leaves the focus in at start (lazy.nvim's installer) is left before the home buffer
+goes into it (`LuaScripts.LEAVE_START_FLOAT`), then shown in the first editor's window, moved into
+its tab page (`BRING_START_FLOAT`), or closed with floats off (`CLOSE_START_FLOAT`); in a floating
+window, `:q` and `:close` are left to Neovim (the host commands' `leave_to_neovim` hook).
 
 **The focus and the attached document.** Two things that used to be one: the *focused window*,
 Neovim's current window, and the *attached document*, the text editor whose buffer and caret
@@ -1038,11 +1046,12 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   (`CursorStyleController.setHidden`: the caret is taken off the `StyledText` and put back, since
   `StyledText` makes an invisible caret visible again at each scroll), so that one cursor shows
   where the keys go; ui2's windows, which have the cursor while a `:` line is typed, leave it shown.
-  A float that *opens* with the focus is still closed by the `WinNew` net of `LuaScripts.WINDOWS`.
+  Leaving the editor closes it (above, section on `BufEnter`: `leave_float`); with plug-ins' floats
+  off, one that *opens* with the focus is closed by the `WinNew` net of `LuaScripts.WINDOWS`.
   Keys are never sent to a canvas (`SWT.NO_FOCUS`): they go to the editor, and from there to
   Neovim, which puts them in the window that has its cursor.
-- **How many** (`Grids.MAX_FLOATS`, `MAX_FLOAT_CELLS`): at most 16 floats and 250,000 cells in
-  all, taken Neovim's own first (ui2's, the popup menu), then the cursor's (the window the keys go
+- **How many** (`Grids.MAX_FLOATS` floats and `MAX_FLOAT_CELLS` cells at most, in
+  all; their numbers in docs/USER_GUIDE.md, "Floating windows", which `GridsTest` holds to them), taken Neovim's own first (ui2's, the popup menu), then the cursor's (the window the keys go
   to), then highest `zindex` first, each one if it still fits; the rest are left out, and that
   is logged once. Neovim does not shrink a float a plug-in asks for (200 by 60 on a screen of 80 by
   24 comes as 200 by 60), and each changed redraw copies a drawn float's cells for the UI thread.
@@ -1137,8 +1146,8 @@ an earlier key overwrite a later one typed by Eclipse. Once Neovim has them all 
 the same handshake hands typing back to Eclipse (`KeyInput.handBackToEclipse`); it is called off when
 the editor applies the sync if a key was queued meanwhile, and the next key tries again. An insert from
 blockwise visual, while recording, or begun in a plug-in's focused floating window (a picker's
-prompt, whose buffer is no document; today the WinNew safety net still closes such a float right
-away) stays Neovim's to Esc. Where an insert begins is told by
+prompt, whose buffer is no document) stays Neovim's to Esc, or until leaving the editor closes
+the float. Where an insert begins is told by
 Neovim's mode report itself (`eclipse_mode`'s second value), not by window events: the plug-in
 switches windows quietly in places, and pickers start their insert after the key that opened them
 was answered (Telescope with `nvim_feedkeys("A")`, others from a `vim.schedule` callback), so only

@@ -417,6 +417,35 @@ final class DocumentBuffers {
     }
 
     /**
+     * The float the user's config left the focus in at start (lazy.nvim's installer), kept for the
+     * first editor shown ({@link #keepStartFloat}), or -1. Input thread.
+     */
+    private int startFloat = -1;
+
+    /**
+     * Keeps {@code win}, the float the user's config left the focus in at start
+     * ({@code LuaScripts.LEAVE_START_FLOAT}), to show in the first editor's window once one is
+     * shown: before, there is no editor to draw it in. Floats are drawn, else the session closed it.
+     */
+    void keepStartFloat(int win) {
+        startFloat = win;
+    }
+
+    /**
+     * The start float ({@link #keepStartFloat}), once, for the first editor shown, or -1: shown
+     * then in that editor's window ({@code NeovimSession.showWindow}). Not for the home window
+     * ({@code window} {@code null}), which no editor shows.
+     */
+    int takeStartFloat(EditorWindow window) {
+        if (window == null) {
+            return -1;
+        }
+        int start = startFloat;
+        startFloat = -1;
+        return start;
+    }
+
+    /**
      * One try of {@link #show(DocumentBuffer, EditorWindow, String)}: returns the window shown, or
      * {@link #BUFFER_GONE} when the buffer this session made for {@code buffer} was wiped in Neovim,
      * and nothing was shown. When SHOW_WINDOW found it gone, the attachment already names it (set
@@ -1064,12 +1093,12 @@ final class DocumentBuffers {
      * @param projectFile the buffer's file when it is a project's and no document's, else {@code ""}
      * @param pageFollows whether {@code winid} is a help page's window that took this help buffer as
      *                    its page ({@code Ctrl-]} in the help editor): it is the page's buffer now
-     * @param newFloat    whether {@code winid} is a plug-in's float just opened with the focus, as a
-     *                    picker's prompt ({@code LuaScripts.WINDOWS}' {@code new_float}): Neovim is
+     * @param floatEntered whether {@code winid} is a plug-in's float Neovim stays in, as a picker's
+     *                    prompt ({@code LuaScripts.WINDOWS}' {@code entered_float}): Neovim is
      *                    left there, unless it shows a document or a project file
      * @param restorePage puts the page's own buffer back into {@code winid}, a page's window
      */
-    void onEntered(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows, boolean newFloat,
+    void onEntered(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows, boolean floatEntered,
             Runnable returnBack, Runnable restorePage) {
         if (pageFollows && pageWindows.containsKey(winid)) {
             pageWindows.put(winid, bufnr);
@@ -1082,7 +1111,7 @@ final class DocumentBuffers {
         BiConsumer<Integer, String> fileHandler = projectFileHandler;
         EnterDecision.Action action = EnterDecision.decide(new EnterDecision.Enter(winid, bufnr, attachedWin,
                 attachedBufnr, focusedPage, pageBuffer == null ? EnterDecision.NONE : pageBuffer,
-                handler != null && created.containsKey(bufnr), fileHandler != null && !projectFile.isEmpty(), newFloat));
+                handler != null && created.containsKey(bufnr), fileHandler != null && !projectFile.isEmpty(), floatEntered));
         switch (action) {
             // Eclipse's own switch, Neovim came back, or the focus moved to a page. Never a reason
             // to take the focus from a page: this notice can be older than the page's focusPage

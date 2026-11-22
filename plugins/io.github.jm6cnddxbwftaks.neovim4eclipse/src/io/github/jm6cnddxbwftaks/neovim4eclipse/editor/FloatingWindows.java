@@ -21,8 +21,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 /**
  * Draws Neovim's floating windows over the editor's text (docs/ARCHITECTURE.md, "Neovim's windows
  * drawn from their grids"): a plug-in's panel of key hints, hover text, a progress window opened in
- * the background, a float entered later with Neovim's cursor in it ({@code Ctrl-W w}; one that
- * opens with the focus, a picker's prompt, is still closed by {@code LuaScripts.WINDOWS}). Eclipse draws the editor, so
+ * the background, a picker's prompt with Neovim's cursor in it. Eclipse draws the editor, so
  * without this such a window exists in Neovim and nobody sees it.
  *
  * <h2>How</h2>
@@ -38,7 +37,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
  *
  * <h2>They only show</h2>
  * A drawn window never takes the keyboard focus ({@code SWT.NO_FOCUS}): the keys keep going to the
- * editor, and from there to Neovim, also when Neovim's cursor is in the window (one entered with {@code Ctrl-W w}):
+ * editor, and from there to Neovim, also when Neovim's cursor is in the window (a picker's prompt):
  * Neovim then puts them there itself. Its cursor is drawn as Neovim draws it by default: a block,
  * a bar at the cell's left edge in Insert and Replace mode ({@link #setInsertMode}). Clicks and
  * the wheel on it do nothing. The windows lie under the plug-in's own overlays (the command-line
@@ -147,7 +146,7 @@ final class FloatingWindows {
 
     /**
      * Whether Neovim's cursor is in a plug-in's drawn window ({@link FloatWindow#focused}): a
-     * float entered with {@code Ctrl-W w}, not ui2's command line. The editor hides its caret meanwhile.
+     * picker's prompt, not ui2's command line. The editor hides its caret meanwhile.
      */
     boolean hasFocusedFloat() {
         return shown.stream().anyMatch(FloatWindow::focused);

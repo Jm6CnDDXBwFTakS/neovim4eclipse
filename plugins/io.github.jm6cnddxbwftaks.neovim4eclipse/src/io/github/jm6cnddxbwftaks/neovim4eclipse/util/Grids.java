@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -35,9 +36,8 @@ import java.util.logging.Logger;
  * is drawn with the cursor. A float's place is counted from the first row and column of the
  * editor's window ({@link FloatWindow}), the one window of the layout that is on screen. Example:
  * a plug-in's panel of key hints (which-key) is two floats, neither entered, drawn without a
- * cursor; a float entered with {@code Ctrl-W w} has the cursor in it, and is drawn with it
- * (a picker's prompt would be too, but {@code LuaScripts.WINDOWS} closes it as it opens), so that the user
- * sees where the letters typed go.
+ * cursor; a picker's prompt has the cursor in it, and is drawn with it, so that the user sees
+ * where the letters typed go.
  *
  * <h2>Example</h2>
  * <pre>
@@ -69,6 +69,16 @@ public final class Grids {
      */
     public static final int MAX_FLOAT_CELLS = 250_000;
 
+    /**
+     * What goes past the limits, in words built from them, the one wording for the log and for the
+     * message that closes a float with the cursor past them ({@code LuaScripts.CLOSE_UNDRAWN_FLOAT}):
+     * "more than {@value #MAX_FLOATS} floating windows or {@value #MAX_FLOAT_CELLS} cells at once"
+     * (the cells grouped by thousands). Not a compile-time constant, so a class using it reads it
+     * here, never a copy javac made.
+     */
+    public static final String PAST_LIMITS = "more than " + MAX_FLOATS + " floating windows or "
+            + String.format(Locale.ROOT, "%,d", MAX_FLOAT_CELLS) + " cells at once";
+
     private final Map<Integer, GridCells> grids = new HashMap<>();
     private final Map<Integer, Integer> windowOfGrid = new HashMap<>();
     /** Where each grid's window is on Neovim's screen, as last said; a float's and a layout window's alike. */
@@ -76,6 +86,14 @@ public final class Grids {
     private final Map<Integer, GridEvent.HlAttr> attrs = new HashMap<>();
     private GridEvent.DefaultColors defaultColors = new GridEvent.DefaultColors(GridEvent.NO_COLOR, GridEvent.NO_COLOR);
     private int cursorGrid = -1;
+    /**
+     * A plug-in's float Neovim hid ({@code win_hide}) while the cursor was in it, as {@code {grid,
+     * window}}, or {@code null}: the cursor stays in a hidden float (its config's {@code hide},
+     * set by its plug-in), so the keys would go into a window nobody sees. {@link #focusedFloat}
+     * still names it, so that the session closes it ({@link #undrawnFocusedFloat}). Forgotten when
+     * the cursor goes to another grid, or the window is shown again or gone.
+     */
+    private int[] hiddenFocused;
     private int cursorRow;
     private int cursorCol;
     private int drawnWindow = -1;
@@ -266,12 +284,15 @@ public final class Grids {
                 touched(e.grid());
             }
             case GridEvent.CursorGoto e -> {
+                if (hiddenFocused != null && hiddenFocused[0] != e.grid()) {
+                    hiddenFocused = null; // the cursor left the hidden float
+                }
                 pageTouched(cursorGrid); // the cursor left that page, or moved in it
                 pageTouched(e.grid());
                 boolean wasDrawn = isDrawn(cursorGrid);
                 floatsChanged |= cursorGrid != e.grid(); // the focus moved: into a float, out of one, to another window
                 // The cursor moved in a window drawn with it: ui2's line or pager, or a float that has
-                // the focus (one entered with Ctrl-W w).
+                // the focus (a picker's prompt).
                 floatsChanged |= alwaysDrawn(e.grid()) || (drawFloats && isFloat(e.grid()));
                 cursorGrid = e.grid();
                 cursorRow = e.row();
@@ -279,17 +300,24 @@ public final class Grids {
                 changed |= wasDrawn || isDrawn(cursorGrid);
             }
             case GridEvent.Destroy e -> {
+                forgetHidden(e.grid());
                 grids.remove(e.grid());
                 windowOfGrid.remove(e.grid());
                 floatsChanged |= placeOfGrid.remove(e.grid()) != null;
             }
             case GridEvent.WinPos e -> {
+                forgetHidden(e.grid()); // shown again
                 windowOfGrid.put(e.grid(), e.win());
                 placeOfGrid.put(e.grid(), e);
                 floatsChanged = true; // a float moved, or the window the floats are counted from
                 touched(e.grid());
             }
             case GridEvent.WinGone e -> {
+                // Read before the window is forgotten. A float that closes takes the cursor along
+                // (a cursor_goto elsewhere follows, which forgets it); a hidden one keeps it.
+                if (e.grid() == cursorGrid && focusedFloat() != -1) {
+                    hiddenFocused = new int[] {e.grid(), focusedFloat()};
+                }
                 touched(e.grid());
                 windowOfGrid.remove(e.grid());
                 floatsChanged |= placeOfGrid.remove(e.grid()) != null;
@@ -497,8 +525,8 @@ public final class Grids {
             if (floats.size() >= MAX_FLOATS || cells + size > MAX_FLOAT_CELLS) {
                 if (!limitLogged) {
                     limitLogged = true;
-                    LOG.info(() -> "a floating window of Neovim's is not drawn: more than " + MAX_FLOATS
-                            + " windows or " + MAX_FLOAT_CELLS + " cells at once (window " + place.win() + ", "
+                    LOG.info(() -> "a floating window of Neovim's is not drawn: " + PAST_LIMITS
+                            + " (window " + place.win() + ", "
                             + grid.width + "x" + grid.height + "); said once per session");
                 }
                 continue;
@@ -529,6 +557,38 @@ public final class Grids {
         }
         lastFloats = List.copyOf(floats);
         return Optional.of(lastFloats);
+    }
+
+    /**
+     * The window of the plug-in's float Neovim's cursor is in, or -1: the cursor's grid is a
+     * float's, and not one of Neovim's own ({@link #alwaysDrawn}: ui2's, the popup menu). Whether it
+     * is drawn or not ({@link #floatsIfChanged}), also once hidden ({@link #hiddenFocused}).
+     * Example: a picker's prompt entered: its window.
+     */
+    public int focusedFloat() {
+        if (hiddenFocused != null && hiddenFocused[0] == cursorGrid) {
+            return hiddenFocused[1];
+        }
+        Integer win = windowOfGrid.get(cursorGrid);
+        return win != null && win != -1 && isFloat(cursorGrid) && !alwaysDrawn(cursorGrid) ? win : -1;
+    }
+
+    /**
+     * The plug-in's float the cursor is in ({@link #focusedFloat}) when the last answer of
+     * {@link #floatsIfChanged} left it out, or -1: more floats or cells than the limits allow, so
+     * it is not drawn, or hidden by its plug-in, and the keys would go into a window nobody sees
+     * (the session closes it).
+     * Only while floats are drawn at all ({@link #drawFloats}): with them off every float is left
+     * out, and Neovim is sent back from such a float instead. Example: a float of more than
+     * {@link #MAX_FLOAT_CELLS} cells with the cursor in it. (Other floats seldom crowd one out: the
+     * cursor's is taken right after Neovim's own windows.)
+     */
+    public int undrawnFocusedFloat() {
+        int focused = focusedFloat();
+        if (focused == -1 || !drawFloats) {
+            return -1;
+        }
+        return lastFloats.stream().anyMatch(f -> f.grid().window() == focused) ? -1 : focused;
     }
 
     /** {@code grid} as it stands, with the highlights it uses; the cursor when it is on it. */
@@ -617,6 +677,12 @@ public final class Grids {
     private boolean alwaysDrawn(int grid) {
         Integer win = windowOfGrid.get(grid);
         return win != null && (ui2Windows.contains(win) || (win == -1 && isFloat(grid)));
+    }
+
+    private void forgetHidden(int grid) {
+        if (hiddenFocused != null && hiddenFocused[0] == grid) {
+            hiddenFocused = null;
+        }
     }
 
     private boolean isFloat(int grid) {

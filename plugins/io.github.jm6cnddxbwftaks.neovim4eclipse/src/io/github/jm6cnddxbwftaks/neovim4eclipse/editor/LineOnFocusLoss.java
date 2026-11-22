@@ -4,6 +4,8 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.function.BooleanSupplier;
+import java.util.function.IntConsumer;
+import java.util.function.IntSupplier;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Control;
@@ -13,7 +15,9 @@ import org.eclipse.swt.widgets.Listener;
 /**
  * Abandons Neovim's open {@code :}, {@code /} or {@code ?} line when the keyboard leaves the
  * widget that typed it for another part of Eclipse, as a click in the text does
- * ({@code NeovimMouse}) and as leaving a field does.
+ * ({@code NeovimMouse}) and as leaving a field does; and closes a plug-in's float Neovim's cursor
+ * is in (a picker's prompt), drawn in the widget, for the same reasons: it would be invisible
+ * while another part has the keyboard, and take Neovim's keys when the user comes back.
  *
  * <h2>Why</h2>
  * Only the part with the keyboard draws Neovim's windows (ui2's line among them), so a line left
@@ -38,28 +42,45 @@ final class LineOnFocusLoss {
     private final Control widget;
     private final BooleanSupplier lineOpen;
     private final Runnable abandon;
-    private final Listener onFocusOut = e -> later();
+    private final IntConsumer leaveFloat;
+    // The float is read as the keyboard leaves (floatNow, in the listener), not later: by then the
+    // part that took the keyboard may have opened one of its own (a page and the code share one
+    // Neovim), which must stay.
+    private final Listener onFocusOut;
 
     /**
      * @param widget   the widget keys are typed into (the editor's text, a page's canvas)
      * @param lineOpen whether a line is open now, typed from this widget ({@code NeovimSession.commandLineOpen})
      * @param abandon  abandons the line ({@code <C-c>} to Neovim)
+     * @param floatNow the plug-in's float Neovim's cursor is in, -1 for none
+     *                 ({@code NeovimSession.pluginFloat}): read as the keyboard leaves
+     * @param leaveFloat closes that float, its insert ended ({@code NeovimSession.leaveFloatAsync})
      */
-    LineOnFocusLoss(Control widget, BooleanSupplier lineOpen, Runnable abandon) {
+    LineOnFocusLoss(Control widget, BooleanSupplier lineOpen, Runnable abandon, IntSupplier floatNow,
+            IntConsumer leaveFloat) {
         this.widget = widget;
         this.lineOpen = lineOpen;
         this.abandon = abandon;
+        this.leaveFloat = leaveFloat;
+        this.onFocusOut = e -> later(floatNow.getAsInt());
         widget.addListener(SWT.FocusOut, onFocusOut);
     }
 
-    private void later() {
+    /** @param floatAtLeave the float the cursor was in as the keyboard left, -1 for none */
+    private void later(int floatAtLeave) {
         Display display = widget.getDisplay();
         display.asyncExec(() -> {
             if (widget.isDisposed() || insideWidget(display.getFocusControl())) {
                 return; // back already, never really left (a transient focus change), or inside it
             }
-            if (display.getActiveShell() != null && lineOpen.getAsBoolean()) { // null: another application
+            if (display.getActiveShell() == null) {
+                return; // another application: the line and the float stay
+            }
+            if (lineOpen.getAsBoolean()) {
                 abandon.run();
+            }
+            if (floatAtLeave != -1) {
+                leaveFloat.accept(floatAtLeave);
             }
         });
     }

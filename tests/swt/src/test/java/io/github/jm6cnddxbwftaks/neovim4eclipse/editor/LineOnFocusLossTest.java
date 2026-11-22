@@ -36,6 +36,9 @@ class LineOnFocusLossTest {
     private Text other;
     private final AtomicInteger abandoned = new AtomicInteger();
     private boolean lineOpen = true;
+    /** The float the cursor is in, -1 for none; and each float left, as asked to close. */
+    private int floatNow = -1;
+    private final java.util.List<Integer> floatsLeft = new java.util.concurrent.CopyOnWriteArrayList<>();
     private LineOnFocusLoss watch;
 
     @BeforeEach
@@ -46,7 +49,7 @@ class LineOnFocusLossTest {
         other = new Text(shell, SWT.SINGLE);
         shell.setSize(300, 200);
         shell.open();
-        watch = new LineOnFocusLoss(text, () -> lineOpen, abandoned::incrementAndGet);
+        watch = new LineOnFocusLoss(text, () -> lineOpen, abandoned::incrementAndGet, () -> floatNow, floatsLeft::add);
         KeyboardFocus.require(text, TIMEOUT_MS);
     }
 
@@ -81,6 +84,29 @@ class LineOnFocusLossTest {
         awaitAbandoned(1);
         drain();
         assertEquals(true, abandoned.get() >= 1, "abandoned");
+    }
+
+    /**
+     * The float the cursor was in as the keyboard left is the one closed, read then: by the time
+     * the check runs, the part that took the keyboard may have opened its own, which stays.
+     */
+    @Test
+    void theFloatTheCursorWasInAsTheKeyboardLeftIsClosedNotOneOpenedSince() {
+        lineOpen = false;
+        floatNow = 1005;
+        KeyboardFocus.require(other, TIMEOUT_MS);
+        text.notifyListeners(SWT.FocusOut, new org.eclipse.swt.widgets.Event());
+        floatNow = 1009; // the other part's own float, opened before the check ran
+        long end = System.currentTimeMillis() + TIMEOUT_MS;
+        while (floatsLeft.isEmpty() && System.currentTimeMillis() < end) {
+            if (!Display.getDefault().readAndDispatch()) {
+                Display.getDefault().sleep();
+            }
+        }
+        drain();
+        assertEquals(true, floatsLeft.contains(1005), "the float left: " + floatsLeft);
+        assertEquals(false, floatsLeft.contains(1009), "not the other part's: " + floatsLeft);
+        assertEquals(0, abandoned.get(), "no line was open");
     }
 
     @Test

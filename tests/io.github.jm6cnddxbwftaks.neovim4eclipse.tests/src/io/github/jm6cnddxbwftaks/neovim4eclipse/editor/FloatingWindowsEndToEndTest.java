@@ -9,8 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.ui.IPageLayout;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -40,18 +42,10 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
 
     /**
      * Opens a picker's prompt as a picker does: a scratch prompt buffer in a float, entered, then
-     * {@code startinsert}. The WinNew safety net of {@code LuaScripts.WINDOWS} still closes such a
-     * float, through {@code vim.api.nvim_win_close} (looked up at each close, so a stand-in set here
-     * takes its place); its close of this one is refused (the stand-in below), so that
-     * the prompt stays open to be drawn. {@link #closeTheFloat} puts the real close back.
+     * {@code startinsert}. It stays: floats are drawn, so the WinNew safety net of
+     * {@code LuaScripts.WINDOWS} leaves it.
      */
     static final String OPEN_PROMPT = """
-            local close = vim.api.nvim_win_close
-            _G.n4e_real_close = close
-            vim.api.nvim_win_close = function(win, force)
-              if win == vim.g.n4e_float then error('the test keeps its prompt open') end
-              return close(win, force)
-            end
             local buf = vim.api.nvim_create_buf(false, true)
             vim.bo[buf].buftype = 'prompt'
             vim.fn.prompt_setprompt(buf, '> ')
@@ -64,7 +58,6 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
     @AfterEach
     void closeTheFloat() {
         SessionProbe.lua(session, "vim.cmd.stopinsert()"
-                + " if _G.n4e_real_close then vim.api.nvim_win_close = _G.n4e_real_close _G.n4e_real_close = nil end"
                 + " pcall(vim.api.nvim_win_close, vim.g.n4e_float or -1, true) vim.g.n4e_float = nil"
                 + " pcall(vim.cmd.delmarks, 'q')");
         waitUntil("no float drawn", TIMEOUT_MS, () -> {
@@ -202,11 +195,72 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
             return !canvas().isInsertCursor() && canvas().grid().cursorRow() >= 0 && widget.getCaret() == null;
         });
         assertEquals(text, document.get(), "the letters went to the prompt, not the document");
-        SessionProbe.lua(session, "_G.n4e_real_close(vim.g.n4e_float, true) vim.g.n4e_float = nil");
+        SessionProbe.lua(session, "vim.api.nvim_win_close(vim.g.n4e_float, true) vim.g.n4e_float = nil");
         waitUntil("the prompt gone, the editor's caret back", TIMEOUT_MS, () -> {
             settle();
             return canvas() == null && widget.getCaret() != null;
         });
+    }
+
+    /** Whether the test's prompt is closed and its insert over. */
+    private boolean promptClosed() {
+        return Long.valueOf(-1).equals(SessionProbe.lua(session, "return vim.fn.bufwinid(vim.g.n4e_prompt)"))
+                && !"i".equals(session.getMode());
+    }
+
+    /**
+     * Leaving the editor for a view closes the prompt and ends its insert (LineOnFocusLoss): it
+     * would be invisible meanwhile, and take the keys on the way back. Back in the editor, its
+     * caret is there and an insert is Eclipse's.
+     */
+    @Test
+    void leavingTheEditorForAViewClosesThePromptAndEndsItsInsert() throws Exception {
+        String text = document.get();
+        SessionProbe.lua(session, OPEN_PROMPT);
+        floatShowing("> ");
+        type(widget, "ab");
+        floatShowing("> ab");
+        page().showView(IPageLayout.ID_TASK_LIST);
+        waitUntil("the prompt closed, its insert ended", TIMEOUT_MS, () -> {
+            settle();
+            return promptClosed();
+        }, () -> "; mode " + session.getMode());
+        page().activate(editor);
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        waitUntil("the prompt not drawn, the caret back", TIMEOUT_MS, () -> {
+            settle();
+            return canvas() == null && widget.getCaret() != null;
+        });
+        assertEquals(text, document.get(), "the letters went to the prompt, not the document");
+    }
+
+    /**
+     * A click in the editor's text, the prompt open in its insert: the prompt closes first, then
+     * the click lands in the text, as in Normal mode (abandonLine, NeovimMouse).
+     */
+    @Test
+    void aClickInTheTextClosesThePromptThenLandsInTheText() {
+        SessionProbe.lua(session, OPEN_PROMPT);
+        floatShowing("> ");
+        Rectangle area = widget.getClientArea();
+        Event down = new Event();
+        down.x = area.x + 2;
+        down.y = area.y + 2;
+        down.button = 1;
+        widget.notifyListeners(SWT.MouseDown, down);
+        Event up = new Event();
+        up.x = down.x;
+        up.y = down.y;
+        up.button = 1;
+        up.stateMask = SWT.BUTTON1;
+        widget.notifyListeners(SWT.MouseUp, up);
+        waitUntil("the prompt closed by the click, its insert ended", TIMEOUT_MS, () -> {
+            settle();
+            return promptClosed() && canvas() == null && widget.getCaret() != null;
+        }, () -> "; mode " + session.getMode());
+        assertEquals(session.getAttachedWinid(),
+                ((Number) SessionProbe.lua(session, "return vim.api.nvim_get_current_win()")).intValue(),
+                "Neovim back in the editor's window");
     }
 
     @Test

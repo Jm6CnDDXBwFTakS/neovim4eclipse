@@ -48,8 +48,7 @@ switch toggles only the letters whose two choices differ, in one `deferUpdates` 
 (`editor/VimKeyContexts.apply`): 0.3 ms, against 5 to 9 ms for 23 contexts toggled one by one.
 
 An insert *Neovim drives* (after a block-visual `I`, `A` or `c`, while recording a macro, or begun in
-a plug-in's focused floating window such as a picker's prompt, which the safety net still closes
-today; Neovim reads every key) uses the Insert letters too. Neovim is in insert mode there, so a key means its
+a plug-in's focused floating window such as a picker's prompt; Neovim reads every key) uses the Insert letters too. Neovim is in insert mode there, so a key means its
 insert meaning; with the Normal letters, `Ctrl+W` ticked for insert only would close the editor in a
 block-visual `I`. The editor re-checks the contexts after each key, since a key can make the insert
 Neovim-driven without a mode change.

@@ -50,10 +50,10 @@ class NotificationBridgeTest {
                 events.add("lines@" + bufnr + ":" + first + ":" + last + ":" + lines);
             }
             @Override public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile,
-                    boolean pageFollows, boolean newFloat) {
+                    boolean pageFollows, boolean floatEntered) {
                 events.add("enter:" + bufnr + (winid == EditorWindow.UNKNOWN ? "" : "#" + winid) + (jumped ? " jump" : "")
                         + (projectFile.isEmpty() ? "" : " file " + projectFile) + (pageFollows ? " follows" : "")
-                        + (newFloat ? " new float" : ""));
+                        + (floatEntered ? " entered float" : ""));
             }
             @Override public void onBufferReload(int bufnr, boolean kept) { events.add("reload:" + bufnr + (kept ? " kept" : "")); }
             @Override public void onWindowClosed(int winid) { events.add("winclosed:" + winid); }
@@ -211,7 +211,7 @@ class NotificationBridgeTest {
         notify("eclipse_reload", 2); // no flag: not kept
         notify("eclipse_reload");
         assertEquals(List.of("enter:5#1002 jump file /ws/app/B.java", "enter:6#1002", "enter:7#1002",
-                "enter:8#1003 follows", "enter:9#1009 new float", "reload:4 kept", "reload:3", "reload:2"), events);
+                "enter:8#1003 follows", "enter:9#1009 entered float", "reload:4 kept", "reload:3", "reload:2"), events);
     }
 
     /** {@code :set wrap} in Neovim (LuaScripts.VIEWPORT); a payload without a boolean is ignored. */

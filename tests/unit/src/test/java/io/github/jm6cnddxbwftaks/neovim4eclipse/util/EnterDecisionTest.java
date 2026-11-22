@@ -40,7 +40,7 @@ class EnterDecisionTest {
      * (any window but the attached one is sent back).
      */
     @Test
-    void aNewFloatKeepsNeovimButNotADocumentOrAFile() {
+    void aFloatNeovimEnteredToStayKeepsItButNotADocumentOrAFile() {
         assertEquals(Action.ACCEPT, inNewFloat(SCRATCH));
         assertEquals(Action.RETURN_BACK, inNewFloat(OTHER_DOC));
         assertEquals(Action.RETURN_BACK, inNewFloat(CODE_BUF));

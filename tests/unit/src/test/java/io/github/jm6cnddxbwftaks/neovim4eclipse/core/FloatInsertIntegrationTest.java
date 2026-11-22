@@ -33,11 +33,11 @@ import org.junit.jupiter.params.provider.ValueSource;
  * made a prompt, then {@code nvim_feedkeys("A")}). In the second case Neovim reports the
  * insert only after the key that opened the picker was answered, so only the report decides.
  *
- * <p>Held back: the WinNew safety net of {@link LuaScripts#WINDOWS}, which today closes such a float
- * right away, runs as in the product, but its close of the test's prompt is refused (a stand-in for
- * {@code nvim_win_close} in this Neovim), so that the prompt stays open while the keys arrive. The
- * session leaves Neovim in the new prompt ({@code util/EnterDecision}, {@code new_float}), so the
- * keys must end up in the prompt, and the document must keep its text.
+ * <p>As in the product: the WinNew safety net of {@link LuaScripts#WINDOWS} leaves the prompt
+ * open while floats are drawn, and the session leaves Neovim in it ({@code util/EnterDecision},
+ * {@code entered_float}), so the keys must end up in the prompt, and the document must keep its
+ * text. Each round ends as leaving the editor does ({@link NeovimSession#leaveFloatAsync}): the
+ * prompt closed, its insert ended.
  *
  * <p>Each case runs {@link #ROUNDS} times in one Neovim, the keys routed without a pause; on a loaded
  * machine run it pinned to two cores (CONTRIBUTING.md, "Tests on a loaded machine").
@@ -54,16 +54,6 @@ class FloatInsertIntegrationTest {
      * later} from vim.schedule, {@code :TestPicker telescope} in Telescope's order.
      */
     private static final String PICKER = """
-            -- The net still runs (its pass is what lets the session leave Neovim in a new float),
-            -- but cannot close the test's prompt; CLOSE ends the round with the real close.
-            local close = vim.api.nvim_win_close
-            _G.n4e_real_close = close
-            vim.api.nvim_win_close = function(win, force)
-              if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == vim.g.n4e_prompt then
-                error('the test keeps its prompt open')
-              end
-              return close(win, force)
-            end
             vim.api.nvim_create_user_command('TestPicker', function(o)
               local buf = vim.api.nvim_create_buf(false, true)
               local opts = { relative = 'editor', row = 1, col = 1, width = 30, height = 1 }
@@ -93,14 +83,53 @@ class FloatInsertIntegrationTest {
             return 0
             """;
 
-    /** Ends the round: normal mode, every float closed, Neovim in the editor's window again. */
-    private static final String CLOSE = """
-            vim.cmd.stopinsert()
-            for _, w in ipairs(vim.api.nvim_list_wins()) do
-              if vim.fn.win_gettype(w) == 'popup' then pcall(_G.n4e_real_close, w, true) end
-            end
-            return 0
-            """;
+    /**
+     * A plug-in's input float that closes itself as Neovim leaves it (a 'nofile' buffer closed on
+     * BufLeave, as input plug-ins do): Neovim goes on to another part's window still in the
+     * float's insert. Leaving with that float named ends the insert all the same.
+     */
+    @org.junit.jupiter.api.Test
+    void anInsertCarriedOutOfAFloatThatClosedItselfEndsAsTheFloatIsLeft() throws Exception {
+        TestNeovim.require();
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean"))) {
+            s.setBufferLines(List.of("one"));
+            s.lua("""
+                    vim.keymap.set('n', 'gS', function()
+                      local buf = vim.api.nvim_create_buf(false, true)
+                      local win = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 20, height = 1 })
+                      vim.api.nvim_create_autocmd('BufLeave', { buffer = buf, once = true, callback = function()
+                        vim.schedule(function() pcall(vim.api.nvim_win_close, win, true) end)
+                      end })
+                      vim.cmd.startinsert()
+                    end)
+                    return 0
+                    """);
+            int editorWin = s.getAttachedWinid();
+            KeyRouter router = new KeyRouter(s);
+            assertTrue(router.route("g"));
+            assertTrue(router.route("S"));
+            long deadline = System.currentTimeMillis() + WAIT_MS;
+            while (!(s.inPluginFloat() && "i".equals(s.getMode())) && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10);
+            }
+            int input = s.pluginFloat();
+            assertTrue(input != -1, "in the input float");
+            s.lua("vim.api.nvim_set_current_win(" + editorWin + ") return 0"); // the part that took the keyboard
+            deadline = System.currentTimeMillis() + WAIT_MS;
+            while (!"0".equals(String.valueOf(s.lua("return vim.api.nvim_win_is_valid(" + input + ") and 1 or 0")))
+                    && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10);
+            }
+            assertEquals("i", String.valueOf(s.lua("return vim.api.nvim_get_mode().mode")), "the insert went on with Neovim");
+            s.leaveFloatAsync(input);
+            deadline = System.currentTimeMillis() + WAIT_MS;
+            while (!"n".equals(String.valueOf(s.lua("return vim.api.nvim_get_mode().mode"))) && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10);
+            }
+            assertEquals("n", String.valueOf(s.lua("return vim.api.nvim_get_mode().mode")), "the float's insert ended");
+            assertEquals(List.of("one"), s.getBufferLines());
+        }
+    }
 
     @ParameterizedTest(name = "insert begun {0}")
     @ValueSource(strings = { "within the command", "later", "telescope" })
@@ -123,6 +152,7 @@ class FloatInsertIntegrationTest {
                 default -> List.of("g", "p");
             };
             for (int round = 0; round < ROUNDS; round++) {
+                s.lua("vim.api.nvim_win_set_cursor(0, {1, 2}) return 0"); // the editor's caret on the e of "one"
                 List<String> keys = new java.util.ArrayList<>(opening);
                 keys.addAll(List.of("a", "b", "c"));
                 CountDownLatch handled = new CountDownLatch(keys.size());
@@ -157,13 +187,22 @@ class FloatInsertIntegrationTest {
                 assertEquals("> abc", String.valueOf(s.lua("return vim.api.nvim_buf_get_lines(vim.g.n4e_prompt, 0, -1, false)[1]")),
                         "round " + round + ": the prompt has the keys, in order");
                 assertEquals(List.of("one"), s.getBufferLines(), "round " + round + ": the document keeps its text");
-                s.lua(CLOSE);
+                s.leaveFloatAsync(); // as a click away from the editor
+                long left = System.currentTimeMillis() + WAIT_MS;
+                while (s.inPluginFloat() && System.currentTimeMillis() < left) {
+                    Thread.sleep(10);
+                }
+                assertFalse(s.inPluginFloat(), "round " + round + ": the prompt closed");
+                assertEquals("0", String.valueOf(s.lua("return vim.fn.bufwinid(vim.g.n4e_prompt) == -1 and 0 or 1")),
+                        "round " + round + ": no window shows the prompt");
                 s.setBufferLines(List.of("one"));
                 long settled = System.currentTimeMillis() + WAIT_MS;
                 while ((s.isTypingMode() || s.isNeovimDrivenInsert()) && System.currentTimeMillis() < settled) {
                     Thread.sleep(10);
                 }
                 assertFalse(s.isNeovimDrivenInsert(), "round " + round + ": the insert ended");
+                assertEquals("2", String.valueOf(s.lua("return vim.api.nvim_win_get_cursor(0)[2]")),
+                        "round " + round + ": the editor's cursor where it was (the prompt's Esc moved it not)");
             }
             assertTrue(eclipseMayType.isEmpty(), "Eclipse could type during the picker's insert: " + eclipseMayType);
 

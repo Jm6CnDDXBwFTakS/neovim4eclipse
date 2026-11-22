@@ -307,12 +307,13 @@ public final class NeovimEditorController implements AutoCloseable {
         this.lineOnFocusLoss = new LineOnFocusLoss(styledText,
                 () -> !closed && neovimModeActive && session.commandLineOpen()
                         && !VimModes.isExMode(session.getMode()), // gQ: Vim cannot cancel its line
-                this::abandonLine);
+                this::abandonLine,
+                () -> !closed && neovimModeActive ? session.pluginFloat() : -1, session::leaveFloatAsync);
         this.statusLineRow = STATUS_ROWS.rowFor(styledText, window, window::winid, new SessionStatusLines(session));
         floatingWindows.keepUnder(statusLineRow.control());
         this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, session::pasteAsync);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
-                this::neovimHandlesMouse, session::mouseAsync, this::abandonLine);
+                this::neovimHandlesMouse, session::mouseAsync, this::abandonLineAndFloat);
         this.wheel = viewport == null ? null
                 : new NeovimWheel(styledText, this::neovimHandlesMouse, viewport::rows,
                         lines -> session.scrollLinesAsync(buffer, lines));
@@ -894,6 +895,9 @@ public final class NeovimEditorController implements AutoCloseable {
             if (VimModes.isCmdline(session.getMode()) && !VimModes.isExMode(session.getMode())) {
                 session.inputAsync("<C-c>");
             }
+            if (session.inPluginFloat()) {
+                session.leaveFloatAsync(); // a picker's prompt would take keys that are Eclipse's now
+            }
             commandLineEdits.update(false);
             lineInput.lineOpen(false);
             if (commandWindowPanel.isOpen()) { // the same for the command-line window
@@ -1062,7 +1066,7 @@ public final class NeovimEditorController implements AutoCloseable {
 
     /**
      * Draws {@code windows}, and hides the editor's caret while Neovim's cursor is in one of them
-     * that a plug-in opened ({@code FloatingWindows.hasFocusedFloat}: one entered with {@code Ctrl-W w}), shows it
+     * that a plug-in opened ({@code FloatingWindows.hasFocusedFloat}: a picker's prompt), shows it
      * again once the cursor is back. UI thread.
      */
     private void showFloats(List<FloatWindow> windows) {
@@ -1074,8 +1078,9 @@ public final class NeovimEditorController implements AutoCloseable {
      * Runs before each click {@link NeovimMouse} hands to Neovim, and when the keyboard goes to
      * another part ({@link LineOnFocusLoss}): a {@code :}, {@code /} or {@code ?} line that is open
      * is abandoned ({@code <C-c>}), as clicking away from a field does; a click then lands in the
-     * text, in that order on the input thread. Ex mode
-     * ({@code gQ}) gets no clicks at all ({@link #neovimHandlesMouse}). UI thread.
+     * text, in that order on the input thread. Ex mode ({@code gQ}) gets no clicks at all
+     * ({@link #neovimHandlesMouse}). The float the cursor is in goes too: for a click
+     * {@link #abandonLineAndFloat}, for the keyboard leaving {@link LineOnFocusLoss} itself. UI thread.
      */
     private void abandonLine() {
         if (!closed && neovimModeActive && VimModes.isCmdline(session.getMode())) {
@@ -1084,14 +1089,29 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
+     * Before each click {@link NeovimMouse} hands to Neovim: {@link #abandonLine}, and the plug-in's
+     * float Neovim's cursor is in (a picker's prompt) closed, its insert ended
+     * ({@code NeovimSession.leaveFloatAsync}), so that the click lands in the editor's window.
+     */
+    private void abandonLineAndFloat() {
+        abandonLine();
+        if (!closed && neovimModeActive && session.inPluginFloat()) {
+            session.leaveFloatAsync();
+        }
+    }
+
+    /**
      * Whether a left click goes to Neovim's mouse ({@link NeovimMouse}): in Neovim mode, except in
      * insert and replace mode, where Eclipse types and so places the caret itself, and in Ex mode,
      * where Neovim would take it as a click on its command line. On a {@code :} line it first
-     * abandons the line ({@link #abandonLine}).
+     * abandons the line ({@link #abandonLine}). In a plug-in's float (a picker's prompt, in an
+     * insert or not) the click is Neovim's too: the float is closed first, and the click lands in
+     * the editor's window, as in Normal mode.
      */
     private boolean neovimHandlesMouse() {
         String mode = session.getMode();
-        return !closed && started && neovimModeActive && !VimModes.isTyping(mode) && !VimModes.isExMode(mode);
+        return !closed && started && neovimModeActive && (!VimModes.isTyping(mode) || session.inPluginFloat())
+                && !VimModes.isExMode(mode);
     }
 
     /**

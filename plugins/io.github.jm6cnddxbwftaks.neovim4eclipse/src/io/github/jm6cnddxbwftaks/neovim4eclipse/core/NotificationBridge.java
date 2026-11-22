@@ -90,11 +90,11 @@ final class NotificationBridge implements Incoming {
          * {@code pageFollows}: {@code winid} is a help page's window, and Neovim's help put this
          * other help buffer there ({@code Ctrl-]}), which is now the page's
          * ({@link LuaScripts#WINDOWS}' {@code follow_page}); false if not sent.
-         * {@code newFloat}: {@code winid} is a plug-in's float just opened with the focus, as a
-         * picker's prompt ({@link LuaScripts#WINDOWS}' {@code new_float}); false if not sent.
+         * {@code floatEntered}: {@code winid} is a plug-in's float Neovim stays in, as a picker's
+         * prompt ({@link LuaScripts#WINDOWS}' {@code entered_float}); false if not sent.
          */
         void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows,
-                boolean newFloat);
+                boolean floatEntered);
 
         /**
          * A document's buffer was unloaded and loaded again by Neovim ({@code :edit!} from a script;
@@ -342,7 +342,7 @@ final class NotificationBridge implements Incoming {
         }
     }
 
-    /** Payload: {@code [bufnr, winid, jumped, projectFile, pageFollows, newFloat]} (see {@link Sink#onBufferEnter}). */
+    /** Payload: {@code [bufnr, winid, jumped, projectFile, pageFollows, floatEntered]} (see {@link Sink#onBufferEnter}). */
     private void onBufEnter(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {
