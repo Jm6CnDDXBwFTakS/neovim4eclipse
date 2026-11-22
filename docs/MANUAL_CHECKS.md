@@ -381,6 +381,45 @@ The tests' Eclipse saves its layout differently from yours, so only a real resta
 **Expect:** each step's result, after its ⇒. If an empty tab shows for a moment at the start, note
 it: closing the page editors at Eclipse's exit as well would avoid it.
 
+## Floating windows that take the keyboard
+
+### `fl-real-plugins` Your own pickers, `:Lazy` and which-key
+
+- **On:** linux, macos, windows
+- **Launch:** normal
+- **Areas:** core/LuaScripts.java, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
+
+Telescope's `current_buffer_fuzzy_find` and `:Lazy` are tested at pinned commits
+(`PickersEndToEndTest`, `FloatInsertIntegrationTest`, `NeovimWindowsIntegrationTest`), with the
+plug-ins' defaults. Your own config, with its pickers, previews, borders and colorscheme, and an
+input method in a prompt, are only seen on screen. Use a config that has Telescope (or another
+picker, fzf-lua, snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
+
+1. In a project of your own with several files, open a file of it, open a file picker with your
+   mapping (`<leader>ff`), type part of another file's name, and press Enter.
+   ⇒ The picker is drawn over the editor where Neovim put it, with its border and colors; the
+   prompt has Neovim's cursor and the editor's caret is hidden; the letters appear in the prompt,
+   the list narrows, a preview shows the selected file; Enter opens that file in an Eclipse
+   editor, and the document you came from is unchanged.
+2. Open the picker again and switch to another application, then back to Eclipse.
+   ⇒ The picker is still open, with the cursor in its prompt.
+3. Run `:Lazy`, move with `j` and `k`, and close it with `q`.
+   ⇒ The window is drawn with the cursor on its lines; `q` closes it, and the caret is back.
+4. With an input method on (Japanese: IBus or fcitx on Linux, the system's on macOS and Windows),
+   open the picker and type a word.
+   ⇒ The candidates are not shown in the prompt (no place for them there), and the committed
+   word reaches the prompt once.
+5. With a config whose lazy.nvim has a plug-in to install (add one to it, or start the LazyVim
+   starter for the first time), choose *Neovim → Restart Neovim...* and type `x` a few times while
+   it installs.
+   ⇒ lazy.nvim's window is not shown, or shown with the cursor, while it installs; when Neovim's
+   start is over a message says its window was closed and `:Lazy` opens it again, and the `x`s
+   deleted characters of the file.
+6. Press your leader key and wait.
+   ⇒ which-key's panel is drawn at the bottom of the editor, and the next key goes on as usual.
+
+**Expect:** each step's result, after its ⇒.
+
 ## Starting Neovim
 
 ### `st-busy` The busy cursor while Neovim starts

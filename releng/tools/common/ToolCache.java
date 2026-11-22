@@ -22,9 +22,9 @@ package common;
  * checked, as always) or by running the tool again. {@code git clean -x} deletes it too.
  *
  * <p>Three readers outside the tools that use a Java 22 launcher hold a literal copy of a name, as
- * they cannot import this class: {@code LikeCi.java} (one file that runs on JDK 21), and the UI
- * tests' {@code PinnedPlugins} and the Lua tests' {@code harness.lua} (other languages or
- * modules). {@code ToolCacheTest} checks each copy equals the name here, and that no tool writes
+ * they cannot import this class: {@code LikeCi.java} (one file that runs on JDK 21), the tests'
+ * shared {@code PinnedPlugins} (UI and integration tests) and the Lua tests' {@code harness.lua}
+ * (other languages or modules). {@code ToolCacheTest} checks each copy equals the name here, and that no tool writes
  * into {@code target/}.
  */
 public final class ToolCache {

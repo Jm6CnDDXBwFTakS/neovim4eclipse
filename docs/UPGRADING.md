@@ -324,8 +324,9 @@ and actions* above); the bullets say what each needs besides, and how to move it
 
 ## The plug-ins the tests run
 
-The tests of the jump labels run four real Neovim plug-ins (flash, leap, hop, mini.jump2d), and
-the gallery's pictures a fifth, which-key. flash's help page also stands for a user's plug-in in
+The tests of the jump labels run four real Neovim plug-ins (flash, leap, hop, mini.jump2d), the
+gallery's pictures a fifth, which-key, and the tests of floating windows that take the keyboard
+three more: Telescope with its library plenary (a picker's prompt) and lazy.nvim (`:Lazy`). flash's help page also stands for a user's plug-in in
 the help editor's test (`windows_spec.lua`). They are third-party
 code that runs in the test Neovim, on your machine and wherever `LikeCi`
 or the gallery runs, so each is pinned: `releng/test-plugins.properties` holds, per plug-in, its repository, one commit,
@@ -369,8 +370,8 @@ before it has been scanned:
    pinned commit (if that one is fetched: run `fetch` before, to have the comparison), and after your yes writes the entry's two lines. If the license changed,
    correct `<name>.license` by hand.
 4. `java releng/tools/plugins/TestPlugins.java fetch`, then `java releng/tools/ci/LikeCi.java`
-   (the specs in `jump_plugins_spec.lua` and `JumpLabelsEndToEndTest` run the plug-in), then
-   commit the file.
+   (the comment above each plug-in's lines in the file names the tests that run it), then commit
+   the file.
 
 `--dry-run` on any step leaves the pins file alone, and only that: `update` and `fetch` still
 download, and `accept` still unpacks and shows the license and the differences. Unlike the other
@@ -386,8 +387,9 @@ A forge makes `archive/<commit>.zip` on request and does not promise the same by
 `fetch` one day reports a wrong hash for a commit that did not change, the archive may only have
 been packed anew: `update <name> <commit>`, vet that file, and `accept` it with its new hash.
 
-To pin another plug-in, add its four lines to the file and a test to `jump_plugins_spec.lua`; if
-the editor should know it without a setting, add its prefix to `util/JumpLabels.BUILT_IN_PREFIXES`
+To pin another plug-in, add its four lines to the file, with a comment naming the tests that run
+it, its name to `PinsTest`'s list, and a test (a jump plug-in's in `jump_plugins_spec.lua`); if a
+jump plug-in should be known without a setting, add its prefix to `util/JumpLabels.BUILT_IN_PREFIXES`
 and to the README's Settings row and the user guide's "Jump labels".
 
 ## Neovim

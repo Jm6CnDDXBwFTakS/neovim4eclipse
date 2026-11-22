@@ -40,8 +40,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
  * Neovim goes on at once. A request ({@code vim.rpcrequest}) makes Neovim wait for the answer, so
  * it is used only where Neovim needs a value back: {@code eclipse_clipboard_paste}, asked when
  * Neovim pastes from the system clipboard, and {@code eclipse_write}, asked when Neovim writes a
- * document buffer (Neovim must know whether the save worked). The return value of {@link #request}
- * is the answer.
+ * document buffer (Neovim must know whether the save worked), and {@code eclipse_attached_window},
+ * asked once as Neovim's start ends (where the keys typed meanwhile go). The return value of
+ * {@link #request} is the answer.
  */
 final class NotificationBridge implements Incoming {
 
@@ -158,6 +159,14 @@ final class NotificationBridge implements Incoming {
          * @return the answer sent to Neovim: a list of lines, or {@code [lines, regtype]}
          */
         Object onClipboardPaste(String register);
+
+        /**
+         * The window Eclipse has attached (its editor's, or the home window before any), asked by
+         * Neovim as its start ends ({@code LuaScripts.WINDOWS}' {@code close_start_floats}), which
+         * then goes to it. Answered on the reader thread from the session's own record, read as it
+         * is then: no call to Neovim, no wait for the UI thread.
+         */
+        int attachedWindow();
 
         /**
          * Neovim writes buffer {@code bufnr} ({@code :w}, {@code :update}, {@code :bufdo update}; see
@@ -566,6 +575,7 @@ final class NotificationBridge implements Incoming {
         return switch (method) {
             case "eclipse_clipboard_paste" -> onClipboardPaste(args);
             case "eclipse_write" -> onWrite(args);
+            case "eclipse_attached_window" -> sink.attachedWindow();
             default -> throw new UnsupportedOperationException("Unknown request: " + method);
         };
     }

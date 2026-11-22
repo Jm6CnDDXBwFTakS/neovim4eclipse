@@ -505,7 +505,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         // First: the one rule for comparing file paths, which later scripts use (LuaScripts.PATHS).
         await(api.execLua(LuaScripts.PATHS, List.of()));
         // Before the home buffer goes into the current window: the config may have left the focus
-        // in a floating window (lazy.nvim's installer on a first start), shown or closed below.
+        // in a floating window (lazy.nvim's installer), closed below (CLOSE_START_FLOAT).
         Object startFloat = await(api.execLua(LuaScripts.LEAVE_START_FLOAT, List.of()));
 
         // Until a document is shown, Neovim shows an unlisted scratch buffer (also what tests edit).
@@ -565,12 +565,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                     await(api.execLua(LuaScripts.HIGHLIGHTS, List.of(JumpLabels.BUILT_IN_PREFIXES))));
             LOG.info(() -> "Neovim's highlights " + (session.highlightsEnabled ? "shown in the editor" : "off (g:neovim4eclipse_highlights)"));
             // Plug-ins' floating windows are drawn from here on (docs/ARCHITECTURE.md, "Neovim's
-            // windows drawn from their grids"), and the one the config left the focus in is shown in
-            // the first editor.
+            // windows drawn from their grids"). Keys typed while Neovim starts go to the file: the
+            // floats that have the keyboard as the start ends are closed, with a message, now that ui2
+            // shows messages (WINDOWS' close_start_floats: at UIEnter, or at once).
             session.floatsDrawn = true;
-            if (startFloat instanceof Number win && win.intValue() > 0) {
-                session.buffers.keepStartFloat(win.intValue());
-            }
+            int left = startFloat instanceof Number win ? win.intValue() : 0;
+            await(api.execLua(LuaScripts.CLOSE_START_FLOAT, List.of(String.valueOf(left))));
             // Always: the Ctrl-X completions that could run a file's text are refused in Neovim itself.
             await(api.execLua(LuaScripts.CTRL_X_GUARD, List.of()));
             // And no file's modeline sets options (LuaScripts.NO_MODELINES).
@@ -1216,17 +1216,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (buffers.attachedBufnr() != before) {
                 keyInput.onAttachedBufferChanged(); // a macro's pending sync was the other buffer's
             }
-        }
-        int start = buffers.takeStartFloat(window);
-        if (start != -1) {
-            // The float the config left the focus in at start (lazy.nvim's installer), shown in this
-            // first editor and entered: a task of its own, after the attach setup this show is part
-            // of (the document's push, its indentation and cursor work on the current window and
-            // buffer, which must be the editor's), and after the keys typed during the start, which
-            // were queued before and are the editor's.
-            int editorWin = buffers.attachedWin();
-            submit("show the start float", Level.FINE, () -> await(api.execLua(LuaScripts.BRING_START_FLOAT,
-                    List.of(String.valueOf(start), String.valueOf(editorWin)))));
         }
     }
 
@@ -2546,6 +2535,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 return DocumentWrite.Result.failed("Eclipse has no editor for buffer " + bufnr + "; nothing was saved");
             }
             return handler.save(document, request);
+        }
+
+        @Override
+        public int attachedWindow() {
+            return buffers.attachedWin();
         }
 
         @Override

@@ -7,17 +7,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BooleanSupplier;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Grids;
@@ -65,6 +70,12 @@ class NeovimWindowsIntegrationTest {
         return ((Number) s.lua(lua)).intValue();
     }
 
+    /** The message closing lazy's window as Neovim's start ends, from the module's own text. */
+    private static String startMessage(NeovimSession s) throws Exception {
+        return (String) s.lua("local w = package.loaded['neovim4eclipse.windows']"
+                + " return w.float_closed_message('lazy', w.AT_START)");
+    }
+
     private static int currentWin(NeovimSession s) throws Exception {
         return number(s, "return vim.api.nvim_get_current_win()");
     }
@@ -106,48 +117,23 @@ class NeovimWindowsIntegrationTest {
             + " vim.g.n4e_start_float = vim.api.nvim_open_win(b, true, {relative = 'editor', row = 1, col = 1, width = 20, height = 3})";
 
     /**
-     * A config that leaves a floating window focused at the start (lazy.nvim's installer on a first
-     * start) does not take the home buffer: the session starts in a plain window that shows the
-     * home buffer, keeps the float, and shows it in the first editor: moved into that editor's tab
-     * page, Neovim in it. The Lua side alone is windows_spec.lua ("LEAVE_START_FLOAT").
+     * The float the config left the focus in at start (lazy.nvim's installer) is closed as Neovim
+     * starts, and Neovim says why (ui2, started before the message): entered later in the first
+     * editor, it would take the keys typed while Neovim started. A plain window is current, the
+     * home window with the home buffer.
      */
     @Test
-    void aFloatFocusedAtTheStartIsShownInTheFirstEditor() throws Exception {
+    void aFloatFocusedAtTheStartIsClosedAndNeovimSaysWhy() throws Exception {
         TestNeovim.require();
         try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "-c", OPEN_START_FLOAT))) {
-            int lazy = number(s, "return vim.g.n4e_start_float");
+            // Closed at once, or at UIEnter should Neovim's start not be over yet.
+            waitFor(() -> number(s, "return vim.api.nvim_win_is_valid(vim.g.n4e_start_float) and 1 or 0") == 0, "the float closed");
             assertEquals("", s.lua("return vim.api.nvim_win_get_config(0).relative"), "a plain window is current");
             assertEquals(currentWin(s), s.getAttachedWinid(), "and it is the home window");
             assertEquals(number(s, "return package.loaded['neovim4eclipse.windows'].home_buffer()"),
                     number(s, "return vim.api.nvim_get_current_buf()"), "it shows the home buffer");
-            assertEquals(1, number(s, "return vim.api.nvim_win_is_valid(vim.g.n4e_start_float) and 1 or 0"), "the float is kept");
-            EditorWindow editor = new EditorWindow();
-            DocumentBuffer doc = new DocumentBuffer("");
-            // As an editor's attach does: the show, then the document's push, in one attach setup on
-            // the input thread. They work on the current window and buffer, the editor's: the float
-            // is entered only after, as a task of its own.
-            java.util.concurrent.atomic.AtomicReference<Object> setup = new java.util.concurrent.atomic.AtomicReference<>();
-            s.runAttachSetup(() -> {
-                try {
-                    s.showWindow(doc, editor, "");
-                    int current = number(s, "return vim.api.nvim_get_current_win()");
-                    s.setBufferLines(List.of("the document's text"));
-                    setup.set(current);
-                } catch (Exception e) {
-                    setup.set(e);
-                }
-            });
-            waitFor(() -> setup.get() != null, "the attach setup done");
-            assertEquals(editor.winid(), setup.get(), "the editor's window current during its attach setup");
-            waitFor(() -> number(s, "return vim.api.nvim_get_current_win()") == lazy, "Neovim in the float, over the first editor");
-            assertEquals("the document's text", s.lua("return vim.api.nvim_buf_get_lines(" + doc.bufnr + ", 0, 1, false)[1]"),
-                    "the document's text in its own buffer");
-            assertEquals(0, number(s, "return #vim.tbl_filter(function(l) return l == \"the document's text\" end,"
-                    + " vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(vim.g.n4e_start_float), 0, -1, false))"),
-                    "none of it in the float's buffer");
-            assertEquals(number(s, "return vim.api.nvim_win_get_tabpage(" + editor.winid() + ")"),
-                    number(s, "return vim.api.nvim_win_get_tabpage(vim.g.n4e_start_float)"), "in the editor's tab page");
-            assertEquals(editor.winid(), s.getAttachedWinid(), "the editor stays attached");
+            waitFor(() -> Ui2Text.shown(s).contains(startMessage(s)),
+                    "the message about the float, shown by Neovim: " + Ui2Text.shown(s));
         }
     }
 
@@ -188,6 +174,133 @@ class NeovimWindowsIntegrationTest {
             waitFor(() -> !valid(s, float_), "the float too large to draw closed");
             waitFor(() -> Ui2Text.shown(s).contains("the editor cannot draw it (" + Grids.PAST_LIMITS + ")"),
                     "the reason, shown by Neovim: " + Ui2Text.shown(s));
+        }
+    }
+
+    /**
+     * lazy.nvim's {@code :Lazy}, a real plug-in's window that takes the keyboard in Normal mode, at
+     * the commit pinned and vetted in {@code releng/test-plugins.properties}: it stays open with
+     * Neovim in it, its own {@code q} closes it, and opened again, leaving the editor closes it
+     * ({@link NeovimSession#leaveFloatAsync}); the document keeps its text. lazy.nvim is set up
+     * with no plug-ins, its own folders under {@code dir} (the rest of Neovim's are this module's,
+     * under {@code target/}: the root pom.xml), nothing installed, checked or watched, and no
+     * {@code .lazy.lua} looked for in the folders above (it would run one, or ask whether to trust
+     * it, and the test would wait). Skipped when it is not fetched.
+     */
+    @Test
+    void lazysWindowTakesTheKeysAndCloses(@TempDir Path dir) throws Exception {
+        TestNeovim.require();
+        Optional<Path> lazy = PinnedPlugins.find("lazy");
+        assumeTrue(lazy.isPresent(), "lazy is not fetched at its pinned commit: " + PinnedPlugins.HOW);
+        String tmp = dir.toAbsolutePath().toString();
+        assumeTrue(!tmp.contains("]==]"), "a folder Lua cannot be given in a long string");
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("one"));
+            s.lua(PinnedPlugins.onRuntimePath(lazy.get()) + " local tmp = [==[" + tmp + "]==]"
+                    + " require('lazy').setup({}, { root = tmp .. '/plugins', lockfile = tmp .. '/lazy-lock.json',"
+                    + "   state = tmp .. '/state.json', readme = { enabled = false }, pkg = { cache = tmp .. '/pkg-cache.lua' },"
+                    + "   rocks = { enabled = false }, install = { missing = false }, checker = { enabled = false },"
+                    + "   change_detection = { enabled = false }, local_spec = false," // no .lazy.lua of a folder above
+                    + "   performance = { cache = { enabled = false }, reset_packpath = false, rtp = { reset = false } } })"
+                    + " vim.keymap.set('n', 'gl', '<Cmd>Lazy<CR>') return 0");
+            // lazy.nvim makes :Lazy from a vim.schedule after its setup.
+            waitFor(() -> number(s, "return vim.fn.exists(':Lazy') == 2 and 1 or 0") == 1, ":Lazy defined");
+            KeyRouter router = new KeyRouter(s);
+            String lazyWindow = "return vim.bo[vim.api.nvim_get_current_buf()].filetype == 'lazy' and 1 or 0";
+            for (int round = 0; round < 2; round++) {
+                assertTrue(router.route("g"));
+                assertTrue(router.route("l"));
+                waitFor(() -> number(s, lazyWindow) == 1 && s.inPluginFloat(), "Neovim in :Lazy's window, a plug-in's float");
+                assertEquals("n", s.getMode(), "in Normal mode: the keys are Neovim's, as in any window");
+                if (round == 0) {
+                    assertTrue(router.route("q")); // lazy.nvim's own key
+                } else {
+                    s.leaveFloatAsync(); // as a click away from the editor
+                }
+                waitFor(() -> number(s, lazyWindow) == 0 && !s.inPluginFloat(), round == 0 ? "q closed it" : "leaving closed it");
+                assertEquals(s.getAttachedWinid(), currentWin(s), "Neovim back in the editor's window");
+                assertEquals(List.of("one"), s.getBufferLines(), "the document keeps its text");
+            }
+        }
+    }
+
+    /**
+     * A config whose init goes on while Eclipse starts its session and attaches an editor, as
+     * lazy.nvim's does while it installs missing plug-ins, and this config does as lazy.nvim
+     * does: it opens its window with the focus, has VimEnter enter that window again (Neovim does
+     * not keep a window entered before its start is over), and waits with vim.wait, in rounds,
+     * each round showing the window again (made anew if it was closed). The session's start is
+     * over before Neovim's, so the keys a user types meanwhile reach Neovim while that window has
+     * the focus; they wait in Neovim's input, read only once the start is over. By then the window
+     * is closed and Neovim is in the editor's window (WINDOWS' close_start_floats), whatever the
+     * config's VimEnter did: the keys go to the document, and Neovim says why. The window stays
+     * in the tab page it opened in, not the editor's, and its VimEnter takes Neovim there. With
+     * lateVimEnter, round 3 also sets up a VimEnter of its own that opens another such window
+     * with the focus, as a plug-in loaded meanwhile can: set up after the plug-in's check, it
+     * runs after every VimEnter set up before. The rounds go on when the test says so, never on a
+     * clock.
+     */
+    @ParameterizedTest(name = "a later VimEnter opening a window: {0}")
+    @ValueSource(booleans = { false, true })
+    void keysTypedWhileAConfigStillStartsGoToTheDocumentNotItsWindows(boolean lateVimEnter, @TempDir Path dir)
+            throws Exception {
+        TestNeovim.require();
+        Path config = dir.resolve("rounds.lua");
+        Files.writeString(config, "local LATE = " + lateVimEnter + "\n" + """
+                local win
+                local function show(round)
+                  if win and vim.api.nvim_win_is_valid(win) then
+                    vim.api.nvim_buf_set_lines(vim.api.nvim_win_get_buf(win), 0, -1, false, { 'round ' .. round })
+                    return
+                  end
+                  local b = vim.api.nvim_create_buf(false, true)
+                  vim.bo[b].filetype = 'lazy'
+                  win = vim.api.nvim_open_win(b, true, { relative = 'editor', row = 1, col = 1, width = 20, height = 3 })
+                  local w = win
+                  vim.api.nvim_create_autocmd('VimEnter', { once = true, callback = function()
+                    if vim.api.nvim_win_is_valid(w) then pcall(vim.api.nvim_set_current_win, w) end
+                  end })
+                end
+                show(1)
+                for round = 2, 4 do
+                  vim.wait(600000, function() return (vim.g.rounds_go or 0) >= round end, 5)
+                  if round == 3 and LATE then
+                    vim.api.nvim_create_autocmd('VimEnter', { once = true, callback = function()
+                      local b = vim.api.nvim_create_buf(false, true)
+                      vim.bo[b].filetype = 'lazy'
+                      vim.api.nvim_open_win(b, true, { relative = 'editor', row = 5, col = 1, width = 20, height = 3 })
+                    end })
+                  end
+                  if round < 4 then show(round) end
+                end
+                """);
+        try (NeovimSession s = NeovimSession.start(NVIM,
+                List.of("--clean", "-c", "lua dofile([==[" + config + "]==])"))) {
+            assertEquals(0, number(s, "return vim.v.vim_did_enter"), "the session is ready before Neovim's start is over");
+            DocumentBuffer doc = new DocumentBuffer("");
+            EditorWindow editor = new EditorWindow();
+            s.showWindow(doc, editor, "");
+            s.setBufferLines(List.of("abcdef"));
+            for (int round = 2; round <= 4; round++) {
+                s.inputAsync("x"); // typed while the window is shown, round after round
+                // On the input thread after the key, so Neovim has the key in its input by then.
+                String go = "vim.g.rounds_go = " + round;
+                s.runAsync("the next round", () -> {
+                    try {
+                        s.lua(go);
+                    } catch (Exception e) {
+                        throw new IllegalStateException(e);
+                    }
+                });
+            }
+            waitFor(() -> number(s, "return vim.v.vim_did_enter") == 1, "Neovim's start over");
+            waitFor(() -> List.of("def").equals(s.getBufferLines()), "the three keys deleted three letters of the document");
+            assertEquals(editor.winid(), currentWin(s), "Neovim in the editor's window");
+            assertEquals(0, number(s, "local n = 0 for _, w in ipairs(vim.api.nvim_list_wins()) do"
+                    + " if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == 'lazy' then n = n + 1 end end return n"),
+                    "no window of the rounds is left with the keyboard");
+            waitFor(() -> Ui2Text.shown(s).contains(startMessage(s)),
+                    "the message, shown by Neovim: " + Ui2Text.shown(s));
         }
     }
 

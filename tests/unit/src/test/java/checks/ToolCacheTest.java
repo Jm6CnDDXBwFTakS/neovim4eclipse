@@ -133,9 +133,10 @@ class ToolCacheTest {
         Path root = root();
         // LikeCi runs alone on JDK 21 and cannot import ToolCache.
         assertEquals(ToolCache.LIKE_CI, LikeCi.LIKE_CI, "LikeCi.LIKE_CI");
-        // The UI tests and the Lua spec find the fetched plug-ins without the tools' sources.
+        // The UI and integration tests (shared PinnedPlugins) and the Lua specs find the fetched
+        // plug-ins without the tools' sources.
         String pinned = Files.readString(root.resolve(
-                "tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/io/github/jm6cnddxbwftaks/neovim4eclipse/editor/PinnedPlugins.java"));
+                "tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/shared/io/github/jm6cnddxbwftaks/neovim4eclipse/testing/PinnedPlugins.java"));
         assertTrue(pinned.contains("static final String FOLDER = \"" + ToolCache.TEST_PLUGINS + "\";"), "PinnedPlugins.FOLDER");
         String harness = Files.readString(root.resolve("tests/unit/src/test/lua/harness.lua"));
         assertTrue(harness.contains("local folder = '" + ToolCache.TEST_PLUGINS + "'"), "harness.lua (t.pinned_plugin): local folder");

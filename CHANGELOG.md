@@ -18,8 +18,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   documentation entered with a second `K`, with Neovim's own `K`) stays open and is drawn with Neovim's cursor in it, a
   bar in Insert mode; your keys go to it, and the editor's caret is hidden meanwhile. Leaving the
   editor (another editor or view, a click in its text, Eclipse mode) closes it. Before, such a
-  window was closed at once with a message. lazy.nvim's installer window at a first start is
-  shown in the first editor instead of closed. One the editor cannot draw (past the limits in
+  window was closed at once with a message. A window that has the keyboard while Neovim is still
+  starting (lazy.nvim's installer, while it installs missing plug-ins) is closed when the start is
+  over, with a message saying `:Lazy` opens it again; the keys typed meanwhile now always go to the
+  file, where before some could reach the installer's window. One the editor cannot draw (past the limits in
   the user guide's *Floating windows*), or that its plug-in hides, is closed with a message.
 
 ### Removed

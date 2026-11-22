@@ -18,6 +18,7 @@ import org.eclipse.swt.graphics.Point;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 
 /**

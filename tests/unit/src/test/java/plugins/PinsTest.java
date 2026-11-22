@@ -84,18 +84,20 @@ class PinsTest {
 
     /**
      * The repository's own file is complete, and it is the only place a pinned commit is written:
-     * the four jump plug-ins the editor knows by default each have a pin, and so has the
-     * plug-in of the gallery's pictures.
+     * the four jump plug-ins the editor knows by default each have a pin, and so have the plug-in
+     * of the gallery's pictures and those of the tests of floating windows that take the keyboard
+     * (a picker with its library, a plug-in manager's window).
      */
     @Test
-    void theRepositorysFileIsCompleteAndPinsTheFourJumpPlugIns() throws Exception {
+    void theRepositorysFileIsCompleteAndPinsEachPlugInATestRuns() throws Exception {
         Path root = Path.of("").toAbsolutePath();
         while (root != null && !Files.isRegularFile(root.resolve(TestPluginsTool.PINS_FILE))) {
             root = root.getParent();
         }
         assertTrue(root != null, "the repository's root holds " + TestPluginsTool.PINS_FILE);
         List<Pin> pins = Pins.parse(Files.readString(root.resolve(TestPluginsTool.PINS_FILE)));
-        assertEquals(List.of("flash", "leap", "hop", "mini.jump2d", "which-key"), pins.stream().map(Pin::name).toList());
+        assertEquals(List.of("flash", "leap", "hop", "mini.jump2d", "which-key", "telescope", "plenary", "lazy"),
+                pins.stream().map(Pin::name).toList());
     }
 
     private static void refused(String text, String inMessage) {

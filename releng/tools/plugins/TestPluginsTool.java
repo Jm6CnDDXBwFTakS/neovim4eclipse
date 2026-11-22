@@ -26,8 +26,8 @@ import common.ToolFailure;
 import plugins.Pins.Pin;
 
 /**
- * The Neovim plug-ins the tests and the gallery run (flash, leap, hop, mini.jump2d, which-key):
- * fetches them as pinned, and moves a pin.
+ * The Neovim plug-ins the tests and the gallery run (those {@code releng/test-plugins.properties}
+ * lists): fetches them as pinned, and moves a pin.
  *
  * <h2>Usage</h2>
  * <pre>

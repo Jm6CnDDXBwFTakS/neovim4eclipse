@@ -1140,31 +1140,63 @@ t.test('a floating window the user enters later stays, so :q in it stays Neovim\
   t.eq(float, vim.api.nvim_get_current_win())
 end)
 
-t.test('a floating window the config left the focus in is left before the home buffer goes anywhere', function()
+t.test('a floating window the config left the focus in is left before the home buffer goes anywhere, then closed', function()
   -- The session's order: LEAVE_START_FLOAT, then SHOW_BUFFER with the home buffer, then WINDOWS;
-  -- then BRING_START_FLOAT at the first editor.
+  -- then CLOSE_START_FLOAT, once ui2 shows messages: here Neovim has entered, so it closes at once.
   t.setup()
   local plain = vim.api.nvim_get_current_win()
   local buf = buffer(1)
   vim.bo[buf].filetype = 'lazy'
   local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
   t.eq(float, t.run('LEAVE_START_FLOAT'))
-  t.ok(vim.api.nvim_win_is_valid(float), 'the float stays, for the first editor')
+  t.ok(vim.api.nvim_win_is_valid(float), 'the float stays, for the session to close')
   t.eq(plain, vim.api.nvim_get_current_win())
   local home_buf = vim.api.nvim_create_buf(false, true)
   t.run('SHOW_BUFFER', tostring(home_buf))
   local home = t.run('WINDOWS', tostring(home_buf))
   t.eq(plain, home, 'the plain window is the home window')
   t.eq(home_buf, vim.api.nvim_win_get_buf(home), 'and shows the home buffer')
-  -- The first editor's window, in a tab page of its own: the float moves there, and is entered.
-  vim.cmd('tabnew')
-  local editor = vim.api.nvim_get_current_win()
-  vim.cmd('noautocmd tabprevious')
-  t.eq(true, t.run('BRING_START_FLOAT', tostring(float), tostring(editor)))
-  t.eq(float, vim.api.nvim_get_current_win())
-  t.eq(vim.api.nvim_win_get_tabpage(editor), vim.api.nvim_win_get_tabpage(float), "in the editor's tab page")
-  vim.api.nvim_win_close(float, true) -- lazy.nvim's installer done
-  t.eq(false, t.run('BRING_START_FLOAT', tostring(float), tostring(editor)), 'closed: nothing to show')
+  vim.v.errmsg = ''
+  t.eq(true, t.run('CLOSE_START_FLOAT', tostring(float)))
+  t.ok(not vim.api.nvim_win_is_valid(float))
+  local windows = package.loaded['neovim4eclipse.windows']
+  t.ok(vim.v.errmsg:find(windows.float_closed_message('lazy', windows.AT_START), 1, true), vim.v.errmsg)
+  t.eq(false, t.run('CLOSE_START_FLOAT', tostring(float)), 'closed already: nothing')
+end)
+
+t.test('closing the floats that have the keyboard at start never discards a changed buffer', function()
+  -- Both kinds close_start_floats closes, the float the config left the focus in (left) and the
+  -- plug-in's float Neovim is in, each on a file of the user's with unsaved changes that closing
+  -- would wipe ('bufhidden' wipe): Neovim refuses, so both stay, their changes kept, and Neovim
+  -- goes on in a plain window.
+  t.setup()
+  local function changed_file()
+    local buf = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_name(buf, vim.fn.tempname())
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'unsaved' })
+    vim.bo[buf].bufhidden = 'wipe'
+    t.ok(vim.bo[buf].modified)
+    return buf
+  end
+  local float_at = { relative = 'editor', row = 1, col = 1, width = 10, height = 1 }
+  local left_buf = changed_file()
+  local left = vim.api.nvim_open_win(left_buf, true, float_at)
+  t.eq(left, t.run('LEAVE_START_FLOAT'))
+  local home_buf = vim.api.nvim_create_buf(false, true)
+  t.run('SHOW_BUFFER', tostring(home_buf))
+  t.run('WINDOWS', tostring(home_buf))
+  local current_buf = changed_file()
+  local current = vim.api.nvim_open_win(current_buf, true, float_at)
+  t.eq(false, t.run('CLOSE_START_FLOAT', tostring(left)), 'nothing closed')
+  for _, f in ipairs({ { left, left_buf }, { current, current_buf } }) do
+    t.ok(vim.api.nvim_win_is_valid(f[1]), 'the float stays')
+    t.ok(vim.api.nvim_buf_is_valid(f[2]) and vim.bo[f[2]].modified, 'its buffer keeps its changes')
+    t.eq({ 'unsaved' }, vim.api.nvim_buf_get_lines(f[2], 0, -1, false))
+  end
+  t.eq('', vim.api.nvim_win_get_config(0).relative, 'Neovim in a plain window')
+  for _, f in ipairs({ left, current }) do
+    vim.api.nvim_win_close(f, true)
+  end
 end)
 
 t.test('without a floating window at start there is nothing to leave', function()

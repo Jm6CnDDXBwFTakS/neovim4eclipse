@@ -6,12 +6,16 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
@@ -215,5 +219,89 @@ class FloatInsertIntegrationTest {
             assertTrue(s.isEclipseTypingReady(), "Eclipse types the editor's insert");
             assertFalse(s.isNeovimDrivenInsert());
         }
+    }
+
+    /**
+     * A real picker, end to end: Telescope's {@code current_buffer_fuzzy_find} (pure Lua, so no
+     * {@code rg} or {@code fd} is needed), at the commit pinned and vetted in
+     * {@code releng/test-plugins.properties}, opened from a mapping as a user's {@code <leader>/}
+     * would. The keys typed right after the mapping go into its prompt, never into the document;
+     * Enter jumps to the line it found; opened again and left, as a click away from the editor
+     * does ({@link NeovimSession#leaveFloatAsync}), every window of the picker closes and its insert
+     * ends. Skipped when the plug-ins are not fetched. Telescope's history is off, so that one
+     * round's prompt cannot come back in the next (Neovim's folders are this module's own, under
+     * {@code target/}: the root pom.xml).
+     */
+    @org.junit.jupiter.api.Test
+    void telescopesPromptTakesTheKeysEnterJumpsAndLeavingClosesIt() throws Exception {
+        TestNeovim.require();
+        Optional<Path> telescope = PinnedPlugins.find("telescope");
+        Optional<Path> plenary = PinnedPlugins.find("plenary");
+        assumeTrue(telescope.isPresent() && plenary.isPresent(),
+                "telescope and plenary are not fetched at their pinned commits: " + PinnedPlugins.HOW);
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean"))) {
+            s.addBufferChangeListener(change -> {
+                if (change.afterApply() != null) {
+                    change.afterApply().run(); // as the editor does once it applied the change
+                }
+            });
+            List<String> text = List.of("alpha", "beta", "gamma");
+            s.setBufferLines(text);
+            s.lua(PinnedPlugins.loadTelescope(plenary.get(), telescope.get()) + " return 0");
+            KeyRouter router = new KeyRouter(s);
+            for (String key : List.of("g", "p", "g", "a", "m")) {
+                assertTrue(router.route(key), key + " goes to Neovim");
+            }
+            // Narrowed: the prompt has the letters and the results only gamma, so that Enter picks
+            // it, not the first line of a list Telescope has not filtered yet.
+            waitFor(() -> number(s, PinnedPlugins.TELESCOPE_WINDOWS, "gam") >= 2 && number(s, PinnedPlugins.TELESCOPE_WINDOWS, "alpha") == 0
+                    && number(s, PinnedPlugins.TELESCOPE_WINDOWS, "beta") == 0, "Telescope's prompt with gam, its results only gamma");
+            assertTrue(s.isNeovimDrivenInsert(), "the prompt's insert is Neovim's");
+            assertEquals(text, s.getBufferLines(), "the typed keys went into the prompt, not the document");
+            assertTrue(router.route("<CR>"));
+            waitFor(() -> number(s, PinnedPlugins.TELESCOPE_WINDOWS, null) == 0 && "n".equals(s.getMode()), "the picker closed by Enter");
+            assertEquals(3, number(s, "return vim.api.nvim_win_get_cursor(0)[1]", null), "Enter jumped to gamma's line");
+            assertEquals(text, s.getBufferLines(), "the document keeps its text");
+
+            for (String key : List.of("g", "p", "b")) {
+                assertTrue(router.route(key), key + " goes to Neovim");
+            }
+            waitFor(() -> number(s, PinnedPlugins.TELESCOPE_WINDOWS, "b") >= 2, "the picker open again, b in its prompt");
+            s.leaveFloatAsync(); // as a click away from the editor
+            waitFor(() -> number(s, PinnedPlugins.TELESCOPE_WINDOWS, null) == 0, "every window of the picker closed by leaving");
+            waitFor(() -> "n".equals(s.getMode()) && !s.isNeovimDrivenInsert(), "the prompt's insert ended");
+            assertEquals(text, s.getBufferLines(), "the document keeps its text");
+        }
+    }
+
+    private interface Check {
+        boolean holds() throws Exception;
+    }
+
+    /** Waits up to {@link #WAIT_MS} for {@code condition}, read with calls that may fail while Neovim changes. */
+    private static void waitFor(Check condition, String what) throws Exception {
+        long deadline = System.currentTimeMillis() + WAIT_MS;
+        while (true) {
+            try {
+                if (condition.holds()) {
+                    return;
+                }
+            } catch (Exception e) {
+                // read again
+            }
+            if (System.currentTimeMillis() > deadline) {
+                throw new AssertionError("timed out waiting for " + what);
+            }
+            Thread.sleep(10);
+        }
+    }
+
+    /**
+     * {@code lua}'s answer as a number; {@code arg} its one argument ({@code ...}), a plain word of
+     * the test's own, or none when null.
+     */
+    private static long number(NeovimSession s, String lua, String arg) throws Exception {
+        Object answer = s.lua("return (function(...)\n" + lua + "\nend)(" + (arg == null ? "" : "'" + arg + "'") + ")");
+        return ((Number) answer).longValue();
     }
 }

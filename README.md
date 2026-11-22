@@ -176,10 +176,10 @@ or, without lazy.nvim, `if not vim.g.neovim4eclipse then require('noice').setup(
 
 **Distributions** (LazyVim, NvChad, AstroNvim and other large configs) are made for a terminal, and
 most of what they add draws windows Eclipse does not show (see [Known limitations](#known-limitations), item 7). With
-the LazyVim starter, the plug-in closes the windows that take the focus (lazy.nvim's installer,
-with a message), and the plug-ins still install in the background; keys typed in the first seconds
-of that first start can be lost, while the installer opens its window again. Later starts edit as
-usual, without most of what the distribution shows. Keep such a config out of Eclipse with the
+the LazyVim starter, lazy.nvim installs while Neovim starts, its window usually not shown, and
+the window is closed with a message when the start is over (`:Lazy` opens it again); keys you type meanwhile
+wait, and go to your file once the start is over, never to the installer. Later starts edit as usual, without
+most of what the distribution shows. Keep such a config out of Eclipse with the
 guard above, placed before it loads (`if vim.g.neovim4eclipse then ... return end` ahead of
 `require('config.lazy')`), or give Eclipse a small config of its own (*A separate config for
 Eclipse*, below).

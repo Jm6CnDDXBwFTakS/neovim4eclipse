@@ -78,6 +78,9 @@ class NotificationBridgeTest {
             @Override public void onClipboardCopy(String register, List<String> lines, String regtype) {
                 events.add("copy" + register + ":" + lines + ":" + regtype);
             }
+            @Override public int attachedWindow() {
+                return 1001;
+            }
             @Override public Object onClipboardPaste(String register) {
                 events.add("paste" + register);
                 if ("!".equals(register)) {
@@ -432,6 +435,7 @@ class NotificationBridgeTest {
     @Test
     void requestsAreAnsweredByName() {
         assertEquals(List.of(List.of("pasted"), "v"), paste("+"));
+        assertEquals(1001, request("eclipse_attached_window"));
         // Thrown, so the RPC layer answers Neovim with an error (Neovim waits for every request).
         assertThrows(UnsupportedOperationException.class, () -> request("eclipse_unknown"));
     }

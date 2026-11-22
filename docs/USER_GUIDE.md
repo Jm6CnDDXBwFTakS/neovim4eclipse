@@ -626,8 +626,11 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   drawn, and Neovim leaves it; closing the editor then closes it, the buffer kept hidden.
   Only the keys reach it: a click on it does nothing, and an input method has no place to show
   its candidates there. `Ctrl-W` and its window commands stay Eclipse's, so `Ctrl-W w` moves to
-  the next editor and closes the window. lazy.nvim's installer at a first start is shown over the
-  first editor. One too large to draw (past the *Limits* below) is closed, with a
+  the next editor and closes the window. A window that has the keyboard while Neovim is still
+  starting (lazy.nvim's installer, as it installs missing plug-ins) is closed with a message when
+  the start is over (meanwhile it is usually not shown): the keys you type meanwhile wait, and go
+  to your file, whatever the config's `VimEnter` did. A float a later `UIEnter` opens takes the
+  keys still waiting. `:Lazy` opens it again. One too large to draw (past the *Limits* below) is closed, with a
   message.
 - **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In
   insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your

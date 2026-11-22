@@ -52,8 +52,11 @@ The Neovim side:
   before the home buffer goes anywhere (`LuaScripts.LEAVE_START_FLOAT`, the session's first script
   after `PATHS`), a floating window the config left the focus in (lazy.nvim's installer on a first
   start) is left and a plain window is made current: left current, it got the home buffer. The
-  float stays, and is moved into the first editor's tab page and entered (`BRING_START_FLOAT`; a
-  float belongs to one tab page).
+  float is then closed with a message at the end of Neovim's start (`UIEnter`, after every
+  `VimEnter`), with any plug-in's float that has the keyboard then, and Neovim goes to the window
+  Eclipse has attached, asked of Eclipse (`CLOSE_START_FLOAT`, `close_start_floats`), so that the
+  keys typed while Neovim starts, which wait in its input until then, stay the file's; its
+  plug-in's command (`:Lazy`) opens it again.
   Not caught by the net: a window opened with `noautocmd` (no `WinNew`); floats are not the net's
   (`close_undrawn` is asked at each redraw, whatever opened them). The net cannot use the current window (in `WinNew`
   it is still the old one, so a net built on it closed the editor's own window); the module keeps

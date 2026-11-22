@@ -1129,7 +1129,8 @@ final class LuaScripts {
      * Leaves a floating window the user's config left the focus in, before the plug-in sets up
      * Neovim's windows: lazy.nvim's installer on the first start of a LazyVim config. Left current,
      * the home buffer would go into it ({@link #SHOW_BUFFER}). The focus moves to a plain window
-     * of the tab; the float stays, and is shown in the first editor ({@link #BRING_START_FLOAT}).
+     * of the tab; the float stays until the session closes it ({@link #CLOSE_START_FLOAT}, at the
+     * start's end).
      * Answers the float's window, or {@code 0} when there was none.
      * Run first, right after {@link #PATHS}. Example: with lazy.nvim's window 1001 current,
      * answers 1001 and leaves the plain window current.
@@ -1149,25 +1150,15 @@ final class LuaScripts {
             """;
 
     /**
-     * Shows the float {@link #LEAVE_START_FLOAT} left (first argument: its window) in the first
-     * editor's window (second argument), and enters it: a float belongs to one tab page, and each
-     * editor's window has its own, so the float moves into that one, hung on the editor's window
-     * at the same row and column. Then it is drawn with the cursor, as any plug-in's float Neovim
-     * is in. Nothing if it closed meanwhile (lazy.nvim's installer was done). Example: LazyVim's
-     * first start: the installer's window over the first editor opened, its keys Neovim's.
+     * Closes the floats that have the keyboard as Neovim's start ends, with a message
+     * ({@link #WINDOWS}' {@code close_start_floats}): the one {@link #LEAVE_START_FLOAT} left
+     * (argument: its window, or 0) and the plug-in's float Neovim is in, then goes to the window
+     * Eclipse has attached; at once when Neovim has entered, else at {@code UIEnter}, after every
+     * {@code VimEnter} and before any key typed meanwhile is read. Run once, at every start, after
+     * {@link #WINDOWS} and ui2, so that the message is shown.
      */
-    static final String BRING_START_FLOAT = """
-            local float, win = tonumber((...)), tonumber((select(2, ...)))
-            if not vim.api.nvim_win_is_valid(float) or not vim.api.nvim_win_is_valid(win)
-                or vim.api.nvim_win_get_config(float).relative == '' then
-              return false
-            end
-            local c = vim.api.nvim_win_get_config(float)
-            if not pcall(vim.api.nvim_win_set_config, float, { relative = 'win', win = win,
-                row = c.row, col = c.col, width = c.width, height = c.height }) then
-              return false
-            end
-            return pcall(vim.api.nvim_set_current_win, float)
+    static final String CLOSE_START_FLOAT = """
+            return package.loaded['neovim4eclipse.windows'].close_start_floats(tonumber((...)))
             """;
 
     /**
@@ -1261,14 +1252,21 @@ final class LuaScripts {
               local ok, ft = pcall(function() return vim.bo[vim.api.nvim_win_get_buf(win)].filetype end)
               return ok and ft ~= '' and ft or 'a plug-in'
             end
-            --- The message for a floating window with the focus that the plug-in closed
-            --- (M.close_undrawn): why, and that it would take the keys unseen. Example: "Closed the
-            --- floating window of lazy: it is hidden, and it would take the keys unseen".
+            --- The message for a floating window with the focus that the plug-in closed (M.close_undrawn,
+            --- M.close_start_floats): its name, and why. Example: "Closed the floating window of lazy: it
+            --- is hidden, and it would take the keys unseen".
             function M.float_closed_message(name, why)
-              return "Closed the floating window of " .. name .. ": " .. why .. ", and it would take the keys unseen"
+              return "Closed the floating window of " .. name .. ": " .. why
             end
+            -- Why a float the editor does not draw is closed, after the reason it is not drawn.
+            local UNSEEN = ', and it would take the keys unseen'
             -- Why a float with the focus that its plug-in hid is closed (M.close_undrawn).
             local HIDDEN = 'it is hidden'
+            -- Why a float Neovim is in as its start ends is closed (M.close_start_floats). On M too,
+            -- for the tests that look for the message (float_closed_message(name, M.AT_START)).
+            local AT_START = "it had the keyboard while Neovim started, so the keys typed meanwhile go to your file"
+              .. " (its plug-in's command, such as :Lazy, opens it again)"
+            M.AT_START = AT_START
             -- The windows the plug-in opened and has not closed (the home window, the editors' and
             -- the pages', these marked 'page'): any other plain window is a stray one (the WinNew
             -- safety net below), and a floating or special one is a side window (M.is_side_window).
@@ -2015,7 +2013,7 @@ final class LuaScripts {
               if not M.leave_float() then
                 return false
               end
-              vim.api.nvim_echo({ { M.float_closed_message(name, why) } }, true, { err = true })
+              vim.api.nvim_echo({ { M.float_closed_message(name, why .. UNSEEN) } }, true, { err = true })
               return true
             end
 
@@ -2029,6 +2027,64 @@ final class LuaScripts {
             }
 
             local group = vim.api.nvim_create_augroup('neovim4eclipse_windows', { clear = true })
+
+            --- The one rule for keys typed while Neovim starts: they go to the file Eclipse shows. A
+            --- config's init can keep running while Eclipse is set up and an editor attached (lazy.nvim
+            --- installing missing plug-ins waits with vim.wait, in rounds), and a plug-in can open a float
+            --- with the focus meanwhile and have VimEnter enter it again (lazy.nvim's window); the keys the
+            --- user types then wait in Neovim's input, which Neovim reads only once its start is over. So
+            --- at UIEnter, after every VimEnter and before any of those keys is read, the check looks at
+            --- where Neovim is and puts it right: the float the config left the focus in before the
+            --- plug-in set Neovim's windows up (LEAVE_START_FLOAT hands it over) is closed, and so is the
+            --- plug-in's float Neovim is in (M.leave_float: not by force, a changed buffer stays); then
+            --- Neovim goes to the window Eclipse has attached, asked of Eclipse there and then
+            --- (eclipse_attached_window), wherever a VimEnter took it. One message names the first float
+            --- closed. When Neovim has already entered (an init that does not wait: the usual start), it
+            --- happens at once. A float opened after that is any other plug-in's: one a later UIEnter opens
+            --- takes the keys still waiting, as Neovim gives them to whatever window is current when it
+            --- reads them; the check runs as late as a hook can, not after every hook. Its plug-in's work
+            --- goes on, and its command opens it again (:Lazy).
+            --- Whether it closed one now (false: at UIEnter, or nothing to close). Example: LazyVim's
+            --- first start, "Closed the floating window of lazy: it had the keyboard while Neovim
+            --- started, ...", and the keys typed meanwhile in the first editor's file.
+            function M.close_start_floats(left)
+              local function close()
+                local name
+                if left and left > 0 and vim.api.nvim_win_is_valid(left) then
+                  local n = float_name(left)
+                  if pcall(vim.api.nvim_win_close, left, false) then
+                    name = n
+                  end
+                end
+                local current = vim.api.nvim_get_current_win()
+                if M.focused_float(current) then
+                  local n = float_name(current)
+                  if M.leave_float() then
+                    name = name or n
+                  end
+                end
+                -- Eclipse's own answer, not a copy kept here: the editor it attached last (the home
+                -- window before any). No channel: not Eclipse's Neovim (the Lua specs).
+                local chan = vim.g.neovim4eclipse_channel
+                local ok, attached = false, nil
+                if chan then
+                  ok, attached = pcall(vim.rpcrequest, chan, 'eclipse_attached_window')
+                end
+                if ok and type(attached) == 'number' and attached > 0 and vim.api.nvim_win_is_valid(attached)
+                    and attached ~= vim.api.nvim_get_current_win() then
+                  pcall(vim.api.nvim_set_current_win, attached)
+                end
+                if name then
+                  vim.api.nvim_echo({ { M.float_closed_message(name, AT_START) } }, true, { err = true })
+                end
+                return name ~= nil
+              end
+              if vim.v.vim_did_enter == 1 then
+                return close()
+              end
+              vim.api.nvim_create_autocmd('UIEnter', { group = group, once = true, callback = function() close() end })
+              return false
+            end
             -- Where each insert begins (insert_float, above).
             vim.api.nvim_create_autocmd('InsertEnter', {
               group = group,

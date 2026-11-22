@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.GalleryCamera;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
 
