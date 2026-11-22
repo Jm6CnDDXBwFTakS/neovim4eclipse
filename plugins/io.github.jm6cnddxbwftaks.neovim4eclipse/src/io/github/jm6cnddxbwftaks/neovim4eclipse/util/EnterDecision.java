@@ -82,9 +82,9 @@ public final class EnterDecision {
 
     public static Action decide(Enter e) {
         if (e.floatEntered() && !e.document() && !e.projectFile()) {
-            // A plug-in's float with the cursor (a picker's prompt): sent back at once, the insert its
-            // plug-in starts would begin in the editor's window, where Eclipse types
-            // (KeyInput.onModeReport). Leaving the editor closes it (WINDOWS' leave_float). Telescope's picks come
+            // A plug-in's float with the cursor (a picker's prompt): Neovim stays. Were it sent back,
+            // the insert its plug-in starts would begin in the editor's window, where Eclipse types
+            // (KeyInput.onModeReport). One the editor does not draw is closed (WINDOWS' close_undrawn). Leaving the editor closes it (WINDOWS' leave_float). Telescope's picks come
             // from the window it returns to (:edit there), which this decides as any other enter.
             // A document or a file shown in it goes the usual way below.
             return Action.ACCEPT;

@@ -140,9 +140,9 @@ final class KeyInput {
      * notices on in order: then this value is the insert's.
      *
      * <p>Leaving the editor closes such a float, its insert ended ({@code LuaScripts.WINDOWS}'
-     * {@code leave_float}). Should a float close by other means during its insert (with plug-ins'
-     * floats off the WinNew safety net closes one that opens with the focus), the insert may go
-     * on in the editor's window, still Neovim's until Esc: its text reaches Eclipse by line
+     * {@code leave_float}; {@code close_undrawn} closes an undrawn one the same way). Should a float
+     * close by other means during its insert (its plug-in closes it), the insert may go on in the
+     * editor's window, still Neovim's until Esc: its text reaches Eclipse by line
      * events, as a block insert's does, and Esc syncs.
      */
     private volatile boolean inFocusedFloat;

@@ -631,8 +631,8 @@ the cursor into it.
   its candidates there. `Ctrl-W` and its window commands stay Eclipse's, so `Ctrl-W w` moves to
   the next editor and closes the window. lazy.nvim's installer at a first start is shown over the
   first editor. One too large to draw (past the *Limits* below) is closed, with a
-  message. With `vim.g.neovim4eclipse_floating_windows = 0` such a window is closed as it opens,
-  with a message.
+  message. With `vim.g.neovim4eclipse_floating_windows = 0` such a window is closed, with a
+  message, as it opens or as Neovim enters it.
 - **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In
   insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your
   typing (signature help, a completion plug-in's documentation) does not appear, or lags; Eclipse's
@@ -661,7 +661,7 @@ the cursor into it.
   replace them with plain text (see its documentation).
 
 `vim.g.neovim4eclipse_floating_windows = 0` in `init.lua` turns the drawing off; the windows then
-exist unseen, as before 0.2.23. Nothing is drawn either with `vim.g.neovim4eclipse_viewport = 0`:
+exist unseen, as before 0.2.23, except one that takes the keyboard, which is closed. Nothing is drawn either with `vim.g.neovim4eclipse_viewport = 0`:
 Neovim's screen is then not the editor's size, and a window "at the bottom" would land anywhere.
 
 Neovim's own floating windows are drawn whatever these say: ui2's command line, messages, pager

@@ -86,14 +86,6 @@ public final class Grids {
     private final Map<Integer, GridEvent.HlAttr> attrs = new HashMap<>();
     private GridEvent.DefaultColors defaultColors = new GridEvent.DefaultColors(GridEvent.NO_COLOR, GridEvent.NO_COLOR);
     private int cursorGrid = -1;
-    /**
-     * A plug-in's float Neovim hid ({@code win_hide}) while the cursor was in it, as {@code {grid,
-     * window}}, or {@code null}: the cursor stays in a hidden float (its config's {@code hide},
-     * set by its plug-in), so the keys would go into a window nobody sees. {@link #focusedFloat}
-     * still names it, so that the session closes it ({@link #undrawnFocusedFloat}). Forgotten when
-     * the cursor goes to another grid, or the window is shown again or gone.
-     */
-    private int[] hiddenFocused;
     private int cursorRow;
     private int cursorCol;
     private int drawnWindow = -1;
@@ -284,9 +276,6 @@ public final class Grids {
                 touched(e.grid());
             }
             case GridEvent.CursorGoto e -> {
-                if (hiddenFocused != null && hiddenFocused[0] != e.grid()) {
-                    hiddenFocused = null; // the cursor left the hidden float
-                }
                 pageTouched(cursorGrid); // the cursor left that page, or moved in it
                 pageTouched(e.grid());
                 boolean wasDrawn = isDrawn(cursorGrid);
@@ -300,24 +289,19 @@ public final class Grids {
                 changed |= wasDrawn || isDrawn(cursorGrid);
             }
             case GridEvent.Destroy e -> {
-                forgetHidden(e.grid());
                 grids.remove(e.grid());
                 windowOfGrid.remove(e.grid());
                 floatsChanged |= placeOfGrid.remove(e.grid()) != null;
             }
             case GridEvent.WinPos e -> {
-                forgetHidden(e.grid()); // shown again
                 windowOfGrid.put(e.grid(), e.win());
                 placeOfGrid.put(e.grid(), e);
                 floatsChanged = true; // a float moved, or the window the floats are counted from
                 touched(e.grid());
             }
             case GridEvent.WinGone e -> {
-                // Read before the window is forgotten. A float that closes takes the cursor along
-                // (a cursor_goto elsewhere follows, which forgets it); a hidden one keeps it.
-                if (e.grid() == cursorGrid && focusedFloat() != -1) {
-                    hiddenFocused = new int[] {e.grid(), focusedFloat()};
-                }
+                // A hidden float keeps the cursor on its grid, its window no longer known here:
+                // unseenCursor names that grid then.
                 touched(e.grid());
                 windowOfGrid.remove(e.grid());
                 floatsChanged |= placeOfGrid.remove(e.grid()) != null;
@@ -473,7 +457,7 @@ public final class Grids {
      * float while {@link #drawFloats} is off, except the windows that are always drawn
      * ({@link #alwaysDrawn}): ui2's and Neovim's popup menu, the cursor's included, with the
      * cursor. Example: a picker's prompt entered, with {@code vim.g.neovim4eclipse_floating_windows}
-     * 0: not drawn (the safety net of {@code LuaScripts.WINDOWS} closes it).
+     * 0: not drawn (so closed: {@link #unseenCursor}, {@code LuaScripts.CLOSE_UNDRAWN_FLOAT}).
      *
      * <p>And what goes past the limits ({@link #MAX_FLOATS}, {@link #MAX_FLOAT_CELLS}): the
      * windows are taken Neovim's own first ({@link #alwaysDrawn}), then the cursor's (the one the
@@ -562,33 +546,47 @@ public final class Grids {
     /**
      * The window of the plug-in's float Neovim's cursor is in, or -1: the cursor's grid is a
      * float's, and not one of Neovim's own ({@link #alwaysDrawn}: ui2's, the popup menu). Whether it
-     * is drawn or not ({@link #floatsIfChanged}), also once hidden ({@link #hiddenFocused}).
-     * Example: a picker's prompt entered: its window.
+     * is drawn or not ({@link #floatsIfChanged}). Example: a picker's prompt entered: its window.
+     * A float its plug-in hid is not one here, as its window is forgotten with {@code win_hide}:
+     * leaving the editor therefore does not close it ({@code NeovimSession.inPluginFloat} is
+     * false), but the redraw that hid it does: {@link #unseenCursor} finds the cursor on its grid.
      */
     public int focusedFloat() {
-        if (hiddenFocused != null && hiddenFocused[0] == cursorGrid) {
-            return hiddenFocused[1];
-        }
         Integer win = windowOfGrid.get(cursorGrid);
         return win != null && win != -1 && isFloat(cursorGrid) && !alwaysDrawn(cursorGrid) ? win : -1;
     }
 
     /**
-     * The plug-in's float the cursor is in ({@link #focusedFloat}) when the last answer of
-     * {@link #floatsIfChanged} left it out, or -1: more floats or cells than the limits allow, so
-     * it is not drawn, or hidden by its plug-in, and the keys would go into a window nobody sees
-     * (the session closes it).
-     * Only while floats are drawn at all ({@link #drawFloats}): with them off every float is left
-     * out, and Neovim is sent back from such a float instead. Example: a float of more than
-     * {@link #MAX_FLOAT_CELLS} cells with the cursor in it. (Other floats seldom crowd one out: the
-     * cursor's is taken right after Neovim's own windows.)
+     * Where Neovim's cursor is, when the editor does not draw it: the cursor's grid and the
+     * window last known on it (-1 when not known), or empty. The one check for "keys go only to
+     * a window Eclipse draws", made at every redraw flush, whatever route led there. Allowed, a
+     * known set: a window of Neovim's layout (no float: an editor's, shown by the editor itself,
+     * another editor's in a switch, a page's, the command-line window), Neovim's own floats
+     * ({@link #alwaysDrawn}) and the floats of the last {@link #floatsIfChanged}, so call this
+     * after that. Anything else is unseen: a plug-in's float past the limits, any float while
+     * floats are not drawn ({@link #drawFloats} off), and a grid whose window is not known, as a
+     * float its plug-in hid ({@code win_hide} forgets its place: window -1). The session hands
+     * this to Neovim ({@code LuaScripts.CLOSE_UNDRAWN_FLOAT}), which decides from its own state
+     * whether it is a plug-in's float to close; for anything else it does nothing (a new float
+     * whose place comes with a later redraw: asked again then, with its window).
+     * Example: Telescope's prompt with floats off: its grid and window.
      */
-    public int undrawnFocusedFloat() {
-        int focused = focusedFloat();
-        if (focused == -1 || !drawFloats) {
-            return -1;
+    public Optional<UnseenCursor> unseenCursor() {
+        if (cursorGrid < 0) {
+            return Optional.empty();
         }
-        return lastFloats.stream().anyMatch(f -> f.grid().window() == focused) ? -1 : focused;
+        Integer win = windowOfGrid.get(cursorGrid);
+        boolean drawn = win != null && (!isFloat(cursorGrid) || alwaysDrawn(cursorGrid)
+                || lastFloats.stream().anyMatch(f -> f.grid().window() == win));
+        return drawn ? Optional.empty() : Optional.of(new UnseenCursor(cursorGrid, win == null ? -1 : win));
+    }
+
+    /**
+     * The cursor on a grid the editor does not draw ({@link #unseenCursor}): the grid, and the
+     * window last known on it, or -1. A record, so that the session asks Neovim once for each
+     * (the same grid with its window now known is another).
+     */
+    public record UnseenCursor(int grid, int window) {
     }
 
     /** {@code grid} as it stands, with the highlights it uses; the cursor when it is on it. */
@@ -677,12 +675,6 @@ public final class Grids {
     private boolean alwaysDrawn(int grid) {
         Integer win = windowOfGrid.get(grid);
         return win != null && (ui2Windows.contains(win) || (win == -1 && isFloat(grid)));
-    }
-
-    private void forgetHidden(int grid) {
-        if (hiddenFocused != null && hiddenFocused[0] == grid) {
-            hiddenFocused = null;
-        }
     }
 
     private boolean isFloat(int grid) {

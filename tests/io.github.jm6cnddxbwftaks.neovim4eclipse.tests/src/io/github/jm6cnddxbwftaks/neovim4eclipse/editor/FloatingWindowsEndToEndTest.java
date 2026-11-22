@@ -42,8 +42,8 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
 
     /**
      * Opens a picker's prompt as a picker does: a scratch prompt buffer in a float, entered, then
-     * {@code startinsert}. It stays: floats are drawn, so the WinNew safety net of
-     * {@code LuaScripts.WINDOWS} leaves it.
+     * {@code startinsert}. It stays: floats are drawn, so the editor draws it, and the one check
+     * for undrawn floats ({@code LuaScripts.WINDOWS}' {@code close_undrawn}) leaves it.
      */
     static final String OPEN_PROMPT = """
             local buf = vim.api.nvim_create_buf(false, true)

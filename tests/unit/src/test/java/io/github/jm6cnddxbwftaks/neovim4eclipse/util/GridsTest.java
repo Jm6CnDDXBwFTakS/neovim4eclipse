@@ -13,8 +13,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent.Cell;
 
@@ -234,7 +238,7 @@ class GridsTest {
         assertEquals(-1, grids.focusedFloat(), "ui2's line is Neovim's own");
     }
 
-    /** With plug-ins' floats off, the float with the focus is not drawn either (the net closes it). */
+    /** With plug-ins' floats off, the float with the focus is not drawn either (so it is closed: unseenCursor). */
     @Test
     void aFloatWithTheFocusIsNotDrawnWhileFloatsAreOff() {
         editorWindow();
@@ -395,51 +399,100 @@ class GridsTest {
         assertFalse(drawn.contains(2001) || drawn.contains(2002), "the next lowest are left out: " + drawn);
     }
 
-    /** A float with the cursor too large to draw is undrawn: the session closes it. Others are not. */
-    @Test
-    void aFocusedFloatPastTheCellLimitIsUndrawnAndOnlyThen() {
-        grids.drawFloats(true);
-        editorWindow();
-        floatOfSize(5, 1002, 1000, 251, 50); // 251,000 cells: one more row than the limit allows
-        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
-        assertTrue(grids.floatsIfChanged().orElse(List.of()).isEmpty(), "too large: not drawn");
-        assertEquals(1002, grids.undrawnFocusedFloat());
-        grids.apply(new GridEvent.Resize(5, 1000, 250)); // exactly the limit: drawn
-        assertEquals(List.of(1002), drawnWindows());
-        assertEquals(-1, grids.undrawnFocusedFloat());
-        grids.apply(new GridEvent.CursorGoto(2, 4, 0));
-        grids.floatsIfChanged();
-        assertEquals(-1, grids.undrawnFocusedFloat(), "the cursor in the editor's window");
-        grids.drawFloats(false);
-        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
-        grids.floatsIfChanged();
-        assertEquals(-1, grids.undrawnFocusedFloat(), "floats off: Neovim is sent back instead");
+    /**
+     * Where Neovim's cursor can be, one row each, and whether the one check for "keys go only to a
+     * window Eclipse draws" ({@link Grids#unseenCursor}) finds it unseen: the grid and the window
+     * last known on it, or nothing. A new way into a window belongs here as a row. The session
+     * asks Neovim about every unseen place, and Neovim closes only a plug-in's float it can tell
+     * is undrawn ({@code windows_spec.lua}, "close_undrawn"), so a row like
+     * {@link #A_GRID_NOT_PLACED_YET} costs one call and changes nothing.
+     */
+    enum CursorPlace {
+        THE_EDITORS_WINDOW(null, t -> t.editorWindow()),
+        A_DRAWN_FLOAT(null, t -> {
+            t.grids.drawFloats(true);
+            t.editorWindow();
+            t.floatAt(5, 1002, 3, 3, 50);
+            t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        }),
+        A_FLOAT_AT_THE_CELL_LIMIT(null, t -> {
+            t.grids.drawFloats(true);
+            t.editorWindow();
+            t.floatOfSize(5, 1002, 1000, Grids.MAX_FLOAT_CELLS / 1000, 50);
+            t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        }),
+        A_FLOAT_PAST_THE_CELL_LIMIT(new Grids.UnseenCursor(5, 1002), t -> {
+            t.grids.drawFloats(true);
+            t.editorWindow();
+            t.floatOfSize(5, 1002, 1000, Grids.MAX_FLOAT_CELLS / 1000 + 1, 50); // one row too many
+            t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        }),
+        A_FLOAT_WHILE_FLOATS_ARE_OFF(new Grids.UnseenCursor(5, 1002), t -> {
+            t.editorWindow();
+            t.floatAt(5, 1002, 3, 3, 50);
+            t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        }),
+        /** win_hide: Neovim forgets the window's place, the cursor stays on its grid. */
+        A_FLOAT_ITS_PLUG_IN_HID(new Grids.UnseenCursor(5, -1), t -> {
+            t.grids.drawFloats(true);
+            t.editorWindow();
+            t.floatAt(5, 1002, 3, 3, 50);
+            t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+            t.grids.floatsIfChanged();
+            t.grids.apply(new GridEvent.WinGone(5));
+        }),
+        A_HIDDEN_FLOAT_SHOWN_AGAIN(null, t -> {
+            A_FLOAT_ITS_PLUG_IN_HID.setUp.accept(t);
+            t.grids.floatsIfChanged();
+            t.grids.apply(new GridEvent.WinPos(5, 1002, true, 3, 3, 0, 0, 50));
+        }),
+        UI2S_LINE_WHILE_FLOATS_ARE_OFF(null, t -> {
+            t.editorWindow();
+            t.grids.ui2Windows(List.of(1002), 1002, -1, false);
+            t.floatAt(5, 1002, 3, 3, 50);
+            t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
+        }),
+        A_PAGES_WINDOW(null, t -> {
+            t.editorWindow();
+            t.pageDrawn();
+        }),
+        THE_COMMAND_LINE_WINDOW(null, t -> {
+            t.editorWindow();
+            t.commandWindow();
+        }),
+        /** A window of Neovim's layout, another editor's during a switch: the editors show their own. */
+        ANOTHER_EDITORS_WINDOW(null, t -> {
+            t.editorWindow();
+            t.grids.apply(new GridEvent.Resize(3, 80, 23));
+            t.grids.apply(new GridEvent.WinPos(3, 1001, false, 0, 0, 80, 23, 0));
+            t.grids.apply(new GridEvent.CursorGoto(3, 0, 0));
+        }),
+        /** A grid whose window is not known yet (its place comes later): asked, Neovim decides. */
+        A_GRID_NOT_PLACED_YET(new Grids.UnseenCursor(6, -1), t -> {
+            t.grids.drawFloats(true);
+            t.editorWindow();
+            t.grids.apply(new GridEvent.Resize(6, 6, 2));
+            t.grids.apply(new GridEvent.CursorGoto(6, 0, 0));
+        });
+
+        private final Grids.UnseenCursor unseen;
+        private final Consumer<GridsTest> setUp;
+
+        CursorPlace(Grids.UnseenCursor unseen, Consumer<GridsTest> setUp) {
+            this.unseen = unseen;
+            this.setUp = setUp;
+        }
     }
 
-    /**
-     * A float its plug-in hides ({@code hide}, Neovim's {@code win_hide}) while the cursor is in
-     * it keeps the keys, Neovim's cursor with them: it is still the focused float, and undrawn, so
-     * that the session closes it, until it is shown again or the cursor leaves.
-     */
-    @Test
-    void aFloatHiddenWithTheCursorInItIsStillTheFocusedOneAndUndrawn() {
-        grids.drawFloats(true);
-        editorWindow();
-        floatAt(5, 1002, 3, 3, 50);
-        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
-        assertEquals(List.of(1002), drawnWindows());
-        grids.apply(new GridEvent.WinGone(5));
-        assertTrue(grids.floatsIfChanged().orElseThrow().isEmpty(), "hidden: not drawn");
-        assertEquals(1002, grids.focusedFloat(), "the keys still go to it");
-        assertEquals(1002, grids.undrawnFocusedFloat(), "so the session closes it");
-        grids.apply(new GridEvent.WinPos(5, 1002, true, 3, 3, 0, 0, 50));
-        assertEquals(List.of(1002), drawnWindows(), "shown again");
-        assertEquals(-1, grids.undrawnFocusedFloat());
-        grids.apply(new GridEvent.WinGone(5));
-        grids.apply(new GridEvent.CursorGoto(2, 4, 0));
-        assertEquals(-1, grids.focusedFloat(), "the cursor left it");
-        grids.apply(new GridEvent.CursorGoto(5, 0, 0));
-        assertEquals(-1, grids.focusedFloat(), "back on a grid without a window: no float known");
+    @ParameterizedTest
+    @EnumSource(CursorPlace.class)
+    void theCursorIsUnseenOnlyWhereTheEditorDrawsNothing(CursorPlace place) {
+        place.setUp.accept(this);
+        grids.floatsIfChanged(); // as the session does: the floats first, then the check
+        assertEquals(Optional.ofNullable(place.unseen), grids.unseenCursor());
+        if (place == CursorPlace.A_FLOAT_ITS_PLUG_IN_HID) {
+            assertEquals(-1, grids.focusedFloat(), "no longer a focused float: its window is forgotten");
+        }
     }
 
     /** A float that closes takes the cursor along (Neovim's cursor_goto elsewhere): none is left. */

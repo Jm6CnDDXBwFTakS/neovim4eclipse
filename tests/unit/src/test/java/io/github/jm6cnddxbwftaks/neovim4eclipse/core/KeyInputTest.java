@@ -676,7 +676,7 @@ class KeyInputTest {
 
     /**
      * Only where an insert begins counts: Eclipse's insert stays Eclipse's when a float takes the
-     * focus during it (the WinNew safety net closes that float), since Eclipse's typed text is not
+     * focus during it (Neovim is sent back from that float: util/EnterDecision), since Eclipse's typed text is not
      * in Neovim yet.
      */
     @Test

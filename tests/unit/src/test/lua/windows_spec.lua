@@ -950,13 +950,15 @@ t.test('a float entered later is reported too, as a hover float focused by a sec
   t.ok(vim.api.nvim_win_is_valid(float), 'and stays')
 end)
 
-t.test('with floats not drawn no float is reported: Neovim is sent back', function()
+t.test('with floats not drawn a float entered is reported all the same: the one check closes it', function()
   commands()
   floats_drawn(false)
   t.forget()
   local float = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
   vim.api.nvim_set_current_win(float)
-  t.eq({ false }, entered_floats())
+  t.eq({ true }, entered_floats(), 'Neovim stays: whether the editor draws it is close_undrawn\'s to decide')
+  t.eq(true, t.run('CLOSE_UNDRAWN_FLOAT', tostring(float), 'the limits'))
+  t.ok(not vim.api.nvim_win_is_valid(float))
 end)
 
 t.test('before WINDOWS runs, no window is a focused float', function()
@@ -976,16 +978,21 @@ t.test("the plug-in's own windows and plain windows are no focused floats", func
   t.eq(true, focused_float(float))
 end)
 
-t.test('with floats not drawn, a floating window that opens with the focus is closed: it would take the keys unseen', function()
+t.test('with floats not drawn, a floating window that opens with the focus is closed by the one check, not the net', function()
   local win = commands()
   floats_drawn(false)
   vim.v.errmsg = ''
   local buf = buffer(1)
   vim.bo[buf].filetype = 'lazy'
   local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
-  t.wait_for('the focused float to close', function() return not vim.api.nvim_win_is_valid(float) end)
+  flush()
+  t.ok(vim.api.nvim_win_is_valid(float), 'the net leaves floats alone')
+  -- What the session sends from the redraw that finds the cursor on the float's undrawn grid.
+  t.eq(true, t.run('CLOSE_UNDRAWN_FLOAT', tostring(float), 'the limits'))
+  t.ok(not vim.api.nvim_win_is_valid(float))
   t.eq(win, vim.api.nvim_get_current_win(), "the editor's window has the focus again")
   t.ok(vim.v.errmsg:find('Closed the floating window of lazy', 1, true), vim.v.errmsg)
+  t.ok(not vim.v.errmsg:find('the limits', 1, true), 'floats off is the reason, not the limits: ' .. vim.v.errmsg)
 end)
 
 t.test('with floats drawn, a floating window that opens with the focus stays', function()
@@ -1049,7 +1056,7 @@ t.test("while Neovim is in a plug-in's float, the editor's view scripts act on t
   t.eq(win, require('neovim4eclipse.windows').editor_window(), 'outside a float: the current window')
 end)
 
-t.test('a hidden float is not entered to stay, and one that opens with the focus hidden is closed', function()
+t.test('a hidden float entered, or one that opens with the focus hidden, is closed by the one check', function()
   commands()
   floats_drawn(true)
   local hidden = vim.api.nvim_open_win(buffer(1), false,
@@ -1057,12 +1064,18 @@ t.test('a hidden float is not entered to stay, and one that opens with the focus
   flush()
   t.forget()
   vim.api.nvim_set_current_win(hidden)
-  t.eq({ false }, entered_floats(), 'nobody would see where the keys go: Neovim is sent back')
+  t.eq({ true }, entered_floats(), 'entered: whether it is drawn is close_undrawn\'s to decide')
+  vim.v.errmsg = ''
+  -- -1: a hidden float's window is not known on its grid (util/Grids.unseenCursor).
+  t.eq(true, t.run('CLOSE_UNDRAWN_FLOAT', '-1', 'the limits'))
+  t.ok(not vim.api.nvim_win_is_valid(hidden))
+  t.ok(vim.v.errmsg:find(': it is hidden, and', 1, true), vim.v.errmsg)
   local opened = vim.api.nvim_open_win(buffer(1), true,
     { relative = 'editor', row = 1, col = 1, width = 5, height = 1, hide = true })
-  vim.v.errmsg = ''
-  t.wait_for('the hidden focused float to close', function() return not vim.api.nvim_win_is_valid(opened) end)
-  t.ok(vim.v.errmsg:find(': it is hidden, and', 1, true), vim.v.errmsg)
+  flush()
+  t.ok(vim.api.nvim_win_is_valid(opened), 'the net leaves floats alone')
+  t.eq(true, t.run('CLOSE_UNDRAWN_FLOAT', '-1', 'the limits'))
+  t.ok(not vim.api.nvim_win_is_valid(opened))
 end)
 
 t.test('leaving closes the float named too, the one the cursor was in as the keyboard left', function()
@@ -1092,14 +1105,28 @@ t.test('a float with the cursor the editor cannot draw is closed with a message'
   t.eq(false, close_undrawn(float), 'gone already: nothing')
 end)
 
+t.test('the one check closes nothing it cannot tell is undrawn', function()
+  local win = commands()
+  local float = vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  t.eq(false, t.run('CLOSE_UNDRAWN_FLOAT', '-1', 'the limits'), 'before the session says whether floats are drawn')
+  floats_drawn(true)
+  t.eq(false, t.run('CLOSE_UNDRAWN_FLOAT', '-1', 'the limits'),
+    'drawn, shown, its window not known to the session yet: placed with a later redraw')
+  t.eq(false, t.run('CLOSE_UNDRAWN_FLOAT', tostring(win), 'the limits'), 'the session saw another window there')
+  t.ok(vim.api.nvim_win_is_valid(float))
+  vim.api.nvim_set_current_win(win)
+  t.eq(false, t.run('CLOSE_UNDRAWN_FLOAT', tostring(win), 'the limits'), "an editor's window: no float")
+  t.ok(vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_is_valid(float))
+end)
+
 t.test('a float its plug-in hides while it has the cursor is closed, the message saying so', function()
   commands()
   floats_drawn(true)
   local float = vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
   flush()
-  vim.api.nvim_win_set_config(float, { hide = true }) -- util/Grids still names it: the session asks
+  vim.api.nvim_win_set_config(float, { hide = true }) -- the cursor stays on its grid, its window forgotten
   vim.v.errmsg = ''
-  t.eq(true, t.run('CLOSE_UNDRAWN_FLOAT', tostring(float)))
+  t.eq(true, t.run('CLOSE_UNDRAWN_FLOAT', '-1', 'the limits'))
   t.ok(not vim.api.nvim_win_is_valid(float))
   t.ok(vim.v.errmsg:find('Closed the floating window of a plug-in: it is hidden', 1, true), vim.v.errmsg)
 end)
@@ -1112,11 +1139,12 @@ end)
 
 t.test("with floats not drawn for the session's reason, the message gives that reason", function()
   commands()
-  t.run('FLOATS_DRAWN', 'false', "the editor's view does not follow Neovim's (vim.g.neovim4eclipse_viewport)")
+  t.run('FLOATS_DRAWN', 'false', 'the reason the session gives')
   vim.v.errmsg = ''
   local float = vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
-  t.wait_for('the focused float to close', function() return not vim.api.nvim_win_is_valid(float) end)
-  t.ok(vim.v.errmsg:find("Closed the floating window of a plug-in: the editor's view does not follow Neovim's (vim.g.neovim4eclipse_viewport), and", 1, true), vim.v.errmsg)
+  t.eq(true, t.run('CLOSE_UNDRAWN_FLOAT', tostring(float), 'the limits'))
+  t.ok(not vim.api.nvim_win_is_valid(float))
+  t.ok(vim.v.errmsg:find('Closed the floating window of a plug-in: the reason the session gives, and', 1, true), vim.v.errmsg)
 end)
 
 t.test('a float on a changed buffer closes by leaving, with hidden on; the changes stay', function()

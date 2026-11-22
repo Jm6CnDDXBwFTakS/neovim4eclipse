@@ -130,7 +130,7 @@ end)
 t.test("the safety net leaves ui2's window open while the cursor is in it", function()
   local ui2 = start()
   vim.api.nvim_set_current_win(ui2.wins.pager)
-  -- Any new window makes the net look at every window; a float the user is in would be closed.
+  -- Any new window makes the net look at every window, ui2's among them.
   local other = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false,
     { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
   -- The net runs scheduled, from WinNew; a callback scheduled after it runs after it.
