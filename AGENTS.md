@@ -25,12 +25,13 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
   establishes, and recommend it unless it costs something real. Easy to prove: check where a path
   ends, not the route to it (the real path through `util/FilePaths`, not each link on the way);
   allow a known set instead of refusing a list of bad cases (`NewFiles.internalOr` lets only
-  Eclipse's own text editors open a file); filter in the one place everything passes through, not
-  on each route to it (every `:` line passes `CmdlineLeavePre`, every jump `followNeovimIntoFile`);
-  act only on what the code found itself, never on text a program printed. Say what the option
-  costs (what it refuses that the other allowed) and what the other option would need instead.
-  Why: a rule proven by one check needs one review; a rule that guards every route keeps turning
-  up new routes.
+  Eclipse's own text editors open a file); filter in the one place everything passes through, not on
+  each route to it (every `:` line passes `CmdlineLeavePre`, every jump `followNeovimIntoFile`); act
+  only on what the code found itself, never on text a program printed; decide from the state itself,
+  read at the check (Neovim's current window, asked of Neovim), not from a copy kept up to date
+  along the way. Say what the option costs (what it refuses that the other allowed) and what the
+  other option would need instead. Why: a rule proven by one check needs one review; a rule that
+  guards every route keeps turning up new routes.
 - **Honor Neovim's own settings, within reason**: when a feature is added or changed, the
   standard Vim and Neovim options that govern it in a terminal (`'cmdheight'`, `'laststatus'`,
   `'statusline'`, `'showcmd'`, ui2's config) decide it here too, before any preference of the
@@ -41,18 +42,24 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
   hard to keep correct. A new plug-in setting is for what no Vim option covers. Why: users
   configure Neovim in `init.lua` and expect it to behave as configured; a setting of our own beside
   a Vim option is a second place to look.
-- **Review before the final test run**: once a change is built and its own tests pass, a code
-  review (correctness against the docs and spec, edge cases, error handling, docs kept current)
-  and a security review (untrusted input, paths, links, what a later step trusts) of the branch's
-  diff (in Claude Code `/code-review`, `/security-review`), each by a fresh reviewer that reads
-  the code, not this session's conclusions; then the fixes. **What counts as real:** a finding
-  that breaks a rule this file states (a cloned repository's file that makes something run: a
-  name reaching a command, a script-running editor, the system's program; Eclipse's and Neovim's
-  text drifting apart, or a user's text lost; a blocking call on the UI thread; personal data in
-  anything pushed), that stops a real use from working as documented, or that makes the code
-  disagree with its docs. A case that needs the user's own config or programs to act against
-  them, a crafted input that can only spoil its own result, or a message's wording is noted in
-  the report, not fixed in another round. Ask the reviewer to sort its findings by this rule. At
+- **State the rules before building**: a plan lists the few rules the change must keep, one line
+  each, each one a check the code can be pointed at. Example, for a plug-in's floating window
+  with the keyboard: keys go only to a window Eclipse draws; closing a window never discards a
+  changed buffer. The scope stays as planned: a case found while building or reviewing that breaks
+  none of these rules goes to the next step or the report, not into this change. Why: a review
+  against stated rules ends; a hunt for edge cases finds one more each round.
+- **Review before the final test run**: once a change is built and its own tests pass, a code review
+  (correctness against the docs and spec, edge cases, error handling, docs kept current) and a
+  security review (untrusted input, paths, links, what a later step trusts) of the branch's diff (in
+  Claude Code `/code-review`, `/security-review`), each by a fresh reviewer that reads the code, not
+  this session's conclusions; then the fixes. **What counts as real:** a finding that breaks one of
+  the change's own rules (above) or a rule this file states (a cloned repository's file that makes
+  something run: a name reaching a command, a script-running editor, the system's program; Eclipse's
+  and Neovim's text drifting apart, or a user's text lost; a blocking call on the UI thread;
+  personal data in anything pushed), that stops a real use from working as documented, or that makes
+  the code disagree with its docs. A case that needs the user's own config or programs to act
+  against them, a crafted input that can only spoil its own result, or a message's wording is noted
+  in the report, not fixed in another round. Ask the reviewer to sort its findings by this rule. At
   most two rounds (the review, and one over its fixes); list what is left and ask before a third.
   Then `LikeCi --all` or `-Pall`, last, since review fixes change the code that run must test.
 
