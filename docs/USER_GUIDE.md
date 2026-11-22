@@ -629,8 +629,7 @@ the cursor into it.
   its candidates there. `Ctrl-W` and its window commands stay Eclipse's, so `Ctrl-W w` moves to
   the next editor and closes the window. lazy.nvim's installer at a first start is shown over the
   first editor. One too large to draw (past the *Limits* below) is closed, with a
-  message. With `vim.g.neovim4eclipse_floating_windows = 0` such a window is closed, with a
-  message, as it opens or as Neovim enters it.
+  message.
 - **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In
   insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your
   typing (signature help, a completion plug-in's documentation) does not appear, or lags; Eclipse's
@@ -658,14 +657,10 @@ the cursor into it.
   (a "Nerd Font Mono") keeps each in its cell. which-key's `icons` options turn its icons off or
   replace them with plain text (see its documentation).
 
-`vim.g.neovim4eclipse_floating_windows = 0` in `init.lua` turns the drawing off; the windows then
-exist unseen, as before 0.2.23, except one that takes the keyboard, which is closed.
-
-Neovim's own floating windows are drawn whatever these say: ui2's command line, messages, pager
-and prompts ([Command line](#command-line---)) and Neovim's popup menu
-([Completion](#completion-ctrl-n-ctrl-p)). Without them there would be no command line to see, so
-the two switches cover only plug-ins' windows. Unlike a plug-in's, they are also drawn with the
-cursor in them (the line you type, the pager after `g<`).
+Neovim's own floating windows are drawn the same way: ui2's command line, messages, pager and
+prompts ([Command line](#command-line---)) and Neovim's popup menu
+([Completion](#completion-ctrl-n-ctrl-p)), with the cursor in them (the line you type, the pager
+after `g<`), and they are never closed for the keyboard: they are Neovim's own.
 
 <a id="the-neovim-view-messages-checkhealth"></a>
 

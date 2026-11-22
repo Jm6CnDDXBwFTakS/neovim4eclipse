@@ -1550,30 +1550,6 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
-     * {@code vim.g.neovim4eclipse_floating_windows = 0} turns the drawing off. The float still
-     * opens in Neovim; no listener hears of it. (Neovim's own
-     * command line and messages, ui2's windows, are drawn all the same: they are left out here.)
-     */
-    @Test
-    void floatingWindowsAreNotReportedWhenTurnedOff() throws Exception {
-        for (String off : List.of("let g:neovim4eclipse_floating_windows = 0")) {
-            try (NeovimSession s = start(List.of("--clean", "--cmd", off))) {
-                assertFalse(s.floatingWindowsDrawn(), off);
-                s.setBufferLines(sixtyLines());
-                List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
-                s.addFloatingWindowListener(reports::add);
-                s.lua(OPEN_FLOAT);
-                keys(s, "j"); // a key after it: Neovim has redrawn, float and all, before it answers
-                waitFor(() -> number(s, "return vim.fn.line('.')") == 2, "the key handled");
-                NeovimBarrier.pass(s);
-                assertEquals(1L, number(s, "return vim.api.nvim_win_is_valid(vim.g.float) and 1 or 0"), "the float is there");
-                assertTrue(reports.stream().allMatch(r -> plugInFloats(s, r).isEmpty()), off + ": " + reports);
-                assertEquals(List.of(), plugInFloats(s, s.floatingWindows()), off);
-            }
-        }
-    }
-
-    /**
      * A click that reaches Neovim after its command-line window closed does nothing. The panel's
      * click and an Enter typed just before it queue in Neovim's input in order, so the Enter can
      * close the window before the plug-in hears of it, and the click then names the closed

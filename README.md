@@ -222,7 +222,6 @@ where the table says otherwise. `0` or `false` turns a part off:
 | `vim.g.neovim4eclipse_search_highlight = 0` | The editor does not highlight search matches; search itself works as before ([Command line](docs/USER_GUIDE.md#command-line---)) |
 | `vim.g.neovim4eclipse_highlights = 0` | The editor does not show the flash after a yank, your `:match` highlights or a jump plug-in's labels ([Command line](docs/USER_GUIDE.md#command-line---)) |
 | `vim.g.neovim4eclipse_jump_label_group_prefixes = { 'Sneak' }` | More jump plug-ins whose labels the editor draws, by the start of their highlight groups' names; added to the built-in `Flash`, `Leap`, `Hop`, `MiniJump2d` ([Jump labels](docs/USER_GUIDE.md#jump-labels)) |
-| `vim.g.neovim4eclipse_floating_windows = 0` | The editor does not draw plug-ins' floating windows, such as a panel of key hints; Neovim's command line, messages, pager and popup menu are drawn all the same ([Floating windows](docs/USER_GUIDE.md#floating-windows)) |
 | `vim.g.neovim4eclipse_task_tags = 'TODO,FIXME'` | The comment tags `:Etasks` collects; read each time `:Etasks` runs ([The quickfix list](docs/USER_GUIDE.md#the-quickfix-list-eproblems-q)) |
 
 **Set by the plug-in**, for your config to read:
@@ -277,6 +276,9 @@ which an administrator can set for everyone in the product's `plugin_customizati
 
 **Removed**, with the release, and what took the part's place:
 
+- `vim.g.neovim4eclipse_floating_windows` (0.3.3): plug-ins' floating windows are always drawn, as
+  a terminal shows them ([Floating windows](docs/USER_GUIDE.md#floating-windows)); one that takes
+  the keyboard has the keys until you leave the editor.
 - `vim.g.neovim4eclipse_viewport` (0.3.3): Neovim's window always follows the editor, its size,
   scrolling and word wrap, as Neovim follows a terminal's size
   ([The editor's size](docs/USER_GUIDE.md#the-editors-size-scrolling-and-word-wrap-h-l-ctrl-d-zz)).
@@ -368,15 +370,13 @@ gets in your way:
 
    Plug-ins that work on text (surround, commentary, text objects, mappings of your own) work as in
    a terminal. A floating window that takes the keyboard gets only the keys (no clicks, no input
-   method), and leaving the editor closes it. With `vim.g.neovim4eclipse_floating_windows = 0` it
-   is closed at once, with a message, since it would take the keys unseen. If keys seem to do
-   nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave plug-ins that do not work out
+   method), and leaving the editor closes it. If keys seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave plug-ins that do not work out
    in Eclipse (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in
    [Your `init.lua` in Eclipse](#your-initlua-in-eclipse)).
 8. **Neovim's command line and messages are always drawn.** Neovim draws them itself, with its
-   experimental ui2, as floating windows over the editor's last row; the editor copies them. So
-   `vim.g.neovim4eclipse_floating_windows = 0` does not hide them, or Neovim's popup menu (the `:`
-   line's Tab list, `Ctrl-N`): that switch covers only plug-ins' floats. There is no switch back to a command line of Eclipse's own.
+   experimental ui2, as floating windows over the editor's last row; the editor copies them, as
+   it does Neovim's popup menu (the `:` line's Tab list, `Ctrl-N`). There is no switch back to a
+   command line of Eclipse's own.
 9. **macOS: no press-and-hold accent menu on the `:` line.** Holding a key such as `E` there
    does not offer `é`, `è`, `ê`. Dead keys still work (`Option+E`, then `E` gives `é`), and so do
    input methods such as Japanese.

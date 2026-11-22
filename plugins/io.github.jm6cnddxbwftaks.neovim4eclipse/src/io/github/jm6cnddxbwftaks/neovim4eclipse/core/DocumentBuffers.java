@@ -425,7 +425,7 @@ final class DocumentBuffers {
     /**
      * Keeps {@code win}, the float the user's config left the focus in at start
      * ({@code LuaScripts.LEAVE_START_FLOAT}), to show in the first editor's window once one is
-     * shown: before, there is no editor to draw it in. Floats are drawn, else the session closed it.
+     * shown: before, there is no editor to draw it in.
      */
     void keepStartFloat(int win) {
         startFloat = win;

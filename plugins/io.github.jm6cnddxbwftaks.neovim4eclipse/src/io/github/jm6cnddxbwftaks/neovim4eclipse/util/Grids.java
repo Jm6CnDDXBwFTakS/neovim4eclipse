@@ -176,8 +176,8 @@ public final class Grids {
 
     /**
      * Whether floating windows are drawn ({@link #floatsIfChanged}). Off, their lines are not even
-     * read. Example: off when the user's config turns them off, or while Neovim's screen is not the
-     * editor's size, so that a float's place would mean nothing.
+     * read. Example: off until the session's start is done ({@code NeovimSession.floatingWindowsDrawn}),
+     * then on for good.
      */
     public void drawFloats(boolean on) {
         if (on != drawFloats) {
@@ -456,8 +456,7 @@ public final class Grids {
      * cursor ({@link FloatWindow#focused}). Left out: the drawn command-line window, and every
      * float while {@link #drawFloats} is off, except the windows that are always drawn
      * ({@link #alwaysDrawn}): ui2's and Neovim's popup menu, the cursor's included, with the
-     * cursor. Example: a picker's prompt entered, with {@code vim.g.neovim4eclipse_floating_windows}
-     * 0: not drawn (so closed: {@link #unseenCursor}, {@code LuaScripts.CLOSE_UNDRAWN_FLOAT}).
+     * cursor. Example: Neovim's popup menu, drawn while plug-ins' floats are not yet.
      *
      * <p>And what goes past the limits ({@link #MAX_FLOATS}, {@link #MAX_FLOAT_CELLS}): the
      * windows are taken Neovim's own first ({@link #alwaysDrawn}), then the cursor's (the one the
@@ -564,12 +563,13 @@ public final class Grids {
      * another editor's in a switch, a page's, the command-line window), Neovim's own floats
      * ({@link #alwaysDrawn}) and the floats of the last {@link #floatsIfChanged}, so call this
      * after that. Anything else is unseen: a plug-in's float past the limits, any float while
-     * floats are not drawn ({@link #drawFloats} off), and a grid whose window is not known, as a
+     * floats are not drawn ({@link #drawFloats} off, before the start is done: the session does not
+     * ask then), and a grid whose window is not known, as a
      * float its plug-in hid ({@code win_hide} forgets its place: window -1). The session hands
      * this to Neovim ({@code LuaScripts.CLOSE_UNDRAWN_FLOAT}), which decides from its own state
      * whether it is a plug-in's float to close; for anything else it does nothing (a new float
      * whose place comes with a later redraw: asked again then, with its window).
-     * Example: Telescope's prompt with floats off: its grid and window.
+     * Example: Telescope's prompt too large to draw: its grid and window.
      */
     public Optional<UnseenCursor> unseenCursor() {
         if (cursorGrid < 0) {
@@ -669,8 +669,8 @@ public final class Grids {
      * Whether {@code grid} is drawn whatever {@link #drawFloats} says, and with the cursor in it:
      * one of ui2's windows ({@link #ui2Windows}), or Neovim's popup menu, the one float without a
      * window (win -1), which ui2's {@code :} line and insert-mode completion show their lists in.
-     * Without them there is no command line to see, so the switch for plug-ins' floats
-     * ({@code vim.g.neovim4eclipse_floating_windows}) does not hide them.
+     * Without them there is no command line to see, so they are drawn from the start, before
+     * plug-ins' floats are.
      */
     private boolean alwaysDrawn(int grid) {
         Integer win = windowOfGrid.get(grid);

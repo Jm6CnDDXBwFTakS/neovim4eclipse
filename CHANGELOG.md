@@ -20,11 +20,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   editor (another editor or view, a click in its text, Eclipse mode) closes it. Before, such a
   window was closed at once with a message. lazy.nvim's installer window at a first start is
   shown in the first editor instead of closed. One the editor cannot draw (past the limits in
-  the user guide's *Floating windows*), or that its plug-in hides, is closed with a message. With `vim.g.neovim4eclipse_floating_windows = 0` they
-  are closed with a message, also one entered later, which was sent back to the editor before.
+  the user guide's *Floating windows*), or that its plug-in hides, is closed with a message.
 
 ### Removed
 
+- `vim.g.neovim4eclipse_floating_windows`: plug-ins' floating windows are always drawn, as a
+  terminal shows them, and one that takes the keyboard keeps it until you leave the editor. A
+  value still set in `init.lua` is not read, and nothing fails.
 - `vim.g.neovim4eclipse_viewport`: Neovim's window always follows the editor (its size, scrolling
   with the wheel, word wrap), as Neovim follows a terminal's size; no GUI of Neovim's keeps a
   screen of its own beside its window. A value still set in `init.lua` is not read, and nothing

@@ -152,23 +152,6 @@ class NeovimWindowsIntegrationTest {
     }
 
     /**
-     * With plug-ins' floats off, the float focused at the start is closed, and Neovim says why
-     * (ui2, started before the message).
-     */
-    @Test
-    void withFloatsOffAFloatFocusedAtTheStartIsClosedAndTheFirstEditorIsToldWhy() throws Exception {
-        TestNeovim.require();
-        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "-c", "let g:neovim4eclipse_floating_windows = 0",
-                "-c", OPEN_START_FLOAT))) {
-            assertEquals(0, number(s, "return vim.api.nvim_win_is_valid(vim.g.n4e_start_float) and 1 or 0"), "the float is closed");
-            assertEquals("", s.lua("return vim.api.nvim_win_get_config(0).relative"), "a plain window is current");
-            assertEquals(currentWin(s), s.getAttachedWinid(), "and it is the home window");
-            waitFor(() -> Ui2Text.shown(s).contains("Closed the floating window of lazy: "),
-                    "the message about the float, shown by Neovim: " + Ui2Text.shown(s));
-        }
-    }
-
-    /**
      * Opens a float on a scratch buffer of filetype {@code picker}, entered, as a picker opens its
      * prompt; {@code config} adds to its window config (a Lua table's fields). Answers its window.
      */
@@ -180,25 +163,6 @@ class NeovimWindowsIntegrationTest {
 
     private static boolean valid(NeovimSession s, int win) throws Exception {
         return number(s, "return vim.api.nvim_win_is_valid(" + win + ") and 1 or 0") == 1;
-    }
-
-    /**
-     * The one check for keys going only to a window Eclipse draws, end to end: the session sees
-     * Neovim's cursor on a grid it does not draw at a redraw (util/Grids.unseenCursor) and Neovim
-     * closes the float, saying why (LuaScripts.WINDOWS' close_undrawn). Here plug-ins' floats are
-     * off, and the float is entered as it opens, as a picker's prompt is.
-     */
-    @Test
-    void withFloatsOffAFloatNeovimIsInIsClosedAtTheNextRedrawAndNeovimSaysWhy() throws Exception {
-        TestNeovim.require();
-        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "-c", "let g:neovim4eclipse_floating_windows = 0"))) {
-            int home = currentWin(s);
-            int float_ = openFocusedFloat(s, 5, 1, "");
-            waitFor(() -> !valid(s, float_), "the undrawn float closed");
-            assertEquals(home, currentWin(s), "Neovim back in a window Eclipse shows");
-            waitFor(() -> Ui2Text.shown(s).contains("Closed the floating window of picker: " + NeovimSession.FLOATS_OFF_WHY),
-                    "the reason, shown by Neovim: " + Ui2Text.shown(s));
-        }
     }
 
     /** As above, with floats drawn: a float its plug-in hides while Neovim is in it. */

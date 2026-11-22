@@ -46,17 +46,14 @@ The Neovim side:
   so `H` and `L` no longer matched the editor. A floating window that opens with the focus (a
   picker's prompt, `:Lazy`) is left alone by the net: drawn with Neovim's cursor while the
   editor's caret is hidden, and leaving the editor closes it (`leave_float`). One the editor does
-  not draw (plug-ins' floats off, hidden by its plug-in, past the limits) is closed in one place,
+  not draw (hidden by its plug-in, past the limits) is closed in one place,
   `close_undrawn`, asked from each redraw that finds the cursor on a grid the editor does not draw
   (`util/Grids.unseenCursor`), since its keys would go to a window nobody sees. At start,
   before the home buffer goes anywhere (`LuaScripts.LEAVE_START_FLOAT`, the session's first script
   after `PATHS`), a floating window the config left the focus in (lazy.nvim's installer on a first
   start) is left and a plain window is made current: left current, it got the home buffer. The
   float stays, and is moved into the first editor's tab page and entered (`BRING_START_FLOAT`; a
-  float belongs to one tab page), or, with floats off, closed (`CLOSE_START_FLOAT`), with a
-  message, shown once Neovim's messages reach the session, and
-  the first editor that attaches shows it (`NeovimSession.takeStartStatus`): it came before any
-  editor listened, and only a key would otherwise show a message.
+  float belongs to one tab page).
   Not caught by the net: a window opened with `noautocmd` (no `WinNew`); floats are not the net's
   (`close_undrawn` is asked at each redraw, whatever opened them). The net cannot use the current window (in `WinNew`
   it is still the old one, so a net built on it closed the editor's own window); the module keeps

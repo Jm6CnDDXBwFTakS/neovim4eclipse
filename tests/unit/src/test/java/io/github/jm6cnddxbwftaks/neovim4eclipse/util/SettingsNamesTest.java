@@ -65,7 +65,6 @@ class SettingsNamesTest {
             Map.entry("vim.g.neovim4eclipse_search_highlight", List.of(LUA, "vim.g.neovim4eclipse_search_highlight")),
             Map.entry("vim.g.neovim4eclipse_highlights", List.of(LUA, "vim.g.neovim4eclipse_highlights")),
             Map.entry("vim.g.neovim4eclipse_jump_label_group_prefixes", List.of(LUA, "vim.g.neovim4eclipse_jump_label_group_prefixes")),
-            Map.entry("vim.g.neovim4eclipse_floating_windows", List.of(LUA, "vim.g.neovim4eclipse_floating_windows")),
             Map.entry("vim.g.neovim4eclipse_task_tags", List.of(LUA, "vim.g.neovim4eclipse_task_tags")),
             // set by the plug-in, read by a user's config
             // In backticks: every vim.g.neovim4eclipse_* row of the README contains the bare name.
@@ -110,6 +109,7 @@ class SettingsNamesTest {
      */
     private static final Map<String, String> REMOVED = Map.of(
             "vim.g.neovim4eclipse_viewport", "0.3.3",
+            "vim.g.neovim4eclipse_floating_windows", "0.3.3",
             "vim.g.neovim4eclipse_completion_menu", "0.3.0",
             "flashOnError", "0.3.0",
             "statusShowcmd", "0.3.0",

@@ -231,16 +231,16 @@ class GridsTest {
         floatAt(5, 1002, 3, 3, 50);
         assertEquals(-1, grids.focusedFloat(), "the cursor in the editor's window");
         grids.apply(new GridEvent.CursorGoto(5, 0, 0));
-        assertEquals(1002, grids.focusedFloat(), "floats off: not drawn, still the one the keys go to");
+        assertEquals(1002, grids.focusedFloat(), "not drawn yet, still the one the keys go to");
         grids.drawFloats(true);
         assertEquals(1002, grids.focusedFloat());
         grids.ui2Windows(List.of(1002), 1002, -1, false);
         assertEquals(-1, grids.focusedFloat(), "ui2's line is Neovim's own");
     }
 
-    /** With plug-ins' floats off, the float with the focus is not drawn either (so it is closed: unseenCursor). */
+    /** Before plug-ins' floats are drawn (the session's start), the one with the focus is not either. */
     @Test
-    void aFloatWithTheFocusIsNotDrawnWhileFloatsAreOff() {
+    void aFloatWithTheFocusIsNotDrawnBeforeFloatsAre() {
         editorWindow();
         floatAt(5, 1002, 3, 3, 50);
         grids.apply(new GridEvent.CursorGoto(5, 0, 0));
@@ -427,7 +427,8 @@ class GridsTest {
             t.floatOfSize(5, 1002, 1000, Grids.MAX_FLOAT_CELLS / 1000 + 1, 50); // one row too many
             t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
         }),
-        A_FLOAT_WHILE_FLOATS_ARE_OFF(new Grids.UnseenCursor(5, 1002), t -> {
+        /** Before the start is done (the session does not ask then). */
+        A_FLOAT_BEFORE_FLOATS_ARE_DRAWN(new Grids.UnseenCursor(5, 1002), t -> {
             t.editorWindow();
             t.floatAt(5, 1002, 3, 3, 50);
             t.grids.apply(new GridEvent.CursorGoto(5, 0, 0));
@@ -446,7 +447,7 @@ class GridsTest {
             t.grids.floatsIfChanged();
             t.grids.apply(new GridEvent.WinPos(5, 1002, true, 3, 3, 0, 0, 50));
         }),
-        UI2S_LINE_WHILE_FLOATS_ARE_OFF(null, t -> {
+        UI2S_LINE_BEFORE_FLOATS_ARE_DRAWN(null, t -> {
             t.editorWindow();
             t.grids.ui2Windows(List.of(1002), 1002, -1, false);
             t.floatAt(5, 1002, 3, 3, 50);
@@ -780,9 +781,9 @@ class GridsTest {
         assertEquals(2, grids.floatsIfChanged().orElseThrow().get(0).grid().cursorCol(), "drawn again with the cursor");
     }
 
-    /** vim.g.neovim4eclipse_floating_windows = 0 hides plug-ins' floats, not Neovim's own line. */
+    /** Before plug-ins' floats are drawn (the session's start), Neovim's own line is. */
     @Test
-    void ui2sWindowsAreDrawnWithPlugInsFloatsTurnedOff() {
+    void ui2sWindowsAreDrawnBeforePlugInsFloats() {
         grids.drawFloats(false);
         screenWithUi2Line();
         floatAt(5, 1002, 3, 3, 50); // a plug-in's panel
@@ -793,7 +794,7 @@ class GridsTest {
     }
 
     /**
-     * Neovim's popup menu, the one float with no window (-1): drawn with plug-ins' floats off too.
+     * Neovim's popup menu, the one float with no window (-1): drawn before plug-ins' floats too.
      * While a {@code :} line is typed it hangs from that line, where Neovim put it; in insert mode
      * it stays by the text.
      */

@@ -163,11 +163,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     private volatile boolean highlightsEnabled;
     /**
-     * Whether Neovim's floating windows are drawn ({@link #floatingWindowsDrawn()}): the answer of
-     * {@link LuaScripts#FLOATING_WINDOWS}, run once at start after the user's config. Written once,
-     * as {@link #searchEnabled}.
+     * Whether plug-ins' floating windows are drawn ({@link #floatingWindowsDrawn()}): false until the
+     * start is done ({@link #initialize}), then for good. Before, Neovim's windows are not set up,
+     * no editor shows them, and no key is typed, so nothing is drawn, and nothing is closed for
+     * being undrawn ({@link #unseenAsked}). Written once, read on the reader thread.
      */
-    private volatile boolean floatingWindowsEnabled;
+    private volatile boolean floatsDrawn;
     /** The floating windows last reported to the listeners, lowest in the stack first. */
     private volatile List<FloatWindow> floatingWindows = List.of();
     /**
@@ -181,18 +182,6 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * once the cursor is on a drawn grid. Reader thread.
      */
     private Grids.UnseenCursor unseenAsked;
-    /**
-     * Whether Neovim knows if the editor draws floats ({@code LuaScripts.FLOATS_DRAWN} done): before,
-     * it could not tell why a float is undrawn, and a place asked about then would not be asked
-     * again ({@link #unseenAsked}). Written once at start, read on the reader thread.
-     */
-    private volatile boolean floatsDrawnSaid;
-    /**
-     * Why plug-ins' floats are not drawn, in the one wording for the log and for the message that
-     * closes a float Neovim is in ({@code LuaScripts.FLOATS_DRAWN}, {@code float_closed_message}):
-     * the user's config turned them off.
-     */
-    static final String FLOATS_OFF_WHY = "plug-ins' floating windows are off (vim.g.neovim4eclipse_floating_windows)";
     /** Editor sizes not sent yet: only the newest counts (a window being dragged larger). */
     private final LatestValue<int[]> pendingEditorSize = new LatestValue<>();
     /** Wheel lines not sent yet, added up ({@link #scrollLinesAsync}); and the buffer they are for. */
@@ -574,20 +563,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             session.highlightsEnabled = Boolean.TRUE.equals(
                     await(api.execLua(LuaScripts.HIGHLIGHTS, List.of(JumpLabels.BUILT_IN_PREFIXES))));
             LOG.info(() -> "Neovim's highlights " + (session.highlightsEnabled ? "shown in the editor" : "off (g:neovim4eclipse_highlights)"));
-            // And for the floating windows (docs/ARCHITECTURE.md, "Neovim's windows drawn from their grids").
-            session.floatingWindowsEnabled = Boolean.TRUE.equals(await(api.execLua(LuaScripts.FLOATING_WINDOWS, List.of())));
-            String floatsOffWhy = session.floatingWindowsDrawn() ? "" : FLOATS_OFF_WHY;
-            await(api.execLua(LuaScripts.FLOATS_DRAWN, List.of(String.valueOf(session.floatingWindowsDrawn()), floatsOffWhy)));
-            session.floatsDrawnSaid = true;
+            // Plug-ins' floating windows are drawn from here on (docs/ARCHITECTURE.md, "Neovim's
+            // windows drawn from their grids"), and the one the config left the focus in is shown in
+            // the first editor.
+            session.floatsDrawn = true;
             if (startFloat instanceof Number win && win.intValue() > 0) {
-                if (session.floatingWindowsDrawn()) {
-                    session.buffers.keepStartFloat(win.intValue()); // shown in the first editor
-                } else {
-                    await(api.execLua(LuaScripts.CLOSE_START_FLOAT, List.of(String.valueOf(win)))); // the messages reach us now
-                }
+                session.buffers.keepStartFloat(win.intValue());
             }
-            LOG.info(() -> "Neovim's floating windows " + (floatsOffWhy.isEmpty() ? "drawn in the editor"
-                    : "not drawn: " + floatsOffWhy));
             // Always: the Ctrl-X completions that could run a file's text are refused in Neovim itself.
             await(api.execLua(LuaScripts.CTRL_X_GUARD, List.of()));
             // And no file's modeline sets options (LuaScripts.NO_MODELINES).
@@ -1030,13 +1012,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Whether floating windows are drawn at all: unless the user's config sets
-     * {@code vim.g.neovim4eclipse_floating_windows = 0}. A float's place is a row and column of
-     * Neovim's screen ({@code util/FloatPlacement}), which is the editor's size
-     * (docs/design/VIEWPORT.md), so a panel "at the bottom" lands at the editor's bottom.
+     * Whether plug-ins' floating windows are drawn: once the start is done, always, as a terminal
+     * shows them. A float's place is a row and column of Neovim's screen
+     * ({@code util/FloatPlacement}), which is the editor's size (docs/design/VIEWPORT.md), so a
+     * panel "at the bottom" lands at the editor's bottom.
      */
     public boolean floatingWindowsDrawn() {
-        return floatingWindowsEnabled;
+        return floatsDrawn;
     }
 
     /** Whether Neovim's command-line window is open. */
@@ -2700,7 +2682,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
          * "keys go only to a window Eclipse draws": with Neovim's cursor on a grid the editor does
          * not draw ({@code Grids.unseenCursor}), Neovim is asked to close the plug-in's float it is
          * in ({@code LuaScripts.CLOSE_UNDRAWN_FLOAT}), which it does only when that is what it
-         * finds: floats off, a float its plug-in hid, one past {@code Grids}' limits. Every route
+         * finds: a float its plug-in hid, one past {@code Grids}' limits. Every route
          * into an undrawn float ends at a redraw, so this one place covers them all. Reader thread.
          */
         private void sendFloatsIfChanged() {
@@ -2709,8 +2691,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 events.floatingWindows(floats);
             });
             focusedFloat = grids.focusedFloat();
-            if (!floatsDrawnSaid) {
-                return; // Neovim could not tell why yet; nothing to type into before the start is done
+            if (!floatsDrawn) {
+                return; // nothing drawn yet, nor typed: the start is not done
             }
             Optional<Grids.UnseenCursor> unseen = grids.unseenCursor(); // the decision: util/Grids, GridsTest
             if (unseen.isEmpty()) {

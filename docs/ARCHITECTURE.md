@@ -275,11 +275,11 @@ net closes any other window that is not the plug-in's, floating or special, and 
 location list and preview windows, which Eclipse cannot show (the quickfix and location list
 windows are then shown the Eclipse way, section 8); floating windows are left alone, one that
 opens with the focus (a picker's prompt, `:Lazy`) too: drawn with the cursor, or, where the editor
-does not draw it (plug-ins' floats off, `LuaScripts.FLOATS_DRAWN`), closed by the one check above
-(`close_undrawn`), since its keys would go to a window nobody sees. One the
+does not draw it (hidden, past the limits), closed by the one check above (`close_undrawn`), since
+its keys would go to a window nobody sees. One the
 user's config leaves the focus in at start (lazy.nvim's installer) is left before the home buffer
 goes into it (`LuaScripts.LEAVE_START_FLOAT`), then shown in the first editor's window, moved into
-its tab page (`BRING_START_FLOAT`), or closed with floats off (`CLOSE_START_FLOAT`); in a floating
+its tab page (`BRING_START_FLOAT`); in a floating
 window, `:q` and `:close` are left to Neovim (the host commands' `leave_to_neovim` hook).
 
 **The focus and the attached document.** Two things that used to be one: the *focused window*,
@@ -1043,8 +1043,9 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
                                           └─ one editor/GridCanvas per window (SWT.NO_FOCUS), a child of the text
 ```
 
-- **Which floats** (`util/Grids.floatsIfChanged`): every float, while plug-ins' floats are drawn
-  (`vim.g.neovim4eclipse_floating_windows`). The one with the focus, whose grid the cursor is on,
+- **Which floats** (`util/Grids.floatsIfChanged`): every float, once the session's start is done
+  (`NeovimSession.floatingWindowsDrawn`; before, `Grids.drawFloats(false)` leaves plug-ins' floats'
+  lines unread). The one with the focus, whose grid the cursor is on,
   is drawn with Neovim's cursor (`FloatWindow.focused`): a block, a bar in Insert and Replace mode
   (`FloatingWindows.setInsertMode`, from the controller's mode, as the command-line window's panel
   does), redrawn as the cursor moves. Meanwhile the editor's caret is hidden
@@ -1052,7 +1053,7 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   `StyledText` makes an invisible caret visible again at each scroll), so that one cursor shows
   where the keys go; ui2's windows, which have the cursor while a `:` line is typed, leave it shown.
   Leaving the editor closes it (above, section on `BufEnter`: `leave_float`); one the editor does
-  not draw (plug-ins' floats off, hidden, past the limits) is closed by the one check
+  not draw (hidden, past the limits) is closed by the one check
   (`Grids.unseenCursor`, `WINDOWS`' `close_undrawn`), however Neovim got into it.
   Keys are never sent to a canvas (`SWT.NO_FOCUS`): they go to the editor, and from there to
   Neovim, which puts them in the window that has its cursor.
@@ -1082,14 +1083,12 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   Neovim reports the cursor's grid only when it changes. Its place comes once, in the redraws
   right after `nvim_ui_attach`, before the session listens; `NeovimConnection.Forwarder` keeps
   those `win_pos` entries, as it keeps the highlight definitions, and hands them on first.
-- **Only with the viewport** (`NeovimSession.floatingWindowsDrawn`): a float's place is a cell of
-  Neovim's screen, which is the editor's size only while the viewport is on. Off (or with
-  `vim.g.neovim4eclipse_floating_windows = 0`), `Grids.drawFloats(false)` leaves plug-ins' floats'
-  lines unread; the windows that are always drawn (next) are read all the same.
+- **On the editor's own screen**: a float's place is a cell of Neovim's screen, which is the
+  editor's size (the viewport, section 9), so a float meant for the bottom lands at the editor's.
 - **Always drawn** (`Grids.alwaysDrawn`): ui2's four windows (`Grids.ui2Windows`, the ids
   `LuaScripts.UI2` sends) and Neovim's popup menu, the one float without a window (win -1), in which
   the `:` line's Tab list and insert-mode completion show. Without them there is no command line to
-  see, so neither switch hides them, and they are drawn with the cursor in them (the typed line, the
+  see, so they are drawn from the start, and with the cursor in them (the typed line, the
   pager after `g<`), which the focused-float rule above would leave out. They hang from the bottom of
   Neovim's screen, below the editor's window and its status line; the editor draws those rows too
   (`editor/StatusLineRow`, `WindowPane`), so its host counts them (`Grids.rowsBelow`, added to

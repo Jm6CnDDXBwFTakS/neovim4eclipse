@@ -1129,9 +1129,8 @@ final class LuaScripts {
      * Leaves a floating window the user's config left the focus in, before the plug-in sets up
      * Neovim's windows: lazy.nvim's installer on the first start of a LazyVim config. Left current,
      * the home buffer would go into it ({@link #SHOW_BUFFER}). The focus moves to a plain window
-     * of the tab; the float stays, for the session to decide once it knows whether floats are
-     * drawn: shown in the first editor ({@link #BRING_START_FLOAT}), or closed with a message
-     * ({@link #CLOSE_START_FLOAT}). Answers the float's window, or {@code 0} when there was none.
+     * of the tab; the float stays, and is shown in the first editor ({@link #BRING_START_FLOAT}).
+     * Answers the float's window, or {@code 0} when there was none.
      * Run first, right after {@link #PATHS}. Example: with lazy.nvim's window 1001 current,
      * answers 1001 and leaves the plain window current.
      */
@@ -1147,26 +1146,6 @@ final class LuaScripts {
               end
             end
             return 0
-            """;
-
-    /**
-     * Closes the float {@link #LEAVE_START_FLOAT} left (argument: its window), with a message:
-     * plug-ins' floats are not drawn, so nobody would see it. Nothing if it closed meanwhile. Run
-     * after {@link #WINDOWS}, whose {@code float_closed_message} words it, once Neovim's messages
-     * reach the session: sent before, the message would be lost.
-     */
-    static final String CLOSE_START_FLOAT = """
-            local float = tonumber((...))
-            if not vim.api.nvim_win_is_valid(float) then
-              return false
-            end
-            local ok, ft = pcall(function() return vim.bo[vim.api.nvim_win_get_buf(float)].filetype end)
-            if not pcall(vim.api.nvim_win_close, float, true) then
-              return false
-            end
-            local windows = package.loaded['neovim4eclipse.windows']
-            vim.api.nvim_echo({ { windows.float_closed_message(ok and ft ~= '' and ft or 'a plug-in') } }, true, { err = true })
-            return true
             """;
 
     /**
@@ -1273,21 +1252,9 @@ final class LuaScripts {
             local home_buf = tonumber((select(1, ...)))
             local M = {}
             local home = vim.api.nvim_get_current_win()
-            -- Whether the editor draws plug-ins' floats (M.set_floats_drawn, from FLOATS_DRAWN once
-            -- the session knows): drawn, a float with the focus is drawn with the cursor; not drawn
-            -- (false), M.close_undrawn closes one Neovim is in, as nobody would see where the keys go.
-            -- nil until the session says: nothing is closed for it then.
-            local floats_drawn
             -- The plug-in's float the current insert began in, or nil (InsertEnter below): leaving
             -- ends that insert (M.leave_float), not one begun elsewhere since.
             local insert_float
-            -- Why not, for the message when M.close_undrawn closes one (float_closed_message). Declared
-            -- before that function, which would otherwise read a global of the same name.
-            local floats_off_why
-            function M.set_floats_drawn(on, why)
-              floats_drawn = on == true
-              floats_off_why = why ~= '' and why or nil
-            end
             --- What to call a floating window in a message: its buffer's filetype ("lazy",
             --- "TelescopePrompt"), else "a plug-in".
             local function float_name(win)
@@ -1295,15 +1262,10 @@ final class LuaScripts {
               return ok and ft ~= '' and ft or 'a plug-in'
             end
             --- The message for a floating window with the focus that the plug-in closed
-            --- (M.close_undrawn, CLOSE_START_FLOAT): why (by default why floats are not
-            --- drawn, worded by the session: NeovimSession sends it with FLOATS_DRAWN), and that
-            --- it would take the keys unseen. Example: "Closed the floating window of lazy: <the
-            --- session's reason, NeovimSession.FLOATS_OFF_WHY>, and it would take the keys unseen".
-            --- Before the session said, no reason.
+            --- (M.close_undrawn): why, and that it would take the keys unseen. Example: "Closed the
+            --- floating window of lazy: it is hidden, and it would take the keys unseen".
             function M.float_closed_message(name, why)
-              why = why or floats_off_why
-              return "Closed the floating window of " .. name .. ": "
-                .. (why and why .. ", and " or "") .. "it would take the keys unseen"
+              return "Closed the floating window of " .. name .. ": " .. why .. ", and it would take the keys unseen"
             end
             -- Why a float with the focus that its plug-in hid is closed (M.close_undrawn).
             local HIDDEN = 'it is hidden'
@@ -1939,8 +1901,8 @@ final class LuaScripts {
             --- (plenary's popup opens a scratch buffer, then Telescope sets 'buftype'). One entered
             --- during an insert (a plug-in's timer while Eclipse types) is sent back, as before:
             --- the insert is the editor's. Leaving the editor closes the float (M.leave_float). Whether
-            --- the editor draws it is not asked here: one it does not draw (floats off, hidden, past
-            --- the limits) is closed in the one place that decides it, M.close_undrawn.
+            --- the editor draws it is not asked here: one it does not draw (hidden, past the limits)
+            --- is closed in the one place that decides it, M.close_undrawn.
             function M.entered_float(win)
               return M.focused_float(win) and win == vim.api.nvim_get_current_win()
                 and not vim.api.nvim_get_mode().mode:match('^[iR]')
@@ -2027,14 +1989,14 @@ final class LuaScripts {
             --- redraw flush that finds Neovim's cursor on a grid it does not draw (util/Grids.unseenCursor),
             --- whatever route led there (a float that opens with the focus, one entered later, one its
             --- plug-in hides), and it acts only on what it finds here itself: the current window, a
-            --- plug-in's float (M.focused_float), and why it is undrawn. Hidden by its plug-in (config
-            --- hide); floats not drawn at all (floats_drawn false: off in the user's config); or past util/Grids' limits, which only the session can tell: then win, the
-            --- window the session saw on that grid, is this one, and past_limits words the limits. Else
+            --- plug-in's float (M.focused_float), and why it is undrawn: hidden by its plug-in (config
+            --- hide), or past util/Grids' limits, which only the session can tell: then win, the window
+            --- the session saw on that grid, is this one, and past_limits words the limits. Else
             --- nothing: a float the session has not placed yet (its position comes with a later redraw),
             --- or Neovim has moved on. Not by force (M.leave_float, close_float): a changed buffer stays,
             --- and an insert begun in the float ends. Whether it closed.
-            --- Example: Telescope's prompt opened while floats are off: closed, with "Closed the floating
-            --- window of TelescopePrompt: plug-ins' floating windows are off (...), and it would take the
+            --- Example: Telescope's prompt hidden by a plug-in of its own while Neovim is in it: closed,
+            --- with "Closed the floating window of TelescopePrompt: it is hidden, and it would take the
             --- keys unseen".
             function M.close_undrawn(win, past_limits)
               local current = vim.api.nvim_get_current_win()
@@ -2044,9 +2006,7 @@ final class LuaScripts {
               local why
               if vim.api.nvim_win_get_config(current).hide then
                 why = HIDDEN
-              elseif floats_drawn == false then
-                why = floats_off_why
-              elseif floats_drawn and win == current then
+              elseif win == current then
                 why = 'the editor cannot draw it' .. (past_limits and ' (' .. past_limits .. ')' or '')
               else
                 return false
@@ -5501,33 +5461,6 @@ final class LuaScripts {
 
 
     /**
-     * Whether plug-ins' floating windows (with the cursor in the one that has the focus) are
-     * drawn in the editor (docs/ARCHITECTURE.md, "Neovim's windows drawn from their grids"): {@code false} when the
-     * user's config sets {@code vim.g.neovim4eclipse_floating_windows = 0} (or {@code false}). Run
-     * once at start, after the user's config. Nothing to install in Neovim: the windows' cells
-     * come with the redraw events anyway, and the session only stops reading them
-     * ({@code util/Grids.drawFloats}). Example: a user who finds a plug-in's panel of key hints in
-     * the way of the editor's text turns it off and has the floats unseen, as before 0.2.23.
-     */
-    static final String FLOATING_WINDOWS = """
-            local enabled = vim.g.neovim4eclipse_floating_windows
-            return not (enabled == 0 or enabled == false)
-            """;
-
-    /**
-     * Tells {@link #WINDOWS} whether the editor draws plug-ins' floats (argument {@code "true"} or
-     * {@code "false"}: {@code NeovimSession.floatingWindowsDrawn}, {@link #FLOATING_WINDOWS}):
-     * drawn, a float with the focus is drawn with the cursor (a picker's
-     * prompt), else {@code close_undrawn} closes it ({@link #CLOSE_UNDRAWN_FLOAT}); second
-     * argument, why not, for that message ("" when drawn). Run once at start, right after
-     * {@link #FLOATING_WINDOWS}.
-     */
-    static final String FLOATS_DRAWN = """
-            local drawn, why = ...
-            package.loaded['neovim4eclipse.windows'].set_floats_drawn(drawn == 'true', why)
-            """;
-
-    /**
      * Leaves the plug-in's float Neovim's cursor is in, closing it, and the float named by the
      * argument too (-1: none), the one the cursor was in when the keyboard left a part
      * ({@link #WINDOWS}' {@code leave_float}): the user left the editor. Answers whether one was
@@ -5589,7 +5522,7 @@ final class LuaScripts {
      *       resize; ui2 still narrows the message window to its text.</li>
      *   <li>The windows' ids sent to Eclipse ({@code eclipse_ui2_windows}: cmd, msg, pager,
      *       dialog), at start and each time ui2 makes one again: the editor draws these even with
-     *       the cursor in them and even with plug-ins' floats turned off. The plug-in's other
+     *       the cursor in them and from the start, before plug-ins' floats are. The plug-in's other
      *       scripts (SETUP's {@code BufEnter}, WINDOWS' safety net) leave ui2's own
      *       <em>buffers</em> to it ({@code ui2.bufs}), not its windows: a file opened in the pager
      *       ({@code gf}, {@code :e}) is announced, and Eclipse sends Neovim back to the editor, as
