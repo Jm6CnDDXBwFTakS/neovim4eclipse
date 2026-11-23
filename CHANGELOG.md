@@ -20,7 +20,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   editor (another editor or view, a click in its text, Eclipse mode) closes it. Before, such a
   window was closed at once with a message. A window that has the keyboard while Neovim is still
   starting (lazy.nvim's installer, while it installs missing plug-ins) is drawn over the editor,
-  with its progress, and closed when the start is over, with a message saying `:Lazy` opens it again; the keys typed meanwhile now always go to the
+  with its progress, and closed when the start is over, with a message (`:Lazy` opens it again); the keys typed meanwhile now always go to the
   file, where before some could reach the installer's window. One the editor cannot draw (past the limits in
   the user guide's *Floating windows*), or that its plug-in hides, is closed with a message.
 - Clicks and the wheel on a plug-in's floating window now go to Neovim, as in a terminal: a click

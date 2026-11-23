@@ -1274,7 +1274,7 @@ final class LuaScripts {
             -- Why a float Neovim is in as its start ends is closed (M.close_start_floats). On M too,
             -- for the tests that look for the message (float_closed_message(name, M.AT_START)).
             local AT_START = "it had the keyboard while Neovim started, so the keys typed meanwhile go to your file"
-              .. " (its plug-in's command, such as :Lazy, opens it again)"
+              .. " (its plug-in's command opens it again)"
             M.AT_START = AT_START
             -- The windows the plug-in opened and has not closed (the home window, the editors' and
             -- the pages', these marked 'page'): any other plain window is a stray one (the WinNew
