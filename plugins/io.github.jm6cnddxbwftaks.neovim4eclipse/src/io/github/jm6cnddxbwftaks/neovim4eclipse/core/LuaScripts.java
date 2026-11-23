@@ -1776,9 +1776,20 @@ final class LuaScripts {
             --- Ends the current insert, keeping the cursor of the window Neovim is in now. :stopinsert
             --- takes effect once the running call is over, in that window, and Esc moves the cursor a
             --- column left there: it is put back as the insert ends, so the editor's caret stays.
+            --- Until then the cursor waits on the next character that is not white space, or an empty
+            --- line: an insert that has only auto-indented ('o' in a float, nothing typed) ends by
+            --- removing the white space at the cursor of the window Neovim is in, which here is the
+            --- document's. Example: 'o' in a float, a click in the text, the document's cursor at the
+            --- start of "    keep": the cursor waits on the k, and the line keeps its indentation.
+            --- Not by a nested insert in the float that does the clean-up there: Neovim would then
+            --- report no ModeChanged as the real insert ends.
             local function stop_insert_in_place()
               local landed = vim.api.nvim_get_current_win()
               local at = vim.api.nvim_win_get_cursor(landed)
+              local safe = vim.fn.searchpos([[\\S\\|^$]], 'cnw')
+              if safe[1] > 0 then
+                pcall(vim.api.nvim_win_set_cursor, landed, { safe[1], safe[2] - 1 })
+              end
               vim.api.nvim_create_autocmd('ModeChanged', { once = true, pattern = '[iR]*:*', callback = function()
                 if vim.api.nvim_win_is_valid(landed) and vim.api.nvim_get_current_win() == landed then
                   pcall(vim.api.nvim_win_set_cursor, landed, at)

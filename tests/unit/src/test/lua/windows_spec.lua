@@ -1686,6 +1686,27 @@ t.test('a float opened after the start check does not carry its insert into the 
   t.eq('n', vim.api.nvim_get_mode().mode)
 end)
 
+-- 'o' on an indented line, nothing typed: as the insert ends, Neovim removes the white space at the
+-- cursor of the window it is in. That must be the float's, never the document's line.
+for _, leave in ipairs({ 'move_out_of_float', 'leave_float' }) do
+  t.test("ending a float's auto-indented insert keeps the document's indentation: " .. leave, function()
+    local win = commands()
+    local doc = vim.api.nvim_win_get_buf(win)
+    vim.api.nvim_buf_set_lines(doc, 0, -1, false, { '    keep indent', 'two' })
+    vim.api.nvim_win_set_cursor(win, { 1, 0 })
+    local b = buffer(1)
+    vim.api.nvim_buf_set_lines(b, 0, -1, false, { '  indented' })
+    vim.bo[b].autoindent = true
+    vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 1, width = 20, height = 3 })
+    vim.keymap.set('i', '<F6>', function() require('neovim4eclipse.windows')[leave](-1) end)
+    vim.api.nvim_feedkeys(vim.keycode('o<F6><Esc>'), 'mx', false)
+    vim.keymap.del('i', '<F6>')
+    t.eq({ '    keep indent', 'two' }, vim.api.nvim_buf_get_lines(doc, 0, -1, false))
+    t.eq(win, vim.api.nvim_get_current_win())
+    t.eq({ 1, 0 }, vim.api.nvim_win_get_cursor(win), "the document's cursor stays")
+  end)
+end
+
 t.test('moving out of a float leaves it open, unless its plug-in closes it on leaving', function()
   local win = commands()
   local windows = require('neovim4eclipse.windows')
