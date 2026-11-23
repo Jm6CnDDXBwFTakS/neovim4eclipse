@@ -45,6 +45,7 @@ import org.eclipse.ui.texteditor.IDocumentProviderExtension;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.DocumentWrite;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
 
@@ -253,6 +254,12 @@ final class NewFiles {
         try {
             String editorId = editorIdFor(path.getFileName().toString());
             Path target = DanglingLinks.finalTarget(path);
+            // A link to a Windows device name: the save below would go to the device.
+            String refused = target == null ? null : EditPath.whyNotOpened(target, name);
+            if (refused != null) {
+                HostCommands.showError(EditorAttachManager.textEditorOf(page.getActiveEditor()), refused);
+                return null;
+            }
             IEditorInput input = target != null ? new DanglingLinkInput(path, target)
                     : new FileStoreEditorInput(EFS.getLocalFileSystem().getStore(path.toUri()));
             IEditorPart opened = page.openEditor(input, editorId, true, matchFlags);

@@ -411,15 +411,16 @@ public final class EclipseFileCommands {
             return;
         }
         String shown = EditPath.shown(file, home, folder);
+        // First: Java calls a Windows device missing, which would open it as a new file.
+        String refused = EditPath.whyNotOpened(file, shown);
+        if (refused != null) {
+            HostCommands.showError(editor, refused);
+            return;
+        }
         // A dangling symbolic link is missing too (Files.exists follows links): it opens as a new
         // file, as in Vim, and its write needs ! (DanglingLinks, NewFiles.save).
         if (!Files.exists(file)) {
             NewFiles.open(editor.getEditorSite().getPage(), file, shown);
-            return;
-        }
-        String refused = EditPath.whyNotOpened(file, shown);
-        if (refused != null) {
-            HostCommands.showError(editor, refused);
             return;
         }
         open(editor.getEditorSite().getPage(), file);

@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Which file {@code :e <file>} means, for a name that reaches Eclipse as typed.
@@ -34,6 +35,14 @@ public final class EditPath {
 
     /** Linux's folders of kernel files, which say they are regular files of size 0. */
     private static final List<String> KERNEL_FOLDERS = List.of("/proc", "/sys");
+
+    /**
+     * The names Windows keeps for its devices, in any case and in every folder, as Microsoft lists
+     * them in "Naming Files, Paths, and Namespaces", with the console's {@code CONIN$} and
+     * {@code CONOUT$}. The digits include the superscripts 1, 2 and 3, which Windows also accepts.
+     */
+    private static final Pattern WINDOWS_DEVICE = Pattern
+            .compile("(?i)CON|PRN|AUX|NUL|CONIN\\$|CONOUT\\$|(?:COM|LPT)[0-9\u00B9\u00B2\u00B3]");
 
     private EditPath() {
     }
@@ -69,16 +78,74 @@ public final class EditPath {
     }
 
     /**
-     * Why an editor cannot open {@code file}, which exists, as the message to show, or {@code null}
-     * for a file an editor can read. The check of {@code :e} and {@code :split}, links followed.
+     * Why an editor cannot open {@code file} as the message to show, or {@code null} for a file an
+     * editor can read or a missing one it can create. The check of {@code :e} and {@code :split},
+     * made before they look for the file: Java calls a Windows device missing, so {@code :e NUL}
+     * would otherwise open a blank new file whose save goes to the device. Links are followed for
+     * what the file is; a Windows device is told by the name given, so {@code NewFiles.open} asks
+     * again for the target of a dangling link ({@code notes.txt -> COM1}).
      *
      * @param shown the name for the message ({@link #shown})
      */
     public static String whyNotOpened(Path file, String shown) {
+        return whyNotOpened(file, shown, FilePaths.Platform.current());
+    }
+
+    /** {@link #whyNotOpened(Path, String)} under {@code platform}'s rule. */
+    static String whyNotOpened(Path file, String shown, FilePaths.Platform platform) {
         if (Files.isDirectory(file)) {
             return "\"" + shown + "\" is a directory";
         }
-        return mayNeverEnd(file) ? "\"" + shown + "\" is not a file" : null;
+        // A name with an extension may be a real file on Windows 11: it opens if it exists, a cloud
+        // drive's too, which Java calls "other" than regular (see mayNeverEnd). A bare device name
+        // never is one, and a port that is present may well be reported as existing.
+        String path = file.toString();
+        boolean device = platform.windows() && isWindowsDevice(path)
+                && (isAlwaysWindowsDevice(path) || !Files.exists(file));
+        return device || mayNeverEnd(file, platform) ? "\"" + shown + "\" is not a file" : null;
+    }
+
+    /**
+     * Whether Windows may take {@code path} for a device, whatever its folder: its last name is a
+     * reserved one ({@link #WINDOWS_DEVICE}), alone or before an extension, or it is in the device
+     * namespace ({@code \\.\}). Examples: {@code C:\work\NUL}, {@code con.txt},
+     * {@code \\.\COM1}; not {@code NULL.txt} or {@code console}.
+     *
+     * <p>Judged by name because nothing else tells: Java reports {@code NUL} and {@code CON} as
+     * missing files. The extension counts because Windows before 11 opens the device for
+     * {@code NUL.txt}. So a caller lets an existing file with an extension through, as Windows 11
+     * allows them ({@link #isAlwaysWindowsDevice}), and what this costs is only creating a new
+     * {@code NUL.txt} with {@code :e}.
+     */
+    static boolean isWindowsDevice(String path) {
+        if (inDeviceNamespace(path)) {
+            return true;
+        }
+        String name = lastName(path);
+        int dot = name.indexOf('.');
+        // Windows ignores spaces before the extension or at the end: "NUL .txt" is NUL.
+        return WINDOWS_DEVICE.matcher((dot < 0 ? name : name.substring(0, dot)).stripTrailing()).matches();
+    }
+
+    /**
+     * Whether {@code path} is a device on every Windows, so that no file can be meant: it is in the
+     * device namespace, or its last name is a reserved one with no extension, trailing dots and
+     * spaces ignored as Windows ignores them ({@code NUL}, {@code NUL.}, {@code COM1 }).
+     */
+    static boolean isAlwaysWindowsDevice(String path) {
+        if (inDeviceNamespace(path)) {
+            return true;
+        }
+        return WINDOWS_DEVICE.matcher(lastName(path).replaceAll("[. ]+$", "")).matches();
+    }
+
+    private static boolean inDeviceNamespace(String path) {
+        return path.startsWith("\\\\.\\") || path.startsWith("//./");
+    }
+
+    /** The name after the last separator; a colon ends a drive, as in {@code C:NUL}. */
+    private static String lastName(String path) {
+        return path.substring(Math.max(Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/')), path.lastIndexOf(':')) + 1);
     }
 
     /**
@@ -101,7 +168,8 @@ public final class EditPath {
      *
      * <p>Never on Windows: Java calls every reparse point "other" than a regular file, which may
      * include ordinary files a cloud drive or deduplication keeps that way, and those must still
-     * open. A missing file and a folder are not this case either; each has its own rule.
+     * open. Devices there are told by name ({@link #isWindowsDevice}). A missing file and a folder
+     * are not this case either; each has its own rule.
      */
     public static boolean mayNeverEnd(Path file) {
         return mayNeverEnd(file, FilePaths.Platform.current());

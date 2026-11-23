@@ -6,11 +6,13 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.function.UnaryOperator;
 
 import org.junit.jupiter.api.Test;
@@ -51,6 +53,61 @@ class EditPathTest {
         assertEquals("\"p\" is not a file", EditPath.whyNotOpened(kernel, "p"));
         Path link = Files.createSymbolicLink(folder.resolve("notes.txt"), kernel);
         assertEquals("\"notes.txt\" is not a file", EditPath.whyNotOpened(link, "notes.txt"));
+    }
+
+    /** Windows' device names, in any case, folder or spelling of the device namespace. */
+    @Test
+    void windowsDeviceNamesAreToldByName() {
+        for (String device : List.of("NUL", "nul", "Con", "PRN", "AUX", "COM0", "COM9", "LPT1", "COM\u00B9", "LPT\u00B3",
+                "CONIN$", "conout$", "C:\\work\\NUL", "C:NUL", "/work/CON", "NUL.txt", "con.tar.gz", "NUL .txt", "NUL ",
+                "\\\\.\\COM1", "\\\\.\\NUL\\", "//./CON")) {
+            assertTrue(EditPath.isWindowsDevice(device), device);
+        }
+        for (String file : List.of("NULL", "NULL.txt", "console", "COM", "COM10", "LPT", "AUX1", "a.NUL", "my NUL",
+                "C:\\NUL\\notes.txt", "\\\\server\\share\\notes.txt")) {
+            assertFalse(EditPath.isWindowsDevice(file), file);
+        }
+    }
+
+    /**
+     * {@code :e NUL} is refused though Java calls it missing; a real file of such a name still
+     * opens (Windows 11 allows {@code NUL.txt}), and elsewhere the name is an ordinary one.
+     */
+    @Test
+    void aWindowsDeviceNameIsRefusedOnWindowsOnly(@TempDir Path folder) throws IOException {
+        FilePaths.Platform windows = new FilePaths.Platform(true, true, UnaryOperator.identity());
+        FilePaths.Platform linux = new FilePaths.Platform(false, false, UnaryOperator.identity());
+        assertEquals("\"NUL\" is not a file", EditPath.whyNotOpened(folder.resolve("NUL"), "NUL", windows));
+        assertNull(EditPath.whyNotOpened(folder.resolve("NUL"), "NUL", linux));
+        assertNull(EditPath.whyNotOpened(folder.resolve("new.txt"), "new.txt", windows), "a new file opens");
+        Path real = folder.resolve("Nul.notes");
+        Files.writeString(real, "text");
+        assumeTrue(Files.exists(real), "a Windows that allows this name");
+        assertNull(EditPath.whyNotOpened(real, "Nul.notes", windows), "an existing file opens");
+    }
+
+    /**
+     * A port that is present may be reported as existing: a bare device name is refused anyway. A
+     * plain file stands in for the port, so never on real Windows, where the write would reach it.
+     */
+    @Test
+    void aBareDeviceNameIsRefusedThoughJavaSaysItExists(@TempDir Path folder) throws IOException {
+        assumeTrue(!FilePaths.Platform.current().windows(), "a system where COM1 can be a plain file");
+        FilePaths.Platform windows = new FilePaths.Platform(true, true, UnaryOperator.identity());
+        Path port = folder.resolve("COM1");
+        Files.writeString(port, "stands in for a port that exists");
+        assertEquals("\"COM1\" is not a file", EditPath.whyNotOpened(port, "COM1", windows));
+    }
+
+    /** With an extension a name may be a real file on Windows 11; without one it never is. */
+    @Test
+    void onlyANameWithoutAnExtensionIsAlwaysADevice() {
+        for (String always : List.of("NUL", "NUL.", "COM1 ", "C:\\work\\con", "\\\\.\\pipe\\name", "//./COM1")) {
+            assertTrue(EditPath.isAlwaysWindowsDevice(always), always);
+        }
+        for (String notAlways : List.of("NUL.txt", "NUL .txt", "con.tar.gz", "notes.txt")) {
+            assertFalse(EditPath.isAlwaysWindowsDevice(notAlways), notAlways);
+        }
     }
 
     @Test

@@ -371,14 +371,15 @@ final class EditorSplits {
                     return null;
                 }
                 String shown = EditPath.shown(file, home, folder);
-                // A dangling link is missing too, as for :e (Files.exists follows links).
-                if (!Files.exists(file)) {
-                    return NewFiles.open(page, file, shown, IWorkbenchPage.MATCH_NONE);
-                }
+                // First: Java calls a Windows device missing, which would open it as a new file.
                 String refused = EditPath.whyNotOpened(file, shown);
                 if (refused != null) {
                     origin.error(refused);
                     return null;
+                }
+                // A dangling link is missing too, as for :e (Files.exists follows links).
+                if (!Files.exists(file)) {
+                    return NewFiles.open(page, file, shown, IWorkbenchPage.MATCH_NONE);
                 }
                 return EclipseFileCommands.open(page, file, IWorkbenchPage.MATCH_NONE);
             }

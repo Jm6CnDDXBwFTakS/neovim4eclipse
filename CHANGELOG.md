@@ -37,7 +37,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   say it is not a file, and a jump (`gf`, a picker's Enter) stays where it was. Before, Eclipse
   tried to read all of it, so `/dev/zero` stalled it until its memory ran out. On Linux the same
   goes for files under `/proc` and `/sys`, some of which have no end. `:e` and `:split` refuse a
-  pipe too, where Eclipse would wait for a writer.
+  pipe too, where Eclipse would wait for a writer. On Windows they refuse its device names (`NUL`,
+  `CON`, `COM1` and the like), which opened a blank editor whose save could go to the device.
 - `Ctrl+click` and the wheel with `Ctrl` held now do nothing in the `q:` window and page editors, as
   on a floating window. Before, `Ctrl+click` there was Vim's tag jump, which reads a `tags` file a
   cloned repository may hold.

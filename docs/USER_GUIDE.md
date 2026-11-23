@@ -340,7 +340,10 @@ Eclipse would try to read all of it, and `/dev/zero` would stall it until its me
 Linux that includes files under `/proc` and `/sys`, since some have no end (`/proc/self/pagemap`), so
 read `/proc/cpuinfo` in a terminal. `:e` and `:split` refuse a pipe too. A jump or a plug-in's window
 on a pipe or an endless `/proc` file is Neovim's own `:edit`, which keeps waiting or reading, as it
-does in a terminal.
+does in a terminal. On Windows, `:e` and `:split` refuse its device names (`NUL`, `CON`, `COM1` and
+the like, in any folder and with any extension) and a link to one, since what you saved there would
+go to the device. An existing file with such a name and an extension, like `NUL.txt` on Windows 11,
+still opens.
 
 After a restart, Eclipse brings the stacks back as it does any layout you dragged.
 

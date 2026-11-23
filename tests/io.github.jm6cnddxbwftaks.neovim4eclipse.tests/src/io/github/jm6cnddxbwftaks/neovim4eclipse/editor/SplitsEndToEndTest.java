@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -114,6 +115,52 @@ class SplitsEndToEndTest extends EndToEndTestBase {
                     Files.delete(link);
                 }
             }
+        }
+    }
+
+    /**
+     * A Windows device name: Java calls it a missing file, so without the check {@code :e NUL}
+     * would open a blank new file whose save goes to the device. Each case has its own spelling,
+     * so that each waits for its own message.
+     */
+    @Test
+    void aWindowsDeviceNameIsNotOpened() throws Exception {
+        assumeTrue(System.getProperty("os.name").startsWith("Windows"), "Windows");
+        int editors = page().getEditorReferences().length;
+        for (Map.Entry<String, List<String>> command : Map.of(
+                "edit", List.of("NUL", "CON", "CONIN$"),
+                "vsplit", List.of("nul", "con", "conin$"),
+                "tabedit", List.of("Nul", "Con", "Conin$")).entrySet()) {
+            for (String name : command.getValue()) {
+                ex(command.getKey() + " " + name);
+                expectShown(name + "\" is not a file");
+                assertSame(editor, page().getActiveEditor(), name);
+                assertEquals(editors, page().getEditorReferences().length, name + " opened no editor");
+            }
+        }
+    }
+
+    /**
+     * A cloned repository's link to a Windows device name is dangling to Java, and would open as a
+     * new file whose {@code :w!} goes to the device ({@code NewFiles.open}).
+     */
+    @Test
+    void aLinkToAWindowsDeviceNameIsNotOpened() throws Exception {
+        assumeTrue(System.getProperty("os.name").startsWith("Windows"), "Windows");
+        Path link = Path.of(project.getLocation().toOSString(), "device-link.txt");
+        try {
+            Files.createSymbolicLink(link, Path.of("COM1"));
+        } catch (FileSystemException e) {
+            assumeTrue(false, "this account may create symbolic links");
+        }
+        try {
+            int editors = page().getEditorReferences().length;
+            ex("edit device-link.txt");
+            expectShown("device-link.txt\" is not a file");
+            assertSame(editor, page().getActiveEditor());
+            assertEquals(editors, page().getEditorReferences().length, "no editor opened");
+        } finally {
+            Files.deleteIfExists(link);
         }
     }
 
