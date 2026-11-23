@@ -313,6 +313,41 @@ t.test(':e +cmd name sends the file alone, and the +cmd runs once Eclipse shows 
   t.eq(4, vim.fn.line('.'), 'the current file: run at once')
 end)
 
+t.test(':e +cmd that fails says so, one that moves windows keeps its move, and from a float it stays there', function()
+  start()
+  local a, a_name = t.document('a.txt', { 'one', 'two', 'three' })
+  local b = t.document('b.txt', { 'x' })
+  local function go() -- as the attach push, for the document in the window it is in
+    return t.run('GO_TO_LAST_POSITION', 'false', tostring(vim.fn.bufnr(a_name)), tostring(vim.fn.bufwinid(a_name)))
+  end
+  local function open_with(command)
+    vim.cmd.buffer(b)
+    t.type(':e +' .. command .. ' ' .. vim.fn.fnameescape(a_name) .. '<CR>')
+    vim.cmd.buffer(vim.fn.bufnr(a_name))
+  end
+  open_with('nosuchcmd')
+  vim.v.errmsg = ''
+  t.eq(true, go(), 'the step goes on')
+  t.wait_for('the error, shown', function() return vim.v.errmsg:find('E492', 1, true) ~= nil end)
+
+  open_with('wincmd\\ w')
+  local here = vim.api.nvim_get_current_win()
+  local other = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false, { split = 'right' })
+  t.eq(true, go())
+  t.eq(other, vim.api.nvim_get_current_win(), 'the +cmd moved Neovim')
+  vim.api.nvim_set_current_win(here)
+  vim.api.nvim_win_close(other, true)
+
+  open_with('3')
+  local float = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), true,
+    { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  t.eq(true, go())
+  t.eq(float, vim.api.nvim_get_current_win(), 'Neovim stays in the float')
+  t.eq(3, vim.api.nvim_win_get_cursor(here)[1], "the +cmd ran in the document's window")
+  vim.api.nvim_win_close(float, true)
+  t.eq(a, vim.api.nvim_win_get_buf(here))
+end)
+
 t.test('%, ~ and $HOME are expanded as Neovim\'s :edit expands them; # without one is E194', function()
   local app = editing_main_in_a_project()
   t.type(':e %:h/Util.java<CR>')

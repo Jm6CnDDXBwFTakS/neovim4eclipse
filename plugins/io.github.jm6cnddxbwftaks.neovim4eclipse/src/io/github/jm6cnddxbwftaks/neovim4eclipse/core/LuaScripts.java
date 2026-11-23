@@ -539,7 +539,12 @@ final class LuaScripts {
             local function run_open_command(command)
               local ok, err = pcall(vim.cmd, command == '' and '$' or command)
               if not ok then
-                vim.api.nvim_echo({ { (tostring(err):gsub('^Vim:', '')) } }, true, { err = true })
+                -- Said once the caller is over: inside nvim_win_call (GO_TO_LAST_POSITION, with Neovim
+                -- in a float) an error message would become an error of that call, and show nothing.
+                local message = tostring(err):gsub('^Vim:', '')
+                vim.schedule(function()
+                  vim.api.nvim_echo({ { message } }, true, { err = true })
+                end)
               end
             end
             package.loaded['neovim4eclipse.host_commands'].take_open_command = function(file)
@@ -1089,8 +1094,15 @@ final class LuaScripts {
             local file = vim.b[buf].neovim4eclipse_file
             local host = package.loaded['neovim4eclipse.host_commands']
             if file and host and host.take_open_command then
+              -- In the document's window as it is, so that a +cmd that moves (:e +tabnext name) keeps its
+              -- move. Only with Neovim in a float does it run from there, and Neovim stays in the float.
               local ran = false
-              vim.api.nvim_win_call(win, function() ran = host.take_open_command(file) end)
+              local function take() ran = host.take_open_command(file) end
+              if win == vim.api.nvim_get_current_win() then
+                take()
+              else
+                vim.api.nvim_win_call(win, take)
+              end
               if ran then
                 return true
               end
