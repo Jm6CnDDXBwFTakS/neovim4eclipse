@@ -382,9 +382,10 @@ gets in your way:
      jump plug-ins (flash, leap, hop, mini.jump2d; see [Jump labels](docs/USER_GUIDE.md#jump-labels)).
    - **Opened in Eclipse:** a plug-in's own split or tab page on a file, such as a picker's
      `Ctrl+V`, `Ctrl+X` or `Ctrl+T`: an Eclipse split or editor tab.
-   - **Not shown:** split windows plug-ins open on anything but a file (file trees),
-     the menus of completion plug-ins (nvim-cmp, blink.cmp), and windows that follow typing in
-     insert mode.
+   - **Not shown:** split windows plug-ins open on anything but a file (file trees).
+   - **Do not open, or lag:** the menus of completion plug-ins (nvim-cmp, blink.cmp) and windows
+     that follow typing in insert mode. Nothing hides them: Eclipse types the insert, so Neovim
+     has no typing to follow until `Esc`.
 
    Plug-ins that work on text (surround, commentary, text objects, mappings of your own) work as in
    a terminal. A floating window takes clicks and the wheel, and one that takes the keyboard gets

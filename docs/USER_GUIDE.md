@@ -682,7 +682,8 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   so and the window stays open.
 - **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In
   insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your
-  typing (signature help, a completion plug-in's documentation) does not appear, or lags; Eclipse's
+  typing (signature help, a completion plug-in's documentation or menu) does not open, or lags.
+  Nothing hides it: the plug-in has no typing to follow. Eclipse's
   own content assist and parameter hints do that job.
 - **Not drawn:** a window a plug-in opens as a split on anything but a file (a file tree), which
   is closed (on a file it becomes an Eclipse editor, on the side Neovim put it)
