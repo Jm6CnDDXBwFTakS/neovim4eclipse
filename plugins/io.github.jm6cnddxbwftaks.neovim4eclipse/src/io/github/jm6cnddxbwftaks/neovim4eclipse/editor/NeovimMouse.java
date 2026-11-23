@@ -46,6 +46,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.MouseInput;
  *       Linux).</li>
  *   <li>Moves without a button: hovers, hyperlink underlines.</li>
  * </ul>
+ * A press that stays Eclipse's still closes a plug-in's float that has the keyboard, as a left click
+ * does: Eclipse's menu or hyperlink acts on the document, and the keys must not stay in a picker.
  *
  * <p>Example: three quick clicks on line 7 send press and release three times at line 7; Neovim
  * enters {@code V}, and the editor shows line 7 selected. UI thread only.
@@ -61,6 +63,8 @@ final class NeovimMouse {
     private final Consumer<MouseInput> neovim;
     /** Runs on every forwarded press, before it is sent: the editor abandons an open {@code :} line there. */
     private final Runnable onPress;
+    /** Runs on a press that stays Eclipse's: a plug-in's float with the keyboard closes there. */
+    private final Runnable onEclipsePress;
     private final Display display;
     private final Listener filter = this::onMouse;
 
@@ -76,15 +80,17 @@ final class NeovimMouse {
      * @param forward    asked at each press whether Neovim handles the mouse now
      * @param neovim     receives the events, in order
      * @param onPress    runs on each forwarded press
+     * @param onEclipsePress runs on each press left to Eclipse (the right or middle button, Ctrl+click)
      */
     NeovimMouse(StyledText widget, IntUnaryOperator toDocument, Supplier<IDocument> document, BooleanSupplier forward,
-            Consumer<MouseInput> neovim, Runnable onPress) {
+            Consumer<MouseInput> neovim, Runnable onPress, Runnable onEclipsePress) {
         this.widget = widget;
         this.toDocument = toDocument;
         this.document = document;
         this.forward = forward;
         this.neovim = neovim;
         this.onPress = onPress;
+        this.onEclipsePress = onEclipsePress;
         this.display = widget.getDisplay();
         for (int type : new int[] { SWT.MouseDown, SWT.MouseMove, SWT.MouseUp, SWT.MouseDoubleClick }) {
             display.addFilter(type, filter);
@@ -105,6 +111,9 @@ final class NeovimMouse {
         switch (event.type) {
             case SWT.MouseDown -> {
                 if (!isNeovims(event)) {
+                    if (event.button != 1 || isHyperlinkOrMenu(event)) {
+                        onEclipsePress.run();
+                    }
                     return;
                 }
                 swallow(event);
@@ -142,8 +151,12 @@ final class NeovimMouse {
 
     /** A left-button event that Neovim handles now (see "What stays Eclipse's"). */
     private boolean isNeovims(Event event) {
-        boolean hyperlinkOrMenu = (event.stateMask & (SWT.MOD1 | SWT.CTRL)) != 0;
-        return event.button == 1 && !hyperlinkOrMenu && forward.getAsBoolean();
+        return event.button == 1 && !isHyperlinkOrMenu(event) && forward.getAsBoolean();
+    }
+
+    /** Ctrl or Cmd held: Eclipse's hyperlink, and on macOS Ctrl+click is the context menu. */
+    private static boolean isHyperlinkOrMenu(Event event) {
+        return (event.stateMask & (SWT.MOD1 | SWT.CTRL)) != 0;
     }
 
     private static void swallow(Event event) {

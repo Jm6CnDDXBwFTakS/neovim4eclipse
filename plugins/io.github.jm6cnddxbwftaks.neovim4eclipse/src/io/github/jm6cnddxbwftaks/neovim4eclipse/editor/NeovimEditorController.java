@@ -257,7 +257,8 @@ public final class NeovimEditorController implements AutoCloseable {
         // next Ctrl-N or Ctrl-E would put that line back, without the change (endCompletion does
         // nothing when no completion is going on).
         this.synchronizer.pushLocalChanges(
-                () -> isNeovimModeActive() && (!session.isTypingMode() || session.isCompleting()), () -> {
+                () -> isNeovimModeActive() && (!session.isTypingMode() || session.isWaitingForArgument()
+                        || session.isCompleting()), () -> {
                     caretSync.sendEclipseCaretNow();
                     session.endCompletionAsync();
                 });
@@ -311,7 +312,7 @@ public final class NeovimEditorController implements AutoCloseable {
         floatingWindows.keepUnder(statusLineRow.control());
         this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, session::pasteAsync);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
-                this::neovimHandlesMouse, session::mouseAsync, this::abandonLineAndFloat);
+                this::neovimHandlesMouse, session::mouseAsync, this::abandonLineAndFloat, this::leaveFloatForEclipse);
         this.wheel = new NeovimWheel(styledText, this::neovimHandlesMouse, viewport::rows,
                 lines -> session.scrollLinesAsync(buffer, lines));
         keyInterceptor.setInsertReplaySupplier(this::consumeInsertReplayPlan);
@@ -882,7 +883,7 @@ public final class NeovimEditorController implements AutoCloseable {
             // Neovim's command line, if one is open, would wait for keys it no longer gets: it is
             // abandoned, as a click away from it does.
             if (VimModes.isCmdline(session.getMode()) && !VimModes.isExMode(session.getMode())) {
-                session.inputAsync("<C-c>");
+                session.abandonLineAsync();
             }
             if (session.inPluginFloat()) {
                 session.leaveFloatAsync(); // a picker's prompt would take keys that are Eclipse's now
@@ -1093,7 +1094,7 @@ public final class NeovimEditorController implements AutoCloseable {
      */
     private void abandonLine() {
         if (!closed && neovimModeActive && VimModes.isCmdline(session.getMode())) {
-            session.inputAsync("<C-c>");
+            session.abandonLineAsync();
         }
     }
 
@@ -1103,9 +1104,23 @@ public final class NeovimEditorController implements AutoCloseable {
      * ({@code NeovimSession.leaveFloatAsync}), so that the click lands in the editor's window.
      */
     private void abandonLineAndFloat() {
+        // With a line open the cursor is on Neovim's command line, so the session cannot see a float
+        // behind it: Neovim is asked, and does nothing when there is none.
+        boolean lineOpen = VimModes.isCmdline(session.getMode());
         abandonLine();
-        if (!closed && neovimModeActive && session.inPluginFloat()) {
+        if (!closed && neovimModeActive && (lineOpen || session.inPluginFloat())) {
             session.leaveFloatAsync();
+        }
+    }
+
+    /**
+     * For a press that stays Eclipse's (a right click, Ctrl+click): what Eclipse then does acts on
+     * the document, so a plug-in's float with the keyboard closes, and a {@code :} line opened from
+     * it goes too. A line opened from the editor stays. Neovim decides, for the reason above.
+     */
+    private void leaveFloatForEclipse() {
+        if (!closed && neovimModeActive && (session.inPluginFloat() || VimModes.isCmdline(session.getMode()))) {
+            session.leaveFloatWithLineAsync();
         }
     }
 

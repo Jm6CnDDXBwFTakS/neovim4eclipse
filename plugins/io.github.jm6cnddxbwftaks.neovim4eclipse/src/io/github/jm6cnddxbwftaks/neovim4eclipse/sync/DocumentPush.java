@@ -18,7 +18,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
  *       comes back from Neovim as a line event; applied, it would be a pointless rewrite, and it
  *       could deadlock with a UI thread that waits for the push (see
  *       {@link BufferSynchronizer#stopRemoteListening()}).</li>
- *   <li>On the session's input thread, after every key already queued:
+ *   <li>On the session's input thread, after every key already queued, and, while Neovim waits for
+ *       the rest of a command, after the key that finishes it ({@code NeovimSession.runAttachSetup}):
  *     <ol>
  *       <li>switch Neovim to the document's own buffer. If that fails, stop: pushing now would
  *           overwrite whatever buffer Neovim is in, another file's text and undo history;</li>
@@ -112,6 +113,15 @@ public final class DocumentPush {
 
     /** The document side: {@link BufferSynchronizer} in the editor. */
     public interface Mirror {
+        /**
+         * Whether the editor has closed or moved on since the push was queued: it then has no text
+         * to push, and Neovim need not visit its buffer. Example: a switch to B and back to A while
+         * Neovim waits for the rest of a command, so that B's attach runs after B was left.
+         */
+        default boolean isClosed() {
+            return false;
+        }
+
         /** Stops applying Neovim's changes to the document. */
         void stopRemoteListening();
 
@@ -182,6 +192,10 @@ public final class DocumentPush {
 
     /** The input-thread part (see the class comment). */
     private void run(int tabWidth, Indentation indentation, int line1, int col0, boolean takeNeovimCursor) {
+        if (mirror.isClosed()) {
+            LOG.fine("The editor was left before its push ran: nothing to show");
+            return;
+        }
         try {
             nvim.showDocumentBuffer();
         } catch (Exception e) {

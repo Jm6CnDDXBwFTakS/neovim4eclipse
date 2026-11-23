@@ -39,6 +39,8 @@ class NeovimMouseTest {
     /** What reached the widget's own mouse listeners (they come after the filter). */
     private final List<Integer> widgetSaw = new ArrayList<>();
     private NeovimMouse mouse;
+    /** Presses left to Eclipse, where a plug-in's float with the keyboard closes. */
+    private int eclipsePresses;
 
     @BeforeEach
     void create() {
@@ -52,7 +54,8 @@ class NeovimMouseTest {
             widget.addListener(type, e -> widgetSaw.add(e.type));
         }
         mouse = new NeovimMouse(widget, offset -> offset, () -> document, () -> forward,
-                e -> sent.add(e.action().luaName() + " " + e.line1() + ":" + e.col0() + e.modifiers()), () -> presses++);
+                e -> sent.add(e.action().luaName() + " " + e.line1() + ":" + e.col0() + e.modifiers()), () -> presses++,
+                () -> eclipsePresses++);
     }
 
     @AfterEach
@@ -116,6 +119,17 @@ class NeovimMouseTest {
 
         assertEquals(List.of(), sent);
         assertTrue(widgetSaw.contains(SWT.MouseDown));
+        assertEquals(3, eclipsePresses, "each of them closes a float that has the keyboard");
+    }
+
+    /** A plain left click Neovim does not take now (Ex mode, an insert Eclipse types) closes no float. */
+    @Test
+    void aPlainLeftClickLeftToTheWidgetIsNoPressForEclipsesMenus() {
+        forward = false;
+        event(SWT.MouseDown, on(2), 1, 0);
+
+        assertEquals(List.of(), sent);
+        assertEquals(0, eclipsePresses);
     }
 
     @Test

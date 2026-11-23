@@ -228,7 +228,7 @@ final class WindowPane {
         lineOnFocusLoss = new LineOnFocusLoss(canvas,
                 () -> session.commandLineOpen() && !VimModes.isExMode(session.getMode()), () -> {
             if (VimModes.isCmdline(session.getMode())) {
-                session.inputAsync("<C-c>");
+                session.abandonLineAsync();
             }
         }, session::pluginFloat, session::leaveFloatAsync); // a picker's prompt opened from the page closes as it is left
         canvas.addControlListener(new ControlAdapter() {

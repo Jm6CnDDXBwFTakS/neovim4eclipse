@@ -68,6 +68,15 @@ public interface BufferPort {
      */
     void runAsync(String what, Runnable work);
 
+    /**
+     * Whether document work is held because Neovim waits for the rest of a command
+     * ({@code NeovimSession.runAsync}). An Eclipse change waiting for its push then makes Neovim's
+     * line numbers stale: the synchronizers drop Neovim's change, and the push restores its buffer.
+     */
+    default boolean isHoldingDocumentWork() {
+        return false;
+    }
+
     /** Notified (on a session thread) of each change Neovim makes to the attached buffer. */
     void addBufferChangeListener(Consumer<BufferChange> listener);
 

@@ -127,6 +127,21 @@ class DocumentPushTest {
     private final Fake fake = new Fake();
     private final DocumentPush push = new DocumentPush(fake, fake, fake);
 
+    /** The editor was left before its queued push ran: Neovim does not visit its buffer. */
+    @Test
+    void anEditorLeftBeforeItsPushRanIsNotShown() {
+        Fake fake = new Fake() {
+            @Override
+            public boolean isClosed() {
+                return true;
+            }
+        };
+        new DocumentPush(fake, fake, fake).start(4, null, 1, 0, false);
+        fake.calls.clear();
+        fake.runQueued();
+        assertEquals(List.of("follow"), fake.calls.stream().filter(c -> !c.equals("queue")).map(c -> c.startsWith("follow") ? "follow" : c).toList());
+    }
+
     @Test
     void listeningStopsAtOnceAndTheRestWaitsForTheInputThread() {
         push.start(4, INDENT, 2, 3, false);

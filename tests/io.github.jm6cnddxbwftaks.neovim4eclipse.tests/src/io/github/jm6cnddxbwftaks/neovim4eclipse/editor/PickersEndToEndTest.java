@@ -367,6 +367,89 @@ class PickersEndToEndTest extends EndToEndTestBase {
         }
     }
 
+    /** A right click stays Eclipse's, whose menu acts on the document: the picker closes first. */
+    @Test
+    void aRightClickInTheTextClosesThePicker() {
+        String text = document.get();
+        type(widget, "gp");
+        waitUntil("Telescope drawn", TIMEOUT_MS, () -> pickerShows("beta"), () -> "; drawn:\n" + drawn());
+        Event press = new Event();
+        press.button = 3;
+        press.x = 1;
+        press.y = 1;
+        widget.notifyListeners(SWT.MouseDown, press);
+        waitUntil("every window of the picker closed, its insert ended", TIMEOUT_MS, () -> {
+            settle();
+            return telescopeWindows(null) == 0 && !"i".equals(session.getMode());
+        }, () -> "; mode " + session.getMode());
+        assertEquals(text, document.get());
+    }
+
+    /**
+     * A {@code :} line opened from the picker goes with it, whichever button clicks the text. The
+     * cursor is on Neovim's command line then, so only Neovim can tell that a float is behind it.
+     */
+    private void clickWithALineOpenFromThePickerClosesBoth(int button) {
+        String text = document.get();
+        type(widget, "gp");
+        waitUntil("Telescope drawn", TIMEOUT_MS, () -> pickerShows("beta"), () -> "; drawn:\n" + drawn());
+        session.inputAsync("<Esc>:");
+        waitUntil("the : line open from the prompt", TIMEOUT_MS, () -> {
+            settle();
+            return "c".equals(session.getMode());
+        }, () -> "; mode " + session.getMode());
+        Event press = new Event();
+        press.button = button;
+        press.x = 1;
+        press.y = 1;
+        widget.notifyListeners(SWT.MouseDown, press);
+        if (button == 1) {
+            Event release = new Event();
+            release.button = 1;
+            release.x = 1;
+            release.y = 1;
+            release.stateMask = SWT.BUTTON1;
+            widget.notifyListeners(SWT.MouseUp, release);
+        }
+        waitUntil("the line and every window of the picker gone", TIMEOUT_MS, () -> {
+            settle();
+            return telescopeWindows(null) == 0 && "n".equals(session.getMode());
+        }, () -> "; mode " + session.getMode() + ", picker windows " + telescopeWindows(null));
+        assertEquals(text, document.get());
+    }
+
+    @Test
+    void aLeftClickWithALineOpenFromThePickerClosesBoth() {
+        clickWithALineOpenFromThePickerClosesBoth(1);
+    }
+
+    @Test
+    void aRightClickWithALineOpenFromThePickerClosesBoth() {
+        clickWithALineOpenFromThePickerClosesBoth(3);
+    }
+
+    /** With no picker behind it, a {@code :} line outlives a right click, whose menu is Eclipse's. */
+    @Test
+    void aRightClickKeepsALineOpenedFromTheEditor() {
+        session.inputAsync(":");
+        waitUntil("the : line open", TIMEOUT_MS, () -> {
+            settle();
+            return "c".equals(session.getMode());
+        }, () -> "; mode " + session.getMode());
+        Event press = new Event();
+        press.button = 3;
+        press.x = 1;
+        press.y = 1;
+        widget.notifyListeners(SWT.MouseDown, press);
+        settle();
+        assertEquals("c", session.getMode());
+        session.inputAsync("<C-c>");
+        waitUntil("the line closed", TIMEOUT_MS, () -> {
+            settle();
+            return "n".equals(session.getMode());
+        }, () -> "; mode " + session.getMode());
+    }
+
     /** Leaving the editor for a view closes every window of the picker and ends its insert. */
     @Test
     void leavingTheEditorClosesThePicker() throws Exception {

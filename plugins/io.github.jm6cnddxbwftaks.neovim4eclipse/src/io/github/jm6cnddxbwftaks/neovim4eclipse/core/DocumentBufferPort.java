@@ -47,6 +47,24 @@ public interface DocumentBufferPort {
     void runAsync(String what, Runnable work);
 
     /**
+     * Says whether an editor's synchronizer mirrors this document now. Neovim may still be in its
+     * window after the editor let go: a command half typed at an editor switch is finished there by
+     * the next key, and that change must reach the document through the unattached route. Nothing
+     * by default.
+     */
+    default void setEditorMirrors(DocumentBuffer buffer, boolean mirrors) {
+    }
+
+    /**
+     * Whether document work is held because Neovim waits for the rest of a command
+     * ({@code NeovimSession.runAsync}). An Eclipse change waiting for its push then makes Neovim's
+     * line numbers stale: the synchronizers drop Neovim's change, and the push restores its buffer.
+     */
+    default boolean isHoldingDocumentWork() {
+        return false;
+    }
+
+    /**
      * Notifies {@code listener} (on the RPC thread, in Neovim's order) of each change Neovim makes to
      * {@code buffer} while it is not attached. One listener per buffer: a second one replaces the first.
      */

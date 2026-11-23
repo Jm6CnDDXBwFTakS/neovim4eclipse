@@ -61,6 +61,14 @@ public final class KeyRouter {
     public interface Neovim {
         boolean isTypingMode();
 
+        /**
+         * Whether Neovim waits for the rest of a command, as last read. After {@code r} it reports
+         * Replace mode, but the next key is that command's, never text for Eclipse to type.
+         */
+        default boolean isWaitingForArgument() {
+            return false;
+        }
+
         boolean isNeovimDrivenInsert();
 
         boolean isEclipseTypingReady();
@@ -236,6 +244,9 @@ public final class KeyRouter {
     private boolean route(String nvimKey, boolean bound) {
         boolean afterCtrlX = ctrlXPending;
         ctrlXPending = false; // it chooses only the very next key
+        if (neovim.isWaitingForArgument()) {
+            return send(nvimKey); // the rest of the command, in whichever editor it is typed
+        }
         if (neovim.isTypingMode() && !neovim.isNeovimDrivenInsert() && !neovim.isEclipseTypingReady()) {
             // Insert mode has begun but the editor has not yet received Neovim's text for it (a fast
             // typist, or a test): Eclipse typing now could be overwritten. Let Neovim type this key

@@ -5,7 +5,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 
 import org.eclipse.jface.dialogs.ErrorDialog;
@@ -225,9 +224,10 @@ final class UiTestSupport {
      * Safe while Neovim waits for more keys (after {@code g}): the no-op sends nothing to Neovim.
      */
     static void settle(NeovimSession session, long timeoutMs) {
-        AtomicBoolean reached = new AtomicBoolean();
-        session.runAsync("test: settle", () -> reached.set(true));
-        waitUntil("the session to finish the work queued before", timeoutMs, reached::get);
+        // The queue's own barrier: document work (runAsync) is held while Neovim waits for a key.
+        java.util.concurrent.Future<?> done =
+                io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.queuedWorkDone(session);
+        waitUntil("the session to finish the work queued before", timeoutMs, done::isDone);
         runUntilIdle(timeoutMs);
     }
 

@@ -305,7 +305,8 @@ conversion (bytes, cells, pixels) is its own work.
 - **D9, the touchpad**: Neovim scrolls by the lines SWT reports (`count`), for a mouse wheel and a
   touchpad alike, dragging the cursor when it would leave the screen as `Ctrl-E` does
   (`'scrolloff'` kept). The speed, acceleration and momentum stay the operating system's, as
-  Eclipse scrolls; `'mousescroll'` is not used (the user guide says so). Why: on macOS nothing in the event
+  Eclipse scrolls; `'mousescroll'` is not used, nor `'mouse'`, since Eclipse's own scrolling would drag
+  Neovim's cursor the same way (the user guide says so). Why: on macOS nothing in the event
   tells a trackpad from a wheel (X10), so one rule must serve both. Events of 0 lines, possible from
   smooth touchpads, did not come on macOS (X10) or Linux (X11), since SWT reports whole lines, so
   nothing is added up; real Linux and Windows touchpads are not measured (the test machines share

@@ -148,6 +148,99 @@ class SplitsEndToEndTest extends EndToEndTestBase {
         }
     }
 
+    /**
+     * A command half typed when the user switches editors stays in its own window, as Neovim keeps
+     * it: the next key finishes it there, and only then Neovim moves to the new editor, whose
+     * document it has before the key after that. Example: {@code r} in one editor, a switch,
+     * {@code Q} replaces the character in the first editor, {@code x} deletes one in the second.
+     */
+    @Test
+    void aCommandPendingAtASwitchFinishesInItsOwnEditorThenKeysGoToTheNewOne() throws Exception {
+        String first = document.get();
+        try (ExpectedLog log = ExpectedLog.of(io.github.jm6cnddxbwftaks.neovim4eclipse.sync.DocumentPush.class)) {
+            keys("gg0");
+            type(widget, "r");
+            settle();
+            ITextEditor second = openFile("switch.txt", "alpha beta\n");
+            StyledText secondText = (StyledText) second.getAdapter(org.eclipse.swt.widgets.Control.class);
+            type(secondText, "Q");
+            waitUntil("r finished in the first editor", TIMEOUT_MS,
+                    () -> ("Q" + first.substring(1)).equals(document.get()), () -> "; first: " + document.get());
+            type(secondText, "x");
+            waitUntil("x ran in the second editor", TIMEOUT_MS, () -> "lpha beta\n".equals(
+                    second.getDocumentProvider().getDocument(second.getEditorInput()).get()),
+                    () -> "; second: " + second.getDocumentProvider().getDocument(second.getEditorInput()).get());
+            assertEquals("Q" + first.substring(1), document.get(), "the x did not reach the first editor");
+            log.assertNothingAtOrAbove(Level.WARNING);
+        }
+    }
+
+    /**
+     * A wait can end with no key: {@code <Space>} of a mapping, a switch, {@code 'timeoutlen'} passes.
+     * The next key then belongs to the new editor, so the held switch runs before it.
+     */
+    @Test
+    void aWaitEndingWithNoKeyMovesToTheNewEditorBeforeTheNextKey() throws Exception {
+        String first = document.get();
+        // Long enough for the switch to come first; on a machine too slow for that the test just
+        // has no wait to end, and still holds.
+        SessionProbe.lua(session, "vim.o.timeoutlen = 1500 vim.keymap.set('n', '<Space>w', '<Nop>')");
+        try {
+            keys("gg0");
+            type(widget, " ");
+            settle();
+            ITextEditor second = openFile("switch-timeout.txt", "alpha beta\n");
+            StyledText secondText = (StyledText) second.getAdapter(org.eclipse.swt.widgets.Control.class);
+            SessionProbe.lua(session, "return 1"); // answered once the mapping has timed out
+            type(secondText, "x");
+            waitUntil("x ran in the new editor", TIMEOUT_MS, () -> "lpha beta\n".equals(
+                    second.getDocumentProvider().getDocument(second.getEditorInput()).get()));
+            assertEquals(first, document.get(), "the key did not reach the first editor");
+        } finally {
+            SessionProbe.lua(session, "vim.o.timeoutlen = 1000 pcall(vim.keymap.del, 'n', '<Space>w')");
+        }
+    }
+
+    /** Away and back during the wait: the key that finishes the command keeps its edit. */
+    @Test
+    void aCommandFinishedAfterASwitchAndBackKeepsItsEdit() throws Exception {
+        String first = document.get();
+        keys("gg0");
+        type(widget, "r");
+        settle();
+        openFile("switch-back.txt", "alpha beta\n");
+        page().activate(editor);
+        waitForAttach(editor, "the first editor again");
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        type(widget, "Q");
+        waitUntil("r finished in this editor", TIMEOUT_MS, () -> {
+            settle();
+            return ("Q" + first.substring(1)).equals(document.get());
+        }, () -> "; document: " + document.get());
+        assertEquals("Q" + first.substring(1), document.get(), "the held push kept the key's edit");
+    }
+
+    /**
+     * Eclipse changes the document while a command is half typed: Neovim's change has the old line
+     * numbers, so it is not applied to whatever line is there now, and the push restores Neovim.
+     */
+    @Test
+    void anEclipseChangeDuringACommandIsNotOverwrittenByItsStaleLineNumbers() throws Exception {
+        String first = document.get();
+        keys("gg0");
+        type(widget, "r");
+        settle();
+        document.replace(0, 0, "new\n");
+        settle();
+        type(widget, "Q");
+        waitUntil("Neovim has Eclipse's text again", TIMEOUT_MS, () -> {
+            settle();
+            return ("new\n" + first).equals(document.get()) && String.valueOf(SessionProbe.lua(session,
+                    "return vim.api.nvim_buf_get_lines(0, 0, 1, false)[1]")).equals("new");
+        }, () -> "; document: " + document.get());
+        assertEquals("new\n" + first, document.get());
+    }
+
     /** The editor stacks of the editor area that show something. */
     private static List<MPartStack> stacks(ITextEditor in) {
         MPart part = in.getSite().getService(MPart.class);

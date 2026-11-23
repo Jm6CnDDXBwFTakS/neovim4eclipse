@@ -335,6 +335,11 @@ final class KeyInput {
         keysQueued.incrementAndGet();
     }
 
+    /** A key counted by {@link #keyQueued} that is not sent after all. Input thread. */
+    void keyDropped() {
+        keysTaken++; // only the input thread writes it
+    }
+
     /** {@link #input} for a key queued after {@link #keyQueued}. Input thread. */
     void inputQueued(String keys) throws Exception {
         keysTaken++; // only the input thread writes it

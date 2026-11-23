@@ -99,15 +99,151 @@ class NeovimWindowsIntegrationTest {
             waitFor(() -> "i".equals(s.lua("return vim.api.nvim_get_mode().mode")), "Insert mode in the float");
             s.lua("vim.schedule(function() vim.api.nvim_win_close(vim.g.plain_float, true)"
                     + " vim.cmd.vsplit(vim.fn.fnameescape([[" + file + "]])) end)");
-            // Only the plain windows: ui2's command line and messages are floats of this tab page too.
-            waitFor(() -> number(s, "return #vim.tbl_filter(function(w) return vim.api.nvim_win_get_config(w)"
-                    + ".relative == '' end, vim.api.nvim_tabpage_list_wins(0))") == 1
+            waitFor(() -> plainWindows(s) == 1
                     && number(s, "return vim.g.editor_win") == number(s, "return vim.api.nvim_get_current_win()"),
                     "the split handed over");
             waitFor(() -> "n".equals(s.lua("return vim.api.nvim_get_mode().mode")), "the insert ended");
             assertEquals(3, number(s, "return vim.api.nvim_win_get_cursor(0)[2]"), "the editor's cursor stays");
             assertEquals("document", s.lua("return vim.api.nvim_get_current_line()"));
         }
+    }
+
+    /**
+     * {@code :noautocmd split} fires no {@code WinNew}: without the check as Neovim is about to wait
+     * for a key, the keys would go on in a window Eclipse does not draw.
+     */
+    @Test
+    void aSplitMadeWithNoautocmdIsClosedBeforeTheNextKey() throws Exception {
+        try (NeovimSession s = start()) {
+            s.lua("vim.g.editor_win = vim.api.nvim_get_current_win() vim.cmd('noautocmd split')");
+            waitFor(() -> plainWindows(s) == 1
+                    && number(s, "return vim.g.editor_win") == number(s, "return vim.api.nvim_get_current_win()"),
+                    "the split closed, Neovim back in the editor's window");
+        }
+    }
+
+    /**
+     * A click in the text while Neovim waits for a key is dropped, by either route: Neovim would
+     * answer only after that key, and a press held until then would act on what the key began. Here
+     * {@code Ctrl-W} is pending in a float: held, a press would close the float once {@code :} ended
+     * the wait, and the rest of the line would run in the editor, on the document.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = { true, false })
+    void aClickIsDroppedWhileNeovimWaitsForAKey(boolean leftToEclipse) throws Exception {
+        long limit = TestWait.millis();
+        try (NeovimSession s = start();
+                io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog log =
+                        io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog.of(InputThread.class,
+                                java.util.logging.Level.FINE)) {
+            floatOverThreeLines(s);
+            s.inputAsync("<C-w>");
+            s.queuedWorkDone().get(limit, java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (leftToEclipse) {
+                s.leaveFloatWithLineAsync();
+            } else {
+                s.leaveFloatAsync();
+            }
+            s.queuedWorkDone().get(limit, java.util.concurrent.TimeUnit.MILLISECONDS);
+            log.assertNotLoggedAtOrAbove(java.util.logging.Level.FINE, " failed");
+            s.inputAsync("<Esc>:let g:after = 1<CR>");
+            waitFor(() -> Long.valueOf(1).equals(longOrNull(s.lua("return vim.g.after"))), "the keys ran");
+            assertEquals(Boolean.TRUE, s.lua("return vim.api.nvim_win_is_valid(vim.g.plain_float)"),
+                    "the click was dropped: the float stays");
+            assertEquals(List.of("one", "two", "three"),
+                    s.lua("return vim.api.nvim_buf_get_lines(vim.g.doc_buf, 0, -1, false)"));
+        }
+    }
+
+    /**
+     * Leaving the editor during a half-typed command sends Neovim no key, as losing the focus sends
+     * none in a terminal: {@code <C-c>} would be typed into the text after {@code r} or {@code
+     * Ctrl-V}. The float stays, and the next key finishes the command on the document.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({ "vlr,QQe", "r<C-v>,Qne", "i<C-v>,Qone" })
+    void leavingDuringAHalfTypedCommandSendsNoKey(String pending, String expected) throws Exception {
+        long limit = TestWait.millis();
+        try (NeovimSession s = start();
+                io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog log =
+                        io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog.of(InputThread.class,
+                                java.util.logging.Level.FINE)) {
+            s.lua("""
+                    vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'one' })
+                    vim.g.doc_buf = vim.api.nvim_get_current_buf()
+                    vim.g.plain_float = vim.api.nvim_open_win(vim.g.doc_buf, true,
+                      { relative = 'editor', row = 1, col = 1, width = 30, height = 5 })
+                    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+                    """);
+            waitFor(s::inPluginFloat, "the float has the cursor");
+            s.inputAsync(pending);
+            s.queuedWorkDone().get(limit, java.util.concurrent.TimeUnit.MILLISECONDS);
+            s.leaveFloatAsync();
+            s.queuedWorkDone().get(limit, java.util.concurrent.TimeUnit.MILLISECONDS);
+            log.assertNotLoggedAtOrAbove(java.util.logging.Level.FINE, " failed");
+            s.inputAsync("Q"); // not x or X, which after Ctrl-V begin a hex code
+            s.queuedWorkDone().get(limit, java.util.concurrent.TimeUnit.MILLISECONDS);
+            waitFor(() -> List.of(expected).equals(s.lua("return vim.api.nvim_buf_get_lines(vim.g.doc_buf, 0, -1, false)")),
+                    "the next key finished the command, with nothing else typed");
+            assertEquals(Boolean.TRUE, s.lua("return vim.api.nvim_win_is_valid(vim.g.plain_float)"), "the float stays");
+        }
+    }
+
+    /**
+     * A {@code :} line is abandoned by a click or the keyboard leaving, but not while Neovim waits
+     * for the rest of {@code Ctrl-V} there: {@code <C-c>} would be typed into the line.
+     */
+    @Test
+    void aLineIsAbandonedUnlessNeovimWaitsForAKeyOnIt() throws Exception {
+        long limit = TestWait.millis();
+        try (NeovimSession s = start()) {
+            s.inputAsync(":abc<C-v>");
+            s.queuedWorkDone().get(limit, java.util.concurrent.TimeUnit.MILLISECONDS);
+            s.abandonLineAsync();
+            s.queuedWorkDone().get(limit, java.util.concurrent.TimeUnit.MILLISECONDS);
+            s.inputAsync("Q"); // not x or X, which after Ctrl-V begin a hex code
+            waitFor(() -> "abcQ".equals(s.lua("return vim.fn.getcmdline()")), "the next key finished Ctrl-V");
+            s.abandonLineAsync(); // no longer waiting: now it goes
+            waitFor(() -> "n".equals(s.lua("return vim.api.nvim_get_mode().mode")), "the line abandoned");
+        }
+    }
+
+    /** A click on a float's grid during a half-typed command is dropped, not replayed after the key. */
+    @Test
+    void aGridClickIsDroppedWhileNeovimWaitsForAKey() throws Exception {
+        long limit = TestWait.millis();
+        try (NeovimSession s = start()) {
+            floatOverThreeLines(s);
+            s.lua("vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'one' }) vim.api.nvim_win_set_cursor(0, { 1, 0 })");
+            s.inputAsync("r");
+            s.queuedWorkDone().get(limit, java.util.concurrent.TimeUnit.MILLISECONDS);
+            s.floatMouseAsync(0, "left", "press", "", 2, 2); // 0: any grid; sent, it would end the wait
+            s.queuedWorkDone().get(limit, java.util.concurrent.TimeUnit.MILLISECONDS);
+            s.inputAsync("Q"); // still the r's character
+            waitFor(() -> "Qne".equals(s.lua("return vim.api.nvim_get_current_line()")),
+                    "the key finished r: the click did not reach Neovim");
+        }
+    }
+
+    /** A document of three lines, and a plug-in's float over it with the cursor. */
+    private static void floatOverThreeLines(NeovimSession s) throws Exception {
+        s.lua("""
+                vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'one', 'two', 'three' })
+                vim.g.doc_buf = vim.api.nvim_get_current_buf()
+                vim.g.plain_float = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), true,
+                  { relative = 'editor', row = 1, col = 1, width = 30, height = 5 })
+                """);
+        waitFor(s::inPluginFloat, "the float has the cursor");
+    }
+
+    private static Long longOrNull(Object value) {
+        return value instanceof Number n ? n.longValue() : null;
+    }
+
+    /** The windows of the current tab page but floats: ui2's command line and messages are floats too. */
+    private static int plainWindows(NeovimSession s) throws Exception {
+        return number(s, "return #vim.tbl_filter(function(w) return vim.api.nvim_win_get_config(w)"
+                + ".relative == '' end, vim.api.nvim_tabpage_list_wins(0))");
     }
 
     private interface Check {

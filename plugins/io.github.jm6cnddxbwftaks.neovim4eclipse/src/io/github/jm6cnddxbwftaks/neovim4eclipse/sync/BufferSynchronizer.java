@@ -523,8 +523,10 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
             runOnUi(() -> runAfterApplyOnceSplit(change)); // in order with the changes before it
             return;
         }
-        if (!listening) {
-            // A Neovim change the document does not get: lines may differ anywhere. Posted, not
+        if (!listening || (localPushPending.get() && session.isHoldingDocumentWork())) {
+            // A Neovim change the document does not get: lines may differ anywhere. The second case
+            // is a key finishing a command while Eclipse's own change waits for its push: its line
+            // numbers are from before that change, and the push restores Neovim's buffer. Posted, not
             // waited for: while not listening, the UI thread may itself wait for a push (see
             // stopRemoteListening), and waiting for it here would deadlock.
             if (ui.isAvailable()) {
@@ -859,6 +861,11 @@ public final class BufferSynchronizer implements AutoCloseable, DocumentPush.Mir
                 }
             });
         }
+    }
+
+    @Override
+    public boolean isClosed() {
+        return closed;
     }
 
     @Override

@@ -2366,6 +2366,13 @@ final class LuaScripts {
                   end
                 end
               end
+              if not before and win == current then
+                -- A tab page opened with :noautocmd: no WinEnter said where from, and no editor is in
+                -- it. Neovim keeps the tab page it came from as the previous one.
+                local previous = vim.fn.tabpagenr('#')
+                local w = previous > 0 and vim.fn.win_getid(vim.fn.tabpagewinnr(previous), previous) or 0
+                before = own[w] and w or nil
+              end
               if not before then
                 return false
               end
@@ -2414,40 +2421,57 @@ final class LuaScripts {
                 end
               end,
             })
+            --- The net itself: looks at each window it has not seen yet. Scheduled, so that the command
+            --- that opened the window is over.
+            local function check_new_windows()
+              local why, list
+              local quickfix = package.loaded['neovim4eclipse.quickfix']
+              for _, win in ipairs(vim.api.nvim_list_wins()) do
+                -- ui2's windows (UI2) showing ui2's own buffers are Neovim's command line and
+                -- messages: never closed. One showing another buffer is a float like any other.
+                local new = not seen[win] and not shows_ui2_buffer(win)
+                seen[win] = true
+                local wintype = vim.fn.win_gettype(win)
+                -- A report taken leaves its window closed: the checks below then pass it by.
+                local taken = new and not own[win] and (take_health_report(win) or take_help(win)
+                  or take_file_window(win))
+                local reason = not taken and not own[win] and why_closed[wintype]
+                if reason and vim.api.nvim_win_is_valid(win) then
+                  keep_changes(win)
+                end
+                if reason and vim.api.nvim_win_is_valid(win) and pcall(vim.api.nvim_win_close, win, true) then
+                  if quickfix and (wintype == 'quickfix' or wintype == 'loclist') then
+                    list = list or wintype
+                  else
+                    why = why or reason
+                  end
+                end
+              end
+              if why then
+                vim.api.nvim_echo({ { 'Window closed: ' .. why } }, true, { err = true })
+              end
+              if list then
+                quickfix.window(list)
+              end
+            end
             vim.api.nvim_create_autocmd('WinNew', {
               group = group,
               callback = function()
-                vim.schedule(function()
-                  local why, list
-                  local quickfix = package.loaded['neovim4eclipse.quickfix']
-                  for _, win in ipairs(vim.api.nvim_list_wins()) do
-                    -- ui2's windows (UI2) showing ui2's own buffers are Neovim's command line and
-                    -- messages: never closed. One showing another buffer is a float like any other.
-                    local new = not seen[win] and not shows_ui2_buffer(win)
-                    seen[win] = true
-                    local wintype = vim.fn.win_gettype(win)
-                    -- A report taken leaves its window closed: the checks below then pass it by.
-                    local taken = new and not own[win] and (take_health_report(win) or take_help(win)
-                      or take_file_window(win))
-                    local reason = not taken and not own[win] and why_closed[wintype]
-                    if reason and vim.api.nvim_win_is_valid(win) then
-                      keep_changes(win)
-                    end
-                    if reason and vim.api.nvim_win_is_valid(win) and pcall(vim.api.nvim_win_close, win, true) then
-                      if quickfix and (wintype == 'quickfix' or wintype == 'loclist') then
-                        list = list or wintype
-                      else
-                        why = why or reason
-                      end
-                    end
+                vim.schedule(check_new_windows)
+              end,
+            })
+            -- :noautocmd split fires no WinNew, and Neovim would go on in a window Eclipse does not
+            -- draw, with the keys editing its buffer unseen. SafeState comes as Neovim is about to
+            -- wait for a key, whatever opened the window, so the net still runs.
+            vim.api.nvim_create_autocmd('SafeState', {
+              group = group,
+              callback = function()
+                for _, win in ipairs(vim.api.nvim_list_wins()) do
+                  if not seen[win] then
+                    vim.schedule(check_new_windows)
+                    return
                   end
-                  if why then
-                    vim.api.nvim_echo({ { 'Window closed: ' .. why } }, true, { err = true })
-                  end
-                  if list then
-                    quickfix.window(list)
-                  end
-                end)
+                end
               end,
             })
             package.loaded['neovim4eclipse.windows'] = M
@@ -5748,6 +5772,23 @@ final class LuaScripts {
      */
     static final String LEAVE_FLOAT = """
             return package.loaded['neovim4eclipse.windows'].leave_float(tonumber((...)))
+            """;
+
+    /**
+     * For a press in the text that stays Eclipse's (a right click, Ctrl+click): leaves the plug-in's
+     * float Neovim is in, with a {@code :} line opened from it. Decided here, since the cursor is on
+     * Neovim's command line then and only Neovim knows a float is behind it. In no float, nothing:
+     * a line opened from the editor stays. Whether a float closed.
+     */
+    static final String LEAVE_FLOAT_WITH_LINE = """
+            local windows = package.loaded['neovim4eclipse.windows']
+            if not windows.focused_float(0) then
+              return false
+            end
+            if vim.api.nvim_get_mode().mode:sub(1, 1) == 'c' then
+              vim.api.nvim_input('<C-c>')
+            end
+            return windows.leave_float(-1)
             """;
 
     /**

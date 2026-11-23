@@ -118,6 +118,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /** Who hears of Neovim's changes to each document buffer that is not attached. */
     private final Map<DocumentBuffer, Consumer<BufferChange>> unattachedListeners = new ConcurrentHashMap<>();
     /**
+     * Documents whose editor has let go though Neovim may still be in their window
+     * ({@link #setEditorMirrors}): their changes take the unattached route. Any thread.
+     */
+    private final Set<DocumentBuffer> editorLetGo = ConcurrentHashMap.newKeySet();
+    /**
      * The buffer whose line events are now the echo of {@link #setDocumentBufferLines}, or
      * {@link NotificationBridge#UNKNOWN_BUFFER}: set and cleared by the {@code eclipse_echo}
      * notifications around the write ({@link LuaScripts#SET_DOCUMENT_LINES}), so exactly the write's
@@ -216,6 +221,13 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * thread; emptied there, or dropped by {@link #close}.
      */
     private final Queue<Held> held = new ConcurrentLinkedQueue<>();
+    /**
+     * True from document work that found Neovim waiting for the rest of a command until a key ends
+     * the wait ({@link #runAsync}: an editor's detach and attach, a push). Meanwhile all queued work
+     * but the keys is held behind it, since it follows from that work. Written on the input thread;
+     * read by the synchronizers on the reader thread ({@link #isHoldingDocumentWork}).
+     */
+    private volatile boolean documentWorkWaiting;
 
     /** Held work and its name for the log. */
     private record Held(String what, InputThread.Task work) {
@@ -1145,7 +1157,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * the page's grid has been drawn once. Queued.
      */
     public void pageMouseAsync(int win, String button, String action, String modifier, int row, int col) {
-        submit("page mouse " + button + " " + action, Level.FINE, () -> {
+        submitPastHeld("page mouse " + button + " " + action, Level.FINE, () -> {
             Integer grid = pageGrids.get(win);
             if (grid != null) {
                 gridMouse(grid, button, action, modifier, row, col);
@@ -1162,7 +1174,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * its grid and drops the event, and never gives a new window the old number. Queued.
      */
     public void floatMouseAsync(int grid, String button, String action, String modifier, int row, int col) {
-        submit("floating window mouse " + button + " " + action, Level.FINE,
+        submitPastHeld("floating window mouse " + button + " " + action, Level.FINE,
                 () -> gridMouse(grid, button, action, modifier, row, col));
     }
 
@@ -1171,13 +1183,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * ({@code util/MouseOption}), the one way all three kinds of grid reach Neovim. The mode is
      * asked with {@code nvim_get_mode}, which Neovim answers even while it waits for a key. Input
      * thread. Example: {@code 'mouse'} {@code "nv"} and a prompt in Insert mode: nothing is sent.
+     * Nothing either while Neovim waits for the rest of a command, as for a click in the text
+     * ({@link KeyInput#mouse}): the click would be taken as that command's next key.
      */
     private void gridMouse(int grid, String button, String action, String modifier, int row, int col)
             throws Exception {
         // The mode first: its answer comes after any 'mouse' report Neovim sent before it, so a
         // mapping on the press that changed 'mouse' counts for its release.
-        String mode = await(api.getMode()).mode();
-        if (MouseOption.allows(mouseOption, mode)) {
+        Mode mode = await(api.getMode());
+        if (!mode.blocking() && MouseOption.allows(mouseOption, mode.mode())) {
             await(api.inputMouse(button, action, modifier, grid, row, col));
         }
     }
@@ -1195,7 +1209,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * @param modifier Neovim's modifier letters ({@code "S"}, {@code "C"}, {@code "A"}), or {@code ""}
      */
     public void commandWindowMouseAsync(String button, String action, String modifier, int row, int col) {
-        submit("command-line window mouse " + button + " " + action, Level.FINE, () -> {
+        submitPastHeld("command-line window mouse " + button + " " + action, Level.FINE, () -> {
             int grid = commandWindowGrid;
             if (grid != -1) {
                 gridMouse(grid, button, action, modifier, row, col);
@@ -1483,6 +1497,23 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     @Override
     public void removeUnattachedChangeListener(DocumentBuffer buffer, Consumer<BufferChange> listener) {
         unattachedListeners.remove(buffer, listener);
+        editorLetGo.remove(buffer);
+    }
+
+    @Override
+    public void setEditorMirrors(DocumentBuffer buffer, boolean mirrors) {
+        if (mirrors) {
+            // Queued, so that it stays behind held work: until the attach has run, a key finishing a
+            // command in this buffer has no listening synchronizer, and takes the unattached route.
+            submit("the editor mirrors its document", Level.FINE, () -> editorLetGo.remove(buffer));
+        } else {
+            editorLetGo.add(buffer);
+        }
+    }
+
+    @Override
+    public boolean isHoldingDocumentWork() {
+        return documentWorkWaiting;
     }
 
     /**
@@ -2056,7 +2087,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     // ---- asynchronous entry points (safe from the UI thread) ----
 
-    /** Runs attach-time setup (document push, initial cursor) on the input thread. */
+    /** Runs attach-time setup (document push, initial cursor) on the input thread ({@link #runAsync}). */
     public void runAttachSetup(Runnable work) {
         runAsync("attach setup", work);
     }
@@ -2065,10 +2096,24 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * Runs {@code work} on the input thread, after every key and command queued before it. For
      * blocking calls from editor code, such as pushing the document.
      *
+     * <p><b>While Neovim waits for the rest of a command it is held</b>, with all work queued after
+     * it but the keys ({@link #submit}). As in Neovim, the command stays in the window it was typed
+     * in and the next key finishes it there; then Neovim moves to the new editor, before the key
+     * after that. Example: {@code r} in one editor, a switch to another, {@code Q} replaces the
+     * character in the first, and {@code x} deletes one in the second. Run at once, this would wait
+     * for an answer Neovim gives only after the key queued behind it, and then fail.
+     *
      * @param what short description for the log, should {@code work} fail
      */
     public void runAsync(String what, Runnable work) {
-        submit(what, Level.WARNING, work::run);
+        submit(what, Level.WARNING, () -> {
+            if (isBlocked()) {
+                documentWorkWaiting = true;
+                held.add(new Held(what, work::run));
+            } else {
+                work.run();
+            }
+        });
     }
 
     /** Queues one key (Neovim notation) for ordered processing. */
@@ -2076,7 +2121,26 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         keyInput.keyQueued(); // before the submit, so a hand-back sees it (KeyInput#handBackToEclipse)
         // No key in the label: a failure logs it at WARNING, into Eclipse's Error Log, and the key
         // may be part of a password typed into inputsecret() (KeyInput#input logs it at FINE).
-        submit("input of a key", Level.WARNING, () -> keyInput.inputQueued(keys));
+        submitPastHeld("input of a key", Level.WARNING, () -> keyInput.inputQueued(keys));
+    }
+
+    /**
+     * Abandons an open {@code :}, {@code /} or {@code ?} line with {@code <C-c>}, for a click in the
+     * text or the keyboard leaving, in order with the keys. <b>Nothing while Neovim waits for the
+     * rest of a command on that line</b>, read here on the input thread: after {@code Ctrl-V} the
+     * {@code <C-c>} would be typed into the line, and after {@code Ctrl-R} it would cancel the line
+     * though the wait was all it should end. The line stays, and the next key finishes the command.
+     */
+    public void abandonLineAsync() {
+        keyInput.keyQueued(); // before the submit, as for inputAsync
+        submitPastHeld("abandon the command line", Level.WARNING, () -> {
+            if (isBlocked()) {
+                keyInput.keyDropped();
+                LOG.fine("The command line stays: Neovim waits for the rest of a command");
+                return;
+            }
+            keyInput.inputQueued("<C-c>");
+        });
     }
 
     /**
@@ -2087,7 +2151,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     public void mouseAsync(MouseInput event) {
         if (event.action() == MouseInput.Action.DRAG) {
             if (pendingDrag.offer(event)) {
-                submit("mouse drag", Level.FINE, () -> {
+                submitPastHeld("mouse drag", Level.FINE, () -> {
                     MouseInput latest = pendingDrag.take();
                     if (latest != null) {
                         keyInput.mouse(latest);
@@ -2096,7 +2160,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             }
             return;
         }
-        submit("mouse " + event.action().luaName(), Level.FINE, () -> keyInput.mouse(event));
+        submitPastHeld("mouse " + event.action().luaName(), Level.FINE, () -> keyInput.mouse(event));
     }
 
     /** Moves the Neovim cursor (e.g. after a mouse click in Eclipse). */
@@ -2247,7 +2311,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     @Override
     public void completeInNeovimAsync(InsertReplay.SyncPoint sync, String keys) {
-        keyInput.handOverCompletion(task -> submit(keys + " (completion) after the typed text", Level.WARNING, task),
+        keyInput.handOverCompletion(task -> submitPastHeld(keys + " (completion) after the typed text", Level.WARNING, task),
                 () -> keyInput.syncInsertThenComplete(sync, keys));
     }
 
@@ -2282,10 +2346,43 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * float stays, and an insert Neovim carried out of {@code win} ends. -1: only the one
      * the cursor is in. Example: a picker's prompt open in a page, a click in the code: the
      * prompt closes, though Neovim is in the code's window by the time this runs.
+     *
+     * <p><b>Nothing while Neovim waits for the rest of a command</b> ({@code Ctrl-W}, {@code f}), as
+     * losing the focus changes nothing in a terminal: the float stays, and the next key finishes
+     * the command. Neovim would answer only after that key, which is queued behind this, and held
+     * until then this would act on what the key began ({@link #leaveFloatWithLineAsync}). No key is
+     * sent to end the wait: after {@code r} or {@code Ctrl-V}, {@code <C-c>} and {@code <Esc>} are
+     * typed into the text.
      */
     public void leaveFloatAsync(int win) {
-        submit("leave the floating window", Level.FINE,
-                () -> await(api.execLua(LuaScripts.LEAVE_FLOAT, List.of(String.valueOf(win)))));
+        submitPastHeld("leave the floating window", Level.FINE, () -> {
+            if (isBlocked()) {
+                LOG.fine("The floating window stays: Neovim waits for the rest of a command");
+                return;
+            }
+            await(api.execLua(LuaScripts.LEAVE_FLOAT, List.of(String.valueOf(win))));
+        });
+    }
+
+    /**
+     * As {@link #leaveFloatAsync()}, for a press in the text that stays Eclipse's: a {@code :} line
+     * opened from the float goes too, and one opened from the editor stays
+     * ({@link LuaScripts#LEAVE_FLOAT_WITH_LINE}). On the input thread, after the keys typed before.
+     *
+     * <p><b>Dropped while Neovim waits for the rest of a command</b>, as a click in the text is
+     * ({@link KeyInput#mouse}). Neovim would answer only after the next key, which is queued behind
+     * this; and held until then, it would act on what that key began. Example: a picker, {@code
+     * Ctrl-W}, a right click, {@code :d<CR>}: the {@code :} ends the wait, a held click would cancel
+     * that line and close the picker, and {@code d<CR>} would delete lines of the document.
+     */
+    public void leaveFloatWithLineAsync() {
+        submitPastHeld("leave the floating window and its line", Level.FINE, () -> {
+            if (isBlocked()) {
+                LOG.fine("A press left to Eclipse dropped: Neovim waits for the rest of a command");
+                return;
+            }
+            await(api.execLua(LuaScripts.LEAVE_FLOAT_WITH_LINE, List.of()));
+        });
     }
 
     /**
@@ -2314,7 +2411,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * from this moment ({@code KeyInput#handOver}). UI thread.
      */
     private void handOver(String what, InputThread.Task work) {
-        keyInput.handOver(task -> submit(what, Level.WARNING, task), work);
+        keyInput.handOver(task -> submitPastHeld(what, Level.WARNING, task), work);
     }
 
     /**
@@ -2327,17 +2424,59 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private boolean submit(String what, Level failureLevel, InputThread.Task work) {
         return inputThread.submit(what, failureLevel, () -> {
             try {
-                work.run();
-                if (gridPending && !closed) {
-                    resizeGrid(); // skipped while Neovim waited; this work may have ended the wait
-                }
-                if (!held.isEmpty() && !closed && !isBlocked()) {
-                    runHeld(); // the same for work held by whenAnswering
+                releaseHeldIfWaitEnded();
+                if (documentWorkWaiting) {
+                    held.add(new Held(what, work)); // behind the document work, which it follows
+                } else {
+                    runThenHeld(work);
                 }
             } finally {
                 events.inputHandled();
             }
         });
+    }
+
+    /**
+     * {@link #submit} for what must run even while document work waits ({@link #runAsync}): the
+     * keys, one of which ends the wait, and the mouse and leaving, which do nothing while Neovim
+     * waits and must not be held to act on what later keys began.
+     */
+    private boolean submitPastHeld(String what, Level failureLevel, InputThread.Task work) {
+        return inputThread.submit(what, failureLevel, () -> {
+            try {
+                releaseHeldIfWaitEnded();
+                runThenHeld(work);
+            } finally {
+                events.inputHandled();
+            }
+        });
+    }
+
+    /**
+     * Runs the held document work once Neovim no longer waits. Asked before each piece of work too:
+     * a wait can end with no key. Example: {@code <Space>} of a mapping, a switch to another editor,
+     * {@code 'timeoutlen'} passes; the next key belongs to the new editor, so the switch goes first.
+     */
+    private void releaseHeldIfWaitEnded() {
+        if (documentWorkWaiting && !closed && !isBlocked()) {
+            documentWorkWaiting = false;
+            runHeld();
+        }
+    }
+
+    /** Runs {@code work}, then what waited for Neovim to answer, if it answers now. Input thread. */
+    private void runThenHeld(InputThread.Task work) throws Exception {
+        work.run();
+        releaseHeldIfWaitEnded();
+        if (documentWorkWaiting) {
+            return;
+        }
+        if (gridPending && !closed) {
+            resizeGrid(); // skipped while Neovim waited; this work may have ended the wait
+        }
+        if (!held.isEmpty() && !closed && !isBlocked()) {
+            runHeld(); // the same for work held by whenAnswering
+        }
     }
 
     /**
@@ -2375,7 +2514,12 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /** Runs the held work in order; a failure is logged and does not stop the rest. Input thread. */
     private void runHeld() {
-        for (Held h = held.poll(); h != null; h = held.poll()) {
+        for (Held h = held.peek(); h != null; h = held.peek()) {
+            if (isBlocked()) { // the work before this one left Neovim waiting: the rest waits with it
+                documentWorkWaiting = true;
+                return;
+            }
+            held.poll();
             try {
                 h.work().run();
             } catch (Exception e) {
@@ -2461,7 +2605,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (document != null) {
                 document.markOutOfSync(); // the next attach pushes again (DocumentBuffer.syncedStamp)
             }
-            if (buffers.isAttached(bufnr)) {
+            if (buffers.isAttached(bufnr) && (document == null || !editorLetGo.contains(document))) {
                 state.dispatchBufferChange(firstLine, lastLine, newLines);
                 return;
             }

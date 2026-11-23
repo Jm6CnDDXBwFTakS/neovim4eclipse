@@ -240,8 +240,9 @@ or font (`Ctrl+=`) changes `&lines` and `&columns` with it.
 The editor scrolls where Neovim's window scrolls: `Ctrl-E`, `Ctrl-Y`, `Ctrl-D`, `zz`, `zt`, `zb`, a
 jump such as `150G`, and your `'scrolloff'`, which keeps lines around the cursor in the editor too.
 In normal and visual mode the mouse wheel and the touchpad scroll Neovim's window, by as many lines
-as your system reports (its speed and momentum, so as far as Eclipse would scroll; Neovim's
-`'mousescroll'` is not used), and the cursor is dragged into the view as `Ctrl-E` drags it,
+as your system reports (its speed and momentum, so as far as Eclipse would scroll). Neovim's
+`'mouse'` and `'mousescroll'` are not used over the text, so the wheel scrolls even with
+`set mouse=`, as in any Eclipse editor. The cursor is dragged into the view as `Ctrl-E` drags it,
 `'scrolloff'` lines from the edge: the caret moves when you scroll it off the screen, as in Vim.
 The wheel with Ctrl or Shift held, and the sideways wheel, stay Eclipse's. Scrolling the editor otherwise (the
 scroll bar, Eclipse showing a search hit) scrolls Neovim's window to the same line and drags the
@@ -342,6 +343,9 @@ on a pipe or an endless `/proc` file is Neovim's own `:edit`, which keeps waitin
 does in a terminal.
 
 After a restart, Eclipse brings the stacks back as it does any layout you dragged.
+
+A command half typed when you switch editors (after `r` or `f`) stays in the editor you typed it in,
+as in Neovim: your next key finishes it there, and the keys after it go to the new editor.
 
 ## Command line (`:`, `/`, `?`)
 
@@ -648,7 +652,7 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   with a second `K`, with Neovim's own `K`: `vim.g.neovim4eclipse_ide_keys = 0`) is drawn with Neovim's cursor in it, a bar in Insert mode, and the editor's
   caret is hidden meanwhile: your keys go to that window, as in Neovim, Esc and Enter included.
   Leaving the editor closes it, its insert ended: another editor or view, a click in the editor's
-  text (which then lands there), Eclipse mode, closing the editor. Switching to another application keeps it. A
+  text (a left click then lands there; a right click or Ctrl+click goes on to Eclipse), Eclipse mode, closing the editor. While Neovim waits for the rest of a command (`Ctrl-W`, `f`), a click or leaving the editor leaves the window open, as losing focus changes nothing in a terminal, and your next key finishes the command. Switching to another application keeps it. A
   window on a file with unsaved changes closes and the changes stay, in a hidden buffer (`:ls`);
   if closing would unload or wipe that buffer (`'bufhidden'`, `'nohidden'`), the window stays,
   drawn, and Neovim leaves it; closing the editor then closes it, the buffer kept hidden.

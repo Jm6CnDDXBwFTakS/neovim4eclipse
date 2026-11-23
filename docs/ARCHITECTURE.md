@@ -615,6 +615,15 @@ the page editor ── keys, mouse, size ──▶ NeovimSession (the editing Ne
 
 Never call `await` on the UI thread for key handling.
 
+While Neovim waits for the rest of a command (`r`, `f`, `Ctrl-W`) it answers only `nvim_get_mode` and
+`nvim_input`, so an `await` on the input thread would hold the key that ends the wait. Document work
+(`NeovimSession.runAsync`: an editor's detach and attach, a push) is held then, with everything queued
+after it but the keys, the mouse and leaving a float. The next key finishes the command in the window it
+was typed in, as in Neovim, and the held work runs right after it, or, when the wait ended with no key (a
+mapping's `'timeoutlen'`), before the next piece of work. The mouse and leaving a float are dropped in
+that state and send no key: held, they would act on what the next key began. An Eclipse change that waits
+for its push makes Neovim's line numbers stale, so Neovim's change is dropped and the push restores it.
+
 Two bounded exceptions, each waiting on purpose:
 
 - **Starting the editing Neovim.** The first editor's attach, and the next one after Neovim quit

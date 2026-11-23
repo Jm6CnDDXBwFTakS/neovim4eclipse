@@ -89,6 +89,8 @@ public final class UnattachedDocumentSync implements AutoCloseable {
     /** A push is queued on the input thread and has not read the document yet. */
     private final AtomicBoolean pushPending = new AtomicBoolean(false);
     private volatile boolean closed;
+    /** Eclipse changed the document and its push has not read it yet. UI and input threads. */
+    private volatile boolean eclipseChangeUnpushed;
 
     /** @param ui the UI thread, where the document is read and changed ({@code SwtUiExecutor} in the editor) */
     public UnattachedDocumentSync(IDocument document, DocumentBuffer buffer, DocumentBufferPort session,
@@ -112,6 +114,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
     public void setAttached(boolean attached) {
         boolean detached = this.attached && !attached;
         this.attached = attached;
+        session.setEditorMirrors(buffer, attached);
         if (detached) {
             pushSoon();
         }
@@ -123,6 +126,9 @@ public final class UnattachedDocumentSync implements AutoCloseable {
     private void onNeovimChange(BufferChange change) {
         if (closed || !ui.isAvailable()) {
             return;
+        }
+        if (eclipseChangeUnpushed && session.isHoldingDocumentWork()) {
+            return; // its line numbers are from before Eclipse's change; the held push restores Neovim
         }
         ui.asyncExec(() -> apply(change));
     }
@@ -199,6 +205,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         if (applyingNeovim || attached || closed) {
             return;
         }
+        eclipseChangeUnpushed = true;
         pushSoon();
     }
 
@@ -212,6 +219,7 @@ public final class UnattachedDocumentSync implements AutoCloseable {
         }
         session.runAsync("push " + describe() + " to its buffer", () -> {
             pushPending.set(false); // before reading: a change from now on queues another push
+            eclipseChangeUnpushed = false;
             if (closed) {
                 return;
             }

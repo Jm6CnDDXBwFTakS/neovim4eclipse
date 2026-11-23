@@ -43,7 +43,8 @@ The Neovim side:
   than `TabClosedPre` because it covers that and any other close. A `WinNew` net closes any window
   the plug-in did not open that is neither floating nor special, and also the quickfix, location
   list and preview windows: Eclipse cannot show them, and in the editor's tab they took its rows,
-  so `H` and `L` no longer matched the editor. One on a file is opened as an Eclipse editor first
+  so `H` and `L` no longer matched the editor. A window `:noautocmd` opened, with no `WinNew`, is
+  found the same way as Neovim is about to wait for a key (`SafeState`). One on a file is opened as an Eclipse editor first
   ([SPLITS.md](SPLITS.md), "Refused"), so that a picker's `Ctrl-V` works. A floating window that opens with the focus (a
   picker's prompt, `:Lazy`) is left alone by the net: drawn with Neovim's cursor while the
   editor's caret is hidden, and leaving the editor closes it (`leave_float`). One the editor does

@@ -721,6 +721,26 @@ t.test('a split a plug-in opens in an editor\'s tab is closed again: the safety 
   t.ok(vim.v.errmsg:find('Window closed', 1, true), vim.v.errmsg)
 end)
 
+--- Lets the nets' checks for the windows opened so far run, so that none is pending below: one
+--- would find a window opened since, and a spec of another route to the net would prove nothing.
+local function earlier_checks_done()
+  local settled = false
+  vim.schedule(function() settled = true end)
+  t.wait_for('the earlier checks', function() return settled end)
+end
+
+t.test('a split made with :noautocmd is closed too, as Neovim is about to wait for a key', function()
+  local win = commands()
+  earlier_checks_done()
+  vim.v.errmsg = ''
+  vim.cmd('noautocmd split') -- no WinNew
+  t.eq(2, windows_in_tab())
+  vim.api.nvim_exec_autocmds('SafeState', {})
+  t.wait_for('the stray window to close', function() return windows_in_tab() == 1 end)
+  t.eq(win, vim.api.nvim_get_current_win(), "Neovim back in the editor's window")
+  t.ok(vim.v.errmsg:find('Window closed', 1, true), vim.v.errmsg)
+end)
+
 --- A file on disk, with three lines, for a plug-in's split to show.
 local function file_on_disk()
   local path = vim.fn.tempname() .. '.txt'
@@ -747,6 +767,32 @@ t.test("a plug-in's split of a file becomes an Eclipse split on the side Neovim 
     t.eq(1, windows_in_tab(), 'its window closed')
     t.eq(win, vim.api.nvim_get_current_win(), "Neovim back in the editor's window")
   end
+end)
+
+t.test('a file split made with :noautocmd becomes an Eclipse split too', function()
+  local win = commands()
+  earlier_checks_done()
+  local path = file_on_disk()
+  t.forget()
+  vim.cmd('noautocmd belowright split ' .. vim.fn.fnameescape(path))
+  vim.api.nvim_exec_autocmds('SafeState', {})
+  t.eq({ 'window', 'split', 'below', 'file' }, vim.list_slice(handed_over(1)[1], 1, 4))
+  t.eq(win, vim.api.nvim_get_current_win())
+end)
+
+t.test('a tab page on a file made with :noautocmd becomes an editor tab too', function()
+  local win = commands()
+  earlier_checks_done()
+  local path = file_on_disk()
+  vim.v.errmsg = ''
+  t.forget()
+  vim.cmd('noautocmd tabedit ' .. vim.fn.fnameescape(path))
+  vim.api.nvim_exec_autocmds('SafeState', {})
+  local words = handed_over(1)[1]
+  t.eq({ 'window', 'tab', 'file' }, vim.list_slice(words, 1, 3))
+  t.same_file(path, words[4])
+  t.eq(win, vim.api.nvim_get_current_win())
+  t.eq('', vim.v.errmsg, 'no "Window closed" message: the file went somewhere')
 end)
 
 t.test("a plug-in's tab page on a file becomes an editor tab", function()
@@ -825,9 +871,7 @@ local function in_second_editor()
   show(wa, a)
   show(wb, b)
   t.eq(wb, vim.api.nvim_get_current_win())
-  local settled = false
-  vim.schedule(function() settled = true end)
-  t.wait_for('the earlier checks', function() return settled end)
+  earlier_checks_done()
   t.forget()
   return wb
 end

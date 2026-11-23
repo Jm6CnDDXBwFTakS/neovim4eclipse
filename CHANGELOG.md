@@ -44,6 +44,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- Switching editors in the middle of a command (after `r` or `f`) no longer stalls the keyboard for
+  five seconds and leaves the new editor's text unsent. As in Neovim, the next key finishes the
+  command in the editor it was typed in, and the keys after it go to the new editor.
 - A floating window that is there only to dim the text below it (every cell blank and
   see-through, `'winblend'`), such as lazy.nvim's backdrop under `:Lazy` with LazyVim's colors,
   was drawn as a solid block over the whole editor. It is now left out, and `:Lazy`'s own window
