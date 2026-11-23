@@ -21,11 +21,13 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
  *   <li>On the session's input thread, after every key already queued, and, while Neovim waits for
  *       the rest of a command, after the key that finishes it ({@code NeovimSession.runAttachSetup}):
  *     <ol>
- *       <li>switch Neovim to the document's own buffer. If that fails, stop: pushing now would
- *           overwrite whatever buffer Neovim is in, another file's text and undo history;</li>
+ *       <li>attach the document's own buffer and window, and enter them, unless a plug-in's float
+ *           the editor draws keeps the keyboard as Neovim's start ends: every step below names
+ *           that buffer or window, and none uses the current one. If this fails, stop: there is no
+ *           buffer of the document to push into;</li>
  *       <li>set the tab width and indent options (a failure is only logged: Neovim then indents
  *           with its defaults);</li>
- *       <li>size Neovim's screen for the editor, measured on this window ({@link Neovim#fitScreen}),
+ *       <li>size Neovim's screen for the editor, measured on the document's window ({@link Neovim#fitScreen}),
  *           so that placing the cursor below scrolls Neovim's window for the editor's rows (a
  *           failure is only logged);</li>
  *       <li>push the document, unless neither it nor the buffer changed since the editor was
@@ -64,15 +66,18 @@ public final class DocumentPush {
         /** Runs {@code work} on the session's input thread, after everything queued before. */
         void queue(Runnable work);
 
-        /** Makes the document's buffer Neovim's current buffer. */
+        /**
+         * Attaches the document's buffer and window and enters them; Neovim stays in a plug-in's
+         * float only when one the editor draws keeps the keyboard as Neovim's start ends.
+         */
         void showDocumentBuffer() throws Exception;
 
-        /** Sets Neovim's {@code 'tabstop'} and indent options for the buffer. */
+        /** Sets Neovim's {@code 'tabstop'} and indent options for the document's buffer. */
         void setIndentation(int tabWidth, Indentation indentation) throws Exception;
 
         /**
-         * Sizes Neovim's screen for the editor, measured on the document's window, which is current
-         * now: done before the cursor is placed, so that Neovim scrolls its window for the
+         * Sizes Neovim's screen for the editor, measured on the document's window, also with Neovim
+         * in a float ({@code LuaScripts.WINDOWS}' {@code editor_window}): done before the cursor is placed, so that Neovim scrolls its window for the
          * editor's rows, not for an earlier screen's. Nothing by default.
          */
         default void fitScreen() throws Exception {

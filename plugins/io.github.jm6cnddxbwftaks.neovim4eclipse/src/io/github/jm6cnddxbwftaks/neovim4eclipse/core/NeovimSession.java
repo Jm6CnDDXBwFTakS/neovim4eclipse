@@ -1829,10 +1829,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * Measures Neovim's screen again for the current window at the editor size last given
+     * Measures Neovim's screen again for the editor's window at the editor size last given
      * ({@link #setEditorSizeAsync}), and resizes it if that changed: the columns beside the text
-     * (line numbers, signs) are the window's own, so they are measured once the document's window
-     * is current. The attach's push runs this right after switching to that window and before
+     * (line numbers, signs) are the window's own, so they are measured on the document's window,
+     * also with Neovim in a float ({@code LuaScripts.WINDOWS}' {@code editor_window}). The attach's
+     * push runs this right after attaching that window and before
      * placing the cursor ({@code sync/DocumentPush}), so that the cursor lands in a window of the
      * editor's size. Nothing before any size was given, or while a page
      * editor has the focus: the screen is the page's then, as for {@link #setEditorSizeAsync}'s
