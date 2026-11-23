@@ -1816,11 +1816,6 @@ final class LuaScripts {
                   say_at_start(M.float_kept_message(name, AT_START))
                 end
               end
-              -- Neovim stays in the editor's window: an insert begun in the float ends here, also
-              -- when the float closed itself on leaving, or its keys would be typed into the document.
-              if insert_float == float and vim.api.nvim_get_mode().mode:match('^[iR]') then
-                stop_insert_in_place()
-              end
             end
 
             function M.show(win, buf)
@@ -1841,6 +1836,13 @@ final class LuaScripts {
               -- After entering win: a float moved while current would take Neovim back to its tab page.
               M.bring_start_floats(win, vim.v.vim_did_enter ~= 1 or pending_start_float ~= nil)
               settle_start_float(win)
+              -- One check, where every show ends, from Neovim's state: in the editor's window, an insert
+              -- begun in a float (any float, the one waiting or not, closed or left) ends here, or
+              -- the keys meant for it would be typed into the document.
+              if insert_float ~= nil and vim.api.nvim_get_current_win() == win
+                  and vim.api.nvim_get_mode().mode:match('^[iR]') then
+                stop_insert_in_place()
+              end
               return win
             end
 
