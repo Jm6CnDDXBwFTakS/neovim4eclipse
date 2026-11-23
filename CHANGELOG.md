@@ -21,8 +21,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   closes itself, `:Lazy` stays drawn. Eclipse mode closes it. Before, such a
   window was closed at once with a message. A window that has the keyboard while Neovim is still
   starting (lazy.nvim's installer, while it installs missing plug-ins) is drawn over the editor,
-  with its progress, and closed when the start is over, with a message (`:Lazy` opens it again); the keys typed meanwhile now always go to the
-  file, where before some could reach the installer's window. One the editor cannot draw (past the limits in
+  with its progress, and keeps the keyboard when the start is over, as in a terminal, so the keys
+  typed meanwhile go to it. An input method composes at such a window's cursor and no longer
+  writes into the file. One the editor cannot draw (past the limits in
   the user guide's *Floating windows*), or that its plug-in hides, is closed with a message.
 - Clicks and the wheel on a plug-in's floating window now go to Neovim, as in a terminal: a click
   on Telescope's results selects the row, a double click opens it, and the wheel scrolls the

@@ -57,11 +57,11 @@ The Neovim side:
   start) is left and a plain window is made current: left current, it got the home buffer. Until
   Neovim has started, each editor shown brings the plug-ins' floats of other tab pages along
   (`bring_start_floats`, from `M.show`), so the installer is drawn over the editor, not left in
-  the home window's tab page, which no editor shows. The float is then closed with a message at the end of Neovim's start (`UIEnter`, after every
-  `VimEnter`), with any plug-in's float that has the keyboard then, and Neovim goes to the window
-  Eclipse has attached, asked of Eclipse (`CLOSE_START_FLOAT`, `close_start_floats`), so that the
-  keys typed while Neovim starts, which wait in its input until then, stay the file's; its
-  plug-in's command (`:Lazy`) opens it again.
+  the home window's tab page, which no editor shows. At the end of Neovim's start (`UIEnter`, after every
+  `VimEnter`) a float in the tab page of the window Eclipse has attached, asked of Eclipse, and not
+  hidden keeps the keyboard, so that the keys typed while Neovim starts, which wait in its input
+  until then, go to it as in a terminal (`CLOSE_START_FLOAT`, `close_start_floats`). One the editor
+  does not draw is closed with a message, and Neovim goes to the attached window.
   Not caught by the net: a window opened with `noautocmd` (no `WinNew`); floats are not the net's
   (`close_undrawn` is asked at each redraw, whatever opened them). The net cannot use the current window (in `WinNew`
   it is still the old one, so a net built on it closed the editor's own window); the module keeps

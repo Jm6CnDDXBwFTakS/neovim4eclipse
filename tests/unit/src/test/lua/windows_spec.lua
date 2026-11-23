@@ -1489,9 +1489,10 @@ t.test("while Neovim starts, the plug-ins' floats come along to the editor shown
   vim.api.nvim_win_close(on_window, true)
 end)
 
-t.test('a floating window the config left the focus in is left before the home buffer goes anywhere, then closed', function()
+t.test('a floating window the config left the focus in is left before the home buffer goes anywhere, then settled', function()
   -- The session's order: LEAVE_START_FLOAT, then SHOW_BUFFER with the home buffer, then WINDOWS;
-  -- then CLOSE_START_FLOAT, once ui2 shows messages: here Neovim has entered, so it closes at once.
+  -- then CLOSE_START_FLOAT, once ui2 shows messages: here Neovim has entered, so it acts at once.
+  -- Drawn, the float gets the keyboard back, as in a terminal; hidden, it is closed, with a message.
   t.setup()
   local plain = vim.api.nvim_get_current_win()
   local buf = buffer(1)
@@ -1506,8 +1507,16 @@ t.test('a floating window the config left the focus in is left before the home b
   t.eq(plain, home, 'the plain window is the home window')
   t.eq(home_buf, vim.api.nvim_win_get_buf(home), 'and shows the home buffer')
   vim.v.errmsg = ''
+  t.eq(false, t.run('CLOSE_START_FLOAT', tostring(float)), 'drawn: nothing closed')
+  t.eq(home, vim.api.nvim_get_current_win(), 'no editor yet: it waits for the first')
+  t.eq('', vim.v.errmsg, 'nothing to say')
+  show(home, home_buf)
+  t.eq(float, vim.api.nvim_get_current_win(), 'the first editor gives it the keyboard')
+  vim.api.nvim_set_current_win(home)
+  vim.api.nvim_win_set_config(float, { hide = true })
   t.eq(true, t.run('CLOSE_START_FLOAT', tostring(float)))
   t.ok(not vim.api.nvim_win_is_valid(float))
+  t.eq(home, vim.api.nvim_get_current_win())
   local windows = package.loaded['neovim4eclipse.windows']
   local message = windows.float_closed_message('lazy', windows.AT_START)
   t.ok(not message:find(':Lazy', 1, true), 'said of any plug-in, so it names no command of one')
@@ -1568,10 +1577,10 @@ t.test("an undrawn float counts as closed though a plug-in's close handler fails
 end)
 
 t.test('closing the floats that have the keyboard at start never discards a changed buffer', function()
-  -- Both kinds close_start_floats closes, the float the config left the focus in (left) and the
-  -- plug-in's float Neovim is in, each on a file of the user's with unsaved changes that closing
-  -- would wipe ('bufhidden' wipe): Neovim refuses, so both stay, their changes kept, and Neovim
-  -- goes on in a plain window.
+  -- Both kinds close_start_floats closes when the editor does not draw them (here hidden), the
+  -- float the config left the focus in (left) and the plug-in's float Neovim is in, each on a file
+  -- of the user's with unsaved changes that closing would wipe ('bufhidden' wipe): Neovim refuses,
+  -- so both stay, their changes kept, and Neovim goes on in a plain window.
   t.setup()
   local function changed_file()
     local buf = vim.api.nvim_create_buf(true, false)
@@ -1585,11 +1594,13 @@ t.test('closing the floats that have the keyboard at start never discards a chan
   local left_buf = changed_file()
   local left = vim.api.nvim_open_win(left_buf, true, float_at)
   t.eq(left, t.run('LEAVE_START_FLOAT'))
+  vim.api.nvim_win_set_config(left, { hide = true })
   local home_buf = vim.api.nvim_create_buf(false, true)
   t.run('SHOW_BUFFER', tostring(home_buf))
   t.run('WINDOWS', tostring(home_buf))
   local current_buf = changed_file()
   local current = vim.api.nvim_open_win(current_buf, true, float_at)
+  vim.api.nvim_win_set_config(current, { hide = true })
   t.eq(false, t.run('CLOSE_START_FLOAT', tostring(left)), 'nothing closed')
   for _, f in ipairs({ { left, left_buf }, { current, current_buf } }) do
     t.ok(vim.api.nvim_win_is_valid(f[1]), 'the float stays')
@@ -1600,6 +1611,61 @@ t.test('closing the floats that have the keyboard at start never discards a chan
   for _, f in ipairs({ left, current }) do
     vim.api.nvim_win_close(f, true)
   end
+end)
+
+t.test('a float left at the start goes along with a first editor in a tab page of its own', function()
+  -- The usual start: Neovim has entered when CLOSE_START_FLOAT runs, and no editor is shown yet.
+  -- One on the screen comes along and gets the keyboard; one hanging on a window cannot, so it
+  -- would be undrawn: it is closed, with a message.
+  for _, case in ipairs({ { config = { relative = 'editor' }, kept = true }, { config = { relative = 'win' }, kept = false } }) do
+    t.setup()
+    local buf = buffer(1)
+    vim.bo[buf].filetype = 'lazy'
+    local float = vim.api.nvim_open_win(buf, true, vim.tbl_extend('force',
+      { row = 1, col = 1, width = 5, height = 1 }, case.config))
+    t.eq(float, t.run('LEAVE_START_FLOAT'))
+    local home_buf = vim.api.nvim_create_buf(false, true)
+    t.run('SHOW_BUFFER', tostring(home_buf))
+    t.run('WINDOWS', tostring(home_buf))
+    t.eq(false, t.run('CLOSE_START_FLOAT', tostring(float)))
+    vim.v.errmsg = ''
+    local a = buffer(3)
+    local win = open(a)
+    show(win, a)
+    if case.kept then
+      t.eq(float, vim.api.nvim_get_current_win(), 'in the float, as in a terminal')
+      t.eq(vim.api.nvim_win_get_tabpage(win), vim.api.nvim_win_get_tabpage(float), "in the editor's tab page")
+      vim.api.nvim_win_close(float, true)
+    else
+      t.ok(not vim.api.nvim_win_is_valid(float), 'closed: the editor could not draw it')
+      t.eq(win, vim.api.nvim_get_current_win())
+      t.wait_for('the message', function() return vim.v.errmsg:find('Closed the floating window', 1, true) ~= nil end)
+    end
+  end
+end)
+
+t.test('a start float in Insert mode that closes on leaving does not carry its insert into the document', function()
+  t.setup()
+  local home_buf = vim.api.nvim_create_buf(false, true)
+  t.run('SHOW_BUFFER', tostring(home_buf))
+  t.run('WINDOWS', tostring(home_buf))
+  local float_buf = buffer(1)
+  local float = vim.api.nvim_open_win(float_buf, true, { relative = 'editor', row = 1, col = 1, width = 9, height = 1 })
+  vim.api.nvim_create_autocmd('BufLeave', { buffer = float_buf, once = true, nested = true,
+    callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, float, true) end) end })
+  t.eq(false, t.run('CLOSE_START_FLOAT', '0'))
+  local doc = buffer(3)
+  -- The first editor is shown during the float's insert; the z after it would be typed into the
+  -- document if that insert went on there.
+  vim.keymap.set('i', '<F6>', function()
+    local win = open(doc)
+    vim.api.nvim_win_close(float, true) -- closed by its plug-in as Neovim leaves it
+    show(win, doc)
+  end)
+  vim.api.nvim_feedkeys(vim.keycode('i<F6>z<Esc>'), 'mx', false)
+  vim.keymap.del('i', '<F6>')
+  t.eq({ 'line 1', 'line 2', 'line 3' }, vim.api.nvim_buf_get_lines(doc, 0, -1, false))
+  t.eq('n', vim.api.nvim_get_mode().mode)
 end)
 
 t.test('moving out of a float leaves it open, unless its plug-in closes it on leaving', function()

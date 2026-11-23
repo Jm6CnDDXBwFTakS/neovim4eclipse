@@ -23,6 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
@@ -319,15 +320,48 @@ class NeovimWindowsIntegrationTest {
             + " vim.g.n4e_start_float = vim.api.nvim_open_win(b, true, {relative = 'editor', row = 1, col = 1, width = 20, height = 3})";
 
     /**
-     * The float the config left the focus in at start (lazy.nvim's installer) is closed as Neovim
-     * starts, and Neovim says why (ui2, started before the message): entered later in the first
-     * editor, it would take the keys typed while Neovim started. A plain window is current, the
-     * home window with the home buffer.
+     * The float the config left the focus in at start (lazy.nvim's installer) keeps the keyboard, as
+     * in a terminal: the plug-in took Neovim out of it only to set up its windows. With no editor
+     * shown yet it waits, and the first editor, in a tab page of its own, brings it along. The
+     * first editor's document then goes into its own buffer, not the float's, editable or not
+     * (lazy.nvim's is not).
+     */
+    @ParameterizedTest(name = "read-only float: {0}")
+    @ValueSource(booleans = { false, true })
+    void aFloatFocusedAtTheStartKeepsTheKeyboard(boolean readOnly, @TempDir Path dir) throws Exception {
+        TestNeovim.require();
+        String open = OPEN_START_FLOAT + "; vim.api.nvim_buf_set_lines(b, 0, -1, false, { 'float text' })"
+                + (readOnly ? "; vim.bo[b].modifiable = false" : "");
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "-c", open))) {
+            EditorWindow editor = new EditorWindow();
+            DocumentBuffer document = new DocumentBuffer(dir.resolve("a.txt").toString());
+            s.showWindow(document, editor, "");
+            waitFor(() -> currentWin(s) == number(s, "return vim.g.n4e_start_float"), "Neovim back in the float");
+            assertEquals(number(s, "return vim.api.nvim_win_get_tabpage(" + editor.winid() + ")"),
+                    number(s, "return vim.api.nvim_win_get_tabpage(vim.g.n4e_start_float)"), "in the editor's tab page");
+            waitFor(() -> drawnFloats(s).contains(number(s, "return vim.g.n4e_start_float")), "and drawn");
+            s.setIndentation(3, new Indentation(false, 3, false));
+            s.setBufferLines(List.of("document"));
+            assertEquals(List.of("document"), s.getBufferLines(), "the document is in its own buffer");
+            assertEquals(List.of("float text"), s.lua("return vim.api.nvim_buf_get_lines("
+                    + "vim.api.nvim_win_get_buf(vim.g.n4e_start_float), 0, -1, false)"), "the float keeps its text");
+            assertEquals(3, number(s, "return vim.bo[" + document.bufnr + "].tabstop"));
+            assertNotEquals(3, number(s, "return vim.bo[vim.api.nvim_win_get_buf(vim.g.n4e_start_float)].tabstop"));
+            assertEquals(number(s, "return vim.g.n4e_start_float"), currentWin(s), "and the keyboard");
+            assertFalse(Ui2Text.shown(s).contains(startMessage(s)), "nothing closed, nothing to say");
+        }
+    }
+
+    /**
+     * A float the editor does not draw (here hidden by its plug-in) is closed as Neovim starts, and
+     * Neovim says why (ui2, started before the message): keys go only to a window Eclipse draws. A
+     * plain window is current, the home window with the home buffer.
      */
     @Test
-    void aFloatFocusedAtTheStartIsClosedAndNeovimSaysWhy() throws Exception {
+    void aHiddenFloatFocusedAtTheStartIsClosedAndNeovimSaysWhy() throws Exception {
         TestNeovim.require();
-        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "-c", OPEN_START_FLOAT))) {
+        String hidden = OPEN_START_FLOAT + "; vim.api.nvim_win_set_config(vim.g.n4e_start_float, { hide = true })";
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean", "-c", hidden))) {
             // Closed at once, or at UIEnter should Neovim's start not be over yet.
             waitFor(() -> number(s, "return vim.api.nvim_win_is_valid(vim.g.n4e_start_float) and 1 or 0") == 0, "the float closed");
             assertEquals("", s.lua("return vim.api.nvim_win_get_config(0).relative"), "a plain window is current");
@@ -484,19 +518,23 @@ class NeovimWindowsIntegrationTest {
             int installer = windowOf(s, "lazy");
             waitFor(() -> drawnFloats(s).contains(installer), "lazy.nvim's window drawn over the editor: " + drawnFloats(s));
             assertEquals(0, number(s, "return vim.v.vim_did_enter"), "while Neovim still starts");
-            s.inputAsync("x");
-            s.runAsync("the start's end", () -> { // on the input thread after the x
+            s.inputAsync("j");
+            s.runAsync("the start's end", () -> { // on the input thread after the j
                 try {
                     s.lua("vim.g.installer_go = 1");
                 } catch (Exception e) {
                     throw new IllegalStateException(e);
                 }
             });
-            waitFor(() -> List.of("bc").equals(s.getBufferLines()), "the key went to the document");
-            assertEquals(editor.winid(), currentWin(s), "Neovim in the editor's window");
-            assertEquals(0, windowOf(s, "lazy"), "lazy.nvim's window closed");
-            waitFor(() -> Ui2Text.shown(s).contains(startMessage(s)), "the message, shown by Neovim: " + Ui2Text.shown(s));
-            assertEquals(1, number(s, "return vim.g.demo_loaded or 0"), "lazy.nvim installed the plug-in and loaded it");
+            waitFor(() -> number(s, "return vim.v.vim_did_enter") == 1, "Neovim's start over");
+            waitFor(() -> windowOf(s, "lazy") != 0 && windowOf(s, "lazy") == currentWin(s),
+                    "Neovim in lazy.nvim's window, as in a terminal");
+            waitFor(() -> number(s, "return vim.g.demo_loaded or 0") == 1, "lazy.nvim installed the plug-in and loaded it");
+            NeovimBarrier.pass(s);
+            assertEquals(List.of("abc"), s.getBufferLines(), "the key went to lazy.nvim's window, not the document");
+            s.inputAsync("q"); // lazy.nvim's own key
+            waitFor(() -> windowOf(s, "lazy") == 0, "q closed lazy.nvim's window");
+            waitFor(() -> currentWin(s) == editor.winid(), "Neovim back in the editor's window");
         }
     }
 
@@ -545,18 +583,16 @@ class NeovimWindowsIntegrationTest {
      * not keep a window entered before its start is over), and waits with vim.wait, in rounds,
      * each round showing the window again (made anew if it was closed). The session's start is
      * over before Neovim's, so the keys a user types meanwhile reach Neovim while that window has
-     * the focus; they wait in Neovim's input, read only once the start is over. By then the window
-     * is closed and Neovim is in the editor's window (WINDOWS' close_start_floats), whatever the
-     * config's VimEnter did: the keys go to the document, and Neovim says why. The window stays
-     * in the tab page it opened in, not the editor's, and its VimEnter takes Neovim there. With
-     * lateVimEnter, round 3 also sets up a VimEnter of its own that opens another such window
+     * the focus; they wait in Neovim's input, read only once the start is over. The editor draws
+     * that window, so it keeps the keyboard (WINDOWS' close_start_floats): the keys go to it, as in
+     * a terminal, and the document keeps its text. With lateVimEnter, round 3 also sets up a VimEnter of its own that opens another such window
      * with the focus, as a plug-in loaded meanwhile can: set up after the plug-in's check, it
      * runs after every VimEnter set up before. The rounds go on when the test says so, never on a
      * clock.
      */
     @ParameterizedTest(name = "a later VimEnter opening a window: {0}")
     @ValueSource(booleans = { false, true })
-    void keysTypedWhileAConfigStillStartsGoToTheDocumentNotItsWindows(boolean lateVimEnter, @TempDir Path dir)
+    void keysTypedWhileAConfigStillStartsGoToTheWindowItDraws(boolean lateVimEnter, @TempDir Path dir)
             throws Exception {
         TestNeovim.require();
         Path config = dir.resolve("rounds.lua");
@@ -608,25 +644,23 @@ class NeovimWindowsIntegrationTest {
                 });
             }
             waitFor(() -> number(s, "return vim.v.vim_did_enter") == 1, "Neovim's start over");
-            waitFor(() -> List.of("def").equals(s.getBufferLines()), "the three keys deleted three letters of the document");
-            assertEquals(editor.winid(), currentWin(s), "Neovim in the editor's window");
-            assertEquals(0, number(s, "local n = 0 for _, w in ipairs(vim.api.nvim_list_wins()) do"
-                    + " if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == 'lazy' then n = n + 1 end end return n"),
-                    "no window of the rounds is left with the keyboard");
-            waitFor(() -> Ui2Text.shown(s).contains(startMessage(s)),
-                    "the message, shown by Neovim: " + Ui2Text.shown(s));
-            // Said once UIEnter is over (still as an error), so that Neovim does not head it with
-            // "Error in UIEnter Autocommands for "*":", as if the check had failed.
+            waitFor(() -> "lazy".equals(s.lua("return vim.bo.filetype")), "Neovim in a window of the rounds");
+            if (!lateVimEnter) { // the late window is empty, so its x has nothing to delete
+                waitFor(() -> List.of("nd 3").equals(s.lua("return vim.api.nvim_buf_get_lines(0, 0, -1, false)")),
+                        "the three keys deleted three letters of the window's text");
+            }
+            NeovimBarrier.pass(s);
+            assertEquals(List.of("abcdef"), s.getBufferLines(), "the document keeps its text");
+            assertTrue(editor.winid() != currentWin(s), "Neovim stays in the float it drew");
             assertFalse(Ui2Text.shown(s).contains("Autocommands"), Ui2Text.shown(s));
         }
     }
 
     /**
      * An operator typed while Neovim starts and its motion typed after: {@code d} waits in Neovim's
-     * input until the start is over, then is read, pending; the message about the float closed
-     * at the start's end comes meanwhile (said once UIEnter is over, as any event between two
-     * keys), and the {@code w} typed then still ends the {@code d}: one word deleted. The config
-     * waits until the test says so, never on a clock.
+     * input until the start is over, then is read, pending, in the float that keeps the keyboard,
+     * and the {@code w} typed then still ends the {@code d}: one word of the float's text deleted,
+     * none of the document's. The config waits until the test says so, never on a clock.
      */
     @Test
     void anOperatorTypedWhileNeovimStartsTakesTheMotionTypedAfter(@TempDir Path dir) throws Exception {
@@ -635,6 +669,7 @@ class NeovimWindowsIntegrationTest {
         Files.writeString(config, """
                 local b = vim.api.nvim_create_buf(false, true)
                 vim.bo[b].filetype = 'lazy'
+                vim.api.nvim_buf_set_lines(b, 0, -1, false, { 'one two' })
                 vim.api.nvim_open_win(b, true, { relative = 'editor', row = 1, col = 1, width = 20, height = 3 })
                 vim.wait(600000, function() return vim.g.waits_go == 1 end, 5)
                 """);
@@ -652,11 +687,11 @@ class NeovimWindowsIntegrationTest {
                     throw new IllegalStateException(e);
                 }
             });
-            waitFor(() -> Ui2Text.shown(s).contains(startMessage(s)), "the message, shown by Neovim: " + Ui2Text.shown(s));
-            assertEquals("no", s.lua("return vim.api.nvim_get_mode().mode"), "the d pending, in operator-pending mode");
+            waitFor(() -> "no".equals(s.lua("return vim.api.nvim_get_mode().mode")), "the d pending, in operator-pending mode");
             s.inputAsync("w");
-            waitFor(() -> List.of("two").equals(s.getBufferLines()), "dw deleted the first word");
-            assertEquals(List.of("two"), s.getBufferLines());
+            waitFor(() -> List.of("two").equals(s.lua("return vim.api.nvim_buf_get_lines(0, 0, -1, false)")),
+                    "dw deleted the first word of the float's text");
+            assertEquals(List.of("one two"), s.getBufferLines(), "the document keeps its text");
         }
     }
 

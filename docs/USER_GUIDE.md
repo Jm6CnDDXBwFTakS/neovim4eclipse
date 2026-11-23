@@ -15,7 +15,7 @@ editor, are Eclipse's own, as in an editor without Neovim.
 
 A config that installs plug-ins as it starts (lazy.nvim on a first start, or after you add a
 plug-in) keeps Neovim starting until the install is done: the installer is drawn over the editor,
-and your keys wait ([Floating windows](#floating-windows), "A window that takes the keyboard").
+and your keys wait, then go to it, as in a terminal ([Floating windows](#floating-windows), "A window that takes the keyboard").
 Install new plug-ins in a terminal first, then restart Neovim in Eclipse: the README's
 *Install new plug-ins in a terminal first*, under [Your `init.lua` in Eclipse](../README.md#your-initlua-in-eclipse),
 says how.
@@ -674,9 +674,10 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   `Ctrl-W w` moves to the next editor and closes the window; in a prompt's Insert mode `Ctrl-W` is
   the plug-in's (Telescope deletes a word). A window that has the keyboard while Neovim is still
   starting (lazy.nvim's installer, as it installs missing plug-ins) is drawn over the editor
-  Eclipse shows, with its progress, and closed with a message when the start is over: the keys
-  you type meanwhile wait, and go to your file, whatever the config's `VimEnter` did. A float a later `UIEnter` opens takes the
-  keys still waiting. `:Lazy` opens it again. One too large to draw (past the *Limits* below) is closed, with a
+  Eclipse shows, with its progress, and keeps the keyboard when the start is over, as in a
+  terminal: the keys you type meanwhile wait, and go to it (in lazy.nvim's window `U`, `S`, `X` and
+  `R` are its commands, and `q` closes it). If the editor does not draw it (hidden, or in another
+  tab page) it is closed with a message, and those keys go to your file. One too large to draw (past the *Limits* below) is closed, with a
   message; if Neovim refuses to close it, as for unsaved changes it would discard, the message says
   so and the window stays open.
 - **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In

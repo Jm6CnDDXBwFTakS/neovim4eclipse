@@ -288,15 +288,18 @@ goes into it (`LuaScripts.LEAVE_START_FLOAT`). Until Neovim has started, each ed
 brings the plug-ins' floats of other tab pages into its own (`WINDOWS`' `bring_start_floats`,
 from `M.show`): a float belongs to one tab page, and the installer opened in the home window's
 before any editor was there; with what Neovim drew of it before the session listened kept
-(`core/EarlyIncoming`), it is drawn over the editor with its progress. Keys typed while Neovim starts go to the file, by
-one rule (`CLOSE_START_FLOAT`, `WINDOWS`' `close_start_floats`): a config's init may still run when
+(`core/EarlyIncoming`), it is drawn over the editor with its progress. Keys typed while Neovim starts go where a terminal
+sends them, as long as the editor draws that window, by one rule (`CLOSE_START_FLOAT`, `WINDOWS`' `close_start_floats`): a config's init may still run when
 the session is ready (lazy.nvim installs in rounds, waiting with `vim.wait`, and has `VimEnter`
 enter its window again), the keys the user types then wait in Neovim's input, which Neovim reads
 only once its start is over, and at `UIEnter`, after every `VimEnter` and before any key is read,
-the float that has the keyboard and the one the config left the focus in are closed, with a
-message, and Neovim goes to the window Eclipse has attached, asked of Eclipse then
-(`eclipse_attached_window`, answered on the reader thread); at once when Neovim has entered. The
-plug-in's command (`:Lazy`) opens it again, entered as any picker is; in a floating
+a float in the tab page of the window Eclipse has attached (asked of Eclipse then,
+`eclipse_attached_window`, answered on the reader thread) and not hidden keeps the keyboard, the one
+the config left the focus in being entered again. One the editor does not draw is closed, with a
+message, and Neovim goes to the attached window. At once when Neovim has entered; with no editor
+shown yet, the first one brings the float along and enters it. So Neovim can be in a float during
+an attach, and every step of the attach push names the document's buffer and window instead of
+using the current ones (`SET_INDENTATION`, `RELOAD_DOCUMENT_BUFFER`, `GO_TO_LAST_POSITION`). In a floating
 window, `:q` and `:close` are left to Neovim (the host commands' `leave_to_neovim` hook).
 
 **The focus and the attached document.** Two things that used to be one: the *focused window*,

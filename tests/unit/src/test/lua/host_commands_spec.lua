@@ -303,9 +303,9 @@ t.test(':e +cmd name sends the file alone, and the +cmd runs once Eclipse shows 
   t.eq({ { 'edit', false, { sent_path(a_name) } } }, t.commands(), 'no +3 for Eclipse')
   -- Eclipse opens a.txt: its attach push enters the buffer, then places the cursor.
   vim.cmd.buffer(vim.fn.bufnr(a_name))
-  t.eq(true, t.run('GO_TO_LAST_POSITION', 'false'), 'the +cmd ran')
+  t.eq(true, t.run('GO_TO_LAST_POSITION', 'false', tostring(vim.api.nvim_get_current_buf()), tostring(vim.api.nvim_get_current_win())), 'the +cmd ran')
   t.eq(3, vim.fn.line('.'))
-  t.eq(false, t.run('GO_TO_LAST_POSITION', 'false'), 'only once')
+  t.eq(false, t.run('GO_TO_LAST_POSITION', 'false', tostring(vim.api.nvim_get_current_buf()), tostring(vim.api.nvim_get_current_win())), 'only once')
 
   t.forget()
   t.type(':e ++ff=unix + ' .. vim.fn.fnameescape(a_name) .. '<CR>') -- + alone: the last line

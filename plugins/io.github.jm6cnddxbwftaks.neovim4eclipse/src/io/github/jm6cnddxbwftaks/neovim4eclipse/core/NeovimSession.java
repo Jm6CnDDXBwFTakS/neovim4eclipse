@@ -585,9 +585,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                     await(api.execLua(LuaScripts.HIGHLIGHTS, List.of(JumpLabels.BUILT_IN_PREFIXES))));
             LOG.info(() -> "Neovim's highlights " + (session.highlightsEnabled ? "shown in the editor" : "off (g:neovim4eclipse_highlights)"));
             // Plug-ins' floating windows are drawn from here on (docs/ARCHITECTURE.md, "Neovim's
-            // windows drawn from their grids"). Keys typed while Neovim starts go to the file: the
-            // floats that have the keyboard as the start ends are closed, with a message, now that ui2
-            // shows messages (WINDOWS' close_start_floats: at UIEnter, or at once).
+            // windows drawn from their grids"). Keys typed while Neovim starts go where a terminal
+            // sends them: a float the editor draws keeps the keyboard, one it does not is closed, with
+            // a message, now that ui2 shows messages (WINDOWS' close_start_floats: at UIEnter, or at once).
             session.floatsDrawn = true;
             int left = startFloat instanceof Number win ? win.intValue() : 0;
             await(api.execLua(LuaScripts.CLOSE_START_FLOAT, List.of(String.valueOf(left))));
@@ -1451,7 +1451,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         boolean reopened = buffer.reopened;
         buffer.reopened = false;
         return Boolean.TRUE.equals(await(api.execLua(LuaScripts.GO_TO_LAST_POSITION,
-                List.of(String.valueOf(reopened)))));
+                List.of(String.valueOf(reopened), String.valueOf(buffer.bufnr),
+                        String.valueOf(buffers.attachedWin())))));
     }
 
     /**
@@ -1560,14 +1561,15 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * undo steps or delete the marks of unchanged lines.
      *
      * <p>The first push into a new buffer loads the file: like Vim reading a file, it is not an undo
-     * step ({@link LuaScripts#LOAD_WITHOUT_UNDO}), so {@code u} right after opening does nothing.
+     * step ({@link LuaScripts#RELOAD_DOCUMENT_BUFFER}), so {@code u} right after opening does nothing.
      */
     @Override
     public List<String> setBufferLines(List<String> lines) throws Exception {
         List<String> target = lines.isEmpty() ? List.of("") : lines; // a buffer always has one line
         DocumentBuffer document = buffers.attachedDocument();
         if (document != null && !document.loaded) {
-            await(api.execLua(LuaScripts.LOAD_WITHOUT_UNDO, List.of(target))); // one list, however long
+            // By number: Neovim may be in a plug-in's float now. One list, however long.
+            await(api.execLua(LuaScripts.RELOAD_DOCUMENT_BUFFER, List.of(String.valueOf(document.bufnr), target)));
             document.loaded = true;
             applyModified(document);
             return null;
@@ -2064,6 +2066,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     public void setIndentation(int tabWidth, Indentation indentation) throws Exception {
         await(api.execLua(LuaScripts.SET_INDENTATION, List.of(
+                String.valueOf(buffers.attachedBufnr()),
                 String.valueOf(tabWidth),
                 flag(indentation.useTabs()),
                 String.valueOf(indentation.width()),

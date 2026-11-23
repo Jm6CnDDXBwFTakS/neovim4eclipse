@@ -416,11 +416,11 @@ picker, fzf-lua, snacks.picker), lazy.nvim and which-key; skip a step whose plug
    ⇒ The candidates are not shown in the prompt (no place for them there), and the committed
    word reaches the prompt once.
 5. With a config whose lazy.nvim has a plug-in to install (add one to it, or start the LazyVim
-   starter for the first time), choose *Neovim → Restart Neovim...* and type `x` a few times while
+   starter for the first time), choose *Neovim → Restart Neovim...* and type `j` a few times while
    it installs.
    ⇒ lazy.nvim's window is drawn over the editor while it installs, its progress moving; when
-   Neovim's start is over the window closes, a message says its plug-in's command opens it again, and the `x`s
-   deleted characters of the file.
+   Neovim's start is over the window stays, with the cursor in it, the `j`s moved that cursor, the
+   file is unchanged, and `q` closes the window.
 6. Press your leader key and wait.
    ⇒ which-key's panel is drawn at the bottom of the editor, and the next key goes on as usual.
 
