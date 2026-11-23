@@ -2584,9 +2584,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private final class EventSink implements NotificationBridge.Sink {
         @Override
         public void onMode(String mode, boolean inFocusedFloat) {
-            // First, on this reader thread, in the order Neovim reported: where an insert began.
-            keyInput.onModeReport(mode, inFocusedFloat);
-            state.dispatchMode(mode);
+            // On this reader thread, in the order Neovim reported, with the mode: where an insert began.
+            state.dispatchMode(mode, () -> keyInput.onModeReport(mode, inFocusedFloat));
         }
 
         @Override

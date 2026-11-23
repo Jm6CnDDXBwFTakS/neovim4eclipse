@@ -25,6 +25,15 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  * the cursor and the selection in one request, and the listeners get the mode, the new cursor and an
  * active selection. After {@code Esc} they get mode {@code "n"} and {@link VisualSelection#none()}.
  *
+ * <p><b>A report beats an answer that was on its way.</b> The reader thread hands on Neovim's
+ * messages in order, but the input thread wakes up with an answer later. Example: {@code nvim_get_mode}
+ * answers {@code "i"}, Neovim's insert ends and it reports {@code "n"}; the reader records the
+ * {@code "n"}, and only then does the input thread get to its {@code "i"}. Recorded, that older
+ * answer would leave Eclipse in Insert mode while Neovim is in Normal mode, with no further report to
+ * correct it. So an answer counts only if no report came while it was asked for
+ * ({@link #settleRead}). Whatever Neovim did before the answer it has reported by then, so the
+ * report is at least as current.
+ *
  * <p>The reading methods block and run on the session's input thread; the getters and dispatch
  * methods may be called from any thread (the fields are volatile; the typing generation is guarded
  * by the instance, see {@link #typingGeneration}). Neovim is reached only through
@@ -96,6 +105,8 @@ final class StateSync {
      * and the key goes to Neovim meanwhile ({@code KeyRouter}).
      */
     private long typingGeneration;
+    /** How many mode reports Neovim has sent ({@link #dispatchMode}). Guarded by {@code this}. */
+    private long modeReports;
     /** The generation in which Eclipse may type, -1 for none yet (see {@link #typingGeneration}). */
     private long readyGeneration = -1;
     /**
@@ -181,6 +192,36 @@ final class StateSync {
         mode = newMode;
     }
 
+    /** {@link #modeReports} now: taken before a request, for {@link #settleRead}. */
+    private synchronized long modeReportsSoFar() {
+        return modeReports;
+    }
+
+    /**
+     * Records {@code answer}, a mode Neovim answered to a request, unless a report came since
+     * {@code reportsBefore} (see the class comment), and gives the mode that stands.
+     *
+     * @param answer the mode in the answer, or {@code null} if it had none
+     */
+    private synchronized String settleRead(long reportsBefore, String answer) {
+        if (answer != null && modeReports == reportsBefore) {
+            setMode(answer);
+        }
+        return mode;
+    }
+
+    /**
+     * {@link #settleRead}, and {@link #onModeChanged} told the mode that stands, in one step. Apart,
+     * a report of an insert beginning in a float could land between them, and the older mode would
+     * then clear what that report just set ({@code KeyInput.onModeChanged}): the insert would no
+     * longer count as Neovim's, and later keys would be typed into the document.
+     */
+    private synchronized String settleAndTell(long reportsBefore, String answer) {
+        String standing = settleRead(reportsBefore, answer);
+        onModeChanged.accept(standing);
+        return standing;
+    }
+
     /** The current {@link #typingGeneration}: what a full sync remembers when it is read. */
     private synchronized long currentGeneration() {
         return typingGeneration;
@@ -220,9 +261,10 @@ final class StateSync {
      */
     Mode readMode() {
         try {
+            long reportsBefore = modeReportsSoFar();
             Mode read = nvim.getMode();
-            if (read != null && read.mode() != null) {
-                setMode(read.mode());
+            if (read != null) {
+                settleRead(reportsBefore, read.mode());
             }
             waitingForArgument = read != null && read.blocking();
             return read;
@@ -260,14 +302,20 @@ final class StateSync {
     void publishState() {
         try {
             boolean folds = foldsEnabled;
+            long reportsBefore = modeReportsSoFar();
             Object raw = nvim.stateSnapshot(true, folds);
-            // The mode in the answer, not one read before the request. Example: Eclipse runs :w, the
-            // plug-in closes Neovim's command line with Esc and publishes. The mode read before was
-            // "c"; Neovim's ModeChanged notice "n" can arrive while the request is out, and publishing
-            // the old "c" after it left the status bar on -- COMMAND -- in normal mode.
+            // The mode in the answer, not one read before the request, unless a report came while it
+            // was out. Example: Eclipse runs :w, the plug-in closes Neovim's command line with Esc and
+            // publishes. The mode read before was "c"; Neovim's ModeChanged notice "n" can arrive
+            // while the request is out, and publishing the old "c" after it left the status bar on
+            // -- COMMAND -- in normal mode.
             String snapshotMode = StateSnapshot.mode(raw);
-            String current = snapshotMode != null ? snapshotMode : mode;
-            dispatchMode(current);
+            String current = settleAndTell(reportsBefore, snapshotMode);
+            listeners.mode(current);
+            String newest = mode;
+            if (!current.equals(newest)) {
+                listeners.mode(newest); // a report came as the listeners were told: they end on it
+            }
             if (isAttached.test(StateSnapshot.window(raw), StateSnapshot.buffer(raw))) {
                 // The folds before the cursor: the editor applies them in this order (one UI queue),
                 // so the caret lands on text that is shown. Example: after zo, a caret placed while
@@ -280,9 +328,13 @@ final class StateSync {
                 if (cursor != null) {
                     dispatchCursor(cursor.line1Based(), cursor.col0Based());
                 }
-                listeners.selection(VimModes.isVisual(current)
-                        ? StateSnapshot.selection(raw, current)
-                        : VisualSelection.none());
+                // The snapshot's selection only with the mode it was read in: after a report of
+                // another Visual mode it is out of date, and the next key publishes it anew.
+                if (!VimModes.isVisual(current)) {
+                    listeners.selection(VisualSelection.none());
+                } else if (snapshotMode == null || snapshotMode.equals(current)) {
+                    listeners.selection(StateSnapshot.selection(raw, current));
+                }
             }
             status.updateRecording(StateSnapshot.recording(raw));
             status.publishStatusLine(StateSnapshot.statusLine(raw));
@@ -343,10 +395,25 @@ final class StateSync {
 
     // ---- dispatch (any thread) ----
 
-    /** Records {@code newMode} and tells {@code onModeChanged}, then the listeners. */
+    /** {@link #dispatchMode(String, Runnable)} with nothing to record along with the report. */
     void dispatchMode(String newMode) {
-        setMode(newMode); // leaving insert ends Eclipse's typing (a new generation)
-        onModeChanged.accept(newMode);
+        dispatchMode(newMode, () -> { });
+    }
+
+    /**
+     * Neovim reported {@code newMode} ({@code ModeChanged}), newer than any answer on its way:
+     * records it and tells {@code onModeChanged}, then the listeners.
+     *
+     * @param withTheReport runs first, in one step with the recording ({@link #settleAndTell}):
+     *                      {@code KeyInput.onModeReport}, where an insert began
+     */
+    void dispatchMode(String newMode, Runnable withTheReport) {
+        synchronized (this) {
+            withTheReport.run();
+            modeReports++;
+            setMode(newMode); // leaving insert ends Eclipse's typing (a new generation)
+            onModeChanged.accept(newMode);
+        }
         listeners.mode(newMode);
     }
 

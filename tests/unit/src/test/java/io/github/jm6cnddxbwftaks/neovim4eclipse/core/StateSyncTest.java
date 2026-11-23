@@ -37,9 +37,12 @@ class StateSyncTest {
         /** The flags of the last snapshot request: statusline, folds. */
         /** The last snapshot's arguments: the statusline's width (0: none) and whether to read folds. */
         List<Object> snapshotFlags;
+        /** Runs while a request is out: what Neovim reports before the input thread has the answer. */
+        Runnable whileAnswering = () -> { };
 
         @Override
         public Mode getMode() {
+            whileAnswering.run();
             if (mode == null) {
                 throw new IllegalStateException("no answer");
             }
@@ -49,6 +52,7 @@ class StateSyncTest {
         @Override
         public Object stateSnapshot(boolean statusLine, boolean folds) {
             snapshotFlags = List.of(statusLine, folds);
+            whileAnswering.run();
             if (snapshot == null) {
                 throw new IllegalStateException("timed out");
             }
@@ -294,6 +298,70 @@ class StateSyncTest {
     }
 
     // ---- readMode ----
+
+    /**
+     * Neovim answered {@code "i"}, then reported {@code "n"} as its insert ended, and the reader
+     * thread recorded the report before the input thread got to the answer: the report stands, or
+     * Eclipse would go on typing an insert Neovim has left. With no report meanwhile, the answer
+     * counts again.
+     */
+    @Test
+    void aModeAnswerOlderThanAReportDoesNotOverwriteIt() {
+        state.dispatchMode("i");
+        nvim.mode = new Mode("i", false);
+        nvim.whileAnswering = () -> state.dispatchMode("n");
+
+        state.readMode();
+
+        assertEquals("n", state.mode());
+        assertFalse(state.isTypingMode());
+        nvim.whileAnswering = () -> { };
+        nvim.mode = new Mode("v", false);
+        state.readMode();
+        assertEquals("v", state.mode(), "no report meanwhile: the answer counts");
+    }
+
+    /** The same for a snapshot: the listeners end on the report, and hear nothing of the old mode. */
+    @Test
+    void aSnapshotOlderThanAReportDoesNotOverwriteIt() {
+        state.dispatchMode("v");
+        List<Object> answer = visualSnapshot(1, 4, "v", 1, 1, 1, 5);
+        while (answer.size() <= StateSnapshot.MODE) {
+            answer.add("");
+        }
+        answer.set(StateSnapshot.MODE, "v"); // the answer's own mode, older than the report below
+        nvim.snapshot = answer;
+        nvim.whileAnswering = () -> state.dispatchMode("n");
+        listeners.heard.clear();
+
+        state.publishState();
+
+        assertEquals("n", state.mode());
+        assertEquals(List.of("onModeChanged n", "mode n", "onModeChanged n", "mode n", "cursor 1:4", "no selection"),
+                listeners.heard, "the report, then the state published with it; no stale selection");
+    }
+
+    /**
+     * The snapshot says Normal, and Neovim reports an insert beginning before the input thread has
+     * that answer: {@code KeyInput.onModeChanged} must not hear the older mode, which would clear
+     * what the report of the insert just set.
+     */
+    @Test
+    void aSnapshotOlderThanAnInsertsReportDoesNotEndIt() {
+        List<Object> answer = snapshot(1, 0, ATTACHED);
+        while (answer.size() <= StateSnapshot.MODE) {
+            answer.add("");
+        }
+        answer.set(StateSnapshot.MODE, "n");
+        nvim.snapshot = answer;
+        nvim.whileAnswering = () -> state.dispatchMode("i");
+
+        state.publishState();
+
+        assertEquals("i", state.mode());
+        assertFalse(listeners.heard.contains("onModeChanged n"), listeners.heard.toString());
+        assertFalse(listeners.heard.contains("mode n"), listeners.heard.toString());
+    }
 
     @Test
     void aFailedModeReadReturnsNullAndKeepsTheLastMode() {

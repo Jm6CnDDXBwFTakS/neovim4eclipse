@@ -542,7 +542,7 @@ final class KeyInput {
      * mode is {@code i}, Eclipse types the next key.
      */
     private boolean mayHandBack() {
-        return handBackPending && neovimDrivenInsert && !neovimOwnsInsert && state.isTypingMode()
+        return handBackPending && neovimDrivenInsert && !neovimOwnsInsert && !inFocusedFloat && state.isTypingMode()
                 && !VimModes.isCompleting(state.mode()) && completionsQueued.get() == 0
                 && status.recordingRegister().isEmpty();
     }

@@ -651,6 +651,23 @@ class KeyInputTest {
         assertFalse(state.isEclipseTypingReady());
     }
 
+    /**
+     * A hand-back pending from an insert in the text, and Neovim carried into a float meanwhile:
+     * Eclipse must not start typing, as its keys would go to the document, not the float.
+     */
+    @Test
+    void aPendingHandBackDoesNotGoOffInAFloat() throws Exception {
+        ctrlRWaitingForARegister();
+        keys.onModeReport("i", false);
+        keys.onModeReport("i", true); // the same insert, its window now a float: no new owner
+        nvim.after.put("a", new Mode("i", false));
+
+        queue("a");
+
+        assertFalse(nvim.calls.contains("bufferLines"), "no hand-back: " + nvim.calls);
+        assertTrue(keys.isNeovimDrivenInsert());
+    }
+
     /** A picker that starts insert mode within its command: the mode read after the key decides, the same way. */
     @Test
     void anInsertAfterAKeyInAFocusedFloatIsNeovimsToItsEnd() throws Exception {

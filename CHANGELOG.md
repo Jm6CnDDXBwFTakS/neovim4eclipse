@@ -52,6 +52,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   see-through, `'winblend'`), such as lazy.nvim's backdrop under `:Lazy` with LazyVim's colors,
   was drawn as a solid block over the whole editor. It is now left out, and `:Lazy`'s own window
   is drawn over the text.
+- Eclipse could stay in Insert mode while Neovim had gone back to Normal mode, when Neovim's answer
+  about its mode arrived just after its report that the mode had changed.
 - A floating window a configuration opened while Neovim was starting, before Eclipse's session
   listened, was never drawn: Eclipse dropped what Neovim drew then, and Neovim does not send a
   window's size again. Everything Neovim sends then is now kept and handed on.
