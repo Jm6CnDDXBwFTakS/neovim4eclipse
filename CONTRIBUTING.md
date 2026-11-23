@@ -30,12 +30,17 @@ Neovim plug-ins the jump-label tests run (`releng/test-plugins.properties`; with
 are left out and those tests skipped), runs CI's Maven commands with it (on Linux under `xvfb-run`, as CI), and
 lists what each module skipped. A failure that only CI would show shows up here first, a change
 that does not compile included. `--all` runs every test group (`-Pall`) the same way, for a
-release. `LikeCiTest` keeps its commands equal to the workflow's. On Windows run it, as every
+release. `--clean`, alone or with `--all`, first deletes the build output, as a runner starts
+from an empty checkout: use it after a changed method signature or `static final String`, whose
+unchanged callers would otherwise keep the old code. Not while a runtime Eclipse started from the
+IDE is open, since `clean` deletes the `lib/*.jar` it uses.
+`LikeCiTest` keeps its commands equal to the workflow's. On Windows run it, as every
 tool, from Git Bash ("Developer tools: where they run").
 
 ```bash
 java releng/tools/ci/LikeCi.java                # what CI runs, on this machine (before a push)
 java releng/tools/ci/LikeCi.java --all          # every test group, as for a release
+java releng/tools/ci/LikeCi.java --all --clean  # the same from an empty build
 ./mvnw verify                                   # plug-in, unit/text/SWT tests, update-site ZIP
 ./mvnw verify -Pui -Dnvim.path=...              # ... and the UI tests (opens an Eclipse window)
 ./mvnw verify -PuiHeavyJava -Dnvim.path=...     # only the UI tests that need Java tooling (slow)

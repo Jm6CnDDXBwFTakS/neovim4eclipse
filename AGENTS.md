@@ -68,6 +68,7 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 ```bash
 java releng/tools/ci/LikeCi.java                  # BEFORE A PUSH: the tests as the Build workflow runs them (pinned Neovim, xvfb-run)
 java releng/tools/ci/LikeCi.java --all            # the same with every test group (-Pall)
+java releng/tools/ci/LikeCi.java --all --clean    # the same from an empty build (not while a runtime Eclipse is open)
 ./mvnw verify -Pall -Dnvim.path=/usr/bin/nvim     # every test of every group (integration, heavyJava, timeoutReliant; not screenshots); slow
 ./mvnw verify -Pui -Dnvim.path=/usr/bin/nvim      # as CI: plug-in, unit, text, SWT and UI tests, feature, ZIP (not integration: add the -Pintegration line)
 ./mvnw verify                                     # the same without the UI tests (no Eclipse window)

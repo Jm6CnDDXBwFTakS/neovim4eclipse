@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -23,7 +24,15 @@ import java.util.stream.Stream;
  * <pre>
  *   java releng/tools/ci/LikeCi.java          what CI runs: -Pui, then the integration tests
  *   java releng/tools/ci/LikeCi.java --all    every test group (-Pall), what a release needs
+ *   java releng/tools/ci/LikeCi.java --clean  first deletes the build output; goes with --all too
  * </pre>
+ *
+ * <p>Without {@code --clean} a run builds on the {@code target/} folders already there, which is
+ * faster but can test stale code: javac does not recompile a class whose source did not change,
+ * so a caller of a changed method fails with {@code NoSuchMethodError}, and it keeps the old text
+ * of a changed {@code static final String}. A runner always starts from a fresh checkout, so
+ * {@code --clean} is also the closer copy of CI. Not while a runtime Eclipse started from the IDE
+ * is open: {@code clean} deletes the plug-in's {@code lib/*.jar}, which that Eclipse uses.
  *
  * <h2>What it does, and why each step</h2>
  * <ol>
@@ -41,6 +50,9 @@ import java.util.stream.Stream;
  *       Without a network, or with a Java older than that tool needs, they are left out with a
  *       note and the tests that need them are skipped; the list of skips below names them. CI
  *       does not fetch them, so there those tests are skipped.</li>
+ *   <li><b>With {@code --clean}, runs {@link #CLEAN}</b>, after the steps above so that a failed
+ *       download leaves the last build in place. If it fails the run stops: tests on half-deleted
+ *       output would say nothing.</li>
  *   <li><b>Runs CI's Maven commands</b> ({@link #UI}, then {@link #INTEGRATION}) with
  *       {@code -Dnvim.path} set to it, from the repository's root, so everything is compiled first,
  *       as in CI (a change that does not compile fails here, not on GitHub). On Linux under
@@ -78,6 +90,9 @@ public final class LikeCi {
     /** Every test group, for {@code --all}. */
     public static final String ALL = "-B -ntp verify -Pall";
 
+    /** Deletes every module's build output, for {@code --clean}; not a CI command (a runner starts empty). */
+    public static final String CLEAN = "-B -ntp clean";
+
     private static final boolean WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("windows");
 
     /**
@@ -88,6 +103,26 @@ public final class LikeCi {
     public static final String LIKE_CI = ".tool-cache/like-ci";
 
     private LikeCi() {
+    }
+
+    /**
+     * What the command line asked for.
+     *
+     * @param all   run every test group ({@code --all})
+     * @param clean delete the build output first ({@code --clean})
+     */
+    public record Options(boolean all, boolean clean) {
+
+        /**
+         * The options in {@code args}, in any order; empty for an unknown or repeated argument, so
+         * that a typo such as {@code --cleam} stops the run instead of testing stale output.
+         */
+        public static Optional<Options> parse(String... args) {
+            List<String> given = List.of(args);
+            boolean all = given.contains("--all");
+            boolean clean = given.contains("--clean");
+            return given.size() == (all ? 1 : 0) + (clean ? 1 : 0) ? Optional.of(new Options(all, clean)) : Optional.empty();
+        }
     }
 
     /**
@@ -114,11 +149,12 @@ public final class LikeCi {
 
     public static void main(String[] args) throws Exception {
         requireSupportedShell("LikeCi");
-        boolean all = List.of(args).contains("--all");
-        if (args.length > (all ? 1 : 0)) {
-            System.err.println("Usage: java releng/tools/ci/LikeCi.java [--all]");
+        Optional<Options> parsed = Options.parse(args);
+        if (parsed.isEmpty()) {
+            System.err.println("Usage: java releng/tools/ci/LikeCi.java [--all] [--clean]");
             System.exit(2);
         }
+        Options options = parsed.get();
         Path root = Path.of("").toAbsolutePath();
         if (!Files.isRegularFile(root.resolve("releng/UpdateNeovimDownloads.java"))) {
             fail("run this from the repository's root folder");
@@ -131,8 +167,11 @@ public final class LikeCi {
         if (fetchPlugins(root) != 0) {
             failed.add(PLUGINS);
         }
+        if (options.clean() && run(root, CLEAN, nvim) != 0) {
+            fail("failed: " + CLEAN);
+        }
         long started = System.currentTimeMillis();
-        for (String maven : all ? List.of(ALL) : List.of(UI, INTEGRATION)) {
+        for (String maven : options.all() ? List.of(ALL) : List.of(UI, INTEGRATION)) {
             if (run(root, maven, nvim) != 0) {
                 failed.add(maven);
             }
@@ -200,8 +239,8 @@ public final class LikeCi {
             command.addAll(List.of("cmd", "/c", ".\\mvnw.cmd"));
         } else {
             // As the Linux build job: the UI tests (and -Pall, which has them) under xvfb-run; the
-            // integration job has no display and needs none.
-            boolean ui = !arguments.equals(INTEGRATION);
+            // integration job and clean open no window and need no display.
+            boolean ui = arguments.equals(UI) || arguments.equals(ALL);
             if (ui && System.getProperty("os.name").startsWith("Linux") && onPath("xvfb-run")) {
                 command.addAll(List.of("xvfb-run", "-a", "-s", SCREEN));
             } else if (ui && System.getProperty("os.name").startsWith("Linux")) {

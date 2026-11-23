@@ -3,11 +3,13 @@
 
 package checks;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
@@ -39,5 +41,23 @@ class LikeCiTest {
         assertTrue(build.contains("./mvnw " + LikeCi.INTEGRATION), "build.yml no longer runs: ./mvnw " + LikeCi.INTEGRATION);
         assertTrue(build.contains("xvfb-run -a -s \"" + LikeCi.SCREEN + "\" ./mvnw " + LikeCi.UI),
                 "the Linux build job no longer runs under xvfb-run -a -s \"" + LikeCi.SCREEN + "\"");
+    }
+
+    @Test
+    void optionsComeInAnyOrder() {
+        assertEquals(Optional.of(new LikeCi.Options(false, false)), LikeCi.Options.parse());
+        assertEquals(Optional.of(new LikeCi.Options(true, false)), LikeCi.Options.parse("--all"));
+        assertEquals(Optional.of(new LikeCi.Options(false, true)), LikeCi.Options.parse("--clean"));
+        assertEquals(Optional.of(new LikeCi.Options(true, true)), LikeCi.Options.parse("--all", "--clean"));
+        assertEquals(Optional.of(new LikeCi.Options(true, true)), LikeCi.Options.parse("--clean", "--all"));
+    }
+
+    /** A typo must stop the run: it would otherwise test the stale output it meant to delete. */
+    @Test
+    void anUnknownOrRepeatedOptionIsRefused() {
+        assertEquals(Optional.empty(), LikeCi.Options.parse("--cleam"));
+        assertEquals(Optional.empty(), LikeCi.Options.parse("--clean", "--clean"));
+        assertEquals(Optional.empty(), LikeCi.Options.parse("--all", "--all"));
+        assertEquals(Optional.empty(), LikeCi.Options.parse("--all", "extra"));
     }
 }
