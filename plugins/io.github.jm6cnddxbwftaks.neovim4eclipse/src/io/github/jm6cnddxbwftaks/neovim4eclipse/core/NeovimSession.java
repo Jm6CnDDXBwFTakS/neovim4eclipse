@@ -1174,7 +1174,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      */
     private void gridMouse(int grid, String button, String action, String modifier, int row, int col)
             throws Exception {
-        if (MouseOption.allows(mouseOption, await(api.getMode()).mode())) {
+        // The mode first: its answer comes after any 'mouse' report Neovim sent before it, so a
+        // mapping on the press that changed 'mouse' counts for its release.
+        String mode = await(api.getMode()).mode();
+        if (MouseOption.allows(mouseOption, mode)) {
             await(api.inputMouse(button, action, modifier, grid, row, col));
         }
     }
