@@ -70,6 +70,14 @@ public final class VimModes {
         return mode != null && mode.startsWith("cv");
     }
 
+    /**
+     * A terminal buffer's modes: Terminal mode {@code t}, and Normal mode in it {@code nt},
+     * {@code ntT}. Not operator-pending {@code no} or Normal {@code n}.
+     */
+    public static boolean isTerminal(String mode) {
+        return first(mode) == 't' || (mode != null && mode.startsWith("nt"));
+    }
+
     /** Modes that show a thin caret: typing modes and the command line. */
     public static boolean usesThinCaret(String mode) {
         return isTyping(mode) || isCmdline(mode);

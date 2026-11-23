@@ -45,6 +45,38 @@ class NeovimWindowsIntegrationTest {
         return NeovimSession.start(NVIM, List.of("--clean"));
     }
 
+    /**
+     * A float running a terminal is how fzf-lua draws its picker, and it closes that float with
+     * {@code 'eventignore'} set, so Neovim leaves Terminal mode without a {@code ModeChanged}: Eclipse
+     * would keep showing {@code t} until the next key. Here {@code ModeChanged} stays ignored until
+     * the check, so only the read at the float's closing can bring the mode back. It closes as the
+     * keyboard leaves the editor, or by the plug-in's own action.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = { true, false })
+    void theModeIsRightAfterATerminalFloatClosesWithoutAKey(boolean byLeaving) throws Exception {
+        TestNeovim.require();
+        try (NeovimSession s = NeovimSession.start(TestNeovim.PATH, List.of("--clean"))) {
+            s.lua("""
+                    local buf = vim.api.nvim_create_buf(false, true)
+                    vim.g.term_float = vim.api.nvim_open_win(buf, true,
+                      { relative = 'editor', row = 1, col = 1, width = 30, height = 5 })
+                    vim.fn.jobstart(vim.o.shell, { term = true })
+                    vim.cmd.startinsert()
+                    """);
+            waitFor(() -> "t".equals(s.getMode()) && s.inPluginFloat(), "Terminal mode in the float");
+            s.lua("vim.o.eventignore = 'ModeChanged'");
+            if (byLeaving) {
+                s.leaveFloatAsync();
+            } else {
+                s.lua("vim.api.nvim_win_close(vim.g.term_float, true)");
+            }
+            waitFor(() -> !s.inPluginFloat(), "the float closed");
+            waitFor(() -> "n".equals(s.getMode()), "Eclipse's mode back to Normal, as Neovim's is");
+            s.lua("vim.o.eventignore = ''");
+        }
+    }
+
     private interface Check {
         boolean holds() throws Exception;
     }

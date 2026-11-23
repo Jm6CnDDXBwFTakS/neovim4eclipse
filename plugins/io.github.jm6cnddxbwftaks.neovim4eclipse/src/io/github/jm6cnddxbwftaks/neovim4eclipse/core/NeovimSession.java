@@ -53,6 +53,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewportSize;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 
 /**
  * Façade over one embedded {@code nvim --embed} process, through the plug-in's own msgpack-rpc
@@ -2725,7 +2726,14 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 floatingWindows = floats;
                 events.floatingWindows(floats);
             });
+            int floatBefore = focusedFloat;
             focusedFloat = grids.focusedFloat();
+            if (floatBefore != -1 && focusedFloat == -1 && VimModes.isTerminal(getMode())) {
+                // A plug-in may close its terminal float with 'eventignore' set (fzf-lua does), and
+                // Neovim then leaves Terminal mode without a ModeChanged. Read at the float's closing,
+                // so that Eclipse does not show TERMINAL until the next key.
+                submit("read the mode after a terminal float closed", Level.FINE, state::syncModeAndCursor);
+            }
             Optional<Grids.UnseenCursor> unseen = grids.unseenCursor(); // the decision: util/Grids, GridsTest
             if (unseen.isEmpty()) {
                 // Asked again once the cursor has been on a drawn grid: a float Neovim refused to

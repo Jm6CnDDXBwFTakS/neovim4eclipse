@@ -6,6 +6,8 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 class VimModesTest {
@@ -84,5 +86,17 @@ class VimModesTest {
         assertFalse(VimModes.isCompleting("niI"));
         assertFalse(VimModes.isCompleting(null));
         assertFalse(VimModes.isCompleting(""));
+    }
+
+    /** Terminal mode and Normal mode in a terminal buffer; Normal and operator-pending are neither. */
+    @Test
+    void terminalModes() {
+        for (String mode : List.of("t", "nt", "ntT")) {
+            assertTrue(VimModes.isTerminal(mode), mode);
+        }
+        for (String mode : List.of("n", "no", "nov", "niI", "i", "c")) {
+            assertFalse(VimModes.isTerminal(mode), mode);
+        }
+        assertFalse(VimModes.isTerminal(null));
     }
 }
