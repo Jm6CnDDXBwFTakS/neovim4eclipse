@@ -68,7 +68,8 @@ class CtrlKeysPage extends PreferencePage {
         setPreferenceStore(store);
         setDescription("A ticked box sends the Ctrl key to Neovim; a cleared one keeps Eclipse's shortcut.\n"
                 + "Normal: normal and visual mode, and the : box. Insert: insert mode; when Eclipse types,\n"
-                + "Neovim gets the typed text first, so its key acts on it.");
+                + "Neovim gets the typed text first, so its key acts on it.\n"
+                + "While a plug-in's floating window has the keyboard, every Ctrl letter goes to Neovim.");
     }
 
     @Override
