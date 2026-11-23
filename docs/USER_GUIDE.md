@@ -330,7 +330,10 @@ refused, since Neovim turns it into one of its hidden tab pages before the plug-
 Refused, with a message: `:tabonly!`, which would discard every other tab's changes at once (Vim's
 keeps their buffers hidden; `:tabonly` asks about them), and the splits that jump first (`:stag`,
 `Ctrl-W ]`, `Ctrl-W F`). A window a plug-in opens in Neovim beside an editor's
-(its own `vim.cmd.split()`) is closed again, with a message: Eclipse would not show it.
+(its own `vim.cmd.split()`, a picker's `Ctrl+V`) opens as an Eclipse split or editor tab when it
+shows a file. On anything else it is closed again, with a message: Eclipse would not show it. So
+is a file window left behind a plug-in's floating window that has the keyboard, so that your keys
+stay in the float. An Insert begun in a float ends when its file opens as an editor.
 
 After a restart, Eclipse brings the stacks back as it does any layout you dragged.
 
@@ -456,7 +459,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:on[ly]`, `:res[ize]`, `:winc[md]` | Vim's windows as editors: see [Splits](#splits-split-vsplit-ctrl-w) |
 | `:tabnew`, `:tabe[dit]`, `:tabf[ind]` | a new editor tab: see [Splits](#splits-split-vsplit-ctrl-w) |
 | `:tabo[nly]` | close the other editor tabs: see [Splits](#splits-split-vsplit-ctrl-w) |
-| `:tabonly!`, `:stag` | refused, with a message. A window opened some other way (a plug-in's `vim.cmd.split()`) is closed again with a message; a help window's page opens in the [help editor](#the-help-editor-help) instead. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
+| `:tabonly!`, `:stag` | refused, with a message. A plug-in's own split or tab page (`vim.cmd.split()`) on a file opens as an Eclipse split or editor tab, at the plug-in's cursor; on anything else it is closed again with a message; a help window's page opens in the [help editor](#the-help-editor-help) instead. So is the preview window (`:pedit`). The quickfix and location list windows are closed as well, and shown the Eclipse way instead: `:copen` opens the Problems or Tasks view for Eclipse's lists, else shows the list's `:clist` (see [The quickfix list](#the-quickfix-list-eproblems-q)) |
 
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed on the line, from a mapping in your `init.lua` (`<leader>q` →
@@ -645,7 +648,7 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   While it has the keyboard **every `Ctrl` letter is Neovim's**, whatever the *Ctrl Keys*
   preference page says, over a text editor and over a `:help` or `:messages` page alike:
   Eclipse's command would act on the document behind the window. So
-  `Ctrl+V` in Telescope's prompt opens a vertical split, and `Ctrl+A`, `Ctrl+B` and `Ctrl+F` run
+  `Ctrl+V` in Telescope's prompt opens the chosen file in an Eclipse split (`Ctrl+X` the other way, `Ctrl+T` as an editor tab), and `Ctrl+A`, `Ctrl+B` and `Ctrl+F` run
   no Eclipse command; `Ctrl+S` does not save until the window is closed. `Cmd` on macOS stays
   Eclipse's. An input method has no place to show
   its candidates there. In Normal mode there, `Ctrl-W` and its window commands stay Eclipse's, so
@@ -660,7 +663,8 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your
   typing (signature help, a completion plug-in's documentation) does not appear, or lags; Eclipse's
   own content assist and parameter hints do that job.
-- **Not drawn:** a window a plug-in opens as a split (a file tree), which is closed
+- **Not drawn:** a window a plug-in opens as a split on anything but a file (a file tree), which
+  is closed (on a file it becomes an Eclipse editor, on the side Neovim put it)
   ([README](../README.md#known-limitations), "Neovim plug-ins that draw"), and a hidden floating
   window; one that has the keyboard, hidden as it opens or later by its plug-in, is closed, with
   a message. Nor one that is there only to dim the text below it, every cell blank and

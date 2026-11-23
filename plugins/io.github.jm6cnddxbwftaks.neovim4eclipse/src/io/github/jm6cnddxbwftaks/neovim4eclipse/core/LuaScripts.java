@@ -495,10 +495,11 @@ final class LuaScripts {
             -- carries only the name, and the reason may depend on the rest (:2tabclose).
             local refusing = {}
             -- The +cmd of :e +cmd name (:e +10 a.txt, :e + a.txt), waiting for Eclipse to show the
-            -- file: { file = its full path (PATHS canonical), command = '10' }. The attach push of
-            -- that file's editor runs it (GO_TO_LAST_POSITION, take_open_command below), as Vim runs
-            -- it once the file is read. The next : line drops one left over (Eclipse could not open).
-            local open_command
+            -- file: { [its full path (PATHS canonical)] = '10' }. By file, since one picker action
+            -- can open several (each with its own line). The attach push of that file's editor runs
+            -- its entry (GO_TO_LAST_POSITION, take_open_command below), as Vim runs it once the file
+            -- is read. The next : line drops those left over (Eclipse could not open them).
+            local open_commands = {}
             local BS = string.char(92) -- a backslash (written as one char: in Java source it needs two)
             local LINE_BREAK = '[' .. string.char(13, 10) .. ']'
             -- The first word of :Eclipse's arguments when eclipse_form wrote the line: the words after
@@ -544,13 +545,19 @@ final class LuaScripts {
             package.loaded['neovim4eclipse.host_commands'].take_open_command = function(file)
               -- GO_TO_LAST_POSITION, after the attach push of file's editor: runs a waiting +cmd for
               -- that file, and says whether there was one (then the caret follows Neovim's cursor).
-              if not open_command or canonical(file) ~= open_command.file then
+              local key = canonical(file)
+              local command = open_commands[key]
+              if not command then
                 return false
               end
-              local command = open_command.command
-              open_command = nil
+              open_commands[key] = nil
               run_open_command(command)
               return true
+            end
+            -- A plug-in's split of a file, handed to Eclipse (WINDOW_COMMANDS' open_beside): the new
+            -- editor starts where the plug-in put the cursor, by the same route as :e +10 name.
+            package.loaded['neovim4eclipse.host_commands'].open_at = function(file, line, col)
+              open_commands[canonical(file)] = ('call cursor(%d, %d)'):format(line, col)
             end
             -- ui2 leaves a line that ran on the command row, as Neovim does (:set nu stays shown).
             -- For a line :Eclipse replaced that would be the replacement (:Eclipse window focus l 0
@@ -591,7 +598,7 @@ final class LuaScripts {
                 return
               end
               local args = vim.list_slice(o.fargs, 2)
-              local command -- the +cmd of :e +cmd name, which Neovim runs itself (open_command)
+              local command -- the +cmd of :e +cmd name, which Neovim runs itself (open_commands)
               if file_commands[name] then
                 if args[1] == FINAL then
                   -- The usual way: eclipse_form wrote this line from the : line as typed, and
@@ -626,7 +633,7 @@ final class LuaScripts {
               if command then
                 local file = args[#args]
                 if file and file:sub(1, 2) ~= '++' and canonical(file) ~= canonical(vim.api.nvim_buf_get_name(0)) then
-                  open_command = { file = canonical(file), command = command }
+                  open_commands[canonical(file)] = command
                 else
                   run_open_command(command) -- :e +10, or :e +10 of this file: here, now
                 end
@@ -909,7 +916,7 @@ final class LuaScripts {
                   return
                 end
                 local line = vim.fn.getcmdline()
-                open_command = nil -- a +cmd whose file Eclipse never showed
+                open_commands = {} -- +cmds whose files Eclipse never showed
                 refusing = {} -- a line that never got to its :Eclipse (an error before it) left some
                 local cmd = replacement(line)
                 if cmd then
@@ -1232,12 +1239,14 @@ final class LuaScripts {
      *
      * <p>The second net, {@code WinNew}, closes a window Eclipse cannot show (a stray split, the
      * quickfix window) once the command that opened it is over; floats are left to
-     * {@code close_undrawn} ({@link #CLOSE_UNDRAWN_FLOAT}). Two kinds of
+     * {@code close_undrawn} ({@link #CLOSE_UNDRAWN_FLOAT}). A changed buffer outlives that close,
+     * whatever its {@code 'bufhidden'}. Two kinds of
      * window it hands to a page editor instead: a {@code :checkhealth} report's and a help
      * window ({@code :help}, {@code :helpgrep}). Their buffer stays, and
      * {@code eclipse_view_page(kind, buf, line)} asks Eclipse to show it in a page window of its
      * own ({@code show_page}); the window it came in closes, with no message
-     * ({@code docs/ARCHITECTURE.md}, decision 10).
+     * ({@code docs/ARCHITECTURE.md}, decision 10). A window on a file (a picker's split action)
+     * becomes an Eclipse split or editor tab on that file, at its cursor ({@code take_file_window}).
      */
     static final String WINDOWS = """
             local home_buf = tonumber((select(1, ...)))
@@ -1284,9 +1293,15 @@ final class LuaScripts {
             for _, win in ipairs(vim.api.nvim_list_wins()) do
               seen[win] = true
             end
-            -- The window each new window was opened from (the WinNew net below): kept per window,
-            -- since a check scheduled for an earlier window may be the one that finds a report.
+            -- The window each window was first entered from (WinEnter, by the WinNew net below);
+            -- one opened without entering it has none until it is entered. Kept per window, since
+            -- a check scheduled for an earlier window may be the one that finds a report.
             local opened_from = {}
+            -- The editor's window the action behind each new window began in, through any window
+            -- the same action opened on the way. Example: fzf-lua's tab action on two files opens
+            -- the second tab page from the first, which is no editor's and is gone by the time the
+            -- net reaches the second, so it is worked out here, as each window opens.
+            local from_editor = {}
             vim.o.showtabline = 0
 
             --- Runs fn(...) without Neovim's file info message ('shortmess' F: putting a buffer in a
@@ -1967,6 +1982,20 @@ final class LuaScripts {
               return false
             end
 
+            --- Ends the current insert, keeping the cursor of the window Neovim is in now. :stopinsert
+            --- takes effect once the running call is over, in that window, and Esc moves the cursor a
+            --- column left there: it is put back as the insert ends, so the editor's caret stays.
+            local function stop_insert_in_place()
+              local landed = vim.api.nvim_get_current_win()
+              local at = vim.api.nvim_win_get_cursor(landed)
+              vim.api.nvim_create_autocmd('ModeChanged', { once = true, pattern = '[iR]*:*', callback = function()
+                if vim.api.nvim_win_is_valid(landed) and vim.api.nvim_get_current_win() == landed then
+                  pcall(vim.api.nvim_win_set_cursor, landed, at)
+                end
+              end })
+              vim.cmd.stopinsert()
+            end
+
             --- Leaves the plug-in's float the cursor is in, closing it (close_float): the user left
             --- the editor for another part of Eclipse, clicked its text, or turned Neovim mode off
             --- (editor/LineOnFocusLoss, NeovimEditorController). An insert in it ends first. Again
@@ -2005,17 +2034,7 @@ final class LuaScripts {
                 end
               end
               if stop then
-                -- :stopinsert takes effect once this call is over, in the window Neovim is in by then,
-                -- the editor's, and Esc moves the cursor a column left there: put it back as the insert
-                -- ends, so that the editor's caret stays where it was.
-                local landed = vim.api.nvim_get_current_win()
-                local at = vim.api.nvim_win_get_cursor(landed)
-                vim.api.nvim_create_autocmd('ModeChanged', { once = true, pattern = '[iR]*:*', callback = function()
-                  if vim.api.nvim_win_is_valid(landed) and vim.api.nvim_get_current_win() == landed then
-                    pcall(vim.api.nvim_win_set_cursor, landed, at)
-                  end
-                end })
-                vim.cmd.stopinsert()
+                stop_insert_in_place() -- in the window Neovim is in by now, the editor's
               end
               return closed
             end
@@ -2170,12 +2189,14 @@ final class LuaScripts {
                 page_kind[tonumber(ev.match)] = nil
                 seen[tonumber(ev.match)] = nil
                 opened_from[tonumber(ev.match)] = nil
+                from_editor[tonumber(ev.match)] = nil
                 vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_window_closed', tonumber(ev.match))
               end,
             })
             -- The second safety net: a window opened next to an editor's, in its tab, by something the
-            -- refusals do not see (a plug-in's :split, <Cmd>split, vim.cmd.split()). Eclipse would not
-            -- show it, but it would take the keys and half the editor's rows. Closed once the
+            -- refusals do not see (a plug-in's :split, <Cmd>split, vim.cmd.split()). On a file it
+            -- becomes an Eclipse split or editor tab (take_file_window). Any other Eclipse would not
+            -- show, but it would take the keys and half the editor's rows. Closed once the
             -- command that opened it is over, not inside its own WinNew, while that command still
             -- runs (and still fills the window, as :checkhealth does). The quickfix, location list and preview windows
             -- (:copen, :lopen, :pedit) are closed too: Eclipse cannot show them either, and in the
@@ -2267,8 +2288,103 @@ final class LuaScripts {
               end
               return true
             end
+            --- Before win closes with force: a changed buffer stays, hidden. Without this its
+            --- 'bufhidden' (wipe, delete, unload) would discard the changes with its last window.
+            --- Only a buffer that can be written: a scratch buffer's 'modified' protects nothing.
+            local function keep_changes(win)
+              local buf = vim.api.nvim_win_get_buf(win)
+              local buftype = vim.bo[buf].buftype
+              if vim.bo[buf].modified and (buftype == '' or buftype == 'acwrite')
+                  and #vim.fn.win_findbuf(buf) == 1 then
+                vim.bo[buf].bufhidden = 'hide'
+              end
+            end
+            --- The file of buf if a plug-in's window on it can become an Eclipse editor: an open
+            --- document, or a plain buffer of a readable file without unsaved changes. Nothing else
+            --- (a scratch or terminal buffer, a name like fugitive://, an untitled editor's), so
+            --- that what passes is what :split file could open. Closing a window on a document
+            --- loses nothing, since the document's own editor keeps showing its buffer.
+            local function file_to_hand_over(buf)
+              local document = M.is_document(buf)
+              local name = vim.b[buf].neovim4eclipse_file or vim.api.nvim_buf_get_name(buf)
+              if not document and (vim.bo[buf].buftype ~= '' or vim.bo[buf].modified) then
+                return nil
+              end
+              if name == '' or vim.fn.isabsolutepath(name) == 0 or name:match('^%a[%w+.-]*://')
+                  or vim.fn.filereadable(name) ~= 1 then
+                return nil
+              end
+              return name
+            end
+            --- A plug-in's window on a file (a picker's Ctrl-V, Ctrl-X or Ctrl-T, a plain
+            --- vim.cmd.split(file)) becomes an Eclipse split or editor tab, on the side Neovim put
+            --- it and at its cursor; Neovim's window closes. Eclipse shows each window as an editor,
+            --- so this is the window the plug-in asked for. Decided here because every window a
+            --- plug-in opens passes this net. Example: Ctrl-V on b.txt in Telescope, with
+            --- 'splitright' off: a window left of the editor's, so an editor to its left.
+            local function take_file_window(win)
+              local commands = package.loaded['neovim4eclipse.window_commands']
+              if not commands or not vim.api.nvim_win_is_valid(win) or vim.fn.win_gettype(win) ~= '' then
+                return false
+              end
+              local buf = vim.api.nvim_win_get_buf(win)
+              local file = file_to_hand_over(buf)
+              if not file then
+                return false
+              end
+              local tab = vim.api.nvim_win_get_tabpage(win)
+              -- Read from Neovim, not remembered: an editor's window that is current is where the
+              -- action is (a plug-in's split opened without entering it, the next window of a
+              -- pass). Else Neovim is in a plug-in's window: the editor that one came from.
+              local current = vim.api.nvim_get_current_win()
+              -- Opened behind a float that has the keyboard: left to the net's plain close. Handing
+              -- it over would move Neovim into the editor, still in the float's mode. Example: a
+              -- plug-in's background split while Telescope's prompt is in Insert mode; the next
+              -- keys would be typed into the document.
+              if win ~= current and M.focused_float(current) then
+                return false
+              end
+              local before = own[current] and current or from_editor[win] or from_editor[current]
+              if not (before and own[before] and vim.api.nvim_win_is_valid(before)) then
+                before = nil -- none known: its tab's editor
+                for _, w in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+                  if own[w] then
+                    before = w
+                    break
+                  end
+                end
+              end
+              if not before then
+                return false
+              end
+              local at = vim.api.nvim_win_get_cursor(win)
+              pcall(vim.api.nvim_set_current_win, before)
+              -- An insert begun in a float must not go on in the editor: a plug-in that opens the
+              -- split without :stopinsert would leave the next keys typing into the document.
+              if insert_float ~= nil and vim.api.nvim_get_mode().mode:match('^[iR]') then
+                stop_insert_in_place()
+              end
+              local where = 'tab'
+              if vim.api.nvim_win_get_tabpage(before) == tab then
+                local new, old = vim.fn.win_screenpos(win), vim.fn.win_screenpos(before)
+                if new[1] == old[1] then
+                  where = new[2] < old[2] and 'left' or 'right'
+                else
+                  where = new[1] < old[1] and 'above' or 'below'
+                end
+              end
+              keep_changes(win)
+              if not pcall(vim.api.nvim_win_close, win, true) then
+                return false
+              end
+              commands.open_beside(where, file, at[1], at[2] + 1)
+              return true
+            end
             -- The window last left: when a command opens a window and enters it (:checkhealth's
-            -- `tab sbuffer`, a split), WinLeave fires in the old window first, then WinNew in the new.
+            -- `tab sbuffer`, a split), WinLeave fires in the old window, then WinNew and WinEnter in
+            -- the new. A window opened without entering it (nvim_open_win(buf, false, ...)) fires
+            -- WinNew alone, with that window current for the moment, so only WinEnter says that
+            -- left_from is where a window came from: at WinNew it may be an editor left long ago.
             local left_from = home
             vim.api.nvim_create_autocmd('WinLeave', {
               group = group,
@@ -2276,15 +2392,19 @@ final class LuaScripts {
                 left_from = vim.api.nvim_get_current_win()
               end,
             })
+            vim.api.nvim_create_autocmd('WinEnter', {
+              group = group,
+              callback = function()
+                local win = vim.api.nvim_get_current_win()
+                if win ~= left_from and not own[win] and not opened_from[win] then
+                  opened_from[win] = left_from
+                  from_editor[win] = own[left_from] and left_from or from_editor[left_from]
+                end
+              end,
+            })
             vim.api.nvim_create_autocmd('WinNew', {
               group = group,
               callback = function()
-                -- By WinNew Neovim is already in a window it opened and entered; it came from the one
-                -- last left. (A window opened without entering it leaves the current one current.)
-                local current = vim.api.nvim_get_current_win()
-                if current ~= left_from then
-                  opened_from[current] = left_from
-                end
                 vim.schedule(function()
                   local why, list
                   local quickfix = package.loaded['neovim4eclipse.quickfix']
@@ -2295,8 +2415,12 @@ final class LuaScripts {
                     seen[win] = true
                     local wintype = vim.fn.win_gettype(win)
                     -- A report taken leaves its window closed: the checks below then pass it by.
-                    local taken = new and not own[win] and (take_health_report(win) or take_help(win))
+                    local taken = new and not own[win] and (take_health_report(win) or take_help(win)
+                      or take_file_window(win))
                     local reason = not taken and not own[win] and why_closed[wintype]
+                    if reason and vim.api.nvim_win_is_valid(win) then
+                      keep_changes(win)
+                    end
                     if reason and vim.api.nvim_win_is_valid(win) and pcall(vim.api.nvim_win_close, win, true) then
                       if quickfix and (wintype == 'quickfix' or wintype == 'loclist') then
                         list = list or wintype
@@ -2377,8 +2501,9 @@ final class LuaScripts {
      * floating window the user entered), {@code :q}, {@code :close}, {@code Ctrl-W q} and
      * {@code Ctrl-W c} are Neovim's again: they close that window, as in Neovim, not the editor.
      *
-     * <p>A window opened some other way (a plug-in's {@code vim.cmd.split()}) is closed by the
-     * {@code WinNew} safety net of {@link #WINDOWS}. The module is
+     * <p>A window opened some other way (a plug-in's {@code vim.cmd.split()}) reaches the
+     * {@code WinNew} safety net of {@link #WINDOWS}: on a file it becomes an editor through
+     * {@code open_beside}, on anything else it is closed. The module is
      * {@code require('neovim4eclipse.window_commands')}; {@link #SPLIT_WINDOW} calls it.
      */
     static final String WINDOW_COMMANDS = """
@@ -2621,6 +2746,25 @@ final class LuaScripts {
             local function send(words)
               vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_command', words[1], false, vim.list_slice(words, 2),
                 vim.api.nvim_get_current_win())
+            end
+
+            --- How each place of a plug-in's window reads as :split's arguments (WINDOWS' net).
+            local BESIDE = {
+              above = { false, { split = 'aboveleft' } },
+              below = { false, { split = 'belowright' } },
+              left = { true, { split = 'aboveleft' } },
+              right = { true, { split = 'belowright' } },
+              tab = { false, TAB },
+            }
+            --- Opens `file` in an Eclipse editor on that side, or as a tab ('tab'), with its cursor
+            --- at (line, col), both 1-based: what a plug-in's own split of a file becomes, by the
+            --- route :vsplit file takes, so the same checks apply. Example: Telescope's Ctrl-V on
+            --- b.txt, line 40: ('left', '/ws/b.txt', 40, 1) sends window split left file /ws/b.txt.
+            function M.open_beside(where, file, line, col)
+              local place = BESIDE[where]
+              local path = full(file)
+              host.open_at(path, line, col)
+              send(split(place[1], place[2], path))
             end
 
             --- Toggle Split Editor in an editor Neovim drives (SPLIT_WINDOW): :split, or :vsplit

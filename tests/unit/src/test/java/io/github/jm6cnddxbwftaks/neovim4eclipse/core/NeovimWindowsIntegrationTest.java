@@ -77,6 +77,39 @@ class NeovimWindowsIntegrationTest {
         }
     }
 
+    /**
+     * A plug-in that closes its float and opens a file split without {@code :stopinsert}: Neovim
+     * would go on in Insert mode in the editor's window, and the next keys would type into the
+     * document. The insert ends with the hand-over, and the editor's cursor stays where it was.
+     */
+    @Test
+    void anInsertBegunInAFloatEndsWhenItsFileWindowIsHandedOver(@org.junit.jupiter.api.io.TempDir Path folder)
+            throws Exception {
+        TestNeovim.require();
+        Path file = java.nio.file.Files.writeString(folder.resolve("other.txt"), "one\ntwo\n");
+        try (NeovimSession s = NeovimSession.start(TestNeovim.PATH, List.of("--clean"))) {
+            s.lua("""
+                    vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'document' })
+                    vim.api.nvim_win_set_cursor(0, { 1, 3 })
+                    vim.g.editor_win = vim.api.nvim_get_current_win()
+                    vim.g.plain_float = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), true,
+                      { relative = 'editor', row = 1, col = 1, width = 30, height = 5 })
+                    vim.cmd.startinsert()
+                    """);
+            waitFor(() -> "i".equals(s.lua("return vim.api.nvim_get_mode().mode")), "Insert mode in the float");
+            s.lua("vim.schedule(function() vim.api.nvim_win_close(vim.g.plain_float, true)"
+                    + " vim.cmd.vsplit(vim.fn.fnameescape([[" + file + "]])) end)");
+            // Only the plain windows: ui2's command line and messages are floats of this tab page too.
+            waitFor(() -> number(s, "return #vim.tbl_filter(function(w) return vim.api.nvim_win_get_config(w)"
+                    + ".relative == '' end, vim.api.nvim_tabpage_list_wins(0))") == 1
+                    && number(s, "return vim.g.editor_win") == number(s, "return vim.api.nvim_get_current_win()"),
+                    "the split handed over");
+            waitFor(() -> "n".equals(s.lua("return vim.api.nvim_get_mode().mode")), "the insert ended");
+            assertEquals(3, number(s, "return vim.api.nvim_win_get_cursor(0)[2]"), "the editor's cursor stays");
+            assertEquals("document", s.lua("return vim.api.nvim_get_current_line()"));
+        }
+    }
+
     private interface Check {
         boolean holds() throws Exception;
     }

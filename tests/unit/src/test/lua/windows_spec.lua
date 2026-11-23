@@ -721,6 +721,222 @@ t.test('a split a plug-in opens in an editor\'s tab is closed again: the safety 
   t.ok(vim.v.errmsg:find('Window closed', 1, true), vim.v.errmsg)
 end)
 
+--- A file on disk, with three lines, for a plug-in's split to show.
+local function file_on_disk()
+  local path = vim.fn.tempname() .. '.txt'
+  vim.fn.writefile({ 'one', 'two', 'three' }, path)
+  return path
+end
+
+--- The `window` commands sent since the last t.forget(), once `n` have come and the net has run.
+local function handed_over(n)
+  t.wait_for('the window handed to Eclipse', function() return #sent_windows() >= n end)
+  return sent_windows()
+end
+
+t.test("a plug-in's split of a file becomes an Eclipse split on the side Neovim put it", function()
+  local win = commands()
+  local path = file_on_disk()
+  for _, case in ipairs({ { 'aboveleft vsplit', 'left' }, { 'belowright vsplit', 'right' },
+    { 'aboveleft split', 'above' }, { 'belowright split', 'below' } }) do
+    t.forget()
+    vim.cmd(case[1] .. ' ' .. vim.fn.fnameescape(path)) -- not the command line: no translation sees it
+    local words = handed_over(1)[1]
+    t.eq({ 'window', 'split', case[2], 'file' }, vim.list_slice(words, 1, 4), case[1])
+    t.same_file(path, words[5])
+    t.eq(1, windows_in_tab(), 'its window closed')
+    t.eq(win, vim.api.nvim_get_current_win(), "Neovim back in the editor's window")
+  end
+end)
+
+t.test("a plug-in's tab page on a file becomes an editor tab", function()
+  local win = commands()
+  local path = file_on_disk()
+  local tabs = #vim.api.nvim_list_tabpages()
+  vim.v.errmsg = ''
+  t.forget()
+  vim.cmd('tabedit ' .. vim.fn.fnameescape(path))
+  local words = handed_over(1)[1]
+  t.eq({ 'window', 'tab', 'file' }, vim.list_slice(words, 1, 3))
+  t.same_file(path, words[4])
+  t.eq(tabs, #vim.api.nvim_list_tabpages(), 'its tab page closed')
+  t.eq(win, vim.api.nvim_get_current_win())
+  t.eq('', vim.v.errmsg, 'no "Window closed" message: the file went somewhere')
+end)
+
+t.test("the new editor starts at the cursor the plug-in's window had", function()
+  commands()
+  local path = file_on_disk()
+  t.forget()
+  vim.cmd('vsplit ' .. vim.fn.fnameescape(path))
+  vim.api.nvim_win_set_cursor(0, { 3, 2 })
+  handed_over(1)
+  vim.cmd('edit ' .. vim.fn.fnameescape(path)) -- stands in for the new editor's window
+  t.ok(package.loaded['neovim4eclipse.host_commands'].take_open_command(path), 'a position is waiting')
+  t.eq({ 3, 2 }, vim.api.nvim_win_get_cursor(0))
+end)
+
+t.test('two files opened by one action each start at their own cursor', function()
+  commands()
+  local first, second = file_on_disk(), file_on_disk()
+  t.forget()
+  vim.cmd('vsplit ' .. vim.fn.fnameescape(first))
+  vim.api.nvim_win_set_cursor(0, { 2, 1 })
+  vim.cmd('vsplit ' .. vim.fn.fnameescape(second))
+  vim.api.nvim_win_set_cursor(0, { 3, 2 })
+  handed_over(2)
+  local host = package.loaded['neovim4eclipse.host_commands']
+  for _, case in ipairs({ { first, { 2, 1 } }, { second, { 3, 2 } } }) do
+    vim.cmd('edit ' .. vim.fn.fnameescape(case[1])) -- stands in for the new editor's window
+    t.ok(host.take_open_command(case[1]), 'a position is waiting')
+    t.eq(case[2], vim.api.nvim_win_get_cursor(0))
+  end
+end)
+
+t.test('every tab page of one action becomes an editor tab', function()
+  local win = commands()
+  for _, open_second in ipairs({ 'tabnew | setlocal bufhidden=wipe | edit ', 'vsplit ' }) do
+    local first, second = file_on_disk(), file_on_disk()
+    vim.v.errmsg = ''
+    t.forget()
+    vim.cmd('tabnew | setlocal bufhidden=wipe | edit ' .. vim.fn.fnameescape(first)) -- as fzf-lua's action
+    vim.cmd(open_second .. vim.fn.fnameescape(second))
+    local words = handed_over(2)
+    t.eq({ 'window', 'tab', 'file' }, vim.list_slice(words[1], 1, 3), open_second)
+    t.eq({ 'window', 'tab', 'file' }, vim.list_slice(words[2], 1, 3), open_second)
+    -- In the order of Neovim's window list: a vsplit to the left comes before the window it split.
+    local files = { first, second }
+    table.sort(files)
+    table.sort(words, function(x, y) return x[4] < y[4] end)
+    t.same_file(files[1], words[1][4])
+    t.same_file(files[2], words[2][4])
+    t.eq(win, vim.api.nvim_get_current_win(), "Neovim back in the editor's window")
+    t.eq('', vim.v.errmsg, 'no "Window closed" message')
+  end
+end)
+
+--- Two editors, with Neovim moved from the first into the second, and the nets' checks done.
+local function in_second_editor()
+  start()
+  t.run('HOST_COMMANDS', t.host_rules)
+  t.run('WINDOW_COMMANDS')
+  local a, b = buffer(3), buffer(3)
+  local wa, wb = open(a), open(b)
+  show(wa, a)
+  show(wb, b)
+  t.eq(wb, vim.api.nvim_get_current_win())
+  local settled = false
+  vim.schedule(function() settled = true end)
+  t.wait_for('the earlier checks', function() return settled end)
+  t.forget()
+  return wb
+end
+
+t.test('a file window opened without entering it goes beside the editor Neovim is in', function()
+  local wb = in_second_editor()
+  local buf = vim.fn.bufadd(file_on_disk())
+  vim.fn.bufload(buf)
+  vim.api.nvim_open_win(buf, false, { split = 'right', win = wb })
+  t.eq({ 'window', 'split', 'right', 'file' }, vim.list_slice(handed_over(1)[1], 1, 4))
+  t.eq(wb, vim.api.nvim_get_current_win(), 'Neovim stays in the editor Eclipse has active')
+end)
+
+t.test('a file window opened behind a float with the keyboard is closed; the keys stay in the float', function()
+  local wb = in_second_editor()
+  for _, keys in ipairs({ '', 'i' }) do -- Normal and Insert mode
+    local float = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), true,
+      { relative = 'editor', row = 1, col = 1, width = 10, height = 2 })
+    local mode = vim.api.nvim_get_mode().mode
+    vim.v.errmsg = ''
+    t.forget()
+    local after = t.during(keys, function()
+      local before = vim.api.nvim_get_mode().mode
+      local buf = vim.fn.bufadd(file_on_disk())
+      vim.fn.bufload(buf)
+      local behind = vim.api.nvim_open_win(buf, false, { split = 'right', win = wb })
+      t.wait_for('the window closed', function() return not vim.api.nvim_win_is_valid(behind) end)
+      return { before = before, mode = vim.api.nvim_get_mode().mode, win = vim.api.nvim_get_current_win() }
+    end)
+    t.eq(keys == 'i' and 'i' or mode, after.before)
+    t.eq(after.before, after.mode, 'the mode is the float\'s still')
+    t.eq(float, after.win, 'the cursor stays in the float')
+    t.eq({}, sent_windows(), 'nothing handed to Eclipse')
+    t.ok(vim.v.errmsg:find('Window closed', 1, true), vim.v.errmsg)
+    vim.api.nvim_win_close(float, true)
+  end
+end)
+
+t.test('a tab page opened from a float that was entered later comes back to its editor', function()
+  local wb = in_second_editor()
+  local float = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false,
+    { relative = 'editor', row = 1, col = 1, width = 10, height = 2 })
+  vim.api.nvim_set_current_win(float)
+  vim.cmd('tabedit ' .. vim.fn.fnameescape(file_on_disk()))
+  t.eq({ 'window', 'tab', 'file' }, vim.list_slice(handed_over(1)[1], 1, 3))
+  t.eq(wb, vim.api.nvim_get_current_win())
+  vim.api.nvim_win_close(float, true)
+end)
+
+t.test('a help window opened without entering it leaves Neovim in its editor', function()
+  local wb = in_second_editor()
+  local buf = vim.fn.bufadd(vim.env.VIMRUNTIME .. '/doc/help.txt')
+  vim.fn.bufload(buf)
+  vim.bo[buf].buftype = 'help'
+  vim.api.nvim_open_win(buf, false, { split = 'right', win = wb })
+  t.wait_for('the help page', function() return #t.sent('eclipse_view_page') == 1 end)
+  t.eq(wb, vim.api.nvim_get_current_win())
+end)
+
+t.test("a changed buffer outlives the net's close, whatever its 'bufhidden'", function()
+  commands()
+  for _, bufhidden in ipairs({ 'wipe', 'delete', 'unload' }) do
+    local path = file_on_disk()
+    vim.cmd('split ' .. vim.fn.fnameescape(path))
+    local buf = vim.api.nvim_get_current_buf()
+    vim.bo[buf].bufhidden = bufhidden
+    vim.api.nvim_buf_set_lines(buf, 0, 1, false, { 'changed' })
+    t.wait_for('the stray window to close', function() return windows_in_tab() == 1 end)
+    t.ok(vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf), bufhidden)
+    t.eq('changed', vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1], bufhidden)
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end
+end)
+
+t.test("a plug-in's split of the editor's own file is a clone of it", function()
+  commands()
+  local path = file_on_disk()
+  vim.bo.buftype = ''
+  vim.api.nvim_buf_set_name(0, path)
+  vim.bo.modified = false
+  t.forget()
+  vim.cmd('belowright split')
+  t.eq({ 'window', 'split', 'below', 'same' }, handed_over(1)[1])
+end)
+
+t.test('a window on anything but a readable, unchanged file is closed as before', function()
+  commands()
+  local changed = file_on_disk()
+  for _, open in ipairs({
+    function() vim.cmd.split() end, -- a scratch buffer, the editor's in these specs
+    function() vim.cmd('split ' .. vim.fn.fnameescape(vim.fn.tempname() .. '-missing')) end,
+    function()
+      vim.cmd.new()
+      vim.api.nvim_buf_set_name(0, 'fugitive:///repo/.git//0/a.txt')
+    end,
+    function()
+      vim.cmd('split ' .. vim.fn.fnameescape(changed))
+      vim.api.nvim_buf_set_lines(0, 0, 1, false, { 'changed' })
+    end,
+  }) do
+    vim.v.errmsg = ''
+    t.forget()
+    open()
+    t.wait_for('the stray window to close', function() return windows_in_tab() == 1 end)
+    t.eq({}, sent_windows(), 'nothing handed to Eclipse')
+    t.ok(vim.v.errmsg:find('Window closed', 1, true), vim.v.errmsg)
+  end
+end)
+
 t.test(':checkhealth hands its report buffer to a page editor and leaves no window or message', function()
   local win = commands()
   vim.v.errmsg = ''

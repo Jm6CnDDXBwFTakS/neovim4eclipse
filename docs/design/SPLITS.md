@@ -107,8 +107,16 @@ hint: Neovim has turned it into one of its hidden tab pages before the plug-in s
 says nothing about the editor tabs. `:tabclose` alone closes this editor, as before.
 
 **Refused**, with a message: `:tabonly!`, and the splits that jump first (`:stag`, `Ctrl-W ]`,
-`Ctrl-W F`; see "Not done"). A window a plug-in opens in Neovim beside an editor's is still closed by the `WinNew`
-safety net of `LuaScripts.WINDOWS`: Eclipse never heard of it.
+`Ctrl-W F`; see "Not done"). A window a plug-in opens in Neovim beside an editor's reaches the `WinNew` safety net of
+`LuaScripts.WINDOWS`. On a file (an open document, or a readable plain buffer without unsaved
+changes) it becomes an editor: the net reads which side Neovim put it on, closes it, and sends the
+same `window split` or `window tab` words as `:vsplit file`, with the plug-in's cursor as the new
+editor's position (`take_file_window`, `open_beside`). Example: `Ctrl-V` on b.txt, line 40, in a
+picker. On anything else (a file tree's scratch buffer, a `fugitive://` name) it is closed. So is
+one left behind a plug-in's float that has the keyboard when the net runs (opened without entering
+it, or with a float entered right after): handing it over would move Neovim into the editor still in
+the float's mode, and the next keys would reach the document. For the same reason, a hand-over that
+does go ahead first ends an insert begun in a float.
 
 ## 3. The window commands on the editor area
 

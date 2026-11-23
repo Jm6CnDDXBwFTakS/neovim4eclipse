@@ -18,10 +18,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.eclipse.core.resources.IFile;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IPageLayout;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.contexts.IContextService;
@@ -61,7 +65,8 @@ class PickersEndToEndTest extends EndToEndTestBase {
 
     @AfterEach
     void closeTelescope() {
-        SessionProbe.lua(session, PinnedPlugins.CLOSE_TELESCOPE + " pcall(vim.keymap.del, 'n', 'gp')");
+        SessionProbe.lua(session, PinnedPlugins.CLOSE_TELESCOPE + " pcall(vim.keymap.del, 'n', 'gp')"
+                + " pcall(vim.keymap.del, 'n', 'gO')");
         waitUntil("no picker drawn", TIMEOUT_MS, () -> {
             settle();
             return pluginFloats().isEmpty();
@@ -250,6 +255,116 @@ class PickersEndToEndTest extends EndToEndTestBase {
             settle();
             return pluginFloats().isEmpty() && !ctrlContextActive('s');
         }, () -> "; drawn:\n" + drawn() + "mode " + session.getMode());
+    }
+
+    /**
+     * A picker of its own on one other file, line 3, mapped to {@code gO}: Telescope's Ctrl-X,
+     * Ctrl-V and Ctrl-T then act on it as on any file picker's entry, on every system (no
+     * {@code find}, {@code fd} or {@code rg}).
+     */
+    private void mapPickerOf(IFile file) {
+        SessionProbe.lua(session, """
+                vim.keymap.set('n', 'gO', function()
+                  local conf = require('telescope.config').values
+                  require('telescope.pickers').new({}, {
+                    prompt_title = 'Files',
+                    finder = require('telescope.finders').new_table({
+                      results = { [[%s]] },
+                      entry_maker = function(path)
+                        return { value = path, display = 'other.txt', ordinal = 'other.txt', path = path, lnum = 3 }
+                      end,
+                    }),
+                    sorter = conf.generic_sorter({}),
+                  }):find()
+                end)
+                """.formatted(file.getLocation().toOSString()));
+    }
+
+    private IFile otherFile() throws Exception {
+        IFile file = project.getFile("other.txt");
+        if (!file.exists()) {
+            file.create(new java.io.ByteArrayInputStream("one\ntwo\nthree\n".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    true, null);
+        }
+        return file;
+    }
+
+    /** Closes every editor but the test's own, and gives it the keyboard back. */
+    private void closeOtherEditors() {
+        for (IEditorReference reference : page().getEditorReferences()) {
+            IEditorPart other = reference.getEditor(false);
+            if (other != null && other != editor) {
+                page().closeEditor(other, false);
+            }
+        }
+        page().activate(editor);
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+    }
+
+    /** The picker's action on the other file; it opens in a new editor, split or not, on line 3. */
+    private void pickerActionOpensTheFile(char key, boolean split) throws Exception {
+        String text = document.get();
+        IFile other = otherFile();
+        mapPickerOf(other);
+        try {
+            UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+            type(widget, "gO");
+            waitUntil("the picker drawn", TIMEOUT_MS, () -> pickerShows("other.txt"), () -> "; drawn:\n" + drawn());
+            ctrlKey(widget, key);
+            waitUntil("other.txt in a new editor, its caret on line 3", TIMEOUT_MS, () -> {
+                settle();
+                IEditorPart active = page().getActiveEditor();
+                return active != editor && "other.txt".equals(active.getTitle())
+                        && active.getAdapter(Control.class) instanceof StyledText opened
+                        && opened.getLineAtOffset(opened.getCaretOffset()) == 2 && pluginFloats().isEmpty();
+            }, () -> "; active " + page().getActiveEditor().getTitle() + ", drawn:\n" + drawn());
+            assertEquals(split, EditorSplits.isSplit(page().getActiveEditor()), "a split, or a tab of this stack");
+            // Normal mode in the new editor: in Insert these keys would be typed into a file.
+            type((StyledText) page().getActiveEditor().getAdapter(Control.class), "zz");
+            settle();
+            assertFalse(page().getActiveEditor().isDirty(), "the keys after the action change no file");
+            assertEquals(text, document.get(), "the document keeps its text");
+        } finally {
+            closeOtherEditors();
+        }
+    }
+
+    @Test
+    void ctrlXInThePickerOpensTheFileInASplit() throws Exception {
+        pickerActionOpensTheFile('x', true);
+    }
+
+    @Test
+    void ctrlVInThePickerOpensTheFileInASplit() throws Exception {
+        pickerActionOpensTheFile('v', true);
+    }
+
+    @Test
+    void ctrlTInThePickerOpensTheFileInAnEditorTab() throws Exception {
+        pickerActionOpensTheFile('t', false);
+    }
+
+    /** Ctrl-V on a line of the file itself: a clone of the editor on that line, the first editor where it was. */
+    @Test
+    void ctrlVOnALineOfThisFileClonesTheEditorThere() {
+        int line = widget.getLineAtOffset(widget.getCaretOffset());
+        try {
+            type(widget, "gp");
+            waitUntil("Telescope drawn", TIMEOUT_MS, () -> pickerShows("beta"), () -> "; drawn:\n" + drawn());
+            type(widget, "gam");
+            waitUntil("narrowed to gamma", TIMEOUT_MS, () -> pickerShows("gam") && telescopeWindows("beta") == 0,
+                    () -> "; drawn:\n" + drawn());
+            ctrlKey(widget, 'v');
+            waitUntil("a clone on gamma's line", TIMEOUT_MS, () -> {
+                settle();
+                IEditorPart active = page().getActiveEditor();
+                return active != editor && active.getAdapter(Control.class) instanceof StyledText clone
+                        && clone.getLineAtOffset(clone.getCaretOffset()) == 2;
+            }, () -> "; active " + page().getActiveEditor().getTitle());
+            assertEquals(line, widget.getLineAtOffset(widget.getCaretOffset()), "the first editor stays where it was");
+        } finally {
+            closeOtherEditors();
+        }
     }
 
     /** Leaving the editor for a view closes every window of the picker and ends its insert. */

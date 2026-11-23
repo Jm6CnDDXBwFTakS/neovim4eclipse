@@ -30,6 +30,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - While a plug-in's floating window has the keyboard, every `Ctrl` letter goes to Neovim, whatever
   the *Ctrl Keys* page says. Before, a letter left to Eclipse ran its command on the document
   behind the window (`Ctrl+A` selected the file, `Ctrl+F` opened Find/Replace).
+- A plug-in's own split or tab page on a file, such as `Ctrl+V`, `Ctrl+X` or `Ctrl+T` in a picker,
+  opens the file in an Eclipse split or editor tab, at the plug-in's cursor. Before, the window
+  was closed with a message and the file did not open.
 
 ### Fixed
 

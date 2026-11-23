@@ -27,7 +27,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * <p><b>Every letter in a plug-in's window</b> ({@link #toNeovim}): while Neovim's cursor is in a
  * plug-in's float (a picker's prompt), the keys are that window's, as in a terminal, and the page's
  * choice does not apply. Eclipse's command would act on the document behind the window. Example:
- * {@code Ctrl-V} in Telescope's prompt opens the entry in a vertical split; {@code Ctrl+A} does not
+ * {@code Ctrl-V} in Telescope's prompt opens the chosen file in a split; {@code Ctrl+A} does not
  * select the file behind it, {@code Ctrl+F} does not open Find/Replace.
  *
  * <p>Example: in the Java editor, {@code Ctrl+O} is Quick Outline. In normal mode it is Vim's

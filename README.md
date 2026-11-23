@@ -379,7 +379,9 @@ gets in your way:
      [Floating windows](docs/USER_GUIDE.md#floating-windows)), Neovim's own popup menu for `Ctrl-N`
      and for Tab on the `:` line ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and the labels of
      jump plug-ins (flash, leap, hop, mini.jump2d; see [Jump labels](docs/USER_GUIDE.md#jump-labels)).
-   - **Not shown:** split windows plug-ins open (file trees),
+   - **Opened in Eclipse:** a plug-in's own split or tab page on a file, such as a picker's
+     `Ctrl+V`, `Ctrl+X` or `Ctrl+T`: an Eclipse split or editor tab.
+   - **Not shown:** split windows plug-ins open on anything but a file (file trees),
      the menus of completion plug-ins (nvim-cmp, blink.cmp), and windows that follow typing in
      insert mode.
 

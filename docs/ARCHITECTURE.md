@@ -272,7 +272,9 @@ the editor (`util/HostCommand`, `QUIT`); Vim's splits are Eclipse editors in sta
 commands' `translate` hook as `:Eclipse window`, and `editor/EditorSplits` does them to the editor
 area; [design/SPLITS.md](design/SPLITS.md)); the tab commands are refused through the `refuse`
 hook; a `WinNew` safety
-net closes any other window that is not the plug-in's, floating or special, and the quickfix,
+net turns a plug-in's window on a file into an Eclipse split or editor tab (a picker's `Ctrl-V`:
+`take_file_window`, by the route of `:vsplit file`), and closes any other window that is not the
+plug-in's, floating or special, and the quickfix,
 location list and preview windows, which Eclipse cannot show (the quickfix and location list
 windows are then shown the Eclipse way, section 8); floating windows are left alone, one that
 opens with the focus (a picker's prompt, `:Lazy`) too: drawn with the cursor, or, where the editor
