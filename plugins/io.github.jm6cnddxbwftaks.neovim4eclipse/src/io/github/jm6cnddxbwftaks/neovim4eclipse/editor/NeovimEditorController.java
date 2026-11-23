@@ -302,7 +302,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 editor.getSite().getService(IHandlerService.class), this::pasteIntoCommandLine);
         this.commandWindowPanel = new NeovimWindowPanel(styledText, new PanelCommands(session),
                 this::onCommandLineStateChanged);
-        this.floatingWindows = new FloatingWindows(styledText, this::floatMouse);
+        this.floatingWindows = new FloatingWindows(styledText, this::floatMouse, this::mouseThroughFloat);
         this.lineOnFocusLoss = new LineOnFocusLoss(styledText,
                 () -> !closed && neovimModeActive && session.commandLineOpen()
                         && !VimModes.isExMode(session.getMode()), // gQ: Vim cannot cancel its line
@@ -1081,6 +1081,20 @@ public final class NeovimEditorController implements AutoCloseable {
         boolean eclipseTypes = VimModes.isTyping(session.getMode()) && !session.isNeovimDrivenInsert();
         if (styledText.isFocusControl() && neovimHandlesMouse() && !eclipseTypes) {
             session.floatMouseAsync(grid, button, action, modifier, row, col);
+        }
+    }
+
+    /**
+     * The mouse that fell through a float with {@code mouse = false} onto the text: the left button
+     * as a click in the text, the wheel as the wheel on it. The middle button and the sideways
+     * wheel in the text stay Eclipse's ({@link NeovimMouse}, {@link NeovimWheel}), and Eclipse does
+     * not see an event on the float's canvas, so they do nothing here. UI thread.
+     */
+    private void mouseThroughFloat(String button, String action, String modifier, int x, int y) {
+        if ("left".equals(button)) {
+            mouse.fromFloat(action, modifier, x, y);
+        } else if ("wheel".equals(button) && modifier.isEmpty() && ("up".equals(action) || "down".equals(action))) {
+            wheel.notch("up".equals(action));
         }
     }
 

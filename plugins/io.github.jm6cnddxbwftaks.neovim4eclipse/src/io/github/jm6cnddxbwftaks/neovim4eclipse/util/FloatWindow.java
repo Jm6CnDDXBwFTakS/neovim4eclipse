@@ -30,8 +30,9 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  *                 editor's height is not a whole number of rows.
  * @param mouseGrid  the grid a click or the wheel on this window goes to ({@code nvim_input_mouse}),
  *                 or -1 when it takes none: a float with {@code mouse = false} (as one with
- *                 {@code focusable = false} is by default), ui2's windows and the popup menu.
- *                 Example: Telescope's results, grid 7: a click on its row 3 is
+ *                 {@code focusable = false} is by default), the popup menu, and ui2's windows
+ *                 unless Neovim's cursor is already in one (the pager entered with {@code g<}), as
+ *                 a click would otherwise enter it. Example: Telescope's results, grid 7: a click on its row 3 is
  *                 {@code ("left", "press", "", 7, 3, col)}.
  */
 public record FloatWindow(GridSnapshot grid, int row, int col, int hostRows, int hostCols, int zindex,
@@ -46,6 +47,17 @@ public record FloatWindow(GridSnapshot grid, int row, int col, int hostRows, int
      */
     public boolean focused() {
         return grid.cursorRow() >= 0 && !fromBottom;
+    }
+
+    /**
+     * Whether a click on this window belongs to what lies below it, as in Neovim, where a float
+     * with {@code mouse = false} is not there for the mouse: a plug-in's float that takes none.
+     * Not Neovim's own windows ({@link #fromBottom}, the popup menu: window -1): a click on the
+     * command line's row is no click in the text under it. Example: a notification with
+     * {@code focusable = false} over the code: a click on it places the cursor in the code.
+     */
+    public boolean mouseFallsThrough() {
+        return mouseGrid == -1 && !fromBottom && grid.window() != -1;
     }
 
     /** A float that takes no clicks. */

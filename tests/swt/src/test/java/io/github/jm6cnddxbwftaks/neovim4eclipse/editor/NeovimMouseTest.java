@@ -101,6 +101,30 @@ class NeovimMouseTest {
         assertEquals(List.of("press 1:0", "drag 1:1", "drag 3:1", "release 3:1"), sent);
     }
 
+    /** A float closed under a press can lose its release: a hover must not become a drag. */
+    @Test
+    void aPressWhoseReleaseWasLostDoesNotDragOnAHover() {
+        event(SWT.MouseDown, on(0), 1, 0);
+        event(SWT.MouseMove, on(3), 0, 0);
+        event(SWT.MouseMove, on(5), 0, 0);
+
+        assertEquals(List.of("press 1:0"), sent);
+        assertEquals(List.of(SWT.MouseMove, SWT.MouseMove), widgetSaw, "hovers are the widget's again");
+    }
+
+    /** The left button on a float that lets it through acts on the text at that point. */
+    @Test
+    void theLeftButtonThroughAFloatActsOnTheTextBelow() {
+        Point from = on(6);
+        Point to = on(13);
+        mouse.fromFloat("press", "", from.x, from.y);
+        mouse.fromFloat("drag", "", to.x, to.y);
+        mouse.fromFloat("release", "S", to.x, to.y);
+
+        assertEquals(List.of("press 1:6", "drag 3:1", "release 3:1S"), sent);
+        assertEquals(1, presses);
+    }
+
     @Test
     void shiftAndAltAreSentAsNeovimsModifiers() {
         event(SWT.MouseDown, on(2), 1, SWT.SHIFT);

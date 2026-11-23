@@ -108,6 +108,38 @@ final class NeovimMouse {
         if (event.widget != widget || widget.isDisposed()) {
             return;
         }
+        handle(event);
+    }
+
+    /**
+     * The left button on a float that lets the mouse through ({@code FloatingWindows.Below}), at
+     * ({@code x}, {@code y}) in the widget: handled as if it were on the text, since it is, for
+     * Neovim. The float's canvas got the event, so the widget does not see it and nothing needs
+     * swallowing. Example: a click on a notification over line 7 places the cursor on line 7.
+     *
+     * @param action   {@code "press"}, {@code "drag"} or {@code "release"}
+     * @param modifier Neovim's modifier letters ({@code GridMouse.modifiers}), {@code "S"} or
+     *                 {@code "A"} among them
+     */
+    void fromFloat(String action, String modifier, int x, int y) {
+        if (widget.isDisposed()) {
+            return;
+        }
+        Event event = new Event();
+        event.type = switch (action) {
+            case "press" -> SWT.MouseDown;
+            case "drag" -> SWT.MouseMove;
+            default -> SWT.MouseUp;
+        };
+        event.button = "drag".equals(action) ? 0 : 1;
+        event.x = x;
+        event.y = y;
+        event.stateMask = (modifier.contains("S") ? SWT.SHIFT : 0) | (modifier.contains("A") ? SWT.ALT : 0)
+                | ("drag".equals(action) ? SWT.BUTTON1 : 0);
+        handle(event);
+    }
+
+    private void handle(Event event) {
         switch (event.type) {
             case SWT.MouseDown -> {
                 if (!isNeovims(event)) {
@@ -133,7 +165,11 @@ final class NeovimMouse {
                 }
             }
             case SWT.MouseMove -> {
-                if (pressed) {
+                // Only with the button held: a press whose release was lost (a float it fell through
+                // closed under the pointer) must not turn a hover into a Visual selection.
+                if (pressed && (event.stateMask & SWT.BUTTON1) == 0) {
+                    pressed = false;
+                } else if (pressed) {
                     swallow(event);
                     send(MouseInput.Action.DRAG, event, false);
                 }

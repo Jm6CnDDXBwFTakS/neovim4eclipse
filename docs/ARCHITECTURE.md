@@ -1131,9 +1131,13 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   cursor is not where the user types then, so a list a config opens by itself would hang in the
   wrong place; a `Ctrl-N` is typed by Neovim, and drawn.
 - **No focus; the mouse goes to Neovim** (`editor/FloatingWindows`, `editor/GridMouse`): the left
-  button and the wheel on a plug-in's float are `nvim_input_mouse` on its grid
-  (`FloatWindow.mouseGrid`, -1 for `mouse = false`, ui2's windows and the popup menu;
-  `NeovimSession.floatMouseAsync`), under the gate of a click in the text
+  and middle buttons and the wheel, both ways, on a float are `nvim_input_mouse` on its grid
+  (`FloatWindow.mouseGrid`, -1 for `mouse = false`, the popup menu, and ui2's windows unless the
+  cursor is already in one, as Neovim enters a window on a click on its grid even when it is not
+  focusable; `NeovimSession.floatMouseAsync`). A plug-in's float with `mouse = false` is not there
+  for the mouse (`FloatWindow.mouseFallsThrough`): the event goes to the highest window under it that
+  takes one, else to the text (`NeovimMouse.fromFloat`, `NeovimWheel.notch`) or the page's grid, and
+  the press decides where, so its drag and release follow. All of it under the gate of a click in the text
   (`NeovimEditorController.neovimHandlesMouse`), not in an insert Eclipse types, and only while the
   editor has the keyboard. Ctrl+click and Cmd+click are left out, as in the text (`<C-LeftMouse>` is
   Vim's raw tag jump). `'mouse'` is honored before the send, for floats, `q:` and pages in one place

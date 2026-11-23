@@ -638,19 +638,21 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   off at the editor's edges.
 - **Keys.** Your keys go to the editor and on to Neovim, as if the window were not there: with
   which-key, the next key runs the mapping and the panel closes.
-- **The mouse.** The left button and the wheel on a floating window go to Neovim at that window's
-  cell, and Neovim and the plug-in decide what they do, as in a terminal: a click on Telescope's
+- **The mouse.** The left and middle buttons and the wheel, both ways, on a floating window go to
+  Neovim at that window's cell, and Neovim and the plug-in decide what they do, as in a terminal: a click on Telescope's
   results selects the row and a double click opens it, the wheel scrolls the window under the
   pointer. Neovim's `'mouse'`, `'mousetime'`, `'mousescroll'` and mouse mappings apply: in a mode
   `'mouse'` leaves out, a click or the wheel on the window does nothing (with `nv`, a click on a
   picker's list while its prompt is in Insert mode). A window
   opened with `mouse = false` (by default one with `focusable = false`, such as which-key's panel)
-  takes no click; unlike a terminal, the click does not pass through to the text below. Neither do
-  Neovim's own windows (ui2's command line and messages, the popup menu) take clicks. Ctrl+click,
+  is not there for the mouse, as in a terminal: a click or the wheel goes to the window under it,
+  or to the text. Only the middle button and the sideways wheel stop there, as those are Eclipse's
+  in the text. ui2's windows take a click only while your cursor is already in one (the pager after
+  `g<`); otherwise they and the popup menu keep it and do nothing with it, since Neovim would put
+  the keyboard in a window of messages. Ctrl+click,
   Cmd+click and the wheel with either held do nothing on a floating window, the `q:` window or a
-  page editor, the right and middle
-  buttons neither, and during
-  an insert Eclipse types the mouse is not sent.
+  page editor, the right button neither (Neovim's answer to it is a menu that waits for a key),
+  and during an insert Eclipse types the mouse is not sent.
 - **A window that takes the keyboard** (a picker's prompt, `:Lazy`, hover documentation entered
   with a second `K`, with Neovim's own `K`: `vim.g.neovim4eclipse_ide_keys = 0`) is drawn with Neovim's cursor in it, a bar in Insert mode, and the editor's
   caret is hidden meanwhile: your keys go to that window, as in Neovim, Esc and Enter included.

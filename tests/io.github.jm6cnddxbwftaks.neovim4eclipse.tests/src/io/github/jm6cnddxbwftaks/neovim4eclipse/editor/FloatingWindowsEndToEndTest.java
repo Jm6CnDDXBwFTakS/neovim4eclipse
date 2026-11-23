@@ -273,6 +273,31 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
                 "Neovim back in the editor's window");
     }
 
+    /** A click on a float that takes no mouse (a notification) lands in the text under it. */
+    @Test
+    void aClickOnAFloatWithoutTheMouseLandsInTheTextBelow() {
+        SessionProbe.lua(session, """
+                vim.api.nvim_win_set_cursor(0, { 1, 0 })
+                local buf = vim.api.nvim_create_buf(false, true)
+                vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'tip' })
+                vim.g.n4e_float = vim.api.nvim_open_win(buf, false, { relative = 'win', row = 1, col = 0,
+                  width = 3, height = 1, style = 'minimal', focusable = false })
+                """);
+        GridCanvas canvas = floatShowing("tip");
+        for (int type : new int[] { SWT.MouseDown, SWT.MouseUp }) {
+            Event click = new Event();
+            click.x = 1;
+            click.y = 1;
+            click.button = 1;
+            click.stateMask = type == SWT.MouseUp ? SWT.BUTTON1 : 0;
+            canvas.notifyListeners(type, click);
+        }
+        waitUntil("the cursor on the line under the float", TIMEOUT_MS, () -> {
+            settle();
+            return Long.valueOf(2).equals(SessionProbe.lua(session, "return vim.api.nvim_win_get_cursor(0)[1]"));
+        });
+    }
+
     /** One notch of the wheel away from the user, on {@code canvas}. */
     private static void wheelDown(GridCanvas canvas) {
         Event wheel = new Event();

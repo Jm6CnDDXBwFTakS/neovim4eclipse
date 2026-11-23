@@ -46,6 +46,10 @@ class FloatingWindowsTest {
     private FloatingWindows floats;
     /** What reached Neovim's mouse: {@code grid button action modifier row col}. */
     private final List<String> sent = new ArrayList<>();
+    /** What fell through every window: {@code button action}. */
+    private final List<String> below = new ArrayList<>();
+    /** Where the last event that fell through every window was, in the host's coordinates. */
+    private int belowX;
 
     @BeforeEach
     void create() {
@@ -53,7 +57,11 @@ class FloatingWindowsTest {
         host = new StyledText(shell, SWT.MULTI);
         host.setSize(600, 300);
         floats = new FloatingWindows(host, (grid, button, action, modifier, row, col) -> sent
-                .add(grid + " " + button + " " + action + " " + modifier + " " + row + " " + col));
+                .add(grid + " " + button + " " + action + " " + modifier + " " + row + " " + col),
+                (button, action, modifier, x, y) -> {
+                    below.add(button + " " + action);
+                    belowX = x;
+                });
     }
 
     @AfterEach
@@ -114,11 +122,12 @@ class FloatingWindowsTest {
     }
 
     /**
-     * The left button and the wheel go to the window's own grid, at its cell. A window that takes
-     * no mouse ignores them, and neither scrolls the editor below.
+     * The left button and the wheel go to the window's own grid, at its cell. A plug-in's window
+     * that takes no mouse lets them through to what lies below, and neither scrolls the editor by
+     * itself.
      */
     @Test
-    void theMouseOnAWindowGoesToItsGridAndOneThatTakesNoneIgnoresIt() {
+    void theMouseOnAWindowGoesToItsGridAndOneThatTakesNoneLetsItThrough() {
         FloatWindow plain = window(1002, 6, 2, 3, 4, 50);
         FloatWindow clickable = new FloatWindow(plain.grid(), 3, 4, 10, 40, 50, false, 7);
         floats.show(List.of(clickable, window(1003, 6, 2, 0, 20, 60)));
@@ -135,6 +144,7 @@ class FloatingWindowsTest {
         mouse(noMouse, SWT.MouseUp, 0, 0, 1);
         assertFalse(mouse(noMouse, SWT.MouseVerticalWheel, 0, 0, 3).doit, "nor under one that takes none");
         assertEquals(List.of(), sent);
+        assertEquals(List.of("left press", "left release", "wheel up"), below);
 
         sent.clear();
         for (int held : new int[] { SWT.CTRL, SWT.MOD1 }) { // Eclipse's hyperlink keys, as in the text
@@ -154,6 +164,99 @@ class FloatingWindowsTest {
         floats.show(List.of(plain)); // the plug-in turned the window's mouse off
         mouse(canvas, SWT.MouseDown, 0, 0, 1);
         assertEquals(List.of(), sent);
+    }
+
+    /**
+     * A click on a window without the mouse goes to the window under it, at that window's cell, and
+     * the drag and release of that press follow, wherever the pointer goes.
+     */
+    @Test
+    void aClickFallsThroughToTheWindowBelowAndItsDragFollows() {
+        FloatWindow lower = window(1002, 6, 2, 3, 4, 50);
+        floats.show(List.of(new FloatWindow(lower.grid(), 3, 4, 10, 40, 50, false, 7), window(1003, 6, 2, 3, 4, 60)));
+        GridCanvas upper = floats.canvas(1003);
+        mouse(upper, SWT.MouseDown, 0, 1, 1);
+        Event drag = new Event();
+        drag.x = 2 * upper.cellWidth() + 1;
+        drag.y = upper.cellHeight() + 1;
+        drag.stateMask = SWT.BUTTON1;
+        upper.notifyListeners(SWT.MouseMove, drag);
+        mouse(upper, SWT.MouseUp, 1, 2, 1);
+        mouse(upper, SWT.MouseVerticalWheel, 0, 0, -3);
+        assertEquals(List.of("7 left press  0 1", "7 left drag  1 2", "7 left release  1 2", "7 wheel down  0 0"), sent);
+        assertEquals(List.of(), below);
+    }
+
+    /** A drag that fell through to the text goes on past the window's edge, at the real pointer. */
+    @Test
+    void aDragThroughAWindowGoesOnPastItsEdge() {
+        floats.show(List.of(window(1003, 6, 2, 3, 4, 60)));
+        GridCanvas canvas = floats.canvas(1003);
+        mouse(canvas, SWT.MouseDown, 0, 0, 1);
+        Event drag = new Event();
+        drag.x = canvas.getBounds().width + 50;
+        drag.y = 1;
+        drag.stateMask = SWT.BUTTON1;
+        canvas.notifyListeners(SWT.MouseMove, drag);
+
+        assertEquals(List.of("left press", "left drag"), below);
+        assertEquals(canvas.getBounds().x + canvas.getBounds().width + 50, belowX);
+    }
+
+    /** A second button pressed during a drag has a press of its own: the first keeps its target. */
+    @Test
+    void aSecondButtonDoesNotMisrouteTheFirstsDrag() {
+        FloatWindow lower = window(1002, 6, 2, 3, 4, 50);
+        floats.show(List.of(new FloatWindow(lower.grid(), 3, 4, 10, 40, 50, false, 7), window(1003, 6, 2, 3, 4, 60)));
+        GridCanvas upper = floats.canvas(1003);
+        mouse(upper, SWT.MouseDown, 0, 1, 1);
+        for (int type : new int[] { SWT.MouseDown, SWT.MouseUp }) {
+            Event middle = new Event();
+            middle.button = 2;
+            middle.x = upper.cellWidth() + 1;
+            middle.y = 1;
+            middle.stateMask = SWT.BUTTON1;
+            upper.notifyListeners(type, middle);
+        }
+        Event drag = new Event();
+        drag.x = 2 * upper.cellWidth() + 1;
+        drag.y = upper.cellHeight() + 1;
+        drag.stateMask = SWT.BUTTON1;
+        upper.notifyListeners(SWT.MouseMove, drag);
+        mouse(upper, SWT.MouseUp, 1, 2, 1);
+
+        assertEquals(List.of("7 left press  0 1", "7 middle press  0 1", "7 middle release  0 1", "7 left drag  1 2",
+                "7 left release  1 2"), sent);
+    }
+
+    /** Neovim's own window (ui2's line) that takes no mouse keeps the click: it is not in the text. */
+    @Test
+    void neovimsOwnWindowKeepsAClickItDoesNotTake() {
+        FloatWindow plain = window(1002, 6, 2, 3, 4, 50);
+        floats.show(List.of(new FloatWindow(plain.grid(), 3, 4, 10, 40, 50, true)));
+        GridCanvas canvas = floats.canvas(1002);
+        mouse(canvas, SWT.MouseDown, 0, 0, 1);
+        mouse(canvas, SWT.MouseUp, 0, 0, 1);
+        assertEquals(List.of(), sent);
+        assertEquals(List.of(), below);
+    }
+
+    /** The middle button and the sideways wheel are Neovim's too; a positive sideways count is left. */
+    @Test
+    void theMiddleButtonAndTheSidewaysWheelGoToTheGrid() {
+        FloatWindow plain = window(1002, 6, 2, 3, 4, 50);
+        floats.show(List.of(new FloatWindow(plain.grid(), 3, 4, 10, 40, 50, false, 7)));
+        GridCanvas canvas = floats.canvas(1002);
+        for (int type : new int[] { SWT.MouseDown, SWT.MouseUp }) {
+            Event middle = new Event();
+            middle.button = 2;
+            middle.x = canvas.cellWidth() + 1;
+            middle.y = 1;
+            canvas.notifyListeners(type, middle);
+        }
+        assertFalse(mouse(canvas, SWT.MouseHorizontalWheel, 0, 1, 3).doit, "the editor below does not scroll too");
+        mouse(canvas, SWT.MouseHorizontalWheel, 0, 1, -3);
+        assertEquals(List.of("7 middle press  0 1", "7 middle release  0 1", "7 wheel left  0 1", "7 wheel right  0 1"), sent);
     }
 
     @Test

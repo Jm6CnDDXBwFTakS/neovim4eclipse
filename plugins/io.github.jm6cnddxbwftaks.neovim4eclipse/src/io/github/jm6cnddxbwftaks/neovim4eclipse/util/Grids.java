@@ -545,8 +545,13 @@ public final class Grids {
                     // fromBottom: ui2's windows and the : line's list. FloatWindow.focused relies on it
                     // to tell Neovim's own windows with the cursor from a plug-in's.
                     ui2Windows.contains(place.win()) || (place.win() == -1 && inCommandLine),
-                    // Clicks: a plug-in's float that lets the mouse in. Not Neovim's own windows.
-                    place.mouse() && place.win() != -1 && !ui2Windows.contains(place.win()) ? e.getKey() : -1));
+                    // Clicks: a window that lets the mouse in, as its 'mouse' config says. Not the popup
+                    // menu, which has no window to click in. One of ui2's only while the cursor is in it
+                    // (the pager entered with g<): Neovim enters a window on a click on its grid, even a
+                    // focusable = false one, and in ui2's message window the keys would edit its buffer,
+                    // with nothing in the editor showing it and no click in the text getting out.
+                    place.mouse() && place.win() != -1
+                            && (!ui2Windows.contains(place.win()) || e.getKey() == cursorGrid) ? e.getKey() : -1));
         }
         floats.sort(Comparator.comparingInt(FloatWindow::zindex).thenComparingInt(f -> f.grid().window()));
         if (floats.equals(lastFloats)) {

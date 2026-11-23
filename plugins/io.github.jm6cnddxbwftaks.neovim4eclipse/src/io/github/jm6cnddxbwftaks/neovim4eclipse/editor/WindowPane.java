@@ -250,6 +250,11 @@ final class WindowPane {
             if (focused) { // only the page Neovim's windows belong to now
                 session.floatMouseAsync(grid, button, action, modifier, row, col);
             }
+        }, (button, action, modifier, x, y) -> { // fell through a float: the page's own cell
+            int[] cell = canvas.cellAt(x, y);
+            if (focused && cell != null && window != EditorWindow.UNKNOWN) {
+                session.pageMouseAsync(window, button, action, modifier, cell[0], cell[1]);
+            }
         });
         floats.keepUnder(statusRow);
         commandWindowPanel = new NeovimWindowPanel(canvas, new NeovimEditorController.PanelCommands(session), () -> {

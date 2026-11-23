@@ -32,6 +32,12 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  */
 public final class WheelScroll {
 
+    /**
+     * SWT's {@code Event.count} for one notch of a wheel on GTK; what a grid (a float, {@code q:}, a
+     * page) adds a touchpad's smaller counts up to before it sends one wheel step to Neovim.
+     */
+    public static final int COUNT_PER_NOTCH = 3;
+
     /** {@code SWT.SCROLL_LINE}: {@code count} is in lines (the value SWT uses; util has no SWT). */
     public static final int SCROLL_LINE = 1;
     /** {@code SWT.SCROLL_PAGE}: {@code count} is in pages. */

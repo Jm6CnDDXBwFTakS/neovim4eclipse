@@ -68,6 +68,18 @@ final class NeovimWheel {
         display.removeFilter(SWT.MouseVerticalWheel, filter);
     }
 
+    /**
+     * One notch of the wheel on a float that lets the mouse through
+     * ({@code FloatingWindows.Below}): the text under it scrolls, as it would without the float,
+     * by the lines of a notch ({@link WheelScroll}). Nothing when the wheel is Eclipse's now.
+     */
+    void notch(boolean up) {
+        if (!widget.isDisposed() && forward.getAsBoolean()) {
+            neovim.accept(WheelScroll.lines(up ? WheelScroll.COUNT_PER_NOTCH : -WheelScroll.COUNT_PER_NOTCH, WheelScroll.SCROLL_LINE,
+                    pageRows.getAsInt()));
+        }
+    }
+
     private void onWheel(Event event) {
         if (event.widget != widget || widget.isDisposed() || (event.stateMask & SWT.MODIFIER_MASK) != 0
                 || !forward.getAsBoolean()) {

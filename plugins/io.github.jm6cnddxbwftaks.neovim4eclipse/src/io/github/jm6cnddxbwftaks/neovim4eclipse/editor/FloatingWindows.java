@@ -4,6 +4,8 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +16,7 @@ import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.Event;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatPlacement;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
@@ -46,9 +49,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
  * ({@link GridMouse}, {@link Mouse}), and Neovim and the plug-in decide what they do, as in a
  * terminal: a click on Telescope's results selects the row and the prompt keeps the keyboard, a
  * double click opens it, the wheel scrolls the window under the pointer. A window that takes no
- * clicks ({@link FloatWindow#mouseGrid} -1: {@code mouse = false}, ui2's, the popup menu) ignores
- * them; unlike a terminal, the click does not pass through to what lies below. Ctrl+click and
- * Cmd+click are left out, as in the editor's text.
+ * clicks is not there for the mouse, as in Neovim ({@link FloatWindow#mouseFallsThrough}: a
+ * plug-in's {@code mouse = false}): the click goes to the highest window under it that takes one,
+ * else to the text ({@link Below}), and the drag and release of that press follow it there. A
+ * notification over the code does not stop a click on the code. Neovim's own windows that take
+ * none (ui2's, unless the cursor is in one; the popup menu) keep it. Ctrl+click and Cmd+click are left out, as in the
+ * editor's text.
  *
  * <h2>Stacking</h2>
  * The windows lie under the plug-in's own overlays (the command-line
@@ -70,8 +76,33 @@ final class FloatingWindows {
         void mouse(int grid, String button, String action, String modifier, int row, int col);
     }
 
+    /**
+     * Where a mouse event goes that fell through every window: what the windows lie over.
+     * {@code x} and {@code y} are in the host's coordinates.
+     */
+    @FunctionalInterface
+    interface Below {
+        void mouse(String button, String action, String modifier, int x, int y);
+    }
+
+    /** {@link #pressWentTo}: the press went to what lies below every window. */
+    private static final int TO_BELOW = -2;
+    /** {@link #pressWentTo}: the press went nowhere (Neovim's own window kept it). */
+    private static final int NOWHERE = -3;
+
     private final Canvas host;
     private final Mouse mouse;
+    private final Below below;
+    /**
+     * Where each button's press that fell through went, until its release: a window, or
+     * {@link #TO_BELOW} or {@link #NOWHERE}. By button, as one can be pressed while another is held.
+     */
+    private final Map<String, Integer> pressWentTo = new HashMap<>();
+    /** The pointer in the event being handled, on its canvas: a cell would stop at the window's edge. */
+    private int pointerX;
+    private int pointerY;
+    /** The last cell a drag that fell through was sent to, {window, row, col}: a new cell sends the next. */
+    private int[] lastDrag;
     /** The canvas of each window drawn, by window ID. */
     private final Map<Integer, GridCanvas> canvases = new LinkedHashMap<>();
     /** The windows drawn, lowest in the stack first. */
@@ -90,8 +121,18 @@ final class FloatingWindows {
      *              decision (an insert Eclipse types gets no clicks)
      */
     FloatingWindows(Canvas host, Mouse mouse) {
+        this(host, mouse, (button, action, modifier, x, y) -> { });
+    }
+
+    /**
+     * @param host  the control the windows are drawn over
+     * @param mouse gets the mouse on a window that takes it, as above
+     * @param below gets the mouse that fell through every window
+     */
+    FloatingWindows(Canvas host, Mouse mouse, Below below) {
         this.host = host;
         this.mouse = mouse;
+        this.below = below;
     }
 
     /** Keeps {@code control}, a child of the host, under every window drawn (the status line's row). */
@@ -118,8 +159,16 @@ final class FloatingWindows {
             if (canvas == null || canvas.isDisposed()) {
                 canvas = new GridCanvas(host, GridCanvas.lookOf(host), SWT.NO_FOCUS);
                 canvas.setInsertCursor(insert);
-                // GridMouse keeps the vertical wheel from the editor under the window; this the other.
-                canvas.addListener(SWT.MouseHorizontalWheel, e -> e.doit = false);
+                GridCanvas made = canvas;
+                // Before GridMouse's listeners, so that mouseOn has the pointer of the same event.
+                for (int type : new int[] { SWT.MouseDown, SWT.MouseUp, SWT.MouseVerticalWheel,
+                        SWT.MouseHorizontalWheel }) {
+                    canvas.addListener(type, e -> {
+                        pointerX = e.x;
+                        pointerY = e.y;
+                    });
+                }
+                canvas.addListener(SWT.MouseMove, e -> dragThrough(made, e));
                 new GridMouse(canvas, (button, action, modifier, row, col) -> mouseOn(id, button, action, modifier, row, col));
                 canvases.put(id, canvas);
             }
@@ -144,14 +193,109 @@ final class FloatingWindows {
         stack();
     }
 
-    /** A mouse event on window {@code win}: sent to the grid it has now, if it takes the mouse. */
+    /**
+     * A mouse event on window {@code win}: sent to the grid it has now if it takes the mouse, else
+     * on to what lies below it if it lets the mouse through ({@link FloatWindow#mouseFallsThrough}).
+     */
     private void mouseOn(int win, String button, String action, String modifier, int row, int col) {
-        for (FloatWindow window : shown) {
-            if (window.grid().window() == win && window.mouseGrid() != -1) {
-                mouse.mouse(window.mouseGrid(), button, action, modifier, row, col);
-                return;
+        boolean press = "press".equals(action);
+        if (press) {
+            pressWentTo.remove(button); // a press whose release was lost ends here
+            lastDrag = null;
+        } else if (pressWentTo.containsKey(button)) { // this press fell through: its drag and release follow
+            if ("release".equals(action)) {
+                Rectangle at = canvases.get(win).getBounds();
+                sendTo(pressWentTo.remove(button), button, action, modifier, at.x + pointerX, at.y + pointerY);
+            }
+            return; // a drag: dragThrough, with the pointer past this window's edge too
+        }
+        int index = indexOf(win);
+        if (index < 0) {
+            return;
+        }
+        FloatWindow window = shown.get(index);
+        if (window.mouseGrid() != -1) {
+            mouse.mouse(window.mouseGrid(), button, action, modifier, row, col);
+        } else if (window.mouseFallsThrough()) {
+            Rectangle at = canvases.get(win).getBounds();
+            int x = at.x + pointerX;
+            int y = at.y + pointerY;
+            int to = targetUnder(index, x, y);
+            if (press) {
+                pressWentTo.put(button, to);
+            }
+            sendTo(to, button, action, modifier, x, y);
+        }
+    }
+
+    /**
+     * The left button dragged after a press that fell through: sent on at the real pointer, so that
+     * a selection goes on past the edge of the window it began under. Only with the button held.
+     */
+    private void dragThrough(GridCanvas canvas, Event e) {
+        Integer to = pressWentTo.get("left");
+        if (to != null && (e.stateMask & SWT.BUTTON1) != 0) {
+            Rectangle at = canvas.getBounds();
+            sendTo(to, "left", "drag", GridMouse.modifiers(e.stateMask), at.x + e.x, at.y + e.y);
+        }
+    }
+
+    /** Sends a mouse event at ({@code x}, {@code y}) of the host to {@code to}, a window or a target. */
+    private void sendTo(int to, String button, String action, String modifier, int x, int y) {
+        if (to == TO_BELOW) {
+            below.mouse(button, action, modifier, x, y);
+        } else if (to != NOWHERE) {
+            sendToWindow(to, button, action, modifier, x, y);
+        }
+    }
+
+    /** The highest window under {@code index} at that point that takes the mouse, or what says where it goes. */
+    private int targetUnder(int index, int x, int y) {
+        for (int i = index - 1; i >= 0; i--) {
+            FloatWindow window = shown.get(i);
+            GridCanvas canvas = canvases.get(window.grid().window());
+            if (canvas == null || canvas.isDisposed() || !canvas.getBounds().contains(x, y)) {
+                continue;
+            }
+            if (window.mouseGrid() != -1) {
+                return window.grid().window();
+            }
+            if (!window.mouseFallsThrough()) {
+                return NOWHERE; // Neovim's own window: it keeps the click
             }
         }
+        return TO_BELOW;
+    }
+
+    /** Sends the event to window {@code win}'s cell at that point, the nearest one when outside it (a drag). */
+    private void sendToWindow(int win, String button, String action, String modifier, int x, int y) {
+        int index = indexOf(win);
+        GridCanvas canvas = canvases.get(win);
+        if (index < 0 || canvas == null || canvas.isDisposed() || shown.get(index).mouseGrid() == -1) {
+            return; // it closed since the press
+        }
+        FloatWindow window = shown.get(index);
+        Rectangle at = canvas.getBounds();
+        int row = Math.max(0, Math.min((y - at.y) / Math.max(1, canvas.cellHeight()), window.grid().height() - 1));
+        int col = Math.max(0, Math.min((x - at.x) / Math.max(1, canvas.cellWidth()), window.grid().width() - 1));
+        if ("drag".equals(action)) {
+            int[] cell = { win, row, col };
+            if (Arrays.equals(cell, lastDrag)) {
+                return; // moving inside one cell would make Neovim redraw for nothing
+            }
+            lastDrag = cell;
+        }
+        mouse.mouse(window.mouseGrid(), button, action, modifier, row, col);
+    }
+
+    /** Where window {@code win} is in {@link #shown}, or -1. */
+    private int indexOf(int win) {
+        for (int i = 0; i < shown.size(); i++) {
+            if (shown.get(i).grid().window() == win) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** Removes every window (Neovim mode off, the editor detaches). */

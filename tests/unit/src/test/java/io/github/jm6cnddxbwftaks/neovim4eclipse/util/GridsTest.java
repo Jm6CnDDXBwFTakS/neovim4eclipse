@@ -229,11 +229,13 @@ class GridsTest {
     }
 
     /**
-     * Clicks go to a plug-in's float that lets the mouse in, on its own grid; not to one with
-     * {@code mouse = false}, ui2's windows or the popup menu (window -1).
+     * Clicks go to a plug-in's window that lets the mouse in, on its own grid; not to one with
+     * {@code mouse = false} or the popup menu (window -1), and to one of ui2's only while the cursor
+     * is in it: Neovim would enter it on the click. Of those, only a plug-in's lets the click
+     * through to what lies below.
      */
     @Test
-    void onlyAPluginsFloatThatLetsTheMouseInTakesClicks() {
+    void aWindowThatLetsTheMouseInTakesClicksAndOnlyAPluginsOtherFloatsLetThemThrough() {
         grids.drawFloats(true);
         editorWindow();
         grids.ui2Windows(List.of(1004), 1004, -1, false);
@@ -244,8 +246,20 @@ class GridsTest {
             grids.apply(new GridEvent.WinPos(other[0], other[1], true, 0, 0, 0, 0, 50, other[1] != 1003));
         }
         Map<Integer, Integer> mouseGrids = new HashMap<>();
-        grids.floatsIfChanged().orElseThrow().forEach(f -> mouseGrids.put(f.grid().window(), f.mouseGrid()));
+        List<Integer> through = new ArrayList<>();
+        grids.floatsIfChanged().orElseThrow().forEach(f -> {
+            mouseGrids.put(f.grid().window(), f.mouseGrid());
+            if (f.mouseFallsThrough()) {
+                through.add(f.grid().window());
+            }
+        });
         assertEquals(Map.of(1002, 5, 1003, -1, 1004, -1, -1, -1), mouseGrids);
+        assertEquals(List.of(1003), through, "not ui2's or the popup menu: a click there is no click in the text");
+        grids.apply(new GridEvent.CursorGoto(7, 0, 0)); // the pager entered with g<
+        assertEquals(7, grids.floatsIfChanged().orElseThrow().stream().filter(f -> f.grid().window() == 1004)
+                .findFirst().orElseThrow().mouseGrid(), "with the cursor in it, a click moves it there");
+    }
+
     /**
      * A plug-in can ask for a window of any size: past {@code GridCells.MAX_HELD_CELLS} its grid
      * holds only its size, so that a 5000x5000 float does not cost 200 MB, and its events do

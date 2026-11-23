@@ -76,6 +76,17 @@ class NeovimWheelTest {
         assertEquals(List.of(3, -3), sent);
     }
 
+    /** A notch that fell through a float scrolls the text below, unless the wheel is Eclipse's now. */
+    @Test
+    void aNotchThroughAFloatScrollsTheTextBelow() {
+        wheel.notch(false);
+        wheel.notch(true);
+        assertEquals(List.of(3, -3), sent);
+        forward = false;
+        wheel.notch(true);
+        assertEquals(List.of(3, -3), sent);
+    }
+
     @Test
     void aPageIsTheEditorLessTwoLines() {
         roll(-1, SWT.SCROLL_PAGE, 0);

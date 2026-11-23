@@ -1203,9 +1203,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * window is not drawn. Any thread. Example: a click on the third history line is
      * {@code ("left", "press", "", 2, 0)}, then the release.
      *
-     * @param button   {@code "left"} or {@code "wheel"}
-     * @param action   {@code "press"}, {@code "drag"} or {@code "release"}; {@code "up"} or
-     *                 {@code "down"} for the wheel
+     * @param button   {@code "left"}, {@code "middle"} or {@code "wheel"}
+     * @param action   {@code "press"}, {@code "drag"} or {@code "release"}; {@code "up"},
+     *                 {@code "down"}, {@code "left"} or {@code "right"} for the wheel
      * @param modifier Neovim's modifier letters ({@code "S"}, {@code "C"}, {@code "A"}), or {@code ""}
      */
     public void commandWindowMouseAsync(String button, String action, String modifier, int row, int col) {

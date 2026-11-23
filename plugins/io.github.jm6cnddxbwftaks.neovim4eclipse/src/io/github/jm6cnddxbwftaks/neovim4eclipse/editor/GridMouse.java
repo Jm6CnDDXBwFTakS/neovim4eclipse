@@ -6,10 +6,13 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Event;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WheelScroll;
+
 /**
  * The mouse on a grid Neovim draws, sent to Neovim as {@code nvim_input_mouse} takes it: the left
- * button (press, drag, release) and the vertical wheel. The right and middle buttons are left
- * alone: there is no Eclipse text under the grid for them. Used by the command-line window's panel
+ * button (press, drag, release), the middle button (press, release: Neovim pastes register
+ * {@code *}, or runs a mapping of {@code <MiddleMouse>}) and the wheel, both ways. The right button
+ * is left alone: Neovim's answer to it is a popup menu that waits for a key. Used by the command-line window's panel
  * ({@link NeovimWindowPanel}), the page editors ({@link NeovimPageEditor}) and plug-ins' floating
  * windows ({@link FloatingWindows}). One per canvas, which
  * owns it: its state goes with the canvas.
@@ -21,7 +24,8 @@ import org.eclipse.swt.widgets.Event;
  *
  * <p>Example: a click on row 2, column 5 sends {@code ("left", "press", "", 2, 5)} and
  * {@code ("left", "release", "", 2, 5)}; one notch of the wheel away from the user sends
- * {@code ("wheel", "up", "", row, col)}. UI thread only.
+ * {@code ("wheel", "up", "", row, col)}, and one to the left {@code ("wheel", "left", "", row, col)}.
+ * UI thread only.
  */
 final class GridMouse {
 
@@ -34,8 +38,12 @@ final class GridMouse {
     private final Target target;
     /** The cell the left button last pressed or dragged to, {row, col}; {@code null} while it is up. */
     private int[] pressedAt;
-    /** The wheel's counts not yet sent: SWT counts 3 per notch, a touchpad less per event. */
+    /** Whether the middle button was pressed here and not yet released. */
+    private boolean middlePressed;
+    /** The wheel's counts not yet sent: a notch is {@link WheelScroll#COUNT_PER_NOTCH}, a touchpad less per event. */
     private int wheelCount;
+    /** The same for the sideways wheel. */
+    private int sidewaysCount;
 
     /** Listens to {@code canvas}'s mouse from now on, as long as it lives. */
     GridMouse(GridCanvas canvas, Target target) {
@@ -45,12 +53,21 @@ final class GridMouse {
         canvas.addListener(SWT.MouseMove, this::onMouseMove);
         canvas.addListener(SWT.MouseUp, this::onMouseUp);
         canvas.addListener(SWT.MouseVerticalWheel, this::onWheel);
+        canvas.addListener(SWT.MouseHorizontalWheel, this::onSidewaysWheel);
     }
 
     private void onMouseDown(Event e) {
         int[] cell = canvas.cellAt(e.x, e.y);
-        if (e.button != 1 || cell == null || leftOut(e)) {
-            return; // the right and middle buttons do nothing here
+        if (cell == null || leftOut(e)) {
+            return;
+        }
+        if (e.button == 2) {
+            middlePressed = true;
+            target.mouse("middle", "press", modifiers(e.stateMask), cell[0], cell[1]);
+            return;
+        }
+        if (e.button != 1) {
+            return; // the right button does nothing here
         }
         pressedAt = cell;
         target.mouse("left", "press", modifiers(e.stateMask), cell[0], cell[1]);
@@ -72,6 +89,13 @@ final class GridMouse {
 
     private void onMouseUp(Event e) {
         int[] cell = canvas.cellAt(e.x, e.y);
+        if (e.button == 2 && middlePressed) {
+            middlePressed = false;
+            if (cell != null) {
+                target.mouse("middle", "release", modifiers(e.stateMask), cell[0], cell[1]);
+            }
+            return;
+        }
         if (e.button != 1 || pressedAt == null || cell == null) {
             return;
         }
@@ -80,7 +104,7 @@ final class GridMouse {
     }
 
     /**
-     * One wheel notch (SWT's count of 3) is one {@code <ScrollWheelUp>} or {@code <ScrollWheelDown>}:
+     * One wheel notch ({@link WheelScroll#COUNT_PER_NOTCH}) is one {@code <ScrollWheelUp>} or {@code <ScrollWheelDown>}:
      * Neovim scrolls by its {@code 'mousescroll'}. A touchpad sends many smaller counts; they add
      * up, so a swipe scrolls as far as the same turn of a wheel would, not one scroll per event.
      */
@@ -94,9 +118,30 @@ final class GridMouse {
             wheelCount = 0; // turned the other way: what was left of the old direction goes
         }
         wheelCount += e.count;
-        while (Math.abs(wheelCount) >= 3) {
+        while (Math.abs(wheelCount) >= WheelScroll.COUNT_PER_NOTCH) {
             target.mouse("wheel", wheelCount > 0 ? "up" : "down", modifiers(e.stateMask), cell[0], cell[1]);
-            wheelCount -= 3 * Integer.signum(wheelCount);
+            wheelCount -= WheelScroll.COUNT_PER_NOTCH * Integer.signum(wheelCount);
+        }
+    }
+
+    /**
+     * The sideways wheel, counted as {@link #onWheel} counts. A positive count is to the left on
+     * every system (SWT's {@code MouseHorizontalWheel}: GTK's and Cocoa's sign, and the one it
+     * flips Windows' to). Neovim scrolls a window of {@code 'nowrap'} text by {@code 'mousescroll'}.
+     */
+    private void onSidewaysWheel(Event e) {
+        e.doit = false; // what lies under the grid does not scroll too
+        int[] cell = canvas.cellAt(e.x, e.y);
+        if (cell == null || e.count == 0 || leftOut(e)) {
+            return;
+        }
+        if (Integer.signum(e.count) != Integer.signum(sidewaysCount)) {
+            sidewaysCount = 0;
+        }
+        sidewaysCount += e.count;
+        while (Math.abs(sidewaysCount) >= WheelScroll.COUNT_PER_NOTCH) {
+            target.mouse("wheel", sidewaysCount > 0 ? "left" : "right", modifiers(e.stateMask), cell[0], cell[1]);
+            sidewaysCount -= WheelScroll.COUNT_PER_NOTCH * Integer.signum(sidewaysCount);
         }
     }
 
