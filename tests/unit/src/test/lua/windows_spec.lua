@@ -1503,6 +1503,26 @@ t.test('an undrawn float Neovim will not close says so', function()
   vim.cmd('noautocmd tabclose')
 end)
 
+t.test("an undrawn float counts as closed though a plug-in's close handler fails", function()
+  local home = start()
+  local windows = require('neovim4eclipse.windows')
+  for _, event in ipairs({ 'WinClosed', 'BufWinLeave', 'BufHidden' }) do
+    local buf = vim.api.nvim_create_buf(false, true)
+    local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 10, height = 1 })
+    local handler = vim.api.nvim_create_autocmd(event, {
+      buffer = event ~= 'WinClosed' and buf or nil,
+      pattern = event == 'WinClosed' and tostring(float) or nil,
+      callback = function() error('a handler that fails (expected by the test)') end,
+    })
+    vim.v.errmsg = ''
+    t.eq(true, windows.close_undrawn(float), event)
+    t.ok(not vim.api.nvim_win_is_valid(float), event .. ': gone')
+    t.eq(home, vim.api.nvim_get_current_win(), event)
+    t.ok(vim.v.errmsg:find('Closed the floating window', 1, true), vim.v.errmsg)
+    pcall(vim.api.nvim_del_autocmd, handler)
+  end
+end)
+
 t.test('closing the floats that have the keyboard at start never discards a changed buffer', function()
   -- Both kinds close_start_floats closes, the float the config left the focus in (left) and the
   -- plug-in's float Neovim is in, each on a file of the user's with unsaved changes that closing

@@ -1974,7 +1974,9 @@ final class LuaScripts {
             --- Refused, Neovim leaves the float for the editor's window of its tab, and the float
             --- stays, drawn without the focus. Whether it closed.
             local function close_float(win)
-              if pcall(vim.api.nvim_win_close, win, false) then
+              -- Asked of the window, not of the call: a plug-in's WinClosed, BufWinLeave or BufHidden
+              -- handler that throws makes nvim_win_close fail after the window has gone.
+              if pcall(vim.api.nvim_win_close, win, false) or not vim.api.nvim_win_is_valid(win) then
                 return true
               end
               if win == vim.api.nvim_get_current_win() then

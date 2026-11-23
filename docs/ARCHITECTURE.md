@@ -215,7 +215,8 @@ shows as an editor or page or the command-line window, Neovim's own floats, and 
 drawn) asks Neovim, once for each grid and window, to close the plug-in's float it is in (`NeovimSession`,
 `LuaScripts.CLOSE_UNDRAWN_FLOAT`). Neovim decides from its own state (`WINDOWS`' `close_undrawn`):
 a plug-in's float that is hidden (`hide`), or past `Grids`' limits
-(the window the session saw is the one), is closed with a message, never by force; anything else,
+(the window the session saw is the one), is closed with a message, never by force (one Neovim refuses to close, as for unsaved changes it
+would discard, stays, and the message says so); anything else,
 such as a float not placed yet, is left. Keys typed
 before that redraw reaches Eclipse still go to the float. When
 a document's last editor closes, its buffer is unloaded and unlisted, as by Vim's `:bd`, not wiped
