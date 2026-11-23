@@ -1473,6 +1473,36 @@ t.test('a floating window the config left the focus in is left before the home b
   t.eq(false, t.run('CLOSE_START_FLOAT', tostring(float)), 'closed already: nothing')
 end)
 
+t.test('an undrawn float Neovim will not close says so', function()
+  local home = start()
+  local windows = require('neovim4eclipse.windows')
+  local function changed_float()
+    local changed = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_name(changed, vim.fn.tempname())
+    vim.api.nvim_buf_set_lines(changed, 0, -1, false, { 'unsaved' })
+    vim.bo[changed].bufhidden = 'wipe' -- closing would discard the change, so Neovim refuses
+    return vim.api.nvim_open_win(changed, true, { relative = 'editor', row = 1, col = 1, width = 10, height = 1 }),
+      changed
+  end
+  local float, buf = changed_float()
+  vim.v.errmsg = ''
+  t.eq(false, windows.close_undrawn(float), 'not closed')
+  t.eq(home, vim.api.nvim_get_current_win(), 'the keys no longer go to a window nobody sees')
+  t.ok(vim.api.nvim_win_is_valid(float), 'the float stays')
+  t.eq({ 'unsaved' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+  t.ok(vim.v.errmsg:find('Could not close', 1, true), vim.v.errmsg)
+  vim.api.nvim_win_close(float, true)
+  -- With no editor's window in its tab page Neovim has nowhere to go: the message still says so.
+  vim.cmd('noautocmd tabnew')
+  float = changed_float()
+  vim.v.errmsg = ''
+  t.eq(false, windows.close_undrawn(float), 'not closed')
+  t.eq(float, vim.api.nvim_get_current_win())
+  t.ok(vim.v.errmsg:find('Could not close', 1, true), vim.v.errmsg)
+  vim.api.nvim_win_close(float, true)
+  vim.cmd('noautocmd tabclose')
+end)
+
 t.test('closing the floats that have the keyboard at start never discards a changed buffer', function()
   -- Both kinds close_start_floats closes, the float the config left the focus in (left) and the
   -- plug-in's float Neovim is in, each on a file of the user's with unsaved changes that closing

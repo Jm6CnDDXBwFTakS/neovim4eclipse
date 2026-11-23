@@ -665,7 +665,8 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   Eclipse shows, with its progress, and closed with a message when the start is over: the keys
   you type meanwhile wait, and go to your file, whatever the config's `VimEnter` did. A float a later `UIEnter` opens takes the
   keys still waiting. `:Lazy` opens it again. One too large to draw (past the *Limits* below) is closed, with a
-  message.
+  message; if Neovim refuses to close it, as for unsaved changes it would discard, the message says
+  so and the window stays open.
 - **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In
   insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your
   typing (signature help, a completion plug-in's documentation) does not appear, or lags; Eclipse's

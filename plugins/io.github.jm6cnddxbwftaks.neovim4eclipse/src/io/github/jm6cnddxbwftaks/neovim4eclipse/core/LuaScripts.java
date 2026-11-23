@@ -1261,6 +1261,12 @@ final class LuaScripts {
               local ok, ft = pcall(function() return vim.bo[vim.api.nvim_win_get_buf(win)].filetype end)
               return ok and ft ~= '' and ft or 'a plug-in'
             end
+            --- The message for a float Neovim would not close (close_float found it refused, as for a
+            --- changed buffer that would be wiped). Example: "Could not close the floating window of
+            --- lazy: it is hidden, and it would take the keys unseen".
+            function M.float_kept_message(name, why)
+              return "Could not close the floating window of " .. name .. ": " .. why
+            end
             --- The message for a floating window with the focus that the plug-in closed (M.close_undrawn,
             --- M.close_start_floats): its name, and why. Example: "Closed the floating window of lazy: it
             --- is hidden, and it would take the keys unseen".
@@ -2050,7 +2056,8 @@ final class LuaScripts {
             --- the session saw on that grid, is this one, and past_limits words the limits. Else
             --- nothing: a float the session has not placed yet (its position comes with a later redraw),
             --- or Neovim has moved on. Not by force (M.leave_float, close_float): a changed buffer stays,
-            --- and an insert begun in the float ends. Whether it closed.
+            --- and an insert begun in the float ends; a float Neovim refuses to close stays, with a
+            --- message. Whether it closed.
             --- Example: Telescope's prompt hidden by a plug-in of its own while Neovim is in it: closed,
             --- with "Closed the floating window of TelescopePrompt: it is hidden, and it would take the
             --- keys unseen".
@@ -2069,6 +2076,9 @@ final class LuaScripts {
               end
               local name = float_name(current)
               if not M.leave_float() then
+                -- Said whether Neovim got out of it or, with no editor's window in its tab page to
+                -- go to, is still in it: then this message is the only sign of where the keys go.
+                vim.api.nvim_echo({ { M.float_kept_message(name, why .. UNSEEN) } }, true, { err = true })
                 return false
               end
               vim.api.nvim_echo({ { M.float_closed_message(name, why .. UNSEEN) } }, true, { err = true })
