@@ -566,8 +566,8 @@ public final class Grids {
      * float's, and not one of Neovim's own ({@link #alwaysDrawn}: ui2's, the popup menu). Whether it
      * is drawn or not ({@link #floatsIfChanged}). Example: a picker's prompt entered: its window.
      * A float its plug-in hid is not one here, as its window is forgotten with {@code win_hide}:
-     * leaving the editor therefore does not close it ({@code NeovimSession.inPluginFloat} is
-     * false), but the redraw that hid it does: {@link #unseenCursor} finds the cursor on its grid.
+     * leaving the editor therefore does not move Neovim out of it ({@code NeovimSession.inPluginFloat}
+     * is false), but the redraw that hid it closes it: {@link #unseenCursor} finds the cursor on its grid.
      */
     public int focusedFloat() {
         Integer win = windowOfGrid.get(cursorGrid);

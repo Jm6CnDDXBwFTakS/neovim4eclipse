@@ -139,8 +139,9 @@ final class KeyInput {
      * show the insert, the report of it was sent before that answer, and the reader thread hands
      * notices on in order: then this value is the insert's.
      *
-     * <p>Leaving the editor closes such a float, its insert ended ({@code LuaScripts.WINDOWS}'
-     * {@code leave_float}; {@code close_undrawn} closes an undrawn one the same way). Should a float
+     * <p>Leaving the editor moves Neovim out of such a float, its insert ended
+     * ({@code LuaScripts.WINDOWS}' {@code move_out_of_float}; Eclipse mode closes it with
+     * {@code leave_float}, and {@code close_undrawn} closes an undrawn one the same way). Should a float
      * close by other means during its insert (its plug-in closes it), the insert may go on in the
      * editor's window, still Neovim's until Esc: its text reaches Eclipse by line
      * events, as a block insert's does, and Esc syncs.

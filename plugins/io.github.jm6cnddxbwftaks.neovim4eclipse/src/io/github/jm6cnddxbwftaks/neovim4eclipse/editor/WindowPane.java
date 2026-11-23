@@ -230,7 +230,7 @@ final class WindowPane {
             if (VimModes.isCmdline(session.getMode())) {
                 session.abandonLineAsync();
             }
-        }, session::pluginFloat, session::leaveFloatAsync); // a picker's prompt opened from the page closes as it is left
+        }, session::pluginFloat, session::moveOutOfFloatAsync); // Neovim leaves a picker's prompt opened from the page
         canvas.addControlListener(new ControlAdapter() {
             @Override
             public void controlResized(ControlEvent e) {

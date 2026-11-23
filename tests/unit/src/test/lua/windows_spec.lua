@@ -1602,6 +1602,28 @@ t.test('closing the floats that have the keyboard at start never discards a chan
   end
 end)
 
+t.test('moving out of a float leaves it open, unless its plug-in closes it on leaving', function()
+  local win = commands()
+  local windows = require('neovim4eclipse.windows')
+  t.eq(false, windows.move_out_of_float(-1), "nothing to move out of in the editor's window")
+  local float = enter_float()
+  t.eq(true, windows.move_out_of_float(-1))
+  t.eq(win, vim.api.nvim_get_current_win(), "Neovim in the editor's window")
+  t.ok(vim.api.nvim_win_is_valid(float), 'the float stays, as after a click outside it in a terminal')
+  vim.api.nvim_set_current_win(float)
+  vim.api.nvim_set_current_win(win)
+  t.eq(false, windows.move_out_of_float(float), 'named, and Neovim has moved on: nothing to move')
+  t.ok(vim.api.nvim_win_is_valid(float), 'and it still stays')
+  vim.api.nvim_win_close(float, true)
+  -- A picker: Telescope closes its windows on BufLeave.
+  local picker = enter_float()
+  vim.api.nvim_create_autocmd('BufLeave', { buffer = vim.api.nvim_win_get_buf(picker), once = true,
+    callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, picker, true) end) end })
+  t.eq(true, windows.move_out_of_float(-1))
+  t.wait_for('the plug-in closed its window', function() return not vim.api.nvim_win_is_valid(picker) end)
+  t.eq(win, vim.api.nvim_get_current_win())
+end)
+
 t.test('without a floating window at start there is nothing to leave', function()
   t.setup()
   local win = vim.api.nvim_get_current_win()

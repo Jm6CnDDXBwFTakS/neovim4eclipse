@@ -16,8 +16,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 - A plug-in's floating window that takes the keyboard (a picker's prompt, `:Lazy`, hover
   documentation entered with a second `K`, with Neovim's own `K`) stays open and is drawn with Neovim's cursor in it, a
-  bar in Insert mode; your keys go to it, and the editor's caret is hidden meanwhile. Leaving the
-  editor (another editor or view, a click in its text, Eclipse mode) closes it. Before, such a
+  bar in Insert mode; your keys go to it, and the editor's caret is hidden meanwhile. Clicking
+  away (another editor or view, its text) moves Neovim out of it, as in a terminal: Telescope
+  closes itself, `:Lazy` stays drawn. Eclipse mode closes it. Before, such a
   window was closed at once with a message. A window that has the keyboard while Neovim is still
   starting (lazy.nvim's installer, while it installs missing plug-ins) is drawn over the editor,
   with its progress, and closed when the start is over, with a message (`:Lazy` opens it again); the keys typed meanwhile now always go to the

@@ -203,11 +203,13 @@ followed the same way; a switch to any other buffer (`:help`, a scratch buffer) 
 (`returnToAttachedBufferAsync`), except in a plug-in's float with the cursor, as a picker's prompt
 (`LuaScripts.WINDOWS`' `entered_float`, sent with the `BufEnter` report: a plug-in's float
 entered outside an insert, showing no document or project file), where
-Neovim is left, so that the insert the picker starts begins there. Leaving the editor closes the
-float (`WINDOWS`' `leave_float`, from the two places every leave passes: `editor/LineOnFocusLoss`
+Neovim is left, so that the insert the picker starts begins there. Leaving the editor moves Neovim
+out of the float, which stays open unless its plug-in closes it on `BufLeave`, as in a terminal
+(`WINDOWS`' `move_out_of_float`, from the two places every leave passes: `editor/LineOnFocusLoss`
 as the keyboard goes to another part, the float read as it goes, and the click handler before a
-click in the text, `NeovimEditorController.abandonLineAndFloat`; Eclipse mode too; and closing the
-editor, since `WINDOWS`' `close` leaves its tab's float before closing the tab quietly), and the
+click in the text, `NeovimEditorController.abandonLineAndFloat`). Eclipse mode closes it
+(`leave_float`), since its keys are gone, and so does closing the editor, since `WINDOWS`' `close`
+leaves its tab's float before closing the tab quietly. Then the
 window Neovim enters next decides as usual. Keys go only to a window Eclipse draws, checked in one
 place for every route: each redraw that ends with Neovim's cursor on a grid the editor does not
 draw (`Grids.unseenCursor`, a known set allowed: any window of Neovim's layout, which Eclipse
@@ -1076,7 +1078,7 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   (`CursorStyleController.setHidden`: the caret is taken off the `StyledText` and put back, since
   `StyledText` makes an invisible caret visible again at each scroll), so that one cursor shows
   where the keys go; ui2's windows, which have the cursor while a `:` line is typed, leave it shown.
-  Leaving the editor closes it (above, section on `BufEnter`: `leave_float`); one the editor does
+  Leaving the editor moves Neovim out of it (above, section on `BufEnter`: `move_out_of_float`); one the editor does
   not draw (hidden, past the limits) is closed by the one check
   (`Grids.unseenCursor`, `WINDOWS`' `close_undrawn`), however Neovim got into it.
   Keys are never sent to a canvas (`SWT.NO_FOCUS`): they go to the editor, and from there to
@@ -1204,8 +1206,8 @@ an earlier key overwrite a later one typed by Eclipse. Once Neovim has them all 
 the same handshake hands typing back to Eclipse (`KeyInput.handBackToEclipse`); it is called off when
 the editor applies the sync if a key was queued meanwhile, and the next key tries again. An insert from
 blockwise visual, while recording, or begun in a plug-in's focused floating window (a picker's
-prompt, whose buffer is no document) stays Neovim's to Esc, or until leaving the editor closes
-the float. Where an insert begins is told by
+prompt, whose buffer is no document) stays Neovim's to Esc, or until leaving the editor moves
+Neovim out of the float. Where an insert begins is told by
 Neovim's mode report itself (`eclipse_mode`'s second value), not by window events: the plug-in
 switches windows quietly in places, and pickers start their insert after the key that opened them
 was answered (Telescope with `nvim_feedkeys("A")`, others from a `vim.schedule` callback), so only

@@ -15,9 +15,10 @@ import org.eclipse.swt.widgets.Listener;
 /**
  * Abandons Neovim's open {@code :}, {@code /} or {@code ?} line when the keyboard leaves the
  * widget that typed it for another part of Eclipse, as a click in the text does
- * ({@code NeovimMouse}) and as leaving a field does; and closes a plug-in's float Neovim's cursor
- * is in (a picker's prompt), drawn in the widget, for the same reasons: it would be invisible
- * while another part has the keyboard, and take Neovim's keys when the user comes back.
+ * ({@code NeovimMouse}) and as leaving a field does; and moves Neovim out of a plug-in's float its
+ * cursor is in (a picker's prompt), drawn in the widget, for the same reasons: it would be
+ * invisible while another part has the keyboard, and take Neovim's keys when the user comes back.
+ * The float stays open unless its plug-in closes it on leaving, as Telescope does.
  *
  * <h2>Why</h2>
  * Only the part with the keyboard draws Neovim's windows (ui2's line among them), so a line left
@@ -54,7 +55,8 @@ final class LineOnFocusLoss {
      * @param abandon  abandons the line ({@code <C-c>} to Neovim)
      * @param floatNow the plug-in's float Neovim's cursor is in, -1 for none
      *                 ({@code NeovimSession.pluginFloat}): read as the keyboard leaves
-     * @param leaveFloat closes that float, its insert ended ({@code NeovimSession.leaveFloatAsync})
+     * @param leaveFloat moves Neovim out of that float, its insert ended
+     *                 ({@code NeovimSession.moveOutOfFloatAsync})
      */
     LineOnFocusLoss(Control widget, BooleanSupplier lineOpen, Runnable abandon, IntSupplier floatNow,
             IntConsumer leaveFloat) {

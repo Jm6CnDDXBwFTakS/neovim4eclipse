@@ -181,7 +181,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     private volatile List<FloatWindow> floatingWindows = List.of();
     /**
      * The plug-in's float Neovim's cursor is in, as of the last redraw, or -1
-     * ({@code util/Grids.focusedFloat}): leaving the editor then closes it ({@link #leaveFloatAsync}).
+     * ({@code util/Grids.focusedFloat}): leaving the editor then moves Neovim out of it
+     * ({@link #moveOutOfFloatAsync}), and Eclipse mode closes it ({@link #leaveFloatAsync}).
      */
     private volatile int focusedFloat = -1;
     /**
@@ -2317,7 +2318,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Whether Neovim's cursor is in a plug-in's float (a picker's prompt), as of the last redraw:
-     * the editor then closes it when the user leaves ({@link #leaveFloatAsync}). Any thread.
+     * the editor then moves Neovim out of it when the user leaves ({@link #moveOutOfFloatAsync}).
+     * Any thread.
      */
     public boolean inPluginFloat() {
         return focusedFloat != -1;
@@ -2330,10 +2332,10 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Leaves the plug-in's float Neovim's cursor is in, closing it, an insert in it ended first
-     * ({@code LuaScripts.WINDOWS}' {@code leave_float}): the user left the editor for another
-     * part, clicked its text, or turned Neovim mode off. On the input thread, so that a key typed
-     * before goes into the float first, and a click after lands in the editor's window. Nothing
-     * when the cursor is in no plug-in's float by then.
+     * ({@code LuaScripts.WINDOWS}' {@code leave_float}): the user turned Neovim mode off, so its
+     * keys are Eclipse's and the float would wait for keys it no longer gets. On the input thread,
+     * so that a key typed before goes into the float first. Nothing when the cursor is in no
+     * plug-in's float by then. For the user clicking away, {@link #moveOutOfFloatAsync}.
      */
     public void leaveFloatAsync() {
         leaveFloatAsync(-1);
@@ -2365,7 +2367,32 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
-     * As {@link #leaveFloatAsync()}, for a press in the text that stays Eclipse's: a {@code :} line
+     * Moves Neovim out of the plug-in's float its cursor is in, to the editor's or page's window,
+     * and leaves the float open ({@code LuaScripts.WINDOWS}' {@code move_out_of_float}), as a click
+     * outside a float does in a terminal: the user clicked the text or left for another part. The
+     * plug-in decides whether its window survives it: Telescope closes on {@code BufLeave},
+     * {@code :Lazy} stays drawn. On the input thread, so that a key typed before goes into the
+     * float first and a click after lands in the editor's window.
+     *
+     * <p><b>Nothing while Neovim waits for the rest of a command</b>, for the reasons at
+     * {@link #leaveFloatAsync(int)}.
+     *
+     * @param win the float the cursor was in when the keyboard left a part
+     *            ({@link #pluginFloat}, read then), or -1: when Neovim has moved on since, only an
+     *            insert begun in that float ends
+     */
+    public void moveOutOfFloatAsync(int win) {
+        submitPastHeld("move out of the floating window", Level.FINE, () -> {
+            if (isBlocked()) {
+                LOG.fine("Neovim stays in the floating window: it waits for the rest of a command");
+                return;
+            }
+            await(api.execLua(LuaScripts.MOVE_OUT_OF_FLOAT, List.of(String.valueOf(win))));
+        });
+    }
+
+    /**
+     * As {@link #moveOutOfFloatAsync}, for a press in the text that stays Eclipse's: a {@code :} line
      * opened from the float goes too, and one opened from the editor stays
      * ({@link LuaScripts#LEAVE_FLOAT_WITH_LINE}). On the input thread, after the keys typed before.
      *

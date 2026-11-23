@@ -656,8 +656,11 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
 - **A window that takes the keyboard** (a picker's prompt, `:Lazy`, hover documentation entered
   with a second `K`, with Neovim's own `K`: `vim.g.neovim4eclipse_ide_keys = 0`) is drawn with Neovim's cursor in it, a bar in Insert mode, and the editor's
   caret is hidden meanwhile: your keys go to that window, as in Neovim, Esc and Enter included.
-  Leaving the editor closes it, its insert ended: another editor or view, a click in the editor's
-  text (a left click then lands there; a right click or Ctrl+click goes on to Eclipse), Eclipse mode, closing the editor. While Neovim waits for the rest of a command (`Ctrl-W`, `f`), a click or leaving the editor leaves the window open, as losing focus changes nothing in a terminal, and your next key finishes the command. Switching to another application keeps it. A
+  **Clicking away moves Neovim out of it**, as in a terminal, its insert ended: another editor or
+  view, or a click in the editor's text (a left click then lands there; a right click or Ctrl+click
+  goes on to Eclipse). The plug-in decides whether its window survives that: Telescope closes
+  itself, `:Lazy` stays, drawn without the cursor, until you click it or close it. **Eclipse mode
+  and closing the editor close it**, since its keys are gone. While Neovim waits for the rest of a command (`Ctrl-W`, `f`), a click or leaving the editor changes nothing, as losing focus changes nothing in a terminal, and your next key finishes the command. Switching to another application keeps it. A
   window on a file with unsaved changes closes and the changes stay, in a hidden buffer (`:ls`);
   if closing would unload or wipe that buffer (`'bufhidden'`, `'nohidden'`), the window stays,
   drawn, and Neovim leaves it; closing the editor then closes it, the buffer kept hidden.

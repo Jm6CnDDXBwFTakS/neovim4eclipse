@@ -1798,7 +1798,7 @@ final class LuaScripts {
             end
 
             --- Before win, an editor's window, closes: a plug-in's float with the cursor in win's tab
-            --- page is left first (M.leave_float), as leaving the editor does, so that its insert
+            --- page is left first (M.leave_float), closed as Eclipse mode closes one, so that its insert
             --- ends and its plug-in cleans up (Telescope's BufLeave). Closing the tab quietly would
             --- close the float with it, and Neovim would go on in insert mode in another window.
             --- Example: Telescope's prompt open in editor A, the user closes A; the next keys are
@@ -1953,7 +1953,7 @@ final class LuaScripts {
             --- (insert_float, set at InsertEnter; not the previous window, which a plug-in can pass
             --- through without an autocommand): a click from a picker's prompt on a second float
             --- enters that one still in Insert mode, and sent back, the next letters would land in
-            --- the file. Leaving the editor closes the float (M.leave_float). Whether
+            --- the file. Leaving the editor moves Neovim out of the float (M.move_out_of_float). Whether
             --- the editor draws it is not asked here: one it does not draw (hidden, past the limits)
             --- is closed in the one place that decides it, M.close_undrawn.
             function M.entered_float(win)
@@ -2010,12 +2010,10 @@ final class LuaScripts {
             --- while the window Neovim is in then is a plug-in's float too (a picker's results,
             --- should its plug-in leave the focus there), so that the cursor ends outside every one;
             --- a plug-in closes its other windows itself when its prompt closes (Telescope does).
-            --- win (optional): the float to close instead, the one the cursor was in when the
-            --- keyboard left a part, though Neovim may have gone on since to the part that took the
-            --- keyboard (a picker's prompt in a page, a click in the code); only that one closes, and
-            --- an insert Neovim carried out of it ends. Whether one was closed.
-            --- Example: Telescope's prompt open, a click in the Problems view: the prompt closes,
-            --- Telescope closes its results and preview, Neovim is back in the editor's window.
+            --- win (optional): the float to close instead, though Neovim may have gone on since; only
+            --- that one closes, and an insert Neovim carried out of it ends. Whether one was closed.
+            --- Example: Telescope's prompt open, Eclipse mode turned on: the prompt closes, Telescope
+            --- closes its results and preview, Neovim is back in the editor's window.
             function M.leave_float(win)
               local current = vim.api.nvim_get_current_win()
               local named = win and win > 0 and win ~= current
@@ -2045,6 +2043,32 @@ final class LuaScripts {
                 stop_insert_in_place() -- in the window Neovim is in by now, the editor's
               end
               return closed
+            end
+
+            --- Moves Neovim out of the plug-in's float it is in, to the editor's or page's window of that
+            --- tab page, and leaves the float open: what a click outside a float does in a terminal.
+            --- The plug-in decides whether its window survives that: Telescope closes its picker on
+            --- BufLeave, and :Lazy stays, drawn without the focus, until it is clicked or closed. For
+            --- the user clicking the text or leaving for another part of Eclipse
+            --- (editor/LineOnFocusLoss, NeovimEditorController). An insert begun in the float ends, as
+            --- in M.leave_float. win (optional): the float the cursor was in when the keyboard left a
+            --- part; when Neovim has gone on since, there is nothing to move, and only that float's
+            --- insert ends. Whether Neovim moved.
+            function M.move_out_of_float(win)
+              local current = vim.api.nvim_get_current_win()
+              local named = win and win > 0 and win ~= current
+              local target = named and win or current
+              local stop = vim.api.nvim_get_mode().mode:match('^[iR]') and insert_float ~= nil
+                and (insert_float == target or (not named and M.focused_float(current)))
+              local moved = false
+              if not named and M.focused_float(current) then
+                local to = M.editor_window() -- the float itself when its tab page has no window of ours
+                moved = to ~= current and pcall(vim.api.nvim_set_current_win, to)
+              end
+              if stop then
+                stop_insert_in_place() -- in the window Neovim is in by now, the editor's
+              end
+              return moved
             end
 
             --- Closes the plug-in's float Neovim is in when the editor does not draw it, with a message:
@@ -2222,7 +2246,8 @@ final class LuaScripts {
             -- the list's :clist, shown by Neovim), so :copen does what it is for.
             -- Floating windows are left alone here, the one that opened with the focus too (a
             -- picker's prompt, :Lazy, a dashboard): drawn, it takes the keys, and leaving the editor
-            -- closes it (M.leave_float); one the editor does not draw is closed by M.close_undrawn.
+            -- moves Neovim out of it (M.move_out_of_float); one the editor does not draw is closed by
+            -- M.close_undrawn.
             -- A :checkhealth report opens in a window of its own however it is asked for (a new
             -- tab, a split with :vert, a float with vim.g.health's style 'float'), and Neovim has
             -- filled it and set its filetype by the time this net runs (after the command). Its
@@ -5766,19 +5791,28 @@ final class LuaScripts {
 
     /**
      * Leaves the plug-in's float Neovim's cursor is in, closing it, and the float named by the
-     * argument too (-1: none), the one the cursor was in when the keyboard left a part
-     * ({@link #WINDOWS}' {@code leave_float}): the user left the editor. Answers whether one was
-     * closed.
+     * argument too (-1: none) ({@link #WINDOWS}' {@code leave_float}): the user turned Neovim mode
+     * off. For clicking away, {@link #MOVE_OUT_OF_FLOAT}. Answers whether one was closed.
      */
     static final String LEAVE_FLOAT = """
             return package.loaded['neovim4eclipse.windows'].leave_float(tonumber((...)))
             """;
 
     /**
-     * For a press in the text that stays Eclipse's (a right click, Ctrl+click): leaves the plug-in's
-     * float Neovim is in, with a {@code :} line opened from it. Decided here, since the cursor is on
-     * Neovim's command line then and only Neovim knows a float is behind it. In no float, nothing:
-     * a line opened from the editor stays. Whether a float closed.
+     * Moves Neovim out of the plug-in's float it is in, to the editor's window, the float staying
+     * open ({@link #WINDOWS}' {@code move_out_of_float}): the user clicked the text or left for
+     * another part. The argument names the float the cursor was in when the keyboard left, or is
+     * -1. Answers whether Neovim moved.
+     */
+    static final String MOVE_OUT_OF_FLOAT = """
+            return package.loaded['neovim4eclipse.windows'].move_out_of_float(tonumber((...)))
+            """;
+
+    /**
+     * For a press in the text that stays Eclipse's (a right click, Ctrl+click): moves Neovim out of
+     * the plug-in's float it is in, and abandons a {@code :} line opened from it. Decided here,
+     * since the cursor is on Neovim's command line then and only Neovim knows a float is behind it.
+     * In no float, nothing: a line opened from the editor stays. Whether Neovim moved.
      */
     static final String LEAVE_FLOAT_WITH_LINE = """
             local windows = package.loaded['neovim4eclipse.windows']
@@ -5788,7 +5822,7 @@ final class LuaScripts {
             if vim.api.nvim_get_mode().mode:sub(1, 1) == 'c' then
               vim.api.nvim_input('<C-c>')
             end
-            return windows.leave_float(-1)
+            return windows.move_out_of_float(-1)
             """;
 
     /**

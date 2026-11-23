@@ -270,12 +270,13 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
 
     /**
      * A prompt with the cursor in the code editor hides its caret; the page takes the focus, which
-     * closes the prompt (the code's {@code LineOnFocusLoss}), and back in the code the caret is
-     * there again and the prompt is not drawn ({@code NeovimEditorController.takeFocusBack} draws
-     * the floats as they are now, also when their last list went to the page).
+     * moves Neovim out of the prompt (the code's {@code LineOnFocusLoss}), and back in the code the
+     * caret is there again, with the prompt, which no plug-in closed, drawn without the cursor
+     * ({@code NeovimEditorController.takeFocusBack} draws the floats as they are now, also when
+     * their last list went to the page).
      */
     @Test
-    void theCodesCaretComesBackWhenAPromptClosedWhileThePageHadTheFocus() {
+    void theCodesCaretComesBackWhenThePageTookTheFocusFromAPrompt() {
         NeovimPageEditor page = messagesShowing("prompt away");
         page().activate(editor);
         UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
@@ -286,15 +287,16 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
                 return widget.getCaret() == null;
             });
             page().activate(page);
-            waitUntil("the prompt closed as the code was left", TIMEOUT_MS, () -> {
+            waitUntil("Neovim out of the prompt as the code was left", TIMEOUT_MS, () -> {
                 settle();
-                return Long.valueOf(-1).equals(SessionProbe.lua(session, "return vim.fn.bufwinid(vim.g.n4e_prompt)"))
+                return Boolean.FALSE.equals(SessionProbe.lua(session,
+                        "return vim.api.nvim_get_current_win() == vim.g.n4e_float"))
                         && !"i".equals(session.getMode());
             }, () -> "; mode " + session.getMode() + " (the prompt's insert must end, not go on in the page)");
             page().activate(editor);
-            waitUntil("the code's caret back, the closed prompt not drawn", TIMEOUT_MS, () -> {
+            waitUntil("the code's caret back, the prompt drawn without the cursor", TIMEOUT_MS, () -> {
                 settle();
-                return widget.getCaret() != null && !pluginFloatDrawn();
+                return widget.getCaret() != null && pluginFloatDrawn();
             });
         } finally {
             SessionProbe.lua(session, "vim.cmd.stopinsert()"

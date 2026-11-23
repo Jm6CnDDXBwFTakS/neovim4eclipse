@@ -212,44 +212,50 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
         });
     }
 
-    /** Whether the test's prompt is closed and its insert over. */
-    private boolean promptClosed() {
-        return Long.valueOf(-1).equals(SessionProbe.lua(session, "return vim.fn.bufwinid(vim.g.n4e_prompt)"))
+    /**
+     * Whether Neovim left the test's prompt, which stays open (it has no plug-in to close it on
+     * leaving), and its insert is over.
+     */
+    private boolean promptLeftOpen() {
+        return !Long.valueOf(-1).equals(SessionProbe.lua(session, "return vim.fn.bufwinid(vim.g.n4e_prompt)"))
+                && Boolean.FALSE.equals(SessionProbe.lua(session,
+                        "return vim.api.nvim_get_current_win() == vim.g.n4e_float"))
                 && !"i".equals(session.getMode());
     }
 
     /**
-     * Leaving the editor for a view closes the prompt and ends its insert (LineOnFocusLoss): it
-     * would be invisible meanwhile, and take the keys on the way back. Back in the editor, its
-     * caret is there and an insert is Eclipse's.
+     * Leaving the editor for a view moves Neovim out of the prompt and ends its insert
+     * (LineOnFocusLoss): it would take the keys on the way back. Back in the editor, the prompt is
+     * still drawn, without the cursor, the caret is there and an insert is Eclipse's.
      */
     @Test
-    void leavingTheEditorForAViewClosesThePromptAndEndsItsInsert() throws Exception {
+    void leavingTheEditorForAViewMovesOutOfThePromptAndEndsItsInsert() throws Exception {
         String text = document.get();
         SessionProbe.lua(session, OPEN_PROMPT);
         floatShowing("> ");
         type(widget, "ab");
         floatShowing("> ab");
         page().showView(IPageLayout.ID_TASK_LIST);
-        waitUntil("the prompt closed, its insert ended", TIMEOUT_MS, () -> {
+        waitUntil("Neovim out of the prompt, its insert ended", TIMEOUT_MS, () -> {
             settle();
-            return promptClosed();
+            return promptLeftOpen();
         }, () -> "; mode " + session.getMode());
         page().activate(editor);
         UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
-        waitUntil("the prompt not drawn, the caret back", TIMEOUT_MS, () -> {
+        waitUntil("the prompt still drawn, the caret back", TIMEOUT_MS, () -> {
             settle();
-            return canvas() == null && widget.getCaret() != null;
+            return canvas() != null && widget.getCaret() != null;
         });
         assertEquals(text, document.get(), "the letters went to the prompt, not the document");
     }
 
     /**
-     * A click in the editor's text, the prompt open in its insert: the prompt closes first, then
-     * the click lands in the text, as in Normal mode (abandonLine, NeovimMouse).
+     * A click in the editor's text, the prompt open in its insert: Neovim moves out of the prompt,
+     * which stays open as in a terminal, then the click lands in the text, as in Normal mode
+     * (abandonLineAndFloat, NeovimMouse).
      */
     @Test
-    void aClickInTheTextClosesThePromptThenLandsInTheText() {
+    void aClickInTheTextMovesOutOfThePromptThenLandsInTheText() {
         SessionProbe.lua(session, OPEN_PROMPT);
         floatShowing("> ");
         Rectangle area = widget.getClientArea();
@@ -264,9 +270,9 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
         up.button = 1;
         up.stateMask = SWT.BUTTON1;
         widget.notifyListeners(SWT.MouseUp, up);
-        waitUntil("the prompt closed by the click, its insert ended", TIMEOUT_MS, () -> {
+        waitUntil("Neovim out of the prompt by the click, its insert ended", TIMEOUT_MS, () -> {
             settle();
-            return promptClosed() && canvas() == null && widget.getCaret() != null;
+            return promptLeftOpen() && canvas() != null && widget.getCaret() != null;
         }, () -> "; mode " + session.getMode());
         assertEquals(session.getAttachedWinid(),
                 ((Number) SessionProbe.lua(session, "return vim.api.nvim_get_current_win()")).intValue(),

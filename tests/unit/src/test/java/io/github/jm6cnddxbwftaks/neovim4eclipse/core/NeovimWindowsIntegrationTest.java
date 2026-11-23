@@ -503,7 +503,7 @@ class NeovimWindowsIntegrationTest {
     /**
      * lazy.nvim's {@code :Lazy}, a real plug-in's window that takes the keyboard in Normal mode, at
      * the commit pinned and vetted in {@code releng/test-plugins.properties}: it stays open with
-     * Neovim in it, its own {@code q} closes it, and opened again, leaving the editor closes it
+     * Neovim in it, its own {@code q} closes it, and opened again, turning Neovim mode off closes it
      * ({@link NeovimSession#leaveFloatAsync}); the document keeps its text. lazy.nvim is set up
      * with no plug-ins ({@link #lazySetup}). Skipped when it is not fetched.
      */
@@ -529,9 +529,9 @@ class NeovimWindowsIntegrationTest {
                 if (round == 0) {
                     assertTrue(router.route("q")); // lazy.nvim's own key
                 } else {
-                    s.leaveFloatAsync(); // as a click away from the editor
+                    s.leaveFloatAsync(); // as turning Neovim mode off
                 }
-                waitFor(() -> number(s, lazyWindow) == 0 && !s.inPluginFloat(), round == 0 ? "q closed it" : "leaving closed it");
+                waitFor(() -> number(s, lazyWindow) == 0 && !s.inPluginFloat(), round == 0 ? "q closed it" : "Eclipse mode closed it");
                 assertEquals(s.getAttachedWinid(), currentWin(s), "Neovim back in the editor's window");
                 assertEquals(List.of("one"), s.getBufferLines(), "the document keeps its text");
             }

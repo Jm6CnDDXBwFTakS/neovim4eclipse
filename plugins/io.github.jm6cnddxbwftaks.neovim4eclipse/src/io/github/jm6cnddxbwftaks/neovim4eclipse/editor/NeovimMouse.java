@@ -46,8 +46,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.MouseInput;
  *       Linux).</li>
  *   <li>Moves without a button: hovers, hyperlink underlines.</li>
  * </ul>
- * A press that stays Eclipse's still closes a plug-in's float that has the keyboard, as a left click
- * does: Eclipse's menu or hyperlink acts on the document, and the keys must not stay in a picker.
+ * A press that stays Eclipse's still moves Neovim out of a plug-in's float that has the keyboard, as
+ * a left click does: Eclipse's menu or hyperlink acts on the document, and the keys must not stay in
+ * a picker.
  *
  * <p>Example: three quick clicks on line 7 send press and release three times at line 7; Neovim
  * enters {@code V}, and the editor shows line 7 selected. UI thread only.
@@ -63,7 +64,7 @@ final class NeovimMouse {
     private final Consumer<MouseInput> neovim;
     /** Runs on every forwarded press, before it is sent: the editor abandons an open {@code :} line there. */
     private final Runnable onPress;
-    /** Runs on a press that stays Eclipse's: a plug-in's float with the keyboard closes there. */
+    /** Runs on a press that stays Eclipse's: Neovim moves out of a plug-in's float with the keyboard there. */
     private final Runnable onEclipsePress;
     private final Display display;
     private final Listener filter = this::onMouse;

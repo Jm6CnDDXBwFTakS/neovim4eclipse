@@ -307,7 +307,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 () -> !closed && neovimModeActive && session.commandLineOpen()
                         && !VimModes.isExMode(session.getMode()), // gQ: Vim cannot cancel its line
                 this::abandonLine,
-                () -> !closed && neovimModeActive ? session.pluginFloat() : -1, session::leaveFloatAsync);
+                () -> !closed && neovimModeActive ? session.pluginFloat() : -1, session::moveOutOfFloatAsync);
         this.statusLineRow = STATUS_ROWS.rowFor(styledText, window, window::winid, new SessionStatusLines(session));
         floatingWindows.keepUnder(statusLineRow.control());
         this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, session::pasteAsync);
@@ -1104,7 +1104,8 @@ public final class NeovimEditorController implements AutoCloseable {
      * is abandoned ({@code <C-c>}), as clicking away from a field does; a click then lands in the
      * text, in that order on the input thread. Ex mode ({@code gQ}) gets no clicks at all
      * ({@link #neovimHandlesMouse}). The float the cursor is in goes too: for a click
-     * {@link #abandonLineAndFloat}, for the keyboard leaving {@link LineOnFocusLoss} itself. UI thread.
+     * {@link #abandonLineAndFloat}, for the keyboard leaving {@link LineOnFocusLoss} itself: Neovim
+     * moves out of it, and its plug-in decides whether it closes. UI thread.
      */
     private void abandonLine() {
         if (!closed && neovimModeActive && VimModes.isCmdline(session.getMode())) {
@@ -1113,9 +1114,10 @@ public final class NeovimEditorController implements AutoCloseable {
     }
 
     /**
-     * Before each click {@link NeovimMouse} hands to Neovim: {@link #abandonLine}, and the plug-in's
-     * float Neovim's cursor is in (a picker's prompt) closed, its insert ended
-     * ({@code NeovimSession.leaveFloatAsync}), so that the click lands in the editor's window.
+     * Before each click {@link NeovimMouse} hands to Neovim: {@link #abandonLine}, and Neovim moved
+     * out of the plug-in's float its cursor is in (a picker's prompt), its insert ended
+     * ({@code NeovimSession.moveOutOfFloatAsync}), so that the click lands in the editor's window,
+     * as in a terminal. Telescope closes itself then; {@code :Lazy} stays, drawn without the focus.
      */
     private void abandonLineAndFloat() {
         // With a line open the cursor is on Neovim's command line, so the session cannot see a float
@@ -1123,14 +1125,14 @@ public final class NeovimEditorController implements AutoCloseable {
         boolean lineOpen = VimModes.isCmdline(session.getMode());
         abandonLine();
         if (!closed && neovimModeActive && (lineOpen || session.inPluginFloat())) {
-            session.leaveFloatAsync();
+            session.moveOutOfFloatAsync(-1);
         }
     }
 
     /**
      * For a press that stays Eclipse's (a right click, Ctrl+click): what Eclipse then does acts on
-     * the document, so a plug-in's float with the keyboard closes, and a {@code :} line opened from
-     * it goes too. A line opened from the editor stays. Neovim decides, for the reason above.
+     * the document, so Neovim moves out of a plug-in's float with the keyboard, and a {@code :} line
+     * opened from it goes. A line opened from the editor stays. Neovim decides, for the reason above.
      */
     private void leaveFloatForEclipse() {
         if (!closed && neovimModeActive && (session.inPluginFloat() || VimModes.isCmdline(session.getMode()))) {
@@ -1143,8 +1145,8 @@ public final class NeovimEditorController implements AutoCloseable {
      * insert and replace mode, where Eclipse types and so places the caret itself, and in Ex mode,
      * where Neovim would take it as a click on its command line. On a {@code :} line it first
      * abandons the line ({@link #abandonLine}). In a plug-in's float (a picker's prompt, in an
-     * insert or not) the click is Neovim's too: the float is closed first, and the click lands in
-     * the editor's window, as in Normal mode.
+     * insert or not) the click is Neovim's too: Neovim moves out of the float first, and the click
+     * lands in the editor's window, as in Normal mode.
      */
     private boolean neovimHandlesMouse() {
         String mode = session.getMode();
