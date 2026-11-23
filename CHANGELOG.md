@@ -33,6 +33,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - A plug-in's own split or tab page on a file, such as `Ctrl+V`, `Ctrl+X` or `Ctrl+T` in a picker,
   opens the file in an Eclipse split or editor tab, at the plug-in's cursor. Before, the window
   was closed with a message and the file did not open.
+- On Linux and macOS, a device, or a link to one, no longer opens in an editor: `:e` and `:split`
+  say it is not a file, and a jump (`gf`, a picker's Enter) stays where it was. Before, Eclipse
+  tried to read all of it, so `/dev/zero` stalled it until its memory ran out. On Linux the same
+  goes for files under `/proc` and `/sys`, some of which have no end. `:e` and `:split` refuse a
+  pipe too, where Eclipse would wait for a writer.
 
 ### Fixed
 

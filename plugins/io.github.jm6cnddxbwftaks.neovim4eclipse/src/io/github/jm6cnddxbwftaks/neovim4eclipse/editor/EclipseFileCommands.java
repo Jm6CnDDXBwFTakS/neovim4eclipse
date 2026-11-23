@@ -417,8 +417,9 @@ public final class EclipseFileCommands {
             NewFiles.open(editor.getEditorSite().getPage(), file, shown);
             return;
         }
-        if (Files.isDirectory(file)) {
-            HostCommands.showError(editor, "\"" + shown + "\" is a directory");
+        String refused = EditPath.whyNotOpened(file, shown);
+        if (refused != null) {
+            HostCommands.showError(editor, refused);
             return;
         }
         open(editor.getEditorSite().getPage(), file);

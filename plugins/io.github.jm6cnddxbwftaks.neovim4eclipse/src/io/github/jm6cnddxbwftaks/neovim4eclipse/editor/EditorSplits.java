@@ -371,13 +371,16 @@ final class EditorSplits {
                     return null;
                 }
                 String shown = EditPath.shown(file, home, folder);
-                if (Files.isDirectory(file)) {
-                    origin.error("\"" + shown + "\" is a directory");
+                // A dangling link is missing too, as for :e (Files.exists follows links).
+                if (!Files.exists(file)) {
+                    return NewFiles.open(page, file, shown, IWorkbenchPage.MATCH_NONE);
+                }
+                String refused = EditPath.whyNotOpened(file, shown);
+                if (refused != null) {
+                    origin.error(refused);
                     return null;
                 }
-                // A dangling link is missing too, as for :e (Files.exists follows links).
-                return Files.exists(file) ? EclipseFileCommands.open(page, file, IWorkbenchPage.MATCH_NONE)
-                        : NewFiles.open(page, file, shown, IWorkbenchPage.MATCH_NONE);
+                return EclipseFileCommands.open(page, file, IWorkbenchPage.MATCH_NONE);
             }
         }
         return page.getActiveEditor();

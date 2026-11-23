@@ -24,6 +24,8 @@ import org.eclipse.ui.ide.FileStoreEditorInput;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.part.MultiPageEditorPart;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.EditPath;
+
 /**
  * Opens the editor of a file that Neovim moved into by itself ({@code gf}, {@code 'A},
  * {@code :b} into a closed file, a quickfix entry), for {@link EditorAttachManager} to follow into
@@ -146,7 +148,7 @@ final class ProjectFileEditors {
     static Path outsidePath(String name) {
         try {
             Path path = Path.of(name);
-            if (!Files.isRegularFile(path) || DanglingLinks.isDangling(path)) {
+            if (!Files.isRegularFile(path) || EditPath.mayNeverEnd(path) || DanglingLinks.isDangling(path)) {
                 LOG.fine(() -> "Not a file to open for Neovim: " + name);
                 return null;
             }
@@ -193,6 +195,10 @@ final class ProjectFileEditors {
             path = Path.of(name);
         } catch (InvalidPathException e) {
             return null;
+        }
+        if (EditPath.mayNeverEnd(path)) {
+            LOG.fine(() -> "A file with no sure end, not opened for Neovim: " + name);
+            return null; // Eclipse would list a project's link to one, and its editor try to read all of it
         }
         IFile found = existing(path); // links resolved by the one lookup, NewFiles.workspaceFileAt
         if (found == null) {

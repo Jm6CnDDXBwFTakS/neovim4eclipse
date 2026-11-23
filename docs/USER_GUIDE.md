@@ -333,7 +333,13 @@ keeps their buffers hidden; `:tabonly` asks about them), and the splits that jum
 (its own `vim.cmd.split()`, a picker's `Ctrl+V`) opens as an Eclipse split or editor tab when it
 shows a file. On anything else it is closed again, with a message: Eclipse would not show it. So
 is a file window left behind a plug-in's floating window that has the keyboard, so that your keys
-stay in the float. An Insert begun in a float ends when its file opens as an editor.
+stay in the float. An Insert begun in a float ends when its file opens as an editor. On
+Linux and macOS, no editor opens on a device, whether from `:e`, `:split`, a jump or a plug-in:
+Eclipse would try to read all of it, and `/dev/zero` would stall it until its memory ran out. On
+Linux that includes files under `/proc` and `/sys`, since some have no end (`/proc/self/pagemap`), so
+read `/proc/cpuinfo` in a terminal. `:e` and `:split` refuse a pipe too. A jump or a plug-in's window
+on a pipe or an endless `/proc` file is Neovim's own `:edit`, which keeps waiting or reading, as it
+does in a terminal.
 
 After a restart, Eclipse brings the stacks back as it does any layout you dragged.
 

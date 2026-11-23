@@ -10,13 +10,17 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Level;
+import java.util.stream.Stream;
 
 import org.eclipse.core.commands.Command;
 import org.eclipse.core.commands.ParameterizedCommand;
@@ -43,6 +47,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WindowLayout;
@@ -82,6 +87,65 @@ class SplitsEndToEndTest extends EndToEndTestBase {
     private void keys(String keys) {
         session.inputAsync(keys);
         settle();
+    }
+
+    /**
+     * A cloned repository's link to a device or a kernel file: {@code :e} and {@code :split} say so
+     * and open nothing, since an editor would try to read all of it on the UI thread
+     * ({@code EditPath.whyNotOpened}). {@code /proc/version} stands in for an endless kernel file:
+     * should the check fail, the test fails instead of hanging.
+     */
+    @Test
+    void aLinkToADeviceIsNotOpened() throws Exception {
+        List<Path> targets = Stream.of("/dev/null", "/proc/version").map(Path::of).filter(Files::exists).toList();
+        assumeTrue(!targets.isEmpty(), "a system with /dev/null");
+        int editors = page().getEditorReferences().length;
+        for (Path target : targets) {
+            for (String command : List.of("edit", "vsplit", "tabedit")) {
+                // A name for each case, so that each waits for its own message.
+                String name = command + "-" + target.getFileName() + ".txt";
+                Path link = Files.createSymbolicLink(Path.of(project.getLocation().toOSString(), name), target);
+                try {
+                    ex(command + " " + name);
+                    expectShown(name + "\" is not a file"); // the name as EditPath.shown spells it
+                    assertSame(editor, page().getActiveEditor(), name);
+                    assertEquals(editors, page().getEditorReferences().length, name + " opened no editor");
+                } finally {
+                    Files.delete(link);
+                }
+            }
+        }
+    }
+
+    /**
+     * The same link reached by Neovim's own {@code :edit}, as {@code gf} or a picker's Enter does:
+     * Eclipse opens no editor on it, and Neovim goes back to the editor's file.
+     */
+    @Test
+    void aJumpToALinkToADeviceStaysInTheEditor() throws Exception {
+        Path device = Path.of("/dev/null");
+        assumeTrue(Files.exists(device), "a system with /dev/null");
+        Path link = Files.createSymbolicLink(Path.of(project.getLocation().toOSString(), "jump-device.txt"), device);
+        Path kernelLink = Path.of(project.getLocation().toOSString(), "jump-kernel.txt");
+        Path kernel = Path.of("/proc/version");
+        List<Path> jumps = new ArrayList<>(List.of(link));
+        if (Files.exists(kernel)) {
+            jumps.add(Files.createSymbolicLink(kernelLink, kernel)); // a project's link
+            jumps.add(kernel); // in no project: the route of a file outside the workspace
+        }
+        try {
+            int editors = page().getEditorReferences().length;
+            for (Path jump : jumps) {
+                SessionProbe.lua(session, "vim.cmd.edit(vim.fn.fnameescape([[" + jump + "]]))");
+                waitUntil("Neovim back in the editor's file from " + jump.getFileName(), TIMEOUT_MS,
+                        () -> "test.txt".equals(SessionProbe.lua(session, "return vim.fn.expand('%:t')")));
+                assertSame(editor, page().getActiveEditor(), jump.toString());
+                assertEquals(editors, page().getEditorReferences().length, "no editor opened");
+            }
+        } finally {
+            Files.delete(link);
+            Files.deleteIfExists(kernelLink);
+        }
     }
 
     /** The editor stacks of the editor area that show something. */

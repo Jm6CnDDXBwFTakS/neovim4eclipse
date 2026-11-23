@@ -4,11 +4,17 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.UnaryOperator;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * {@link EditPath}: the file an {@code :e} or {@code :wq} name means when it reaches Eclipse as
@@ -20,6 +26,32 @@ class EditPathTest {
     private static final Path HOME = Path.of("/home/user").toAbsolutePath();
     /** The window's folder: the project root, where the plug-in's {@code :lcd} puts it. */
     private static final Path PROJECT = Path.of("/ws/app").toAbsolutePath();
+
+    /** An editor reads its whole file: a device, or a link to one, may have no end. */
+    @Test
+    void onlyARegularFileCanBeOpened(@TempDir Path folder) throws IOException {
+        Path file = Files.writeString(folder.resolve("a.txt"), "text");
+        assertNull(EditPath.whyNotOpened(file, "a.txt"));
+        assertEquals("\"d\" is a directory", EditPath.whyNotOpened(folder, "d"));
+        Path device = Path.of("/dev/null");
+        assumeTrue(Files.exists(device), "a system with /dev/null");
+        assertEquals("\"n\" is not a file", EditPath.whyNotOpened(device, "n"));
+        Path link = Files.createSymbolicLink(folder.resolve("notes.txt"), device);
+        assertEquals("\"notes.txt\" is not a file", EditPath.whyNotOpened(link, "notes.txt"));
+        assertFalse(EditPath.mayNeverEnd(folder.resolve("missing")), "a missing file has its own rule");
+        assertFalse(EditPath.mayNeverEnd(link, new FilePaths.Platform(true, true, UnaryOperator.identity())),
+                "never on Windows, where ordinary files can look like this");
+    }
+
+    /** {@code /proc/self/pagemap} says it is a regular empty file and has no end: judged by where it is. */
+    @Test
+    void aKernelFileIsRefusedThoughItLooksRegular(@TempDir Path folder) throws IOException {
+        Path kernel = Path.of("/proc/self/pagemap");
+        assumeTrue(Files.isRegularFile(kernel), "a system with /proc");
+        assertEquals("\"p\" is not a file", EditPath.whyNotOpened(kernel, "p"));
+        Path link = Files.createSymbolicLink(folder.resolve("notes.txt"), kernel);
+        assertEquals("\"notes.txt\" is not a file", EditPath.whyNotOpened(link, "notes.txt"));
+    }
 
     @Test
     void aRelativeNameIsInTheWindowsFolder() {

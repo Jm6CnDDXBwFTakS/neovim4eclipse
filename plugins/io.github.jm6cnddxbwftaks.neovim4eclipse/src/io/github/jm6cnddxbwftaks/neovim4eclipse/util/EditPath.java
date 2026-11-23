@@ -3,8 +3,10 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Which file {@code :e <file>} means, for a name that reaches Eclipse as typed.
@@ -29,6 +31,9 @@ import java.nio.file.Path;
  * disagree about the same name.
  */
 public final class EditPath {
+
+    /** Linux's folders of kernel files, which say they are regular files of size 0. */
+    private static final List<String> KERNEL_FOLDERS = List.of("/proc", "/sys");
 
     private EditPath() {
     }
@@ -61,6 +66,54 @@ public final class EditPath {
         } catch (InvalidPathException e) {
             return null; // a name such as "a\0b" cannot be a file anywhere
         }
+    }
+
+    /**
+     * Why an editor cannot open {@code file}, which exists, as the message to show, or {@code null}
+     * for a file an editor can read. The check of {@code :e} and {@code :split}, links followed.
+     *
+     * @param shown the name for the message ({@link #shown})
+     */
+    public static String whyNotOpened(Path file, String shown) {
+        if (Files.isDirectory(file)) {
+            return "\"" + shown + "\" is a directory";
+        }
+        return mayNeverEnd(file) ? "\"" + shown + "\" is not a file" : null;
+    }
+
+    /**
+     * Whether reading {@code file}, links followed, may never end, so that no editor may open it: a
+     * device, a pipe, a socket, or a kernel file under {@code /proc} or {@code /sys}.
+     *
+     * <p>Why: an editor loads its whole file on the UI thread (Eclipse's file buffers call
+     * {@code readAllBytes}). A cloned repository's {@code notes.txt -> /dev/zero} has no end, so it
+     * would stall Eclipse until its memory ran out and the load failed. A pipe would hold it until
+     * a writer came. {@code /proc/self/pagemap} is as endless, though the system calls it a regular
+     * file of size 0, so those two folders are refused by where the path really ends. That costs
+     * {@code :e /proc/cpuinfo}, which does end: nothing tells the two kinds apart without reading.
+     *
+     * <p>What this stops: whatever would reach Eclipse. Neovim refuses a device itself ("is not a
+     * file") but keeps a buffer of that name, which a jump ({@code gf}, a picker's Enter) would
+     * then have Eclipse open, so it is checked here. On a pipe or an endless kernel file, a jump or
+     * a plug-in's window runs Neovim's own {@code :edit}, which keeps reading, as in a terminal,
+     * before Eclipse hears of it; only {@code :e} and {@code :split}, which Eclipse carries out,
+     * are stopped here.
+     *
+     * <p>Never on Windows: Java calls every reparse point "other" than a regular file, which may
+     * include ordinary files a cloud drive or deduplication keeps that way, and those must still
+     * open. A missing file and a folder are not this case either; each has its own rule.
+     */
+    public static boolean mayNeverEnd(Path file) {
+        return mayNeverEnd(file, FilePaths.Platform.current());
+    }
+
+    /** {@link #mayNeverEnd(Path)} under {@code platform}'s rule. */
+    static boolean mayNeverEnd(Path file, FilePaths.Platform platform) {
+        if (platform.windows() || !Files.exists(file) || Files.isDirectory(file)) {
+            return false;
+        }
+        return !Files.isRegularFile(file)
+                || KERNEL_FOLDERS.stream().anyMatch(folder -> FilePaths.inside(file.toString(), folder, platform));
     }
 
     /**
