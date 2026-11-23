@@ -387,7 +387,7 @@ it: closing the page editors at Eclipse's exit as well would avoid it.
 
 - **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** core/LuaScripts.java, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridMouse.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
+- **Areas:** core/LuaScripts.java, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridMouse.java, editor/LineInputMethod.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
 
 Telescope's `current_buffer_fuzzy_find` and `:Lazy` are tested at pinned commits
 (`PickersEndToEndTest`, `FloatInsertIntegrationTest`, `NeovimWindowsIntegrationTest`), with the
@@ -413,8 +413,8 @@ picker, fzf-lua, snacks.picker), lazy.nvim and which-key; skip a step whose plug
    and the caret is back.
 4. With an input method on (Japanese: IBus or fcitx on Linux, the system's on macOS and Windows),
    open the picker and type a word.
-   ⇒ The candidates are not shown in the prompt (no place for them there), and the committed
-   word reaches the prompt once.
+   ⇒ The composing text and the candidates appear at the prompt's cursor, nothing of it reaches
+   the file, and the committed word reaches the prompt once.
 5. With a config whose lazy.nvim has a plug-in to install (add one to it, or start the LazyVim
    starter for the first time), choose *Neovim → Restart Neovim...* and type `j` a few times while
    it installs.

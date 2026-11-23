@@ -669,9 +669,9 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   Eclipse's command would act on the document behind the window. So
   `Ctrl+V` in Telescope's prompt opens the chosen file in an Eclipse split (`Ctrl+X` the other way, `Ctrl+T` as an editor tab), and `Ctrl+A`, `Ctrl+B` and `Ctrl+F` run
   no Eclipse command; `Ctrl+S` does not save until the window is closed. `Cmd` on macOS stays
-  Eclipse's. An input method has no place to show
-  its candidates there. In Normal mode there, `Ctrl-W` and its window commands stay Eclipse's, so
-  `Ctrl-W w` moves to the next editor and closes the window; in a prompt's Insert mode `Ctrl-W` is
+  Eclipse's. An input method composes at that window's cursor, and
+  its committed text reaches Neovim as typed keys. In Normal mode there, `Ctrl-W` and its window commands stay Eclipse's, so
+  `Ctrl-W w` moves to the next editor and Neovim out of the window; in a prompt's Insert mode `Ctrl-W` is
   the plug-in's (Telescope deletes a word). A window that has the keyboard while Neovim is still
   starting (lazy.nvim's installer, as it installs missing plug-ins) is drawn over the editor
   Eclipse shows, with its progress, and keeps the keyboard when the start is over, as in a

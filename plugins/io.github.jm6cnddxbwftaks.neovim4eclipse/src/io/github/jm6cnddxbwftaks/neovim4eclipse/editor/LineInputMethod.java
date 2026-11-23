@@ -25,20 +25,21 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineComposition;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 
 /**
- * An input method's composition (Japanese, Chinese, Korean) on Neovim's command line, while one is
- * open: shown at the line's cursor, and typed into Neovim's line at its commit, not into the
- * document. The decisions are {@link LineComposition}'s; this is the SWT side.
+ * An input method's composition (Japanese, Chinese, Korean) while Neovim's cursor is in a window it
+ * draws itself: its command line, or a plug-in's float (a picker's prompt). Shown at that cursor,
+ * and handed to Neovim at its commit, not written into the document. The decisions are
+ * {@link LineComposition}'s; this is the SWT side.
  *
  * <h2>Why a filter</h2>
  * Neovim draws its command line itself (ui2), over the editor's last row, and the editor's text
  * widget keeps the keyboard, so the input method composes in the {@link StyledText}, which would
- * put the composing text into the document. While the line is open, a display filter takes the
+ * put the composing text into the document. While such a window has the cursor, a display filter takes the
  * text widget's {@code ImeComposition} events before the widget sees them (a filter runs before any
  * listener, and an event whose type it clears goes no further):
  * <ul>
  *   <li>{@code COMPOSITION_CHANGED}: the composing text is drawn in a small box at the line's
- *       cursor; at the commit the committed text goes to Neovim's line as a paste, and the key
- *       presses that repeat it are dropped by a second filter (measured on GTK, Windows and macOS:
+ *       cursor; at the commit the committed text goes to Neovim (on the line as a paste, in a
+ *       float as typed keys: the owner's {@code commit}), and the key presses that repeat it are dropped by a second filter (measured on GTK, Windows and macOS:
  *       every system delivers the commit as key presses too). The event is taken from the widget
  *       ({@code type} cleared) but not refused ({@code doit} stays true): on macOS a refused
  *       commit tells Cocoa no key input happened, and Cocoa then sends the raw key that ended the
@@ -68,7 +69,7 @@ final class LineInputMethod {
 
     private final StyledText widget;
     private final Supplier<Rectangle> cursorCell;
-    private final Consumer<String> paste;
+    private final Consumer<String> commit;
     private final LineComposition composition = new LineComposition();
     private final Listener imeFilter = this::onIme;
     private final Listener keyFilter = this::onKey;
@@ -80,18 +81,21 @@ final class LineInputMethod {
     private Point caretBefore;
 
     /**
-     * @param widget     the editor's text widget, which keeps the keyboard while the line is open
-     * @param cursorCell where Neovim's cursor is in the drawn line, in the widget's coordinates, or
+     * @param widget     the editor's text widget, which keeps the keyboard meanwhile
+     * @param cursorCell where Neovim's cursor is in the drawn window, in the widget's coordinates, or
      *                   {@code null} while not known ({@link FloatingWindows#cursorCell})
-     * @param paste      types committed text into Neovim's line ({@code nvim_paste})
+     * @param commit     hands committed text to Neovim
      */
-    LineInputMethod(StyledText widget, Supplier<Rectangle> cursorCell, Consumer<String> paste) {
+    LineInputMethod(StyledText widget, Supplier<Rectangle> cursorCell, Consumer<String> commit) {
         this.widget = widget;
         this.cursorCell = cursorCell;
-        this.paste = paste;
+        this.commit = commit;
     }
 
-    /** A command line opened ({@code true}) or closed: the filters go on or off. */
+    /**
+     * Neovim's cursor went into a window it draws ({@code true}: a command line opened, a plug-in's
+     * float entered) or out of the last one: the filters go on or off.
+     */
     void lineOpen(boolean open) {
         if (open == attached || widget.isDisposed()) {
             return;
@@ -163,7 +167,7 @@ final class LineInputMethod {
         placeCaret();
         String sent = composition.changed(text, committed);
         if (!sent.isEmpty()) {
-            paste.accept(sent);
+            commit.accept(sent);
         }
         showComposing();
     }

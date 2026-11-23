@@ -53,6 +53,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.InsertReplay;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.LineComposition;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 
@@ -310,7 +311,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 () -> !closed && neovimModeActive ? session.pluginFloat() : -1, session::moveOutOfFloatAsync);
         this.statusLineRow = STATUS_ROWS.rowFor(styledText, window, window::winid, new SessionStatusLines(session));
         floatingWindows.keepUnder(statusLineRow.control());
-        this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, session::pasteAsync);
+        this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, this::commitComposition);
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
                 this::neovimHandlesMouse, session::mouseAsync, this::abandonLineAndFloat, this::leaveFloatForEclipse);
         this.wheel = new NeovimWheel(styledText, this::neovimHandlesMouse, viewport::rows,
@@ -952,7 +953,7 @@ public final class NeovimEditorController implements AutoCloseable {
             if (!closed && !styledText.isDisposed()) {
                 boolean open = !type.isEmpty();
                 commandLineEdits.update(open);
-                lineInput.lineOpen(open);
+                lineInput.lineOpen(composesInNeovim(open)); // a float's prompt composes in Neovim too
                 if (searchHighlighter != null) {
                     searchHighlighter.setSearchTyped("/".equals(type) || "?".equals(type));
                 }
@@ -1062,7 +1063,35 @@ public final class NeovimEditorController implements AutoCloseable {
     private void showFloats(List<FloatWindow> windows) {
         floatingWindows.show(windows);
         cursorStyle.setHidden(floatingWindows.hasFocusedFloat());
+        lineInput.lineOpen(composesInNeovim(session.commandLineOpen()));
         keyContext.update(); // in a plug-in's window every Ctrl letter is Neovim's (KeyContextRule)
+    }
+
+    /**
+     * An input method's committed text ({@link LineInputMethod}): on a command line as a paste, so
+     * that it is text whatever it holds; in a plug-in's float as typed keys, as a terminal sends a
+     * commit, because the float may be in Normal mode, where a paste would change its buffer and
+     * keys are commands, or waiting for the key of {@code r}. One key per character, as
+     * {@code inputAsync} takes them. Example: two characters committed in Telescope's prompt go in
+     * as two typed keys.
+     */
+    private void commitComposition(String text) {
+        if (session.commandLineOpen()) {
+            session.pasteAsync(text);
+        } else {
+            LineComposition.asKeys(text).forEach(session::inputAsync);
+        }
+    }
+
+    /** Whether an input method's composition is Neovim's now ({@link LineComposition#composesInNeovim}). */
+    private boolean composesInNeovim(boolean lineOpen) {
+        return neovimModeActive && LineComposition.composesInNeovim(lineOpen, hasFocusedFloat(),
+                VimModes.isTyping(session.getMode()), session.isNeovimDrivenInsert());
+    }
+
+    /** The input method's handling, for tests that commit a composition without an input method. */
+    LineInputMethod lineInputForTests() {
+        return lineInput;
     }
 
     /** Whether Neovim's cursor is in a plug-in's window drawn here; {@code false} while the editor is being built. */
@@ -1195,7 +1224,7 @@ public final class NeovimEditorController implements AutoCloseable {
         // Neovim mode only (Eclipse's own Paste and input method in Eclipse mode).
         boolean lineOpen = neovimModeActive && session.commandLineOpen();
         commandLineEdits.update(lineOpen);
-        lineInput.lineOpen(lineOpen);
+        lineInput.lineOpen(composesInNeovim(lineOpen));
         viewport.resendSize();
         if (neovimModeActive) {
             // The floats changed while the page had the focus events (a picker closed as Neovim
@@ -1353,6 +1382,7 @@ public final class NeovimEditorController implements AutoCloseable {
         HostCommands.runOnUi(() -> {
             if (!closed && !styledText.isDisposed()) {
                 floatingWindows.setInsertMode(typingNow); // the cursor in a drawn window: a bar in an insert
+                lineInput.lineOpen(composesInNeovim(session.commandLineOpen())); // who types may have changed
             }
         });
         if (commandWindowShown) {

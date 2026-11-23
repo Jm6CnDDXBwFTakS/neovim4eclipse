@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
 
+import java.util.List;
+
 /**
  * What an input method's composition on Neovim's command line does, as plain decisions:
  * {@code editor/LineInputMethod} feeds it SWT's events and acts on the answers.
@@ -35,6 +37,30 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * <p>Not thread-safe: the UI thread only.
  */
 public final class LineComposition {
+
+    /**
+     * Whether a composition is Neovim's now, rather than the text widget's: on an open command
+     * line, and in a plug-in's float while Neovim types there. Not during an insert Eclipse types,
+     * even with Neovim's cursor in a float (a mapping entered one on the same buffer): Eclipse's
+     * text is ahead of Neovim's until Esc, so text sent to Neovim then could be lost at that sync.
+     *
+     * @param lineOpen     a command line is open
+     * @param inFloat      Neovim's cursor is in a plug-in's float the editor draws
+     * @param typing       Neovim is in Insert or Replace mode
+     * @param neovimDrives Neovim, not Eclipse, types that insert
+     */
+    public static boolean composesInNeovim(boolean lineOpen, boolean inFloat, boolean typing, boolean neovimDrives) {
+        return lineOpen || (inFloat && (!typing || neovimDrives));
+    }
+
+    /**
+     * Committed text as the keys that type it into a float, one per character, as a terminal sends
+     * a commit: {@code <} is escaped, so that text can never be read as key notation. Example:
+     * {@code "a<Esc>"} is {@code ["a", "<lt>", "E", "s", "c", ">"]}.
+     */
+    public static List<String> asKeys(String text) {
+        return text.codePoints().mapToObj(c -> NvimKeys.escapeLiteral(Character.toString(c))).toList();
+    }
 
     private String composing = "";
     /** Committed text whose key presses have not all come yet; they are dropped as they do. */

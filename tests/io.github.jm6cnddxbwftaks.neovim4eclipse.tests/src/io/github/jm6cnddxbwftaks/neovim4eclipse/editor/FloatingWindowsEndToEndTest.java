@@ -279,6 +279,20 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
                 "Neovim back in the editor's window");
     }
 
+    /**
+     * An input method's commit with the cursor in a prompt reaches Neovim as typed keys, {@code <}
+     * as itself, and the document keeps its text.
+     */
+    @Test
+    void anInputMethodsCommitInAPromptIsTypedThereNotIntoTheDocument() {
+        String text = document.get();
+        SessionProbe.lua(session, OPEN_PROMPT);
+        floatShowing("> ");
+        EditorAttachManager.getInstance().getActiveController().lineInputForTests().composed("x<y", 3);
+        floatShowing("> x<y");
+        assertEquals(text, document.get());
+    }
+
     /** A click on a float that takes no mouse (a notification) lands in the text under it. */
     @Test
     void aClickOnAFloatWithoutTheMouseLandsInTheTextBelow() {
