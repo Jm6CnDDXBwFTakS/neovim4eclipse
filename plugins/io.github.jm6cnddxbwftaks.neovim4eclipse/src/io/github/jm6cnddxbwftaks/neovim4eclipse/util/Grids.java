@@ -339,8 +339,8 @@ public final class Grids {
         }
         Integer gridId = gridOf(drawnWindow);
         GridCells grid = gridId == null ? null : grids.get(gridId);
-        if (grid == null) {
-            return Optional.empty(); // its win_pos has not come yet: stays changed until it does
+        if (grid == null || !grid.held) {
+            return Optional.empty(); // no win_pos yet, or too large to hold: stays changed until that changes
         }
         changed = false;
         GridSnapshot snapshot = snapshot(drawnWindow, gridId, grid);
@@ -371,8 +371,8 @@ public final class Grids {
                 lastPage.remove(win);
                 continue;
             }
-            if (grid == null) {
-                continue; // its win_pos has not come yet: stays changed until it does
+            if (grid == null || !grid.held) {
+                continue; // no win_pos yet, or too large to hold: stays changed until that changes
             }
             pagesChanged.remove(win);
             GridSnapshot snapshot = snapshot(win, gridId, grid);
@@ -401,7 +401,7 @@ public final class Grids {
     public List<GridSnapshot> pageStatusIfChanged() {
         lastPageStatus.keySet().retainAll(pages);
         GridCells screen = grids.get(1);
-        if (screen == null || pages.isEmpty()) {
+        if (screen == null || !screen.held || pages.isEmpty()) {
             return List.of();
         }
         List<GridSnapshot> changed = new ArrayList<>();
@@ -465,7 +465,8 @@ public final class Grids {
      * are still tried. Example: three floats of 150,000, 125,000 and 75,000 cells, the first on
      * top: the first and the third are drawn (225,000 cells), the second is not. A single float of
      * more than {@link #MAX_FLOAT_CELLS} cells is never drawn. Its cells are counted before they
-     * are copied, so a window of any size costs nothing here.
+     * are copied, and one far past the limit holds none at all ({@link GridCells#MAX_HELD_CELLS}),
+     * so a window of any size costs little here.
      *
      * <p>And a plug-in's float that is there only to dim the text below it ({@link #dimsOnly}):
      * every cell blank, in a highlight with {@code blend} ({@code 'winblend'}). Neovim draws the

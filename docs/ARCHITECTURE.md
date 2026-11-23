@@ -1081,6 +1081,8 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   (`Grids.unseenCursor`, `WINDOWS`' `close_undrawn`), however Neovim got into it.
   Keys are never sent to a canvas (`SWT.NO_FOCUS`): they go to the editor, and from there to
   Neovim, which puts them in the window that has its cursor.
+- **What a huge window costs**: `GridCells` makes its arrays at `grid_resize`, before anyone knows
+  whose grid it is, so past `GridCells.MAX_HELD_CELLS` a grid holds only its size.
 - **How many** (`Grids.MAX_FLOATS` floats and `MAX_FLOAT_CELLS` cells at most, in
   all; their numbers in docs/USER_GUIDE.md, "Floating windows", which `GridsTest` holds to them), taken Neovim's own first (ui2's, the popup menu), then the cursor's (the window the keys go
   to), then highest `zindex` first, each one if it still fits; the rest are left out, and that

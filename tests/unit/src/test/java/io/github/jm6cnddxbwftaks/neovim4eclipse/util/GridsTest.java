@@ -246,6 +246,34 @@ class GridsTest {
         Map<Integer, Integer> mouseGrids = new HashMap<>();
         grids.floatsIfChanged().orElseThrow().forEach(f -> mouseGrids.put(f.grid().window(), f.mouseGrid()));
         assertEquals(Map.of(1002, 5, 1003, -1, 1004, -1, -1, -1), mouseGrids);
+    /**
+     * A plug-in can ask for a window of any size: past {@code GridCells.MAX_HELD_CELLS} its grid
+     * holds only its size, so that a 5000x5000 float does not cost 200 MB, and its events do
+     * nothing. Made smaller, it holds cells again and is drawn.
+     */
+    @Test
+    void aGridFarPastTheLimitHoldsNoCellsUntilItFits() {
+        GridCells cells = new GridCells(5000, 5000);
+        assertFalse(cells.held);
+        assertEquals(0, cells.text.length);
+        assertFalse(new GridCells(100_000, 100_000).held, "a size whose cells would wrap an int");
+        cells.line(1, 0, text("hi", 0));
+        cells.scroll(0, 5000, 0, 5000, 1);
+        cells.clear();
+        cells.resize(3, 2);
+        assertTrue(cells.held);
+        assertEquals(6, cells.text.length);
+
+        grids.drawFloats(true);
+        editorWindow();
+        floatOfSize(5, 1002, 5000, 5000, 50);
+        grids.apply(new GridEvent.Line(5, 0, 0, text("hi", 0)));
+        grids.apply(new GridEvent.Scroll(5, 0, 5000, 0, 5000, 1));
+        grids.apply(new GridEvent.Flush());
+        assertTrue(grids.floatsIfChanged().isEmpty(), "never drawn");
+        grids.apply(new GridEvent.Resize(5, 6, 2));
+        grids.apply(new GridEvent.Line(5, 0, 0, text("hi", 0)));
+        assertEquals(List.of(1002), drawnWindows());
     }
 
     /**

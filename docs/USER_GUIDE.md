@@ -693,7 +693,8 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   in Neovim's order stay and the others are not drawn (the window your keys go to is kept first,
   and one that cannot be drawn is closed with a message); the plug-in's log says so once
   ([The plug-in's log](#the-plug-ins-log)). The limits keep a plug-in gone wrong, with a window of
-  5000 by 5000 cells or thousands of windows, from slowing Eclipse down.
+  5000 by 5000 cells or thousands of windows, from slowing Eclipse down: a window far past them
+  does not even get memory for its cells.
 - **A row off, sometimes.** A window anchored to a text position is placed by Neovim's rows. Where
   Eclipse's rows differ (a code mining above a line, a long line Eclipse wraps at another
   character), it can sit one row from where Neovim meant it.

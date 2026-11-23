@@ -54,6 +54,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   is drawn over the text.
 - Eclipse could stay in Insert mode while Neovim had gone back to Normal mode, when Neovim's answer
   about its mode arrived just after its report that the mode had changed.
+- A plug-in's floating window of a huge size (5000 by 5000 cells) no longer takes hundreds of
+  megabytes of Eclipse's memory before the limit on what is drawn applies.
 - A floating window a configuration opened while Neovim was starting, before Eclipse's session
   listened, was never drawn: Eclipse dropped what Neovim drew then, and Neovim does not send a
   window's size again. Everything Neovim sends then is now kept and handed on.
