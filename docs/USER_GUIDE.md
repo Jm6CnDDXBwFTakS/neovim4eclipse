@@ -640,7 +640,8 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   opened with `mouse = false` (by default one with `focusable = false`, such as which-key's panel)
   takes no click; unlike a terminal, the click does not pass through to the text below. Neither do
   Neovim's own windows (ui2's command line and messages, the popup menu) take clicks. Ctrl+click,
-  Cmd+click and the wheel with either held do nothing on a floating window, the right and middle
+  Cmd+click and the wheel with either held do nothing on a floating window, the `q:` window or a
+  page editor, the right and middle
   buttons neither, and during
   an insert Eclipse types the mouse is not sent.
 - **A window that takes the keyboard** (a picker's prompt, `:Lazy`, hover documentation entered

@@ -38,6 +38,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   tried to read all of it, so `/dev/zero` stalled it until its memory ran out. On Linux the same
   goes for files under `/proc` and `/sys`, some of which have no end. `:e` and `:split` refuse a
   pipe too, where Eclipse would wait for a writer.
+- `Ctrl+click` and the wheel with `Ctrl` held now do nothing in the `q:` window and page editors, as
+  on a floating window. Before, `Ctrl+click` there was Vim's tag jump, which reads a `tags` file a
+  cloned repository may hold.
 
 ### Fixed
 

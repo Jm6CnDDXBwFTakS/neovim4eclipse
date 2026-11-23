@@ -120,8 +120,7 @@ final class FloatingWindows {
                 canvas.setInsertCursor(insert);
                 // GridMouse keeps the vertical wheel from the editor under the window; this the other.
                 canvas.addListener(SWT.MouseHorizontalWheel, e -> e.doit = false);
-                new GridMouse(canvas, (button, action, modifier, row, col) -> mouseOn(id, button, action, modifier, row, col),
-                        true);
+                new GridMouse(canvas, (button, action, modifier, row, col) -> mouseOn(id, button, action, modifier, row, col));
                 canvases.put(id, canvas);
             }
             canvas.show(window.grid());
