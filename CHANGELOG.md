@@ -27,6 +27,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   on Telescope's results selects the row, a double click opens it, and the wheel scrolls the
   window under the pointer. Before, they did nothing. Neovim's `'mouse'` decides in which modes,
   there and in the `q:` window and page editors, as in a terminal.
+- While a plug-in's floating window has the keyboard, every `Ctrl` letter goes to Neovim, whatever
+  the *Ctrl Keys* page says. Before, a letter left to Eclipse ran its command on the document
+  behind the window (`Ctrl+A` selected the file, `Ctrl+F` opened Find/Replace).
 
 ### Fixed
 

@@ -72,11 +72,21 @@ class KeyContextRuleTest {
      */
     @Test
     void everyLetterGoesToNeovimWhileItCompletes() {
-        assertTrue(KeyContextRule.toNeovim(false, Column.INSERT, true), "Ctrl-Y, not ticked, while completing");
-        assertFalse(KeyContextRule.toNeovim(false, Column.INSERT, false), "Ctrl-Y otherwise: Eclipse's Redo");
-        assertFalse(KeyContextRule.toNeovim(false, Column.NORMAL, true), "the choice for normal mode stands");
-        assertTrue(KeyContextRule.toNeovim(true, Column.INSERT, false));
-        assertTrue(KeyContextRule.toNeovim(true, Column.NORMAL, false));
+        assertTrue(KeyContextRule.toNeovim(false, Column.INSERT, true, false), "Ctrl-Y, not ticked, while completing");
+        assertFalse(KeyContextRule.toNeovim(false, Column.INSERT, false, false), "Ctrl-Y otherwise: Eclipse's Redo");
+        assertFalse(KeyContextRule.toNeovim(false, Column.NORMAL, true, false), "the choice for normal mode stands");
+        assertTrue(KeyContextRule.toNeovim(true, Column.INSERT, false, false));
+        assertTrue(KeyContextRule.toNeovim(true, Column.NORMAL, false, false));
+    }
+
+    /**
+     * In a plug-in's window every letter is Neovim's, in every mode, also one left to Eclipse:
+     * {@code Ctrl+F} in a picker's prompt must not open Find/Replace on the document behind it.
+     */
+    @Test
+    void everyLetterGoesToNeovimInAPluginsWindow() {
+        assertTrue(KeyContextRule.toNeovim(false, Column.INSERT, false, true), "the prompt, in its insert");
+        assertTrue(KeyContextRule.toNeovim(false, Column.NORMAL, false, true), "the prompt after Esc, :Lazy");
     }
 
     @Test

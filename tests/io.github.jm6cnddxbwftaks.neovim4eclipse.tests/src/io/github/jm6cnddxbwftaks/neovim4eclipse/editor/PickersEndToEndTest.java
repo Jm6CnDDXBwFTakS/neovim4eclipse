@@ -3,11 +3,13 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
+import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.ctrlKey;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -19,7 +21,10 @@ import java.util.Optional;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
+import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IPageLayout;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.contexts.IContextService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
  * A real picker in a real editor: Telescope's {@code current_buffer_fuzzy_find} (pure Lua, no
@@ -203,6 +209,47 @@ class PickersEndToEndTest extends EndToEndTestBase {
         } finally {
             SessionProbe.lua(session, "vim.o.mousetime = " + mousetime);
         }
+    }
+
+    /** Whether the binding context of {@code Ctrl+letter} is active now. */
+    private static boolean ctrlContextActive(char letter) {
+        return PlatformUI.getWorkbench().getService(IContextService.class).getActiveContextIds()
+                .contains(VimCtrlKeys.contextId(letter));
+    }
+
+    /**
+     * In the prompt, letters left to Eclipse reach Neovim: {@code Ctrl+A} does not select the
+     * document behind it, {@code Ctrl+F} opens no Find/Replace, {@code Ctrl+B} builds nothing,
+     * {@code Ctrl+S} saves nothing. Maps of the test's own say that Neovim got each. Once the
+     * picker is closed, the preferences apply again ({@code Ctrl+S} is Eclipse's by default).
+     */
+    @Test
+    void everyCtrlLetterInThePromptGoesToNeovim() {
+        Shell shell = widget.getShell();
+        type(widget, "gp");
+        waitUntil("Telescope drawn", TIMEOUT_MS, () -> pickerShows("beta"), () -> "; drawn:\n" + drawn());
+        assertTrue(ctrlContextActive('s'), "Ctrl+S, Eclipse's by default, is Neovim's in the prompt");
+        SessionProbe.lua(session, """
+                vim.g.n4e_ctrl = ''
+                for _, key in ipairs({ 'a', 'b', 'f', 's' }) do
+                  vim.keymap.set('i', '<C-' .. key .. '>', function() vim.g.n4e_ctrl = vim.g.n4e_ctrl .. key end,
+                    { buffer = 0 })
+                end""");
+        for (char letter : "abfs".toCharArray()) {
+            ctrlKey(widget, letter);
+        }
+        waitUntil("Neovim got every letter", TIMEOUT_MS,
+                () -> "abfs".equals(SessionProbe.lua(session, "return vim.g.n4e_ctrl")),
+                () -> "; got " + SessionProbe.lua(session, "return vim.g.n4e_ctrl"));
+        assertEquals(0, widget.getSelectionCount(), "Eclipse's Select All did not run");
+        assertSame(shell, widget.getDisplay().getActiveShell(), "no Find/Replace dialog");
+        assertFalse(editor.isDirty(), "the document is untouched");
+
+        SessionProbe.lua(session, PinnedPlugins.CLOSE_TELESCOPE);
+        waitUntil("the picker gone, Ctrl+S Eclipse's again", TIMEOUT_MS, () -> {
+            settle();
+            return pluginFloats().isEmpty() && !ctrlContextActive('s');
+        }, () -> "; drawn:\n" + drawn() + "mode " + session.getMode());
     }
 
     /** Leaving the editor for a view closes every window of the picker and ends its insert. */

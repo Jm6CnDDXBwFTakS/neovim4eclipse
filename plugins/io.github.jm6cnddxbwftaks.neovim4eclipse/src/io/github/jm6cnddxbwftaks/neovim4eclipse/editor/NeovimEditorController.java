@@ -226,8 +226,10 @@ public final class NeovimEditorController implements AutoCloseable {
         this.session = session;
         this.styledText = styledText;
         this.keyInterceptor = new KeyInterceptor(session);
-        this.keyInterceptor.setCtrlKeyFilter(EditorKeyContext::isCtrlKeyNormal);
-        this.keyInterceptor.setInsertCtrlKeyFilter(EditorKeyContext::isCtrlKeyInsert);
+        // In a plug-in's window every letter is Neovim's (KeyContextRule), also when an insert Eclipse
+        // types was carried into it, or a binding conflict left the key to the widget.
+        this.keyInterceptor.setCtrlKeyFilter(letter -> hasFocusedFloat() || EditorKeyContext.isCtrlKeyNormal(letter));
+        this.keyInterceptor.setInsertCtrlKeyFilter(letter -> hasFocusedFloat() || EditorKeyContext.isCtrlKeyInsert(letter));
         this.synchronizer = new BufferSynchronizer(documentOf(editor), buffer, session, SwtUiExecutor.INSTANCE);
         this.offsets = new WidgetOffsets(styledText, viewerOf(editor));
         this.buffer = buffer;
@@ -289,7 +291,8 @@ public final class NeovimEditorController implements AutoCloseable {
                 caretSync::runAsFromNeovim);
         this.keyContext = new EditorKeyContext(styledText, session::getMode, this::isNeovimModeActive,
                 this::commandLineHasFocus, session::isNeovimDrivenInsert, session::completesInNeovim,
-                () -> session.completesInNeovim() && (session.isCompleting() || keyInterceptor.isCtrlXPending()));
+                () -> session.completesInNeovim() && (session.isCompleting() || keyInterceptor.isCtrlXPending()),
+                this::hasFocusedFloat);
         // A key can change which letters are Neovim's without a mode change (KeyRouter): Ctrl-N starts
         // a completion and Ctrl-X waits for its second key, and then every Ctrl letter is Neovim's;
         // an insert becomes Neovim-driven. Look after each key.
@@ -1058,6 +1061,12 @@ public final class NeovimEditorController implements AutoCloseable {
     private void showFloats(List<FloatWindow> windows) {
         floatingWindows.show(windows);
         cursorStyle.setHidden(floatingWindows.hasFocusedFloat());
+        keyContext.update(); // in a plug-in's window every Ctrl letter is Neovim's (KeyContextRule)
+    }
+
+    /** Whether Neovim's cursor is in a plug-in's window drawn here; {@code false} while the editor is being built. */
+    private boolean hasFocusedFloat() {
+        return floatingWindows != null && floatingWindows.hasFocusedFloat();
     }
 
     /**

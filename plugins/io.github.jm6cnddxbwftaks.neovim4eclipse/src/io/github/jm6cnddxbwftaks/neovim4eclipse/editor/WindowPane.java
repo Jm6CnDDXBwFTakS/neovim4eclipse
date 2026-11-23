@@ -79,6 +79,9 @@ final class WindowPane {
 
         /** Neovim closed the page's window by itself, or it could not be entered: the editor closes. */
         void close();
+
+        /** The floats drawn over the page changed: Neovim's cursor may have entered one or left it. */
+        void floatsChanged();
     }
 
     private final Host host;
@@ -136,7 +139,10 @@ final class WindowPane {
 
         @Override
         public void onFloatingWindows(List<FloatWindow> windows) {
-            onUi(() -> floats.show(windows));
+            onUi(() -> {
+                floats.show(windows);
+                host.floatsChanged();
+            });
         }
 
         @Override
@@ -476,6 +482,11 @@ final class WindowPane {
         if (window != EditorWindow.UNKNOWN && (e.detail == SWT.TRAVERSE_TAB_NEXT || e.detail == SWT.TRAVERSE_TAB_PREVIOUS)) {
             session.inputAsync(e.detail == SWT.TRAVERSE_TAB_PREVIOUS ? "<S-Tab>" : "<Tab>");
         }
+    }
+
+    /** Whether Neovim's cursor is in a plug-in's window drawn over this page (a picker's prompt). UI thread. */
+    boolean hasFocusedFloat() {
+        return floats.hasFocusedFloat();
     }
 
     public void sendKey(String key) {

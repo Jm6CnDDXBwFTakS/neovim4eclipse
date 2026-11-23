@@ -43,7 +43,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
  * change (a key typed before Eclipse could take over, {@code Ctrl-R}), so the editor calls
  * {@link #update()} after each key too; after most keys neither the mode's column nor who types
  * changed, and then nothing is switched or read again ({@link #applied}). While Neovim completes,
- * every letter is switched on ({@link KeyContextRule#toNeovim}). In
+ * every letter is switched on ({@link KeyContextRule#toNeovim}), and so while Neovim's cursor is in
+ * a plug-in's drawn float (a picker's prompt); the editor calls {@link #update()} when the floats
+ * change, since that comes after the key that opened one. In
  * Eclipse mode, on focus loss, while a page editor has the keyboard ({@link #pageHasKeyboard}) and
  * after {@link #dispose()} they are inactive, so Eclipse's own
  * shortcuts (paste, content assist, other views) are untouched there. Activation is workbench-wide
@@ -75,6 +77,8 @@ final class EditorKeyContext {
     private final BooleanSupplier neovimCompletes;
     /** Whether Neovim completes now, or Ctrl-X waits for its key: every letter is Neovim's then. */
     private final BooleanSupplier completing;
+    /** Whether Neovim's cursor is in a plug-in's drawn float: every letter is Neovim's then. */
+    private final BooleanSupplier inPluginFloat;
     private final VimKeyContexts contexts = new VimKeyContexts();
     /**
      * What the active contexts were applied for, or {@code null} while none is active. {@link #update}
@@ -89,7 +93,7 @@ final class EditorKeyContext {
     private int activations;
 
     /** The inputs of the letter choice besides the preferences: see {@link #applied}. */
-    private record Applied(Column column, boolean eclipseTypes, boolean completing) {
+    private record Applied(Column column, boolean eclipseTypes, boolean completing, boolean inPluginFloat) {
     }
 
     /**
@@ -121,7 +125,7 @@ final class EditorKeyContext {
 
     EditorKeyContext(StyledText widget, Supplier<String> mode, BooleanSupplier neovimOwnsKeys,
             BooleanSupplier commandLineFocused, BooleanSupplier neovimDrivenInsert, BooleanSupplier neovimCompletes,
-            BooleanSupplier completing) {
+            BooleanSupplier completing, BooleanSupplier inPluginFloat) {
         this.widget = widget;
         this.mode = mode;
         this.neovimOwnsKeys = neovimOwnsKeys;
@@ -129,6 +133,7 @@ final class EditorKeyContext {
         this.neovimDrivenInsert = neovimDrivenInsert;
         this.neovimCompletes = neovimCompletes;
         this.completing = completing;
+        this.inPluginFloat = inPluginFloat;
         widget.addFocusListener(focusListener);
         LIVE.add(this);
     }
@@ -164,17 +169,20 @@ final class EditorKeyContext {
             if (wanted) {
                 boolean wasActive = contexts.isActive();
                 Column column = KeyContextRule.column(nvimMode, onCommandLine);
-                boolean eclipseTypes = !neovimDrivenInsert.getAsBoolean();
+                boolean inFloat = inPluginFloat.getAsBoolean();
+                // In a float Ctrl-N is the plug-in's, not Eclipse's Word Completion.
+                boolean eclipseTypes = !inFloat && !neovimDrivenInsert.getAsBoolean();
                 boolean allLetters = completing.getAsBoolean();
                 boolean neovimsCompletion = neovimCompletes.getAsBoolean(); // fixed for the session
-                Applied now = new Applied(column, eclipseTypes, allLetters);
+                Applied now = new Applied(column, eclipseTypes, allLetters, inFloat);
                 if (wasActive && now.equals(applied)) {
                     return; // the usual case after a key: nothing to switch
                 }
                 applied = null; // until applied: a failure below must not look applied
                 contexts.apply(service,
                         letter -> KeyContextRule.toNeovim(
-                                column == Column.INSERT ? isCtrlKeyInsert(letter) : isCtrlKeyNormal(letter), column, allLetters),
+                                column == Column.INSERT ? isCtrlKeyInsert(letter) : isCtrlKeyNormal(letter), column, allLetters,
+                                inFloat),
                         letter -> KeyContextRule.contextId(letter, column, eclipseTypes, neovimsCompletion));
                 applied = now;
                 if (!wasActive) {
@@ -205,8 +213,8 @@ final class EditorKeyContext {
         }
         Applied now = applied;
         boolean active = !disposed && now != null && contexts.isActive();
-        boolean toNeovim = now != null
-                && (now.column() == Column.INSERT ? isCtrlKeyInsert('v') : isCtrlKeyNormal('v'));
+        boolean toNeovim = now != null && (now.inPluginFloat()
+                || (now.column() == Column.INSERT ? isCtrlKeyInsert('v') : isCtrlKeyNormal('v')));
         KeyContextDiagnostics.logResolution(active, toNeovim);
     }
 

@@ -322,6 +322,49 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
         waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
     }
 
+    /**
+     * An insert Eclipse types, carried into a float on the same buffer (a mapping entered it, so
+     * no {@code BufEnter}): a click is not sent, since Neovim's text is behind Eclipse's until
+     * Esc; a Ctrl letter left to Eclipse still goes to Neovim, through a sync point, and runs no
+     * Eclipse command on the document.
+     */
+    @Test
+    void anInsertEclipseTypesCarriedIntoAFloatGetsNoClicksAndKeepsTheCtrlLettersNeovims() {
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        type(widget, "i");
+        waitUntil("insert mode", TIMEOUT_MS, () -> "i".equals(session.getMode()));
+        SessionProbe.lua(session, """
+                vim.g.n4e_ctrl = ''
+                vim.keymap.set('i', '<C-a>', function() vim.g.n4e_ctrl = 'a' end, { buffer = 0 })
+                vim.g.n4e_float = vim.api.nvim_open_win(0, true,
+                  { relative = 'editor', row = 1, col = 2, width = 20, height = 3, style = 'minimal' })
+                """);
+        waitUntil("the float drawn with Neovim's cursor", TIMEOUT_MS, () -> {
+            settle();
+            GridCanvas c = canvas();
+            return c != null && c.grid().cursorRow() >= 0;
+        });
+        GridCanvas canvas = canvas();
+        for (int type : new int[] { SWT.MouseDown, SWT.MouseUp }) {
+            Event e = new Event();
+            e.button = 1;
+            e.x = 1;
+            e.y = 2 * canvas.cellHeight() + 1;
+            e.stateMask = type == SWT.MouseUp ? SWT.BUTTON1 : 0;
+            canvas.notifyListeners(type, e);
+        }
+        java.util.concurrent.Future<?> passed = SessionProbe.queuedWorkDone(session);
+        waitUntil("what was queued has run", TIMEOUT_MS, passed::isDone);
+        assertEquals(1L, SessionProbe.lua(session, "return vim.api.nvim_win_get_cursor(vim.g.n4e_float)[1]"),
+                "the click on the third row was not sent");
+
+        UiTestSupport.ctrlKey(widget, 'a');
+        waitUntil("Neovim got Ctrl-A", TIMEOUT_MS, () -> "a".equals(SessionProbe.lua(session, "return vim.g.n4e_ctrl")),
+                () -> "; got " + SessionProbe.lua(session, "return vim.g.n4e_ctrl"));
+        assertEquals(0, widget.getSelectionCount(), "Eclipse's Select All did not run");
+        SessionProbe.lua(session, "pcall(vim.keymap.del, 'i', '<C-a>', { buffer = 0 })");
+    }
+
     @Test
     void aPanelOpenedWithoutTheFocusIsDrawnOnTheWindowsBottomEdgeAndTheKeysStayTheEditors() {
         SessionProbe.lua(session, OPEN_PANEL);

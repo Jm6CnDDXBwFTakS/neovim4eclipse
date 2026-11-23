@@ -24,6 +24,12 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  * it is Eclipse's Redo; with Neovim's list open it accepts the selected entry, as in Vim, and
  * {@code Ctrl-E} takes the completion back instead of opening Quick Switch Editor.
  *
+ * <p><b>Every letter in a plug-in's window</b> ({@link #toNeovim}): while Neovim's cursor is in a
+ * plug-in's float (a picker's prompt), the keys are that window's, as in a terminal, and the page's
+ * choice does not apply. Eclipse's command would act on the document behind the window. Example:
+ * {@code Ctrl-V} in Telescope's prompt opens the entry in a vertical split; {@code Ctrl+A} does not
+ * select the file behind it, {@code Ctrl+F} does not open Find/Replace.
+ *
  * <p>Example: in the Java editor, {@code Ctrl+O} is Quick Outline. In normal mode it is Vim's
  * <i>jump back</i> if its Normal box is ticked; in insert mode Vim's <i>one normal-mode command</i>
  * if its Insert box is (the default on Windows and Linux): with the context on, the plug-in's
@@ -72,9 +78,11 @@ public final class KeyContextRule {
      * @param column     which choice that is
      * @param completing whether Neovim completes, or waits after {@code Ctrl-X} for the key that
      *                   says what to complete: then every letter is its own, in insert mode
+     * @param inPluginFloat whether Neovim's cursor is in a plug-in's drawn float: then every letter
+     *                   is Neovim's, in every mode
      */
-    public static boolean toNeovim(boolean chosen, Column column, boolean completing) {
-        return chosen || (completing && column == Column.INSERT);
+    public static boolean toNeovim(boolean chosen, Column column, boolean completing, boolean inPluginFloat) {
+        return chosen || inPluginFloat || (completing && column == Column.INSERT);
     }
 
     /**

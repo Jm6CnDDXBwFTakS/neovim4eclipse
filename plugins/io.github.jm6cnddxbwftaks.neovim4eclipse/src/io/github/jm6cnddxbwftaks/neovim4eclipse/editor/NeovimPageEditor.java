@@ -83,6 +83,14 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
     private static final Map<PageKind, WeakReference<NeovimPageEditor>> LAST_USED = new EnumMap<>(PageKind.class);
     /** The key context while the screen has the keyboard; {@code null} otherwise. */
     private IContextActivation keyContext;
+    /**
+     * Every Ctrl letter but {@code w} (the page's own context binds that one, and two active
+     * bindings of a key are a conflict), while a plug-in's window over the page has Neovim's
+     * cursor: without it {@code Ctrl+N} in a picker's prompt opened from {@code :help} would run
+     * Eclipse's New wizard ({@code util/KeyContextRule}). {@link SendKeyHandler} sends each to
+     * this page.
+     */
+    private final VimKeyContexts floatKeys = new VimKeyContexts();
 
     @Override
     public void init(IEditorSite site, IEditorInput input) throws PartInitException {
@@ -129,6 +137,11 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
             public void close() {
                 getSite().getPage().closeEditor(NeovimPageEditor.this, false);
             }
+
+            @Override
+            public void floatsChanged() {
+                applyFloatKeys();
+            }
         }, editing);
         pane.canvas().addListener(SWT.FocusIn, e -> LAST_USED.put(kind(), new WeakReference<>(this)));
         pane.canvas().addListener(SWT.FocusOut, e -> pane.focusOut());
@@ -143,15 +156,31 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
                 if (keyContext == null) {
                     EditorKeyContext.pageHasKeyboard(true);
                     keyContext = contexts.activateContext(KEY_CONTEXT_ID);
+                    applyFloatKeys();
                 }
             });
             pane.canvas().addListener(SWT.FocusOut, e -> {
                 if (keyContext != null) {
                     contexts.deactivateContext(keyContext);
                     keyContext = null;
+                    applyFloatKeys(); // off before the text editors' letters come back
                     EditorKeyContext.pageHasKeyboard(false);
                 }
             });
+        }
+    }
+
+    /** Switches {@link #floatKeys} on while this page has the keyboard and a plug-in's window the cursor. UI thread. */
+    private void applyFloatKeys() {
+        IContextService contexts = getSite().getService(IContextService.class);
+        if (contexts == null || pane == null) {
+            return;
+        }
+        boolean wanted = keyContext != null && pane.hasFocusedFloat();
+        if (wanted && !floatKeys.isActive()) {
+            floatKeys.apply(contexts, letter -> letter != 'w');
+        } else if (!wanted && floatKeys.isActive()) {
+            floatKeys.deactivate(contexts);
         }
     }
 

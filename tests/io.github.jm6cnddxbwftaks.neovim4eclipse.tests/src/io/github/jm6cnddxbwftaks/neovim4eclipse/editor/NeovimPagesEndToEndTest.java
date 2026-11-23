@@ -6,7 +6,9 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.type;
 import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.waitUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -28,8 +30,10 @@ import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
+import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.contexts.IContextService;
 import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.keys.IBindingService;
 import org.eclipse.ui.texteditor.ITextEditor;
@@ -43,6 +47,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ScreenInput;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
 
 /**
  * The page editors in a real workbench, opened by the commands typed in an editor:
@@ -543,6 +548,39 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
             return widget.isFocusControl();
         });
         assertTrue(page().isPartVisible(editor), "the editor is still open: Ctrl+W was not Eclipse's Close");
+    }
+
+    /**
+     * A prompt opened over a page takes every Ctrl letter: {@code Ctrl+N} reaches Neovim, not
+     * Eclipse's New wizard; {@code Ctrl+W} stays the page's own binding alone (two would be a
+     * conflict); once the prompt is closed, the letters are Eclipse's again.
+     */
+    @Test
+    void aPromptOverAPageTakesTheCtrlLetters() {
+        SessionProbe.lua(session, "vim.cmd.echomsg(\"'under a prompt'\") return 0");
+        colon("messages");
+        NeovimPageEditor view = pageShowing("under a prompt");
+        UiTestSupport.requireKeyboardFocus(view.canvasForTests(), TIMEOUT_MS);
+        IContextService contexts = PlatformUI.getWorkbench().getService(IContextService.class);
+        assertFalse(contexts.getActiveContextIds().contains(VimCtrlKeys.contextId('n')), "Eclipse's on a page");
+        SessionProbe.lua(session, FloatingWindowsEndToEndTest.OPEN_PROMPT + """
+                vim.g.n4e_ctrl = ''
+                vim.keymap.set('i', '<C-n>', function() vim.g.n4e_ctrl = 'n' end, { buffer = 0 })
+                """);
+        waitUntil("the letters on while the prompt has the cursor", TIMEOUT_MS, () -> {
+            settle();
+            return contexts.getActiveContextIds().contains(VimCtrlKeys.contextId('n'));
+        });
+        assertFalse(contexts.getActiveContextIds().contains(VimCtrlKeys.contextId('w')), "Ctrl+W is the page's own");
+        Shell shell = view.canvasForTests().getShell();
+        key(view.canvasForTests(), 'n', (char) 14, SWT.CTRL);
+        waitUntil("Neovim got Ctrl-N", TIMEOUT_MS, () -> "n".equals(SessionProbe.lua(session, "return vim.g.n4e_ctrl")));
+        assertSame(shell, view.canvasForTests().getDisplay().getActiveShell(), "no New wizard");
+        SessionProbe.lua(session, "vim.cmd.stopinsert() vim.api.nvim_win_close(vim.g.n4e_float, true) vim.g.n4e_float = nil");
+        waitUntil("the letters Eclipse's again", TIMEOUT_MS, () -> {
+            settle();
+            return !contexts.getActiveContextIds().contains(VimCtrlKeys.contextId('n'));
+        });
     }
 
     /** Runs the plug-in's Ctrl-W command as Eclipse's key binding would, with the page editor active. */

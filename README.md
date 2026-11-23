@@ -384,8 +384,8 @@ gets in your way:
      insert mode.
 
    Plug-ins that work on text (surround, commentary, text objects, mappings of your own) work as in
-   a terminal. A floating window takes clicks and the wheel; one that takes the keyboard has no
-   input method there, and leaving the editor closes it. If keys seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave plug-ins that do not work out
+   a terminal. A floating window takes clicks and the wheel, and one that takes the keyboard gets
+   every `Ctrl` letter (no input method there); leaving the editor closes it. If keys seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave plug-ins that do not work out
    in Eclipse (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in
    [Your `init.lua` in Eclipse](#your-initlua-in-eclipse)).
 8. **Neovim's command line and messages are always drawn.** Neovim draws them itself, with its

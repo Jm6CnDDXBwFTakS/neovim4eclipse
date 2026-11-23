@@ -51,6 +51,15 @@ way).
 
 Tick any of them to send it to Neovim instead.
 
+**In a plug-in's floating window** that has Neovim's cursor (a picker's prompt, `:Lazy`), every
+letter is Neovim's, whatever these boxes say, as while Neovim completes (`util/KeyContextRule`).
+Why: the window has the keys, and an Eclipse command would act on the document behind it. Example:
+`Ctrl+F` in Telescope's prompt is Telescope's, where it would open Find/Replace. The contexts are
+applied again when the floats change (the key that opens a picker comes before its window), so
+the boxes count again as soon as the window closes. A page editor (`:help`, `:messages`) does the
+same for a window over it (`NeovimPageEditor.floatKeys`), every letter but `Ctrl+W`, which is
+already the page's.
+
 **"Keybinding conflicts occurred" in the Error Log.** Eclipse warns about this when a Java editor opens:
 `Ctrl+I`, `Ctrl+O` and `Ctrl+T` have bindings of the Java editor (Correct Indentation, Quick Outline,
 Quick Type Hierarchy) and of the plug-in, in contexts where neither is the parent of the other, so

@@ -642,7 +642,12 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   window on a file with unsaved changes closes and the changes stay, in a hidden buffer (`:ls`);
   if closing would unload or wipe that buffer (`'bufhidden'`, `'nohidden'`), the window stays,
   drawn, and Neovim leaves it; closing the editor then closes it, the buffer kept hidden.
-  An input method has no place to show
+  While it has the keyboard **every `Ctrl` letter is Neovim's**, whatever the *Ctrl Keys*
+  preference page says, over a text editor and over a `:help` or `:messages` page alike:
+  Eclipse's command would act on the document behind the window. So
+  `Ctrl+V` in Telescope's prompt opens a vertical split, and `Ctrl+A`, `Ctrl+B` and `Ctrl+F` run
+  no Eclipse command; `Ctrl+S` does not save until the window is closed. `Cmd` on macOS stays
+  Eclipse's. An input method has no place to show
   its candidates there. In Normal mode there, `Ctrl-W` and its window commands stay Eclipse's, so
   `Ctrl-W w` moves to the next editor and closes the window; in a prompt's Insert mode `Ctrl-W` is
   the plug-in's (Telescope deletes a word). A window that has the keyboard while Neovim is still
