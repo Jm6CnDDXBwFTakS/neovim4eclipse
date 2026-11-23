@@ -22,6 +22,9 @@ public final class VimModes {
     /** Ctrl-S, the first character of the blockwise-select mode string. */
     public static final char CTRL_S = '\u0013';
 
+    /** {@link #mouseLetter}'s answer where no letter of {@code 'mouse'} applies. */
+    public static final char NO_MOUSE = '\0';
+
     private VimModes() {
     }
 
@@ -79,6 +82,29 @@ public final class VimModes {
 
     public static boolean isBlockVisual(String mode) {
         return first(mode) == CTRL_V;
+    }
+
+    /**
+     * The letter of Neovim's {@code 'mouse'} option for {@code mode}, or {@link #NO_MOUSE} where
+     * Neovim takes no mouse (a {@code :confirm} prompt {@code r?}, a shell command {@code !}).
+     * Select mode counts as Visual, Replace as Insert, operator-pending and Terminal mode as
+     * Normal. Example: {@code "V"} is {@code 'v'}, {@code "rm"} (the more prompt) is {@code 'r'}.
+     */
+    public static char mouseLetter(String mode) {
+        char c = first(mode);
+        if (isVisual(mode) || c == 's' || c == 'S' || c == CTRL_S) {
+            return 'v';
+        }
+        if (isTyping(mode)) {
+            return 'i';
+        }
+        if (isCmdline(mode)) {
+            return 'c';
+        }
+        if (c == '!' || "r?".equals(mode)) {
+            return NO_MOUSE;
+        }
+        return c == 'r' ? 'r' : 'n';
     }
 
     private static char first(String mode) {

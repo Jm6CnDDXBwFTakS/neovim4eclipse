@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -43,13 +44,16 @@ class FloatingWindowsTest {
     private Shell shell;
     private StyledText host;
     private FloatingWindows floats;
+    /** What reached Neovim's mouse: {@code grid button action modifier row col}. */
+    private final List<String> sent = new ArrayList<>();
 
     @BeforeEach
     void create() {
         shell = new Shell(Display.getDefault());
         host = new StyledText(shell, SWT.MULTI);
         host.setSize(600, 300);
-        floats = new FloatingWindows(host);
+        floats = new FloatingWindows(host, (grid, button, action, modifier, row, col) -> sent
+                .add(grid + " " + button + " " + action + " " + modifier + " " + row + " " + col));
     }
 
     @AfterEach
@@ -95,6 +99,61 @@ class FloatingWindowsTest {
         assertFalse(floats.hasFocusedFloat(), "ui2's line with the cursor is Neovim's command line, not a plug-in's window");
         floats.clear();
         assertFalse(floats.hasFocusedFloat());
+    }
+
+    /** A mouse event at cell ({@code row}, {@code col}) of {@code canvas}; returns it, for its {@code doit}. */
+    private static Event mouse(GridCanvas canvas, int type, int row, int col, int count) {
+        Event e = new Event();
+        e.button = type == SWT.MouseVerticalWheel ? 0 : 1;
+        e.x = col * canvas.cellWidth() + 1;
+        e.y = row * canvas.cellHeight() + 1;
+        e.count = count;
+        e.doit = true;
+        canvas.notifyListeners(type, e);
+        return e;
+    }
+
+    /**
+     * The left button and the wheel go to the window's own grid, at its cell. A window that takes
+     * no mouse ignores them, and neither scrolls the editor below.
+     */
+    @Test
+    void theMouseOnAWindowGoesToItsGridAndOneThatTakesNoneIgnoresIt() {
+        FloatWindow plain = window(1002, 6, 2, 3, 4, 50);
+        FloatWindow clickable = new FloatWindow(plain.grid(), 3, 4, 10, 40, 50, false, 7);
+        floats.show(List.of(clickable, window(1003, 6, 2, 0, 20, 60)));
+        GridCanvas canvas = floats.canvas(1002);
+        mouse(canvas, SWT.MouseDown, 1, 2, 1);
+        mouse(canvas, SWT.MouseUp, 1, 2, 1);
+        Event wheel = mouse(canvas, SWT.MouseVerticalWheel, 1, 2, -3);
+        assertEquals(List.of("7 left press  1 2", "7 left release  1 2", "7 wheel down  1 2"), sent);
+        assertFalse(wheel.doit, "the editor below does not scroll too");
+
+        sent.clear();
+        GridCanvas noMouse = floats.canvas(1003);
+        mouse(noMouse, SWT.MouseDown, 0, 0, 1);
+        mouse(noMouse, SWT.MouseUp, 0, 0, 1);
+        assertFalse(mouse(noMouse, SWT.MouseVerticalWheel, 0, 0, 3).doit, "nor under one that takes none");
+        assertEquals(List.of(), sent);
+
+        sent.clear();
+        for (int held : new int[] { SWT.CTRL, SWT.MOD1 }) { // Eclipse's hyperlink keys, as in the text
+            Event press = new Event();
+            press.button = 1;
+            press.stateMask = held;
+            canvas.notifyListeners(SWT.MouseDown, press);
+            Event wheelHeld = new Event();
+            wheelHeld.count = 3;
+            wheelHeld.stateMask = held;
+            wheelHeld.doit = true;
+            canvas.notifyListeners(SWT.MouseVerticalWheel, wheelHeld);
+            assertFalse(wheelHeld.doit);
+        }
+        assertEquals(List.of(), sent, "Ctrl+click is no Vim tag jump here");
+
+        floats.show(List.of(plain)); // the plug-in turned the window's mouse off
+        mouse(canvas, SWT.MouseDown, 0, 0, 1);
+        assertEquals(List.of(), sent);
     }
 
     @Test

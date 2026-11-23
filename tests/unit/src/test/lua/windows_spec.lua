@@ -942,6 +942,68 @@ t.test('a float entered later is reported too, as a hover float focused by a sec
   t.ok(vim.api.nvim_win_is_valid(float), 'and stays')
 end)
 
+--- Enters `win` from an Insert-mode <F5>, so that its BufEnter fires during the insert; first
+--- `through`, if given, without autocommands, as a plug-in can.
+local function enter_in_insert(win, through)
+  vim.keymap.set('i', '<F5>', function()
+    if through then
+      vim.cmd('noautocmd call nvim_set_current_win(' .. through .. ')')
+    end
+    vim.api.nvim_set_current_win(win)
+  end)
+  t.forget()
+  vim.api.nvim_feedkeys(vim.keycode('i<F5><Esc>'), 'mx', false)
+  vim.keymap.del('i', '<F5>')
+end
+
+t.test("a float entered in another float's insert is reported: a click from a prompt stays there", function()
+  commands()
+  vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  local other = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 4, col = 1, width = 5, height = 1 })
+  flush()
+  enter_in_insert(other)
+  t.eq({ true }, entered_floats())
+end)
+
+t.test("a float entered in the editor's insert is not: that insert is Eclipse's", function()
+  commands()
+  local float = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  flush()
+  enter_in_insert(float)
+  t.eq({ false }, entered_floats())
+end)
+
+t.test("a float passed through quietly does not make the editor's insert a float's", function()
+  commands()
+  local quiet = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
+  local float = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 4, col = 1, width = 5, height = 1 })
+  flush()
+  enter_in_insert(float, quiet)
+  t.eq({ false }, entered_floats())
+end)
+
+t.test("'mouse' is told at each change, a :noautocmd one at the next mode change, h as a in help", function()
+  start()
+  local function last()
+    local sent = t.sent('eclipse_mouse_option')
+    return sent[#sent] and sent[#sent][1]
+  end
+  vim.o.mouse = 'nv'
+  t.eq('nv', last())
+  t.forget()
+  vim.cmd('noautocmd set mouse=i')
+  t.eq(nil, last(), 'no autocommand heard it')
+  vim.api.nvim_feedkeys(vim.keycode('v<Esc>'), 'nx', false)
+  t.eq('i', last(), 'the next mode change does')
+  vim.o.mouse = 'h'
+  t.eq('h', last())
+  vim.bo.buftype = 'help'
+  t.eq('ha', last(), 'h is every mode in a help buffer')
+  vim.bo.buftype = ''
+  t.eq('h', last())
+  vim.o.mouse = 'nvi'
+end)
+
 t.test('before WINDOWS runs, no window is a focused float', function()
   t.setup()
   t.forget()

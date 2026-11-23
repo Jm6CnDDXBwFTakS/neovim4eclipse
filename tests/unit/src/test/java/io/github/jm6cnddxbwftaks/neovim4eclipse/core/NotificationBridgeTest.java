@@ -112,6 +112,7 @@ class NotificationBridgeTest {
                 events.add("view:" + kind);
             }
             @Override public void onCmdlineType(String type) { events.add("cmdline:" + type); }
+            @Override public void onMouseOption(String option) { }
             @Override public void onMessages(List<ViewText.Message> history) { events.add("messages:" + history); }
             @Override public void onViewContent(ViewContent content) {
                 events.add(switch (content) {

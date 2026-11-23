@@ -387,7 +387,7 @@ it: closing the page editors at Eclipse's exit as well would avoid it.
 
 - **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** core/LuaScripts.java, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
+- **Areas:** core/LuaScripts.java, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridMouse.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
 
 Telescope's `current_buffer_fuzzy_find` and `:Lazy` are tested at pinned commits
 (`PickersEndToEndTest`, `FloatInsertIntegrationTest`, `NeovimWindowsIntegrationTest`), with the
@@ -401,8 +401,10 @@ picker, fzf-lua, snacks.picker), lazy.nvim and which-key; skip a step whose plug
    prompt has Neovim's cursor and the editor's caret is hidden; the letters appear in the prompt,
    the list narrows, a preview shows the selected file; Enter opens that file in an Eclipse
    editor, and the document you came from is unchanged.
-2. Open the picker again and switch to another application, then back to Eclipse.
-   ⇒ The picker is still open, with the cursor in its prompt.
+2. Open the picker again and switch to another application, then back to Eclipse. Click a row of
+   its list, turn the mouse wheel over the list, then double-click a row.
+   ⇒ The picker is still open after the switch, with the cursor in its prompt; the click selects
+   the row and the picker stays; the wheel moves the list; the double click opens that row.
 3. Run `:Lazy`, move with `j` and `k`, and close it with `q`.
    ⇒ The window is drawn with the cursor on its lines, the editor's text visible around it (no
    dark block over the editor, with a colorscheme that sets a background too); `q` closes it,

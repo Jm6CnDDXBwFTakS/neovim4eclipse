@@ -114,9 +114,9 @@ final class GridCanvas extends Canvas {
     }
 
     /**
-     * @param style more SWT style bits for the canvas. Example: {@code SWT.NO_FOCUS} for a window
-     *              that only shows ({@link FloatingWindows}), so a click on it leaves the keyboard
-     *              focus in the editor.
+     * @param style more SWT style bits for the canvas. Example: {@code SWT.NO_FOCUS} for a floating
+     *              window ({@link FloatingWindows}), so a click on it leaves the keyboard focus in
+     *              the editor.
      */
     GridCanvas(Composite parent, StyledText host, int style) {
         this(parent, of(host), style);

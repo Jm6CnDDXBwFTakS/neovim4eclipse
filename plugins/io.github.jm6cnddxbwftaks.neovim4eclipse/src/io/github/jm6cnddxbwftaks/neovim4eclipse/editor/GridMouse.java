@@ -10,7 +10,8 @@ import org.eclipse.swt.widgets.Event;
  * The mouse on a grid Neovim draws, sent to Neovim as {@code nvim_input_mouse} takes it: the left
  * button (press, drag, release) and the vertical wheel. The right and middle buttons are left
  * alone: there is no Eclipse text under the grid for them. Used by the command-line window's panel
- * ({@link NeovimWindowPanel}) and the page editors ({@link NeovimPageEditor}). One per canvas, which
+ * ({@link NeovimWindowPanel}), the page editors ({@link NeovimPageEditor}) and plug-ins' floating
+ * windows ({@link FloatingWindows}). One per canvas, which
  * owns it: its state goes with the canvas.
  *
  * <p>Example: a click on row 2, column 5 sends {@code ("left", "press", "", 2, 5)} and
@@ -26,6 +27,8 @@ final class GridMouse {
 
     private final GridCanvas canvas;
     private final Target target;
+    /** Whether events with Ctrl or Cmd held are left out ({@link #GridMouse(GridCanvas, Target, boolean)}). */
+    private final boolean withoutCtrl;
     /** The cell the left button last pressed or dragged to, {row, col}; {@code null} while it is up. */
     private int[] pressedAt;
     /** The wheel's counts not yet sent: SWT counts 3 per notch, a touchpad less per event. */
@@ -33,8 +36,20 @@ final class GridMouse {
 
     /** Listens to {@code canvas}'s mouse from now on, as long as it lives. */
     GridMouse(GridCanvas canvas, Target target) {
+        this(canvas, target, false);
+    }
+
+    /**
+     * @param withoutCtrl leave out a press or a wheel with Ctrl or Cmd held, as the editor's text
+     *                    does ({@link NeovimMouse}): those are Eclipse's hyperlink keys. Sent, Ctrl+click
+     *                    would be Vim's raw tag jump ({@code <C-LeftMouse>}), past the mapping
+     *                    that gives {@code Ctrl-]} to Open Declaration, on a {@code tags} file a
+     *                    cloned repository may hold. Example: a plug-in's floating window.
+     */
+    GridMouse(GridCanvas canvas, Target target, boolean withoutCtrl) {
         this.canvas = canvas;
         this.target = target;
+        this.withoutCtrl = withoutCtrl;
         canvas.addListener(SWT.MouseDown, this::onMouseDown);
         canvas.addListener(SWT.MouseMove, this::onMouseMove);
         canvas.addListener(SWT.MouseUp, this::onMouseUp);
@@ -43,7 +58,7 @@ final class GridMouse {
 
     private void onMouseDown(Event e) {
         int[] cell = canvas.cellAt(e.x, e.y);
-        if (e.button != 1 || cell == null) {
+        if (e.button != 1 || cell == null || leftOut(e)) {
             return; // the right and middle buttons do nothing here
         }
         pressedAt = cell;
@@ -81,7 +96,7 @@ final class GridMouse {
     private void onWheel(Event e) {
         e.doit = false; // what lies under the grid does not scroll too
         int[] cell = canvas.cellAt(e.x, e.y);
-        if (cell == null || e.count == 0) {
+        if (cell == null || e.count == 0 || leftOut(e)) {
             return;
         }
         if (Integer.signum(e.count) != Integer.signum(wheelCount)) {
@@ -92,6 +107,10 @@ final class GridMouse {
             target.mouse("wheel", wheelCount > 0 ? "up" : "down", modifiers(e.stateMask), cell[0], cell[1]);
             wheelCount -= 3 * Integer.signum(wheelCount);
         }
+    }
+
+    private boolean leftOut(Event e) {
+        return withoutCtrl && (e.stateMask & (SWT.MOD1 | SWT.CTRL)) != 0;
     }
 
     /** Neovim's modifier letters for a mouse event's keys: {@code "S"} Shift, {@code "C"} Ctrl, {@code "A"} Alt. */

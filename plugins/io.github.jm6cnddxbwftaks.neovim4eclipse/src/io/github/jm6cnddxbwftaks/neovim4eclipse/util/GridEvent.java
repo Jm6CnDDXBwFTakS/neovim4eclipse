@@ -99,9 +99,10 @@ public sealed interface GridEvent {
      *
      * <p>A window of the layout ({@code win_pos}) also says its size. A floating window
      * ({@code win_float_pos}) does not (its grid's size is its own, border included), but says
-     * where it lies in the stack of floats. Whether the mouse can enter it ({@code mouse_enabled})
-     * is not read: a float is drawn while the cursor is not in it, whatever it could do
-     * ({@link Grids#floatsIfChanged}). Its place is the one
+     * where it lies in the stack of floats, and whether the mouse can enter it ({@code mouse_enabled},
+     * the float's {@code mouse} option, off by default for one with {@code focusable = false}):
+     * only then does a click on it go to Neovim ({@link FloatWindow#mouseGrid}); it is drawn
+     * either way ({@link Grids#floatsIfChanged}). Its place is the one
      * Neovim worked out ({@code screen_row}, {@code screen_col}), not the anchor it was opened
      * with: the anchor's corner, the window or float it hangs on and the cursor are all settled in
      * those two numbers. Examples, from a screen of 80 columns:
@@ -117,9 +118,16 @@ public sealed interface GridEvent {
      * @param width     a layout window's columns; 0 for a floating window
      * @param height    a layout window's rows; 0 for a floating window
      * @param zindex    a floating window's place in the stack, the higher on top; 0 for a layout window
+     * @param mouse     whether the mouse can enter it ({@code mouse_enabled}); {@code true} for a
+     *                  layout window
      */
-    record WinPos(int grid, int win, boolean floating, int row, int col, int width, int height, int zindex)
-            implements GridEvent {
+    record WinPos(int grid, int win, boolean floating, int row, int col, int width, int height, int zindex,
+            boolean mouse) implements GridEvent {
+
+        /** A window the mouse can enter. */
+        public WinPos(int grid, int win, boolean floating, int row, int col, int width, int height, int zindex) {
+            this(grid, win, floating, row, col, width, height, zindex, true);
+        }
 
         /** A window whose place does not matter to the caller (tests of what is drawn, not where). */
         public WinPos(int grid, int win, boolean floating) {
@@ -232,7 +240,8 @@ public sealed interface GridEvent {
             // anchor's row and column, right for a float hung by its top left on the screen itself.
             case "win_float_pos" -> a.size() < 2 ? null
                     : new WinPos(number(a, 0), windowId.applyAsInt(a.get(1)), true, numberOr(a, 9, numberOr(a, 4, 0)),
-                            numberOr(a, 10, numberOr(a, 5, 0)), 0, 0, numberOr(a, 7, 0));
+                            numberOr(a, 10, numberOr(a, 5, 0)), 0, 0, numberOr(a, 7, 0),
+                            !(a.size() > 6 && Boolean.FALSE.equals(a.get(6))));
             case "win_hide", "win_close" -> a.isEmpty() ? null : new WinGone(number(a, 0));
             case "hl_attr_define" -> a.size() < 2 ? null : hlAttr(number(a, 0), a.get(1));
             case "default_colors_set" -> a.size() < 2 ? null : new DefaultColors(color(a.get(0)), color(a.get(1)));

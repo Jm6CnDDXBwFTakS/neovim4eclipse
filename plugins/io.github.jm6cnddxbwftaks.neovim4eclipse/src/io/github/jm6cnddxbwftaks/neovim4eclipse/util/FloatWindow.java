@@ -28,9 +28,14 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.util;
  *                 and the {@code :} line's list, which Neovim stacks on those rows. Example: ui2's
  *                 message window right above the status line stays right above it, also when the
  *                 editor's height is not a whole number of rows.
+ * @param mouseGrid  the grid a click or the wheel on this window goes to ({@code nvim_input_mouse}),
+ *                 or -1 when it takes none: a float with {@code mouse = false} (as one with
+ *                 {@code focusable = false} is by default), ui2's windows and the popup menu.
+ *                 Example: Telescope's results, grid 7: a click on its row 3 is
+ *                 {@code ("left", "press", "", 7, 3, col)}.
  */
 public record FloatWindow(GridSnapshot grid, int row, int col, int hostRows, int hostCols, int zindex,
-        boolean fromBottom) {
+        boolean fromBottom, int mouseGrid) {
 
     /**
      * Whether this is a plug-in's float with Neovim's cursor in it: a picker's prompt,
@@ -41,6 +46,12 @@ public record FloatWindow(GridSnapshot grid, int row, int col, int hostRows, int
      */
     public boolean focused() {
         return grid.cursorRow() >= 0 && !fromBottom;
+    }
+
+    /** A float that takes no clicks. */
+    public FloatWindow(GridSnapshot grid, int row, int col, int hostRows, int hostCols, int zindex,
+            boolean fromBottom) {
+        this(grid, row, col, hostRows, hostCols, zindex, fromBottom, -1);
     }
 
     /** A float placed by its rows from the window's top: every float but ui2's and the {@code :} line's list. */

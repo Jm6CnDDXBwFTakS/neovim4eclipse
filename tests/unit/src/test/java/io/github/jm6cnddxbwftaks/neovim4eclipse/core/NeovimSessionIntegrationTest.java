@@ -597,6 +597,111 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /** The grid of the one plug-in's float that takes the mouse, once it is reported. */
+    private static int mouseGridOfTheFloat(NeovimSession s) throws Exception {
+        waitFor(() -> s.floatingWindows().stream().anyMatch(f -> f.mouseGrid() != -1), "the float reported");
+        return s.floatingWindows().stream().filter(f -> f.mouseGrid() != -1).findFirst().orElseThrow().mouseGrid();
+    }
+
+    /** A click on {@code row} of {@code grid}, as the float's canvas sends it, handled by Neovim once this returns. */
+    private static void floatClick(NeovimSession s, int grid, int row) throws Exception {
+        s.floatMouseAsync(grid, "left", "press", "", row, 1);
+        s.floatMouseAsync(grid, "left", "release", "", row, 1);
+        NeovimBarrier.pass(s);
+    }
+
+    /**
+     * {@code 'mouse'} decides, by the mode at each key, as in a terminal: a mode it leaves out gets
+     * no click or wheel on a floating window, and the same holds in the float's own insert.
+     */
+    @Test
+    void aFloatsMouseFollowsTheMouseOption() throws Exception {
+        try (NeovimSession s = start()) {
+            s.lua("""
+                    local b = vim.api.nvim_create_buf(false, true)
+                    local lines = {}
+                    for i = 1, 40 do lines[i] = 'entry ' .. i end
+                    vim.api.nvim_buf_set_lines(b, 0, -1, false, lines)
+                    vim.g.float = vim.api.nvim_open_win(b, false,
+                      { relative = 'editor', row = 1, col = 2, width = 20, height = 5 })
+                    """);
+            int grid = mouseGridOfTheFloat(s);
+            String top = "return vim.fn.line('w0', vim.g.float)";
+            String inFloat = "return vim.api.nvim_get_current_win() == vim.g.float";
+
+            for (String without : List.of("", "vic")) { // no n: Normal mode gets nothing
+                s.lua("vim.o.mouse = '" + without + "'");
+                s.floatMouseAsync(grid, "wheel", "down", "", 1, 1);
+                floatClick(s, grid, 2);
+                assertEquals(1L, s.lua(top), "'mouse' " + without + ": not scrolled");
+                assertEquals(false, s.lua(inFloat), "'mouse' " + without + ": not entered");
+            }
+
+            s.lua("vim.o.mouse = 'n'");
+            s.floatMouseAsync(grid, "wheel", "down", "", 1, 1);
+            NeovimBarrier.pass(s);
+            assertTrue(((Number) s.lua(top)).longValue() > 1, "with n: scrolled");
+            floatClick(s, grid, 2);
+            assertEquals(true, s.lua(inFloat), "with n: entered");
+
+            s.input("i");
+            waitFor(() -> "i".equals(s.getMode()), "the float's insert");
+            Object line = s.lua("return vim.api.nvim_win_get_cursor(0)[1]");
+            floatClick(s, grid, 0); // 'mouse' is still n
+            assertEquals(line, s.lua("return vim.api.nvim_win_get_cursor(0)[1]"), "Insert mode left out");
+            s.lua("vim.o.mouse = 'i'");
+            floatClick(s, grid, 0);
+            assertNotEquals(line, s.lua("return vim.api.nvim_win_get_cursor(0)[1]"), "with i: the click lands");
+        }
+    }
+
+    /**
+     * A click in a mode {@code 'mouse'} leaves out does not reach a mapping of it, as in a
+     * terminal. The mapping here changes the text, so a click that got through would show.
+     */
+    @Test
+    void aMappingOfTheMouseDoesNotRunInAModeTheOptionLeavesOut() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("alpha beta"));
+            s.lua("""
+                    vim.keymap.set('n', '<LeftMouse>', 'x')
+                    vim.o.mouse = 'vi'
+                    local b = vim.api.nvim_create_buf(false, true)
+                    vim.api.nvim_buf_set_lines(b, 0, -1, false, { 'one', 'two', 'three' })
+                    vim.g.float = vim.api.nvim_open_win(b, false,
+                      { relative = 'editor', row = 1, col = 2, width = 20, height = 3 })
+                    """);
+            floatClick(s, mouseGridOfTheFloat(s), 1);
+            assertEquals("alpha beta", s.lua("return vim.api.nvim_buf_get_lines(0, 0, 1, false)[1]"),
+                    "the mapping did not run on the text");
+            assertEquals("n", s.getMode());
+        }
+    }
+
+    /** The command-line window's mouse goes through the same check: with {@code 'mouse'} empty, nothing. */
+    @Test
+    void theCommandLineWindowsMouseFollowsTheMouseOption() throws Exception {
+        try (NeovimSession s = start()) {
+            for (int i = 1; i <= 5; i++) {
+                s.lua("vim.fn.histadd(':', 'echo " + i + "')");
+            }
+            keys(s, "q", ":");
+            waitFor(() -> s.commandWindowGrid() != -1, "the window drawn");
+            String line = "return vim.api.nvim_win_get_cursor(0)[1]";
+            Object before = s.lua(line);
+            s.lua("vim.o.mouse = ''");
+            s.commandWindowMouseAsync("left", "press", "", 0, 1);
+            s.commandWindowMouseAsync("left", "release", "", 0, 1);
+            NeovimBarrier.pass(s);
+            assertEquals(before, s.lua(line), "'mouse' empty: the click does nothing");
+            s.lua("vim.o.mouse = 'nvi'");
+            s.commandWindowMouseAsync("left", "press", "", 0, 1);
+            s.commandWindowMouseAsync("left", "release", "", 0, 1);
+            NeovimBarrier.pass(s);
+            assertNotEquals(before, s.lua(line), "with n: the click moves the cursor");
+        }
+    }
+
     // ---- macros ----
 
     private static void waitFor(java.util.function.BooleanSupplier condition, String what) throws Exception {

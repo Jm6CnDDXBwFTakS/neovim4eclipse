@@ -240,7 +240,11 @@ final class WindowPane {
             }
         };
         JFaceResources.getFontRegistry().addListener(fontListener);
-        floats = new FloatingWindows(canvas);
+        floats = new FloatingWindows(canvas, (grid, button, action, modifier, row, col) -> {
+            if (focused) { // only the page Neovim's windows belong to now
+                session.floatMouseAsync(grid, button, action, modifier, row, col);
+            }
+        });
         floats.keepUnder(statusRow);
         commandWindowPanel = new NeovimWindowPanel(canvas, new NeovimEditorController.PanelCommands(session), () -> {
             // nothing to update: a page has no Ctrl-key context of its own

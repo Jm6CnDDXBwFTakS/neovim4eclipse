@@ -11,8 +11,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -224,6 +226,26 @@ class GridsTest {
         assertEquals(List.of(1002, 1003), grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList(),
                 "with the cursor in it, drawn: the keys go to it");
         assertTrue(grids.unseenCursor().isEmpty(), "so no float the keys go to is undrawn");
+    }
+
+    /**
+     * Clicks go to a plug-in's float that lets the mouse in, on its own grid; not to one with
+     * {@code mouse = false}, ui2's windows or the popup menu (window -1).
+     */
+    @Test
+    void onlyAPluginsFloatThatLetsTheMouseInTakesClicks() {
+        grids.drawFloats(true);
+        editorWindow();
+        grids.ui2Windows(List.of(1004), 1004, -1, false);
+        floatAt(5, 1002, 0, 0, 50);
+        for (int[] other : new int[][] { { 6, 1003 }, { 7, 1004 }, { 8, -1 } }) {
+            grids.apply(new GridEvent.Resize(other[0], 6, 2));
+            grids.apply(new GridEvent.Line(other[0], 0, 0, text("hi", 0)));
+            grids.apply(new GridEvent.WinPos(other[0], other[1], true, 0, 0, 0, 0, 50, other[1] != 1003));
+        }
+        Map<Integer, Integer> mouseGrids = new HashMap<>();
+        grids.floatsIfChanged().orElseThrow().forEach(f -> mouseGrids.put(f.grid().window(), f.mouseGrid()));
+        assertEquals(Map.of(1002, 5, 1003, -1, 1004, -1, -1, -1), mouseGrids);
     }
 
     /**

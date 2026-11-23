@@ -35,12 +35,23 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
  * repaints too. Example: {@code <Space>} with which-key installed gives two windows, the
  * panel across the editor's bottom and a one-row line above it; the next key closes both.
  *
- * <h2>They only show</h2>
+ * <h2>The keyboard</h2>
  * A drawn window never takes the keyboard focus ({@code SWT.NO_FOCUS}): the keys keep going to the
  * editor, and from there to Neovim, also when Neovim's cursor is in the window (a picker's prompt):
  * Neovim then puts them there itself. Its cursor is drawn as Neovim draws it by default: a block,
- * a bar at the cell's left edge in Insert and Replace mode ({@link #setInsertMode}). Clicks and
- * the wheel on it do nothing. The windows lie under the plug-in's own overlays (the command-line
+ * a bar at the cell's left edge in Insert and Replace mode ({@link #setInsertMode}).
+ *
+ * <h2>The mouse</h2>
+ * The left button and the wheel on a plug-in's window go to Neovim at that window's own cell
+ * ({@link GridMouse}, {@link Mouse}), and Neovim and the plug-in decide what they do, as in a
+ * terminal: a click on Telescope's results selects the row and the prompt keeps the keyboard, a
+ * double click opens it, the wheel scrolls the window under the pointer. A window that takes no
+ * clicks ({@link FloatWindow#mouseGrid} -1: {@code mouse = false}, ui2's, the popup menu) ignores
+ * them; unlike a terminal, the click does not pass through to what lies below. Ctrl+click and
+ * Cmd+click are left out, as in the editor's text.
+ *
+ * <h2>Stacking</h2>
+ * The windows lie under the plug-in's own overlays (the command-line
  * window's panel), among themselves in Neovim's order ({@code zindex}), and over the status line's
  * row ({@link #keepUnder}), as Neovim draws a float over a status line: ui2's prompt and pager
  * windows reach it, and with {@code 'cmdheight'} 0 ui2's {@code :} line lies on it. Neovim's own command
@@ -53,7 +64,14 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
  */
 final class FloatingWindows {
 
+    /** Where a mouse event on a window goes; {@code nvim_input_mouse}'s arguments. */
+    @FunctionalInterface
+    interface Mouse {
+        void mouse(int grid, String button, String action, String modifier, int row, int col);
+    }
+
     private final Canvas host;
+    private final Mouse mouse;
     /** The canvas of each window drawn, by window ID. */
     private final Map<Integer, GridCanvas> canvases = new LinkedHashMap<>();
     /** The windows drawn, lowest in the stack first. */
@@ -66,8 +84,14 @@ final class FloatingWindows {
     /** Whether Neovim is in Insert or Replace mode: a cursor in a drawn window is a bar then. */
     private boolean insert;
 
-    FloatingWindows(Canvas host) {
+    /**
+     * @param host  the control the windows are drawn over
+     * @param mouse gets the mouse on a window that takes it; whether it is sent on is the owner's
+     *              decision (an insert Eclipse types gets no clicks)
+     */
+    FloatingWindows(Canvas host, Mouse mouse) {
         this.host = host;
+        this.mouse = mouse;
     }
 
     /** Keeps {@code control}, a child of the host, under every window drawn (the status line's row). */
@@ -94,9 +118,10 @@ final class FloatingWindows {
             if (canvas == null || canvas.isDisposed()) {
                 canvas = new GridCanvas(host, GridCanvas.lookOf(host), SWT.NO_FOCUS);
                 canvas.setInsertCursor(insert);
-                // The wheel over a float does nothing; without this, some platforms scroll the editor under it.
-                canvas.addListener(SWT.MouseVerticalWheel, e -> e.doit = false);
+                // GridMouse keeps the vertical wheel from the editor under the window; this the other.
                 canvas.addListener(SWT.MouseHorizontalWheel, e -> e.doit = false);
+                new GridMouse(canvas, (button, action, modifier, row, col) -> mouseOn(id, button, action, modifier, row, col),
+                        true);
                 canvases.put(id, canvas);
             }
             canvas.show(window.grid());
@@ -118,6 +143,16 @@ final class FloatingWindows {
         }
         place();
         stack();
+    }
+
+    /** A mouse event on window {@code win}: sent to the grid it has now, if it takes the mouse. */
+    private void mouseOn(int win, String button, String action, String modifier, int row, int col) {
+        for (FloatWindow window : shown) {
+            if (window.grid().window() == win && window.mouseGrid() != -1) {
+                mouse.mouse(window.mouseGrid(), button, action, modifier, row, col);
+                return;
+            }
+        }
     }
 
     /** Removes every window (Neovim mode off, the editor detaches). */

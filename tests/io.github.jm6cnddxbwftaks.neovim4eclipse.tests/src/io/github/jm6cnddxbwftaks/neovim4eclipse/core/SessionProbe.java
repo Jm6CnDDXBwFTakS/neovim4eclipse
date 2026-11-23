@@ -34,6 +34,15 @@ public final class SessionProbe {
     }
 
     /**
+     * Done once the session's input thread has run what was queued before this call. For a test on
+     * the UI thread, which must keep the display running meanwhile ({@code waitUntil(done::isDone)}):
+     * a queued key can wait for the UI thread, so blocking here would hold both up.
+     */
+    public static java.util.concurrent.Future<?> queuedWorkDone(NeovimSession session) {
+        return session.queuedWorkDone();
+    }
+
+    /**
      * Waits until the session's input thread has done the work queued before this call. Example: an
      * editor's close queues its buffer's close ({@code closeBufferAsync}); a test that checks what
      * that close logged waits here first. Any queued request is a barrier, since the input thread

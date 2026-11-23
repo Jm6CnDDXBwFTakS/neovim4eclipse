@@ -37,6 +37,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FoldRegions;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.MouseOption;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Grids;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.HostCommand;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Indentation;
@@ -282,6 +283,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * Written on the reader thread with each page snapshot, read on the input thread.
      */
     private final Map<Integer, Integer> pageGrids = new ConcurrentHashMap<>();
+    /**
+     * Neovim's {@code 'mouse'} as last reported ({@code LuaScripts.WINDOWS}), for {@link #gridMouse};
+     * {@code null} before the first report. Written on the reader thread, read on the input thread.
+     */
+    private volatile String mouseOption;
 
     private NeovimSession(NeovimConnection connection, Handle homeBuffer, int homeWin, ClipboardPort clipboard) {
         this.connection = connection;
@@ -1141,9 +1147,35 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit("page mouse " + button + " " + action, Level.FINE, () -> {
             Integer grid = pageGrids.get(win);
             if (grid != null) {
-                await(api.inputMouse(button, action, modifier, grid, row, col));
+                gridMouse(grid, button, action, modifier, row, col);
             }
         });
+    }
+
+    /**
+     * A mouse event on a plug-in's floating window, at its {@code row} and {@code col}
+     * ({@code nvim_input_mouse} with its grid, {@code FloatWindow.mouseGrid}), in order with the
+     * keys. What it does is Neovim's and the plug-in's: Telescope's results select the row, a
+     * double click opens it. Nothing in a mode {@code 'mouse'} leaves out ({@link #gridMouse}).
+     * A window closed meanwhile costs nothing: Neovim finds no window for
+     * its grid and drops the event, and never gives a new window the old number. Queued.
+     */
+    public void floatMouseAsync(int grid, String button, String action, String modifier, int row, int col) {
+        submit("floating window mouse " + button + " " + action, Level.FINE,
+                () -> gridMouse(grid, button, action, modifier, row, col));
+    }
+
+    /**
+     * Sends a mouse event on a grid, if {@code 'mouse'} enables Neovim's mode now
+     * ({@code util/MouseOption}), the one way all three kinds of grid reach Neovim. The mode is
+     * asked with {@code nvim_get_mode}, which Neovim answers even while it waits for a key. Input
+     * thread. Example: {@code 'mouse'} {@code "nv"} and a prompt in Insert mode: nothing is sent.
+     */
+    private void gridMouse(int grid, String button, String action, String modifier, int row, int col)
+            throws Exception {
+        if (MouseOption.allows(mouseOption, await(api.getMode()).mode())) {
+            await(api.inputMouse(button, action, modifier, grid, row, col));
+        }
     }
 
     /**
@@ -1162,7 +1194,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         submit("command-line window mouse " + button + " " + action, Level.FINE, () -> {
             int grid = commandWindowGrid;
             if (grid != -1) {
-                await(api.inputMouse(button, action, modifier, grid, row, col));
+                gridMouse(grid, button, action, modifier, row, col);
             }
         });
     }
@@ -2625,6 +2657,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
             if (!history.isEmpty()) {
                 status.onViewContent(ViewText.messages(history));
             }
+        }
+
+        @Override
+        public void onMouseOption(String option) {
+            mouseOption = option;
         }
 
         @Override

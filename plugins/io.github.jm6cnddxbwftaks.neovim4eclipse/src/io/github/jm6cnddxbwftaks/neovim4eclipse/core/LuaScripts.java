@@ -1928,12 +1928,21 @@ final class LuaScripts {
             --- kind: Telescope makes its prompt buffer a prompt only after entering the window
             --- (plenary's popup opens a scratch buffer, then Telescope sets 'buftype'). One entered
             --- during an insert (a plug-in's timer while Eclipse types) is sent back, as before:
-            --- the insert is the editor's. Leaving the editor closes the float (M.leave_float). Whether
+            --- the insert is the editor's. Unless that insert began in a plug-in's float
+            --- (insert_float, set at InsertEnter; not the previous window, which a plug-in can pass
+            --- through without an autocommand): a click from a picker's prompt on a second float
+            --- enters that one still in Insert mode, and sent back, the next letters would land in
+            --- the file. Leaving the editor closes the float (M.leave_float). Whether
             --- the editor draws it is not asked here: one it does not draw (hidden, past the limits)
             --- is closed in the one place that decides it, M.close_undrawn.
             function M.entered_float(win)
-              return M.focused_float(win) and win == vim.api.nvim_get_current_win()
-                and not vim.api.nvim_get_mode().mode:match('^[iR]')
+              if not M.focused_float(win) or win ~= vim.api.nvim_get_current_win() then
+                return false
+              end
+              if not vim.api.nvim_get_mode().mode:match('^[iR]') then
+                return true
+              end
+              return insert_float ~= nil
             end
 
             --- Closes win, a plug-in's float, as leaving it does: not by force, so that a buffer of
@@ -2122,6 +2131,29 @@ final class LuaScripts {
               vim.api.nvim_create_autocmd('UIEnter', { group = group, once = true, callback = function() close() end })
               return false
             end
+            -- 'mouse', told to Eclipse, which checks it before it sends a click on a grid (a floating
+            -- window, q:, a page; util/MouseOption). Eclipse cannot ask at the click: Neovim holds an
+            -- option read while it waits for a key (after f or r). Nor can Neovim drop the click as
+            -- it reads it: vim.on_key runs after mappings, and dropping the first key of a mapping's
+            -- right-hand side would run the rest as commands on the user's text. Told at each change,
+            -- and looked at again at each mode change, for a :noautocmd set. "h" means every mode in
+            -- a help buffer, so there it is told with an "a". Example: "nvi"; "ha" in :help with "h".
+            local told_mouse
+            local function tell_mouse()
+              local value = vim.o.mouse
+              if value:find('h', 1, true) and vim.bo.buftype == 'help' then
+                value = value .. 'a'
+              end
+              if value ~= told_mouse then
+                told_mouse = value
+                vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_mouse_option', value)
+              end
+            end
+            vim.api.nvim_create_autocmd({ 'ModeChanged', 'BufEnter', 'BufWinEnter', 'UIEnter' },
+              { group = group, callback = tell_mouse })
+            vim.api.nvim_create_autocmd('OptionSet',
+              { group = group, pattern = { 'mouse', 'buftype' }, callback = tell_mouse })
+            tell_mouse()
             -- Where each insert begins (insert_float, above).
             vim.api.nvim_create_autocmd('InsertEnter', {
               group = group,

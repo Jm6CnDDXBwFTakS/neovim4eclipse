@@ -298,7 +298,7 @@ public final class NeovimEditorController implements AutoCloseable {
                 editor.getSite().getService(IHandlerService.class), this::pasteIntoCommandLine);
         this.commandWindowPanel = new NeovimWindowPanel(styledText, new PanelCommands(session),
                 this::onCommandLineStateChanged);
-        this.floatingWindows = new FloatingWindows(styledText);
+        this.floatingWindows = new FloatingWindows(styledText, this::floatMouse);
         this.lineOnFocusLoss = new LineOnFocusLoss(styledText,
                 () -> !closed && neovimModeActive && session.commandLineOpen()
                         && !VimModes.isExMode(session.getMode()), // gQ: Vim cannot cancel its line
@@ -1058,6 +1058,20 @@ public final class NeovimEditorController implements AutoCloseable {
     private void showFloats(List<FloatWindow> windows) {
         floatingWindows.show(windows);
         cursorStyle.setHidden(floatingWindows.hasFocusedFloat());
+    }
+
+    /**
+     * The mouse on a plug-in's floating window goes to Neovim when a click in the text would
+     * ({@link #neovimHandlesMouse}), and only while this editor has the keyboard: Neovim's windows
+     * are this editor's then. Not during an insert Eclipse types, even with the cursor in a float
+     * (one a mapping entered on the same buffer): Neovim's text is behind Eclipse's until Esc.
+     * Unlike a click in the text it leaves nothing: the picker stays open. UI thread.
+     */
+    private void floatMouse(int grid, String button, String action, String modifier, int row, int col) {
+        boolean eclipseTypes = VimModes.isTyping(session.getMode()) && !session.isNeovimDrivenInsert();
+        if (styledText.isFocusControl() && neovimHandlesMouse() && !eclipseTypes) {
+            session.floatMouseAsync(grid, button, action, modifier, row, col);
+        }
     }
 
     /**

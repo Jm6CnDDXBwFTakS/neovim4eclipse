@@ -40,6 +40,16 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
               width = vim.api.nvim_win_get_width(win), height = 2, style = 'minimal', focusable = false })
             """;
 
+    /** Opens a float of 40 lines showing 5, not entered, that lets the mouse in, as hover text does. */
+    private static final String OPEN_LIST = """
+            local buf = vim.api.nvim_create_buf(false, true)
+            local lines = {}
+            for i = 1, 40 do lines[i] = 'entry ' .. i end
+            vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+            vim.g.n4e_float = vim.api.nvim_open_win(buf, false,
+              { relative = 'editor', row = 1, col = 2, width = 20, height = 5, style = 'minimal' })
+            """;
+
     /**
      * Opens a picker's prompt as a picker does: a scratch prompt buffer in a float, entered, then
      * {@code startinsert}. It stays: floats are drawn, so the editor draws it, and the one check
@@ -261,6 +271,55 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
         assertEquals(session.getAttachedWinid(),
                 ((Number) SessionProbe.lua(session, "return vim.api.nvim_get_current_win()")).intValue(),
                 "Neovim back in the editor's window");
+    }
+
+    /** One notch of the wheel away from the user, on {@code canvas}. */
+    private static void wheelDown(GridCanvas canvas) {
+        Event wheel = new Event();
+        wheel.x = canvas.cellWidth() + 1;
+        wheel.y = canvas.cellHeight() + 1;
+        wheel.count = -3;
+        wheel.doit = true;
+        canvas.notifyListeners(SWT.MouseVerticalWheel, wheel);
+    }
+
+    private long floatTopLine() {
+        return ((Number) SessionProbe.lua(session, "return vim.fn.line('w0', vim.g.n4e_float)")).longValue();
+    }
+
+    /**
+     * The wheel on a float scrolls that window, the cursor staying in the editor's; during an
+     * insert Eclipse types the mouse is not Neovim's, there or in the text.
+     */
+    @Test
+    void theWheelScrollsTheFloatUnderItExceptInAnInsertEclipseTypes() {
+        Object editorWindow = SessionProbe.lua(session, "return vim.api.nvim_get_current_win()");
+        SessionProbe.lua(session, OPEN_LIST);
+        GridCanvas canvas = floatShowing("entry 1");
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        wheelDown(canvas);
+        waitUntil("the float scrolled", TIMEOUT_MS, () -> floatTopLine() > 1, () -> "; top line " + floatTopLine());
+        // 'mouse' empty: the wheel is not sent (NeovimSession.gridMouse, util/MouseOption).
+        Object mouseOption = SessionProbe.lua(session, "local m = vim.o.mouse vim.o.mouse = '' return m");
+        long before = floatTopLine();
+        wheelDown(canvas);
+        java.util.concurrent.Future<?> dropped = SessionProbe.queuedWorkDone(session);
+        waitUntil("what was queued has run", TIMEOUT_MS, dropped::isDone);
+        assertEquals(before, floatTopLine(), "'mouse' empty: the wheel does nothing");
+        SessionProbe.lua(session, "vim.o.mouse = '" + mouseOption + "'");
+        assertEquals(editorWindow, SessionProbe.lua(session, "return vim.api.nvim_get_current_win()"),
+                "the cursor stays in the editor's window");
+
+        long top = floatTopLine();
+        type(widget, "i");
+        waitUntil("insert mode", TIMEOUT_MS, () -> "i".equals(session.getMode()));
+        wheelDown(canvas);
+        java.util.concurrent.Future<?> passed = SessionProbe.queuedWorkDone(session);
+        waitUntil("what was queued has run", TIMEOUT_MS, passed::isDone);
+        // floatTopLine is a call Neovim answers after the input queued before it.
+        assertEquals(top, floatTopLine(), "Eclipse types: the wheel is not sent");
+        type(widget, "\u001b");
+        waitUntil("normal mode", TIMEOUT_MS, () -> "n".equals(session.getMode()));
     }
 
     @Test

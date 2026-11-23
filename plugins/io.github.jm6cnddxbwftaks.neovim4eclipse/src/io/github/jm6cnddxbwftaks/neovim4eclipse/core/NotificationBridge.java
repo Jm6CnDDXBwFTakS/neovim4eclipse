@@ -237,6 +237,9 @@ final class NotificationBridge implements Incoming {
          */
         void onCmdlineType(String type);
 
+        /** Neovim's {@code 'mouse'} option, at each change ({@link LuaScripts#WINDOWS}; {@code util/MouseOption}). */
+        void onMouseOption(String option);
+
         /**
          * {@code :messages}: the message history, oldest first, for its page editor
          * ({@link LuaScripts#UI2}). Example: {@code [Message("", "a note"), Message("echoerr", "it broke")]}.
@@ -312,6 +315,7 @@ final class NotificationBridge implements Incoming {
             case "eclipse_echo" -> onEcho(args);
             case "eclipse_cmdwin" -> onCommandWindow(args);
             case "eclipse_cmdwin_closed" -> sink.onCommandWindowClosed();
+            case "eclipse_mouse_option" -> sink.onMouseOption(args.isEmpty() ? null : String.valueOf(args.get(0)));
             case "eclipse_cmdline" -> sink.onCmdlineType(args.isEmpty() ? "" : String.valueOf(args.get(0)));
             case "eclipse_messages" -> onMessages(args);
             case "nvim_buf_lines_event" -> onBufLines(args);

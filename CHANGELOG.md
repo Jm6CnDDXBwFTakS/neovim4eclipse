@@ -23,6 +23,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   with its progress, and closed when the start is over, with a message saying `:Lazy` opens it again; the keys typed meanwhile now always go to the
   file, where before some could reach the installer's window. One the editor cannot draw (past the limits in
   the user guide's *Floating windows*), or that its plug-in hides, is closed with a message.
+- Clicks and the wheel on a plug-in's floating window now go to Neovim, as in a terminal: a click
+  on Telescope's results selects the row, a double click opens it, and the wheel scrolls the
+  window under the pointer. Before, they did nothing. Neovim's `'mouse'` decides in which modes,
+  there and in the `q:` window and page editors, as in a terminal.
 
 ### Fixed
 

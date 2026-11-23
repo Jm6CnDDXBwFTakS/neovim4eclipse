@@ -427,7 +427,7 @@ aimed. Its colors are the editor's, with Neovim's highlight groups on top; Neovi
 follows Eclipse's theme (light or dark), so a colorscheme with both variants picks the one that
 matches; when Eclipse changes it, Neovim reloads the colorscheme, so highlight changes your
 config makes after its `:colorscheme` are lost then (make them in a `ColorScheme` autocommand to
-keep them). The left button and the wheel are Neovim's inside it, in every mode: a click puts the
+keep them). The left button and the wheel are Neovim's inside it, in the modes `'mouse'` enables: a click puts the
 cursor on a history line, a double click selects a word, dragging selects, and the wheel scrolls
 (your `'mouse'`, `'mousescroll'` and mouse mappings apply; with `'mouse'` empty, a click there
 does nothing). The right and middle buttons do nothing there. An input method's composed text (Japanese, say) does not reach it: the
@@ -620,9 +620,20 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   `FloatBorder`, your colorscheme's), over the editor's text, where Neovim put it. A window across
   the bottom of Neovim's screen lies on the editor's bottom edge. One larger than the editor is cut
   off at the editor's edges.
-- **They only show.** Your keys go to the editor and on to Neovim, as if the window were not
-  there: with which-key, the next key runs the mapping and the panel closes. A click or the wheel
-  on a floating window does nothing.
+- **Keys.** Your keys go to the editor and on to Neovim, as if the window were not there: with
+  which-key, the next key runs the mapping and the panel closes.
+- **The mouse.** The left button and the wheel on a floating window go to Neovim at that window's
+  cell, and Neovim and the plug-in decide what they do, as in a terminal: a click on Telescope's
+  results selects the row and a double click opens it, the wheel scrolls the window under the
+  pointer. Neovim's `'mouse'`, `'mousetime'`, `'mousescroll'` and mouse mappings apply: in a mode
+  `'mouse'` leaves out, a click or the wheel on the window does nothing (with `nv`, a click on a
+  picker's list while its prompt is in Insert mode). A window
+  opened with `mouse = false` (by default one with `focusable = false`, such as which-key's panel)
+  takes no click; unlike a terminal, the click does not pass through to the text below. Neither do
+  Neovim's own windows (ui2's command line and messages, the popup menu) take clicks. Ctrl+click,
+  Cmd+click and the wheel with either held do nothing on a floating window, the right and middle
+  buttons neither, and during
+  an insert Eclipse types the mouse is not sent.
 - **A window that takes the keyboard** (a picker's prompt, `:Lazy`, hover documentation entered
   with a second `K`, with Neovim's own `K`: `vim.g.neovim4eclipse_ide_keys = 0`) is drawn with Neovim's cursor in it, a bar in Insert mode, and the editor's
   caret is hidden meanwhile: your keys go to that window, as in Neovim, Esc and Enter included.
@@ -631,9 +642,10 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   window on a file with unsaved changes closes and the changes stay, in a hidden buffer (`:ls`);
   if closing would unload or wipe that buffer (`'bufhidden'`, `'nohidden'`), the window stays,
   drawn, and Neovim leaves it; closing the editor then closes it, the buffer kept hidden.
-  Only the keys reach it: a click on it does nothing, and an input method has no place to show
-  its candidates there. `Ctrl-W` and its window commands stay Eclipse's, so `Ctrl-W w` moves to
-  the next editor and closes the window. A window that has the keyboard while Neovim is still
+  An input method has no place to show
+  its candidates there. In Normal mode there, `Ctrl-W` and its window commands stay Eclipse's, so
+  `Ctrl-W w` moves to the next editor and closes the window; in a prompt's Insert mode `Ctrl-W` is
+  the plug-in's (Telescope deletes a word). A window that has the keyboard while Neovim is still
   starting (lazy.nvim's installer, as it installs missing plug-ins) is drawn over the editor
   Eclipse shows, with its progress, and closed with a message when the start is over: the keys
   you type meanwhile wait, and go to your file, whatever the config's `VimEnter` did. A float a later `UIEnter` opens takes the
@@ -794,7 +806,8 @@ Shift+click extends the selection. The selection is Neovim's visual selection, s
 act on what you see. Your `'mouse'`, `'mousetime'` and mappings such as `<2-LeftMouse>` apply; with
 `'mouse'` empty a click only moves the cursor.
 
-Eclipse keeps the mouse in insert mode and in Eclipse mode, and always keeps Ctrl+click (Cmd+click on
+Eclipse keeps the mouse in insert mode (except on a plug-in's window with Neovim typing, as a
+picker's prompt: [Floating windows](#floating-windows)) and in Eclipse mode, and always keeps Ctrl+click (Cmd+click on
 macOS: Open Declaration and other hyperlinks), the right button (context menu) and the middle button
 (pasting the primary selection on Linux). The wheel scrolls Neovim's window in normal and visual mode
 (see "The editor's size, scrolling and word wrap"). Dragging selected text to move it is not available in

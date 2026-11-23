@@ -543,7 +543,9 @@ public final class Grids {
                     host == null ? 0 : host.width(), place.zindex(),
                     // fromBottom: ui2's windows and the : line's list. FloatWindow.focused relies on it
                     // to tell Neovim's own windows with the cursor from a plug-in's.
-                    ui2Windows.contains(place.win()) || (place.win() == -1 && inCommandLine)));
+                    ui2Windows.contains(place.win()) || (place.win() == -1 && inCommandLine),
+                    // Clicks: a plug-in's float that lets the mouse in. Not Neovim's own windows.
+                    place.mouse() && place.win() != -1 && !ui2Windows.contains(place.win()) ? e.getKey() : -1));
         }
         floats.sort(Comparator.comparingInt(FloatWindow::zindex).thenComparingInt(f -> f.grid().window()));
         if (floats.equals(lastFloats)) {

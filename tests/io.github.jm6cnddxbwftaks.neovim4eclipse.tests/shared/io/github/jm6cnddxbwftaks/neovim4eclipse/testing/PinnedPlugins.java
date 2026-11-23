@@ -117,7 +117,7 @@ public final class PinnedPlugins {
     public static final String CLOSE_TELESCOPE = """
             vim.cmd.stopinsert()
             for _, w in ipairs(vim.api.nvim_list_wins()) do
-              if vim.bo[vim.api.nvim_win_get_buf(w)].filetype:match('^Telescope') then
+              if vim.api.nvim_win_is_valid(w) and vim.bo[vim.api.nvim_win_get_buf(w)].filetype:match('^Telescope') then
                 pcall(vim.api.nvim_win_close, w, true)
               end
             end
