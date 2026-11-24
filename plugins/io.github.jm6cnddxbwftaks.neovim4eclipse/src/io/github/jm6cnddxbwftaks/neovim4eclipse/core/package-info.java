@@ -71,7 +71,8 @@
  *   <li>{@code ClipboardRegisters}: Neovim's {@code "+} and {@code "*} registers in the system
  *       clipboard, as Neovim's clipboard provider: which selection, lines to text and back, and the
  *       register type of what Neovim copied itself.</li>
- *   <li>{@code LuaScripts}: every Lua chunk run inside Neovim, with comments.</li>
+ *   <li>{@code LuaScripts}: every Lua chunk run inside Neovim, with comments; the large ones are
+ *       files in {@code core/lua/}, which {@code LuaModules} reads from the plug-in and sends.</li>
  *   <li>{@code NotificationBridge}: decodes the msgpack-rpc notifications Neovim sends (buffer line
  *       events and the plug-in's own {@code eclipse_*} events), and answers its two requests, the
  *       clipboard paste and the save of a document Neovim writes.</li>
