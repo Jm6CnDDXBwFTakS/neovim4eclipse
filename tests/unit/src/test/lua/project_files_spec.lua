@@ -71,10 +71,6 @@ t.test('a modeline in a file the hook reads does not apply', function()
   t.eq(false, vim.bo.modeline)
 end)
 
--- A cloned repository may hold a file whose name has a line break (legal on Linux and macOS). Built
--- into the hook's :read, the rest of the name ran as a command of its own: the attack needed only
--- a second file named like the first line plus a backslash, so the :read before it succeeded
--- (0.2.1 security review). Now such a file is not read at all.
 -- PROJECT_FILES finds PATHS in package.loaded, as the session sent it first: without it, the install
 -- fails at once, rather than leaving a read hook that fails on every file (and Neovim reading the
 -- disk itself), or require searching the runtimepath for it.
@@ -88,6 +84,10 @@ t.test('the project files module is not installed without PATHS sent first', fun
   t.eq(nil, installed)
 end)
 
+-- A cloned repository may hold a file whose name has a line break (legal on Linux and macOS). Built
+-- into the hook's :read, the rest of the name ran as a command of its own: the attack needed only
+-- a second file named like the first line plus a backslash, so the :read before it succeeded
+-- (0.2.1 security review). Now such a file is not read at all.
 t.test('a file name with a line break is not read, and nothing in it runs', function()
   if vim.fn.has('win32') == 1 then
     t.skip('Windows names cannot hold a line break')

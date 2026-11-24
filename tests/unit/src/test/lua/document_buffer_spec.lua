@@ -476,8 +476,8 @@ t.test('after :augroup! of the plug-in\'s group, old and new document buffers ke
   vim.schedule(function() next_loop = true end) -- after the unload's own scheduled clean-up
   t.wait_for("Neovim's next loop", function() return next_loop end)
   t.eq('acwrite', vim.bo[old].buftype, 'still a document')
-  -- Its editor closed: none of its autocommands is left (all of them the plug-in's here, the
-  -- ones without a desc too: FileType, OptionSet, BufFilePre).
+  -- Its editor closed: none of its autocommands is left (all of them the plug-in's here,
+  -- whatever their desc).
   local before = vim.api.nvim_get_autocmds({ buffer = old })
   t.ok(#before >= 10, 'every hook, in the deleted group: ' .. #before)
   t.run('CLOSE_DOCUMENT_BUFFER', tostring(old))
