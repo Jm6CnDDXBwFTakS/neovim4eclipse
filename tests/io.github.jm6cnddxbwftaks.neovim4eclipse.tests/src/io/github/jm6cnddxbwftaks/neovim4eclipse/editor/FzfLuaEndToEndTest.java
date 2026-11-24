@@ -148,9 +148,9 @@ class FzfLuaEndToEndTest extends EndToEndTestBase {
      * {@code Ctrl-V} on a file in an fzf-lua list: fzf-lua's own action for it ({@code file_vsplit},
      * which its {@code files} binds to {@code Ctrl-V}) closes the list and makes a vertical split on
      * the file, which the editor turns into an Eclipse split on it (a window Eclipse does not draw
-     * would take keys unseen). The list is one of the test's own ({@code fzf_exec} on two names in
-     * the project's folder: {@code other.txt}, a file there, and {@code notes.md}, which the
-     * letters typed leave out), so that it is the same on every system: {@code files} lists with
+     * would take keys unseen). The list is one of the test's own ({@code fzf_exec} on two names, read
+     * in the project's folder: {@code other.txt}, a file there, and {@code notes.md}, only a name,
+     * which the letters typed leave out), so that it is the same on every system: {@code files} lists with
      * whatever the machine has ({@code fd}, {@code rg}, {@code find}), and on Windows Git Bash's
      * {@code find} gives full paths, cut at the window's width, so no row would show the name.
      */
