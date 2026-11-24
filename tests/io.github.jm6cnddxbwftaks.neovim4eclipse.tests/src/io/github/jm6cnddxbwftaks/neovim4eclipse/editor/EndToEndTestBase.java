@@ -385,7 +385,7 @@ abstract class EndToEndTestBase {
         UiTestSupport.settle(running, TIMEOUT_MS); // the closes are queued in the session: let them happen first
         String folder = project == null || project.getLocation() == null ? "" : project.getLocation().toOSString();
         SessionProbe.lua(running, """
-                local paths = require('neovim4eclipse.paths') -- the one rule (LuaScripts.PATHS)
+                local paths = package.loaded['neovim4eclipse.paths'] -- the one rule (LuaScripts.PATHS)
                 local folder = FOLDER
                 for _, b in ipairs(vim.api.nvim_list_bufs()) do
                   local name = vim.api.nvim_buf_get_name(b)

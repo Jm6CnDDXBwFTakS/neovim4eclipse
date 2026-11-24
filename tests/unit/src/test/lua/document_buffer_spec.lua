@@ -411,10 +411,11 @@ t.test('the per-buffer call only uses the module the session sent', function()
   package.preload['neovim4eclipse.document_buffer'] = function()
     return { setup = function() found = true end }
   end
-  local ok = pcall(t.run, 'DOCUMENT_BUFFER', tostring(buf))
+  local ok, err = pcall(t.run, 'DOCUMENT_BUFFER', tostring(buf))
   package.preload['neovim4eclipse.document_buffer'] = nil
   package.loaded['neovim4eclipse.document_buffer'] = module
-  t.ok(not ok, 'no module sent: an error')
+  t.ok(not ok and tostring(err):find('not installed (LuaScripts.DOCUMENT_BUFFER_MODULE)', 1, true) ~= nil,
+    'no module sent: an error that says so: ' .. tostring(err))
   t.eq(false, found, 'no other module stood in')
   t.eq('', vim.bo[buf].buftype)
 end)
@@ -457,14 +458,31 @@ t.test('a buffer made a document buffer again keeps nothing its unload took', fu
 end)
 
 -- The group is made again by each setup, as a script run per buffer made it: a config that deleted
--- it (:augroup!) does not keep the next editor's buffer from its hooks.
-t.test('a deleted group is made again for the next document buffer', function()
+-- it (:augroup!) does not keep the next editor's buffer from its hooks. And the buffers set up
+-- before keep theirs, which Vim's :augroup! leaves in place under the deleted group: the module
+-- knows them by their ids, not by the group's name, so an older document still gets 'acwrite' back
+-- after an unload (else its next :w would write the disk behind Eclipse), and its close still
+-- takes them off.
+t.test('after :augroup! of the plug-in\'s group, old and new document buffers keep working', function()
   t.setup()
-  t.document('First.txt', { 'x' })
-  vim.api.nvim_del_augroup_by_name('neovim4eclipse_document')
+  local old = t.document('First.txt', { 'x' })
+  vim.cmd('silent! augroup! neovim4eclipse_document') -- W19: still in use; the autocommands stay
   local buf = t.document('Second.txt', { 'y' })
-  t.ok(plugins_autocmds(buf) > 0, 'the write hook and the safety net')
+  t.ok(plugins_autocmds(buf) > 0, 'the new buffer: the write hook and the safety net')
   t.eq('acwrite', vim.bo[buf].buftype)
+  -- The old one, unloaded by a plug-in: 'acwrite' again on the next loop.
+  vim.cmd('bunload! ' .. old)
+  local next_loop = false
+  vim.schedule(function() next_loop = true end) -- after the unload's own scheduled clean-up
+  t.wait_for("Neovim's next loop", function() return next_loop end)
+  t.eq('acwrite', vim.bo[old].buftype, 'still a document')
+  -- Its editor closed: no hook of the plug-in's is left on it.
+  t.run('CLOSE_DOCUMENT_BUFFER', tostring(old))
+  local left = vim.tbl_filter(function(a)
+    return a.desc ~= nil and a.desc:find('^Eclipse') ~= nil
+  end, vim.api.nvim_get_autocmds({ buffer = old }))
+  t.eq({}, left)
+  t.eq(false, package.loaded['neovim4eclipse.document_buffer'].has_hooks(old))
 end)
 
 -- Kept only for the read that follows the unload at once (:edit! does both in one command): a buffer

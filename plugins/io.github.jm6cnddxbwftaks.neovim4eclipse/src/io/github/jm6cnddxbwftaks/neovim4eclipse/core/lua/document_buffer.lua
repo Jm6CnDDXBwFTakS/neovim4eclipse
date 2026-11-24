@@ -110,13 +110,21 @@
 
 local M = {}
 
--- The plug-in's autocommands for document buffers, in one group: setup gives each buffer its
--- own (buffer-local) ones, and CLOSE_DOCUMENT_BUFFER removes a buffer's when its last editor
--- closes, so a buffer reused for a new editor gets them once. Made here and again by each
--- setup ({ clear = false } keeps the other buffers' autocommands), so that a group deleted
--- meanwhile (`:augroup! neovim4eclipse_document`) is made anew, as a script run per buffer did.
+-- The plug-in's autocommands for document buffers, in one group (`:autocmd
+-- neovim4eclipse_document` lists them): setup gives each buffer its own (buffer-local) ones.
+-- Made here and again by each setup ({ clear = false } keeps the other buffers'
+-- autocommands), so that a group deleted meanwhile (`:augroup! neovim4eclipse_document`) is
+-- made anew, as a script run per buffer did.
 local GROUP = 'neovim4eclipse_document'
 local group = vim.api.nvim_create_augroup(GROUP, { clear = false })
+
+-- Each document buffer's hooks, by buffer number: the ids of the autocommands setup made for
+-- it. The one record of which buffers are documents now (M.has_hooks): setup sets it,
+-- M.close (CLOSE_DOCUMENT_BUFFER, its last editor closed) and a wipe remove it. Kept by id,
+-- not looked up by group, so that it holds whatever happened to the group: after a config's
+-- `:augroup! neovim4eclipse_document`, Vim's rule keeps the autocommands of the deleted group,
+-- and a lookup by name would find the new group, without them.
+local hooks = {}
 
 -- What a buffer's hooks keep until a later event, one table per buffer, by its number (Neovim
 -- never gives a number twice): `kept`, the text a reload's unload took (BufUnload to
@@ -124,7 +132,7 @@ local group = vim.api.nvim_create_augroup(GROUP, { clear = false })
 -- `name_before`, the name before a rename (BufFilePre to BufFilePost). setup gives the buffer a
 -- new table, as a buffer made anew starts with nothing kept; a hook scheduled for the next loop
 -- holds on to the table it began with, so it finishes with what its own event kept, never with
--- a later setup's. A buffer wiped (BufWipeout) drops its table.
+-- a later setup's. M.close and a wipe (BufWipeout) drop the buffer's table.
 local state = {}
 local function state_of(b)
   local st = state[b]
@@ -326,11 +334,11 @@ end
 -- Safety net: Neovim deleting this buffer by itself (<Cmd>bd, Lua, :bufdo bd) closes its
 -- editor too. Eclipse ignores it for a buffer no editor shows. (When Eclipse closes the
 -- last editor, CLOSE_DOCUMENT_BUFFER removes this autocommand first.) A wiped buffer is gone
--- for good, its number never given again: its table goes too (BufWipeout comes last, after
--- BufUnload and BufDelete).
+-- for good, its number never given again, and Neovim removes its autocommands: its records
+-- go too (BufWipeout comes last, after BufUnload and BufDelete).
 local function on_delete(ev)
   if ev.event == 'BufWipeout' then
-    state[ev.buf] = nil
+    state[ev.buf], hooks[ev.buf] = nil, nil
   end
   vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_buffer_closed', ev.buf)
 end
@@ -359,6 +367,14 @@ local function on_unload(ev)
     end
   end
   local st = state_of(b)
+  -- The clean-up first, then what it cleans: should a later step fail, the text is still
+  -- dropped on the next loop, never handed to a read much later.
+  vim.schedule(function()
+    st.kept = nil
+    if vim.api.nvim_buf_is_valid(b) and hooks[b] then
+      set_buftype(b, 'acwrite') -- still a document's buffer (not closed meanwhile)
+    end
+  end)
   st.kept = { lines = vim.api.nvim_buf_get_lines(b, 0, -1, false), modified = vim.bo[b].modified,
               marks = marks }
   -- Unloaded as a normal file's buffer, the buffer keeps its marks and last position
@@ -366,13 +382,6 @@ local function on_unload(ev)
   -- buffer Eclipse then closes (the safety net), as for CLOSE_DOCUMENT_BUFFER's unload.
   -- 'acwrite' comes back with the read (BufReadCmd below) or on the next loop.
   vim.bo[b].buftype = '' -- no OptionSet: inside an autocommand (see set_buftype)
-  vim.schedule(function()
-    st.kept = nil
-    if vim.api.nvim_buf_is_valid(b)
-        and #vim.api.nvim_get_autocmds({ group = group, buf = b }) > 0 then
-      set_buftype(b, 'acwrite') -- still a document's buffer (not closed meanwhile)
-    end
-  end)
 end
 local function on_read(ev)
   local b = ev.buf
@@ -396,6 +405,27 @@ local function on_read(ev)
   vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_reload', b, k ~= nil)
 end
 
+-- Removes buffer b's hooks and what they kept (nothing for a buffer that has none).
+local function remove_hooks(b)
+  for _, id in ipairs(hooks[b] or {}) do
+    pcall(vim.api.nvim_del_autocmd, id) -- one a config deleted already is gone
+  end
+  hooks[b], state[b] = nil, nil
+end
+
+--- Whether buf is a document's buffer now: setup gave it its hooks, and neither M.close nor
+--- a wipe took them since. Example: false for a buffer whose editor closed (CLOSE_DOCUMENT_BUFFER),
+--- which keeps b:neovim4eclipse_file.
+function M.has_hooks(buf)
+  return hooks[buf] ~= nil
+end
+
+--- Takes the hooks off buffer `buf`, its last editor closed (CLOSE_DOCUMENT_BUFFER, which
+--- then unloads it): Neovim reads the file itself again if the buffer is shown later.
+function M.close(buf)
+  remove_hooks(buf)
+end
+
 --- Makes buffer `buf` a document buffer: 'acwrite', b:neovim4eclipse_file, and the hooks
 --- above as autocommands local to it. Again for the same buffer (one reused for a new
 --- editor), its hooks are made anew, once. Example: setup(3) after CREATE_DOCUMENT_BUFFER
@@ -403,20 +433,25 @@ end
 function M.setup(buf)
   vim.bo[buf].buftype = 'acwrite'
   group = vim.api.nvim_create_augroup(GROUP, { clear = false })
-  vim.api.nvim_clear_autocmds({ group = group, buf = buf })
+  remove_hooks(buf)
   state[buf] = {}
+  local ids = {}
+  hooks[buf] = ids
+  local function hook(event, opts)
+    ids[#ids + 1] = vim.api.nvim_create_autocmd(event, opts)
+  end
   -- The editor's file, as Neovim names it (links resolved). Writes are compared with it, not
   -- with the buffer's name, which :saveas and :file change.
   vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)
   keep_iskeyword(buf)
-  vim.api.nvim_create_autocmd('FileType', {
+  hook('FileType', {
     group = group,
     buffer = buf,
     callback = function()
       keep_iskeyword(buf)
     end,
   })
-  vim.api.nvim_create_autocmd('OptionSet', {
+  hook('OptionSet', {
     group = group,
     buffer = buf,
     callback = function(ev)
@@ -425,40 +460,40 @@ function M.setup(buf)
       end
     end,
   })
-  vim.api.nvim_create_autocmd('BufWriteCmd', {
+  hook('BufWriteCmd', {
     buf = buf, -- named "buffer" before Neovim 0.12.2
     group = group,
     desc = 'Eclipse saves the document',
     callback = on_write,
   })
   for event in pairs(LINE_WRITES) do
-    vim.api.nvim_create_autocmd(event, {
+    hook(event, {
       buf = buf,
       group = group,
       desc = 'Eclipse writes the lines to another file',
       callback = on_line_write,
     })
   end
-  vim.api.nvim_create_autocmd('BufFilePre', { buf = buf, group = group, callback = before_rename })
-  vim.api.nvim_create_autocmd('BufFilePost', {
+  hook('BufFilePre', { buf = buf, group = group, callback = before_rename })
+  hook('BufFilePost', {
     buf = buf,
     group = group,
     desc = 'Eclipse keeps the buffer named after its file',
     callback = after_rename,
   })
-  vim.api.nvim_create_autocmd({ 'BufDelete', 'BufWipeout' }, {
+  hook({ 'BufDelete', 'BufWipeout' }, {
     buf = buf,
     group = group,
     desc = 'Eclipse closes the editor',
     callback = on_delete,
   })
-  vim.api.nvim_create_autocmd('BufUnload', {
+  hook('BufUnload', {
     buf = buf,
     group = group,
     desc = 'Eclipse keeps the text for a reload',
     callback = on_unload,
   })
-  vim.api.nvim_create_autocmd('BufReadCmd', {
+  hook('BufReadCmd', {
     buf = buf,
     group = group,
     desc = 'Eclipse keeps the document',

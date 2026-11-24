@@ -573,7 +573,8 @@ final class LuaScripts {
      * {@code 1u} in {@code :ls!}, and opening it again gives buffer 1, not a new number.
      *
      * <p>In order: the plug-in's autocommands for the buffer go (the write hook and the safety net
-     * belong to a document with an editor); {@code 'buftype'} goes back to a normal file's, since
+     * belong to a document with an editor; {@link #DOCUMENT_BUFFER_MODULE}'s {@code close}, which
+     * removes them by their ids, whatever a config did to their group); {@code 'buftype'} goes back to a normal file's, since
      * Neovim drops the marks of an {@code acwrite} buffer when it unloads it (BUFFER_NUMBERS.md, X4); then unload and
      * unlist. {@code b:neovim4eclipse_file} stays. Nothing for a buffer that is gone.
      *
@@ -591,7 +592,7 @@ final class LuaScripts {
             if not vim.api.nvim_buf_is_valid(buf) then
               return
             end
-            pcall(vim.api.nvim_clear_autocmds, { group = 'neovim4eclipse_document', buf = buf })
+            package.loaded['neovim4eclipse.document_buffer'].close(buf)
             vim.bo[buf].buftype = ''
             if vim.api.nvim_buf_is_loaded(buf) then -- not after Neovim's own :bdelete, which unloaded it
               vim.api.nvim_buf_delete(buf, { force = true, unload = true }) -- force: unsaved changes live in Eclipse
@@ -622,7 +623,7 @@ final class LuaScripts {
             if not vim.api.nvim_buf_is_valid(buf) then
               return true
             end
-            local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
+            local canonical = package.loaded['neovim4eclipse.paths'].canonical -- PATHS: case, links, separators
             if canonical(vim.api.nvim_buf_get_name(buf)) == canonical(name) then
               vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)
               return true
@@ -1543,10 +1544,15 @@ final class LuaScripts {
      * Makes a new buffer (argument: its number) a document buffer, through the module
      * {@link #DOCUMENT_BUFFER_MODULE} installed ({@code setup(buf)}). Read from
      * {@code package.loaded}, never with {@code require}, which would search the runtimepath for a
-     * module the session had not sent.
+     * module the session had not sent; without it, an error that says so (the session then undoes
+     * the buffer, {@code DocumentBuffers.undoCreate}).
      */
     static final String DOCUMENT_BUFFER = """
-            package.loaded['neovim4eclipse.document_buffer'].setup(tonumber((select(1, ...))))
+            local module = package.loaded['neovim4eclipse.document_buffer']
+            if not module then
+              error('neovim4eclipse.document_buffer is not installed (LuaScripts.DOCUMENT_BUFFER_MODULE)', 0)
+            end
+            module.setup(tonumber((select(1, ...))))
             """;
 
     /**
@@ -1710,7 +1716,7 @@ final class LuaScripts {
      */
     static final String LEAVE_FOLDER = """
             local folder = ...
-            local paths = require('neovim4eclipse.paths') -- PATHS: case, links, separators
+            local paths = package.loaded['neovim4eclipse.paths'] -- PATHS: case, links, separators
             local inner = paths.canonical(folder)
             local function inside(dir)
               return paths.within(paths.canonical(dir), inner)

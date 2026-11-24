@@ -80,10 +80,11 @@ buffer was empty for that moment. 2.3, point 4 keeps the text across the reload 
 `DocumentBuffers.close` forgets the buffer in Java, `RELEASE_BUFFER` closes its windows and Neovim
 returns to the attached buffer. Then `CLOSE_DOCUMENT_BUFFER`:
 
-1. Clears the plug-in's buffer-local autocommands (the write hook `BufWriteCmd`, the reload hook,
-   the safety net): they belong to a document with an editor. They live in the augroup
-   `neovim4eclipse_document` so that they can be cleared for that buffer alone, and are set again
-   when the buffer is reused (without the group, `DOCUMENT_BUFFER` would add them a second time).
+1. Removes the plug-in's buffer-local autocommands (the write hook `BufWriteCmd`, the reload hook,
+   the safety net): they belong to a document with an editor. The module that makes them
+   (`DOCUMENT_BUFFER_MODULE`) keeps their ids by buffer, so that they can be removed for that
+   buffer alone (its `close`), and are set again, once, when the buffer is reused. They live in the
+   augroup `neovim4eclipse_document` too, which `:autocmd neovim4eclipse_document` lists.
 2. Sets `'buftype'` back to `''` (X4, X5), so the marks survive.
 3. `nvim_buf_delete(buf, { force = true, unload = true })`, then `'buflisted'` off: `:bd`. `force`,
    because unsaved changes live in Eclipse. A buffer that is not loaded is only unlisted:

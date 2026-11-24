@@ -87,15 +87,15 @@ local function page_buffer(buf)
 end
 
 --- Whether buf is an open document's buffer now: DOCUMENT_BUFFER marked it
---- (b:neovim4eclipse_file) and its hooks are on it. CLOSE_DOCUMENT_BUFFER removes the hooks
---- and keeps the mark, so a buffer whose editor closed is no document any more: its
---- help may be a page again.
+--- (b:neovim4eclipse_file) and its hooks are on it (DOCUMENT_BUFFER_MODULE's has_hooks, the
+--- one record of them). CLOSE_DOCUMENT_BUFFER removes the hooks and keeps the mark, so a
+--- buffer whose editor closed is no document any more: its help may be a page again.
 function M.is_document(buf)
   if vim.b[buf].neovim4eclipse_file == nil then
     return false
   end
-  local ok, hooks = pcall(vim.api.nvim_get_autocmds, { group = 'neovim4eclipse_document', buffer = buf })
-  return ok and #hooks > 0
+  local documents = package.loaded['neovim4eclipse.document_buffer']
+  return documents ~= nil and documents.has_hooks(buf)
 end
 
 --- Gives a document's buffer back what :help took from it: :help on a help file that is

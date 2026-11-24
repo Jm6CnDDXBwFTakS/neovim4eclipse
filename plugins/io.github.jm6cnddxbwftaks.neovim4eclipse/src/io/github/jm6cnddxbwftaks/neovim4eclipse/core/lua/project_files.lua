@@ -84,10 +84,10 @@ local function read(ev)
   local buf = ev.buf
   vim.bo[buf].swapfile = false -- first: a stale swap file would stop the read at E325
   -- A document's buffer: its own hook asks Eclipse for the text (DOCUMENT_BUFFER_MODULE). Known
-  -- by its hooks as well as by 'acwrite': during :edit! the buffer is read with 'buftype'
-  -- '' (its BufUnload set it, to keep the marks), and this hook runs first.
-  local ok, hooks = pcall(vim.api.nvim_get_autocmds, { group = 'neovim4eclipse_document', buf = buf })
-  if vim.bo[buf].buftype == 'acwrite' or (ok and #hooks > 0) then
+  -- by its hooks (the module's has_hooks) as well as by 'acwrite': during :edit! the buffer is
+  -- read with 'buftype' '' (its BufUnload set it, to keep the marks), and this hook runs first.
+  local documents = package.loaded['neovim4eclipse.document_buffer']
+  if vim.bo[buf].buftype == 'acwrite' or (documents ~= nil and documents.has_hooks(buf)) then
     return
   end
   local name = ev.match

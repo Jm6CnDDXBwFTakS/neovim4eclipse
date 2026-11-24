@@ -1137,9 +1137,11 @@ file there, starting with the two SPDX lines and a comment saying what it does, 
 `LuaScripts` that names it (`static final String QUICKFIX = LuaModules.script("quickfix.lua")`),
 sent once from `NeovimSession.initialize`; `LuaModulesTest` fails on a file no field names. Its
 functions go in a table it puts in `package.loaded` (`package.loaded['neovim4eclipse.quickfix'] =
-M`), and the short scripts call them by name (`require('neovim4eclipse.quickfix').set(...)`).
-Never a `require` of a module the session has not sent: Lua would search the runtimepath, where a
-file of the user's could answer.
+M`), and the short scripts call them from there (`package.loaded['neovim4eclipse.quickfix'].set(...)`),
+as `DOCUMENT_BUFFER` does. Not with `require`: should the module be missing (its install failed, or
+a config removed it), `require` would search the runtimepath and `./?.lua`, where a file of the
+user's or of a cloned repository could answer; `package.loaded` gives an error instead. (Older
+scripts still call `require`, which finds the same table while the module is there.)
 
 **Add a preference.** Add a key and default to `PreferenceConstants`; set the default in
 `PreferenceDefaults`; add a field to a preference page's body (`NeovimPage`, `StatusBarPage`,
