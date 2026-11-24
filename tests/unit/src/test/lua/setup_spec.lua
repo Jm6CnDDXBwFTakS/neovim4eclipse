@@ -172,7 +172,7 @@ local function lines_and_jumps()
 end
 
 local function trail()
-  return require('neovim4eclipse.history').trail()
+  return package.loaded['neovim4eclipse.history'].trail()
 end
 
 t.test('Ctrl-I undoes a Back before the jumps Ctrl-O made before it', function()

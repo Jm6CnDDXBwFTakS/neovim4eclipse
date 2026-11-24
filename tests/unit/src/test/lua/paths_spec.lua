@@ -32,7 +32,7 @@ local function fake_realpath(platform)
 end
 
 local function rules(platform)
-  return require('neovim4eclipse.paths').rules({
+  return package.loaded['neovim4eclipse.paths'].rules({
     win32 = platform == 'windows',
     ignorecase = platform ~= 'linux',
     realpath = fake_realpath(platform),
@@ -62,7 +62,7 @@ t.test('every case of the shared table, on its platform\'s rule', function()
 end)
 
 t.test('this machine\'s rule on real files: a link, a relative name, and a file not there yet', function()
-  local paths = require('neovim4eclipse.paths')
+  local paths = package.loaded['neovim4eclipse.paths']
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir .. '/real', 'p')
   vim.fn.writefile({ 'x' }, dir .. '/real/a.txt')
@@ -84,8 +84,8 @@ t.test("an error names the module's file and line (core/LuaModules)", function()
   -- Each Lua file is compiled as a chunk named after it, so Neovim's messages point into
   -- core/lua/ (neovim4eclipse/core/lua/paths.lua:42: ...), not at a line of "a script".
   -- Named with =, not @: Neovim would take a @ name for a file in its working folder.
-  local info = debug.getinfo(require('neovim4eclipse.paths').rules, 'S')
+  local info = debug.getinfo(package.loaded['neovim4eclipse.paths'].rules, 'S')
   t.eq('=neovim4eclipse/core/lua/paths.lua', info.source)
-  local ok, err = pcall(require('neovim4eclipse.paths').rules, nil) -- indexes a nil platform
+  local ok, err = pcall(package.loaded['neovim4eclipse.paths'].rules, nil) -- indexes a nil platform
   t.ok(not ok and err:find('^neovim4eclipse/core/lua/paths%.lua:%d+:') ~= nil, err)
 end)

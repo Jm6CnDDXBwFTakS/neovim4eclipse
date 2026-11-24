@@ -1141,7 +1141,8 @@ M`), and the short scripts call them from there (`package.loaded['neovim4eclipse
 as `DOCUMENT_BUFFER` does. Not with `require`: should the module be missing (its install failed, or
 a config removed it), `require` would search the runtimepath and `./?.lua`, where a file of the
 user's or of a cloned repository could answer; `package.loaded` gives an error instead.
-`LuaScriptsTest` fails on a `require` of a plug-in module in any script or file.
+`LuaScriptsTest` allows `require` in a script or file only of the modules it lists (Neovim's own
+`vim._core.ui2`); a new one goes into that list.
 
 **Add a preference.** Add a key and default to `PreferenceConstants`; set the default in
 `PreferenceDefaults`; add a field to a preference page's body (`NeovimPage`, `StatusBarPage`,

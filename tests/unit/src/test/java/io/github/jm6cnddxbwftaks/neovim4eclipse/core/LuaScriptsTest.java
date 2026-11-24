@@ -5,9 +5,13 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
@@ -85,12 +89,45 @@ class LuaScriptsTest {
     }
 
     /**
-     * A call of {@code require} on one of the plug-in's own modules:
-     * {@code require('neovim4eclipse.x')}, {@code require "neovim4eclipse.x"},
-     * {@code pcall(require, 'neovim4eclipse.x')}.
+     * The modules the plug-in's Lua may load with {@code require}: Neovim's own, never one of the
+     * plug-in's. A known set, so that the check below does not depend on spotting every spelling
+     * of a plug-in module (a name built at run time, an alias of {@code require}, a long string).
      */
-    private static final Pattern REQUIRE_OF_A_PLUGIN_MODULE =
-            Pattern.compile("\\brequire\\b[\\s(,]*['\"]neovim4eclipse\\.");
+    private static final Set<String> REQUIRED_MODULES = Set.of("vim._core.ui2");
+
+    /**
+     * {@code require} given one module name as a quoted string, and nothing else:
+     * {@code require('x')}, {@code require "x"} and {@code pcall(require, 'x')}. The name is
+     * group 2, 4 or 6. Not {@code require('x' .. y)}: the call must close after the name.
+     */
+    private static final Pattern REQUIRE_OF_A_NAME = Pattern.compile("\\brequire\\b(?:"
+            + "\\s*\\(\\s*(['\"])([^'\"\\\\]+)\\1\\s*\\)" // require('x')
+            + "|\\s*(['\"])([^'\"\\\\]+)\\3" // require 'x'
+            + "|\\s*,\\s*(['\"])([^'\"\\\\]+)\\5\\s*\\))"); // pcall(require, 'x')
+
+    /**
+     * The first use of {@code require} in {@code lua} that is not a load of a module of
+     * {@link #REQUIRED_MODULES}, or {@code null}. Any other use counts: one of the plug-in's
+     * modules, another name, a name built at run time ({@code require('neovim4eclipse.' .. m)}),
+     * {@code require} kept under another name ({@code local r = require}).
+     */
+    private static String disallowedRequire(String lua) {
+        String code = code(lua);
+        Matcher use = Pattern.compile("\\brequire\\b").matcher(code);
+        while (use.find()) {
+            Matcher call = REQUIRE_OF_A_NAME.matcher(code).region(use.start(), code.length());
+            String name = null; // the module's name, when the use is a load of one
+            if (call.lookingAt()) {
+                for (int group : new int[] {2, 4, 6}) {
+                    name = call.group(group) != null ? call.group(group) : name;
+                }
+            }
+            if (name == null || !REQUIRED_MODULES.contains(name)) {
+                return code.substring(use.start()).lines().findFirst().orElse("");
+            }
+        }
+        return null;
+    }
 
     /**
      * No script finds one of the plug-in's modules with {@code require}; each reads it from
@@ -99,23 +136,25 @@ class LuaScriptsTest {
      * it), {@code require} would search the runtimepath and {@code ./?.lua}, where a file of the
      * user's or of a cloned repository could answer; {@code package.loaded} gives an error instead.
      * Every file in {@code core/lua/} is in a script's text ({@code LuaModulesTest}), so this reads
-     * them too. Other modules, Neovim's own among them ({@code vim._core.ui2}), may be required.
+     * them too. The only {@code require} allowed is of a module in {@link #REQUIRED_MODULES}.
      */
     @Test
     void noScriptFindsAPluginModuleWithRequire() throws IllegalAccessException {
         for (String script : LuaModulesTest.scriptsOfLuaScripts()) {
-            var found = REQUIRE_OF_A_PLUGIN_MODULE.matcher(code(script));
-            assertFalse(found.find(), () -> "require of a plug-in module: "
-                    + code(script).substring(found.start()).lines().findFirst().orElse(""));
+            String found = disallowedRequire(script);
+            assertNull(found, () -> "require of a module outside REQUIRED_MODULES: " + found);
         }
-        // The pattern itself: each form is found, a comment, another module and a longer name not.
-        for (String call : new String[] {"require('neovim4eclipse.windows').open()",
-                "local w = require \"neovim4eclipse.windows\"", "pcall(require, 'neovim4eclipse.folds')"}) {
-            assertTrue(REQUIRE_OF_A_PLUGIN_MODULE.matcher(code(call)).find(), call);
+        // The check itself: every other use is found; a comment, a longer name and an allowed module not.
+        for (String use : new String[] {"require('neovim4eclipse.windows').open()",
+                "local w = require \"neovim4eclipse.windows\"", "pcall(require, 'neovim4eclipse.folds')",
+                "require [[neovim4eclipse.x]]", "require('neovim4eclipse.' .. m)", "local r = require",
+                "require(name)", "require('vim._core.ui2' .. x)", "require('other')"}) {
+            assertNotNull(disallowedRequire(use), use);
         }
         for (String other : new String[] {"x = 1 -- require('neovim4eclipse.windows')",
-                "pcall(require, 'vim._core.ui2')", "my_require('neovim4eclipse.windows')"}) {
-            assertFalse(REQUIRE_OF_A_PLUGIN_MODULE.matcher(code(other)).find(), other);
+                "local ok, ui2 = pcall(require, 'vim._core.ui2')", "require('vim._core.ui2').cfg",
+                "my_require('neovim4eclipse.windows')", "return nil, 'E471: Argument required'"}) {
+            assertNull(disallowedRequire(other), other);
         }
     }
 

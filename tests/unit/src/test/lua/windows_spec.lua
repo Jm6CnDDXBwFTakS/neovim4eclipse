@@ -1292,7 +1292,7 @@ end)
 
 t.test("the plug-in's own windows and plain windows are no focused floats", function()
   local win, home = commands()
-  local focused_float = require('neovim4eclipse.windows').focused_float
+  local focused_float = package.loaded['neovim4eclipse.windows'].focused_float
   t.eq(false, focused_float(win), "an editor's window")
   t.eq(false, focused_float(home), 'the home window')
   local float = enter_float()
@@ -1311,7 +1311,7 @@ end)
 
 t.test('leaving closes the float the cursor is in, and the next one it lands in, ending an insert', function()
   local win = commands()
-  local leave_float = require('neovim4eclipse.windows').leave_float
+  local leave_float = package.loaded['neovim4eclipse.windows'].leave_float
   t.eq(false, leave_float(), 'nothing to leave in the editor\'s window')
   t.eq(win, vim.api.nvim_get_current_win())
   local results = vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 3, col = 1, width = 5, height = 1 })
@@ -1319,7 +1319,7 @@ t.test('leaving closes the float the cursor is in, and the next one it lands in,
   -- Closing the prompt puts Neovim in the results float, the window last current.
   t.eq(true, leave_float())
   t.ok(not vim.api.nvim_win_is_valid(prompt) and not vim.api.nvim_win_is_valid(results), 'both closed')
-  t.ok(not require('neovim4eclipse.windows').focused_float(0), 'the cursor outside every plug-in float')
+  t.ok(not package.loaded['neovim4eclipse.windows'].focused_float(0), 'the cursor outside every plug-in float')
   local panel = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 5, col = 1, width = 5, height = 1 })
   t.eq(false, leave_float())
   t.ok(vim.api.nvim_win_is_valid(panel), 'a float without the cursor stays')
@@ -1332,7 +1332,7 @@ t.test('a float on a buffer with unsaved changes is not closed by leaving: Neovi
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'typed by the user' })
   vim.bo[buf].bufhidden = 'wipe'
   local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
-  t.eq(false, require('neovim4eclipse.windows').leave_float())
+  t.eq(false, package.loaded['neovim4eclipse.windows'].leave_float())
   t.ok(vim.api.nvim_win_is_valid(float), 'kept: closing would wipe the changes')
   t.eq(win, vim.api.nvim_get_current_win(), "Neovim in the editor's window of the tab")
   t.eq({ 'typed by the user' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
@@ -1345,7 +1345,7 @@ t.test("while Neovim is in a plug-in's float, the editor's view scripts act on t
   t.run('VIEWPORT')
   local expected = t.run('VIEWPORT_OVERHEAD')
   local float = vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
-  t.eq(win, require('neovim4eclipse.windows').editor_window())
+  t.eq(win, package.loaded['neovim4eclipse.windows'].editor_window())
   t.eq(expected, t.run('VIEWPORT_OVERHEAD'), "measured on the editor's window, not the float")
   local buf = vim.api.nvim_win_get_buf(win)
   t.run('SET_WRAP', tostring(buf), '0')
@@ -1354,7 +1354,7 @@ t.test("while Neovim is in a plug-in's float, the editor's view scripts act on t
   t.eq(true, vim.wo[win].wrap, "the editor's wrap set from inside the float")
   t.eq(float, vim.api.nvim_get_current_win(), 'the float keeps the focus')
   vim.api.nvim_set_current_win(win)
-  t.eq(win, require('neovim4eclipse.windows').editor_window(), 'outside a float: the current window')
+  t.eq(win, package.loaded['neovim4eclipse.windows'].editor_window(), 'outside a float: the current window')
 end)
 
 t.test('a hidden float entered, or one that opens with the focus hidden, is closed by the one check', function()
@@ -1380,7 +1380,7 @@ end)
 
 t.test('leaving closes the float named too, the one the cursor was in as the keyboard left', function()
   local win = commands()
-  local leave_float = require('neovim4eclipse.windows').leave_float
+  local leave_float = package.loaded['neovim4eclipse.windows'].leave_float
   local prompt = vim.api.nvim_open_win(buffer(1), true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
   vim.api.nvim_set_current_win(win) -- Neovim already in the part that took the keyboard
   t.eq(true, leave_float(prompt))
@@ -1395,7 +1395,7 @@ t.test('a float with the cursor the editor cannot draw is closed with a message'
   local buf = buffer(1)
   vim.bo[buf].filetype = 'huge'
   local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
-  local close_undrawn = require('neovim4eclipse.windows').close_undrawn
+  local close_undrawn = package.loaded['neovim4eclipse.windows'].close_undrawn
   vim.v.errmsg = ''
   t.eq(true, t.run('CLOSE_UNDRAWN_FLOAT', tostring(float), 'the limits, worded by util/Grids'))
   t.ok(not vim.api.nvim_win_is_valid(float))
@@ -1433,7 +1433,7 @@ t.test('a float on a changed buffer closes by leaving, with hidden on; the chang
   vim.api.nvim_buf_set_name(buf, vim.fn.tempname())
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'typed by the user' })
   local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
-  t.eq(true, require('neovim4eclipse.windows').leave_float())
+  t.eq(true, package.loaded['neovim4eclipse.windows'].leave_float())
   t.ok(not vim.api.nvim_win_is_valid(float))
   t.eq(win, vim.api.nvim_get_current_win())
   t.ok(vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].modified, 'hidden, still changed (:ls)')
@@ -1450,7 +1450,7 @@ t.test("closing an editor keeps the changes of a float leaving could not close, 
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { 'typed by the user' })
   vim.bo[buf].bufhidden = 'wipe'
   local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 5, height = 1 })
-  t.eq(false, require('neovim4eclipse.windows').leave_float(), "refused: 'nohidden' would unload it")
+  t.eq(false, package.loaded['neovim4eclipse.windows'].leave_float(), "refused: 'nohidden' would unload it")
   t.ok(vim.api.nvim_win_is_valid(float))
   t.run('CLOSE_WINDOW', tostring(win), tostring(home_buf))
   t.ok(not vim.api.nvim_win_is_valid(float), 'gone with the tab page')
@@ -1547,7 +1547,7 @@ end)
 
 t.test('an undrawn float Neovim will not close says so', function()
   local home = start()
-  local windows = require('neovim4eclipse.windows')
+  local windows = package.loaded['neovim4eclipse.windows']
   local function changed_float()
     local changed = vim.api.nvim_create_buf(true, false)
     vim.api.nvim_buf_set_name(changed, vim.fn.tempname())
@@ -1577,7 +1577,7 @@ end)
 
 t.test("an undrawn float counts as closed though a plug-in's close handler fails", function()
   local home = start()
-  local windows = require('neovim4eclipse.windows')
+  local windows = package.loaded['neovim4eclipse.windows']
   for _, event in ipairs({ 'WinClosed', 'BufWinLeave', 'BufHidden' }) do
     local buf = vim.api.nvim_create_buf(false, true)
     local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 10, height = 1 })
@@ -1718,7 +1718,7 @@ for _, leave in ipairs({ 'move_out_of_float', 'leave_float' }) do
       vim.api.nvim_buf_set_lines(b, 0, -1, false, { '  indented' })
       vim.bo[b].autoindent = true
       vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 1, width = 20, height = 3 })
-      local windows = require('neovim4eclipse.windows')
+      local windows = package.loaded['neovim4eclipse.windows']
       vim.keymap.set('i', '<F6>', function() t.eq(true, windows.end_float_insert('move', -1)) end)
       vim.keymap.set('n', '<F7>', function() windows[leave](-1) end)
       vim.api.nvim_feedkeys(vim.keycode('o<F6><F7>'), 'mx', false)
@@ -1814,7 +1814,7 @@ for _, keys in ipairs({ 'v', 'gh' }) do
     local win = commands()
     local doc = vim.api.nvim_win_get_buf(win)
     enter_float()
-    local windows = require('neovim4eclipse.windows')
+    local windows = package.loaded['neovim4eclipse.windows']
     local answer
     vim.keymap.set({ 'x', 's' }, '<F6>', function() answer = t.run('END_FLOAT_INSERT', 'move', '-1') end)
     vim.keymap.set({ 'x', 's' }, '<F7>', function() windows.move_out_of_float(-1) end)
@@ -1842,7 +1842,7 @@ for _, route in ipairs({ 'show', 'move' }) do
     vim.api.nvim_buf_set_lines(b, 0, -1, false, { '  indented' })
     vim.bo[b].autoindent = true
     local float = vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 1, width = 20, height = 3 })
-    local windows = require('neovim4eclipse.windows')
+    local windows = package.loaded['neovim4eclipse.windows']
     vim.keymap.set('i', '<F6>', function() vim.api.nvim_set_current_win(win) end) -- the plug-in's move
     vim.keymap.set('i', '<F7>', function()
       if route == 'show' then
@@ -1862,7 +1862,7 @@ end
 
 t.test('moving out of a float leaves it open, unless its plug-in closes it on leaving', function()
   local win = commands()
-  local windows = require('neovim4eclipse.windows')
+  local windows = package.loaded['neovim4eclipse.windows']
   t.eq(false, windows.move_out_of_float(-1), "nothing to move out of in the editor's window")
   local float = enter_float()
   t.eq(true, windows.move_out_of_float(-1))
@@ -1892,7 +1892,7 @@ end)
 t.test('only floating and special windows are side windows', function()
   local win, home = commands()
   local float = enter_float()
-  local side = require('neovim4eclipse.windows').is_side_window
+  local side = package.loaded['neovim4eclipse.windows'].is_side_window
   t.ok(side(0), 'the float is current')
   t.ok(side(float))
   t.ok(not side(win), "an editor's window")
@@ -1941,7 +1941,7 @@ end)
 
 t.test("the plug-in's own closes forget the window, though they fire no WinClosed", function()
   local win, home, home_buf = commands()
-  local side = require('neovim4eclipse.windows').is_side_window
+  local side = package.loaded['neovim4eclipse.windows'].is_side_window
   t.ok(not side(win), 'one of the plug-in\'s windows while open')
   t.run('CLOSE_WINDOW', tostring(win), tostring(home_buf))
   -- A closed window's type is 'unknown': it counts as the plug-in's no more.
@@ -1971,8 +1971,8 @@ t.test('a page window opens quietly in a tab of its own, with a page\'s options'
   t.eq({ false, 'no', false, true }, { vim.wo[win].number, vim.wo[win].signcolumn, vim.wo[win].list, vim.wo[win].wrap },
     "a page's options, not the copied ones")
   t.eq({ true, 'yes' }, { vim.wo[home].number, vim.wo[home].signcolumn }, "the editor's stay")
-  t.eq(true, require('neovim4eclipse.windows').is_page(win))
-  t.eq(false, require('neovim4eclipse.windows').is_page(home))
+  t.eq(true, package.loaded['neovim4eclipse.windows'].is_page(win))
+  t.eq(false, package.loaded['neovim4eclipse.windows'].is_page(home))
   t.eq(-2, open_page(99999), 'a buffer that is gone')
 end)
 
@@ -1983,7 +1983,7 @@ t.test('the WinNew net leaves a page window, and :q in it is no side window\'s',
   vim.cmd('doautocmd WinNew') -- the net looks at every window it has not seen
   vim.wait(50)
   t.ok(vim.api.nvim_win_is_valid(win), 'still open')
-  t.eq(false, require('neovim4eclipse.windows').is_side_window(win), ':q is the page\'s host command')
+  t.eq(false, package.loaded['neovim4eclipse.windows'].is_side_window(win), ':q is the page\'s host command')
 end)
 
 t.test('restore_page puts the page back after Neovim put another buffer in its window', function()
@@ -2076,7 +2076,7 @@ t.test("entering a page gives its window the attached editor's folder", function
   -- The page starts in the root folder: '/' on Linux and macOS, the drive's root (C:\) on Windows,
   -- so the setup only checks that it differs from the code's folder, by the one rule for paths.
   vim.api.nvim_win_call(page, function() vim.fn.chdir('/', 'window') end)
-  t.ok(not require('neovim4eclipse.paths').same(folder, folder_of(page)), 'the page starts elsewhere')
+  t.ok(not package.loaded['neovim4eclipse.paths'].same(folder, folder_of(page)), 'the page starts elsewhere')
   t.eq(page, t.run('FOCUS_WINDOW', tostring(page), tostring(code)))
   t.same_file(folder, folder_of(page), ":e b.txt in the page means the code's b.txt")
   t.eq(-1, t.run('FOCUS_WINDOW', '99999', tostring(code)), 'a window that is gone')
@@ -2105,14 +2105,14 @@ t.test("a folder with $ in its name is not given: chdir() would expand it, even 
   local au = vim.api.nvim_create_autocmd('DirChanged', { callback = function()
     visited[#visited + 1] = vim.v.event.cwd
   end })
-  t.eq(false, require('neovim4eclipse.windows').set_folder(page, root .. '/e$HOME'))
+  t.eq(false, package.loaded['neovim4eclipse.windows'].set_folder(page, root .. '/e$HOME'))
   t.eq({}, visited, 'no chdir() at all, so no DirChanged sees the expanded folder')
-  t.ok(not require('neovim4eclipse.paths').same(cwd(page)[1], expanded), 'not the folder the name expands to: ' .. cwd(page)[1])
+  t.ok(not package.loaded['neovim4eclipse.paths'].same(cwd(page)[1], expanded), 'not the folder the name expands to: ' .. cwd(page)[1])
   vim.api.nvim_del_autocmd(au)
-  t.eq(true, require('neovim4eclipse.windows').set_folder(page, root), 'a plain folder is set')
+  t.eq(true, package.loaded['neovim4eclipse.windows'].set_folder(page, root), 'a plain folder is set')
   t.same_file(root, cwd(page)[1])
   local editor = open(buffer(3), root .. '/e$HOME')
-  t.ok(not require('neovim4eclipse.paths').same(cwd(editor)[1], expanded), "an editor's window does not land there either")
+  t.ok(not package.loaded['neovim4eclipse.paths'].same(cwd(editor)[1], expanded), "an editor's window does not land there either")
   t.ok(code ~= editor)
   vim.fn.delete(root, 'rf')
 end)
@@ -2170,7 +2170,7 @@ t.test('a help page opens in a page window with its topic\'s line at the top', f
   local buf, line = help_buffer('help-context')
   local win = show_page(-1, buf, line, 'help')
   t.ok(win > 0, 'a window')
-  t.eq(true, require('neovim4eclipse.windows').is_page(win))
+  t.eq(true, package.loaded['neovim4eclipse.windows'].is_page(win))
   t.eq(buf, vim.api.nvim_win_get_buf(win))
   t.eq(line, vim.api.nvim_win_call(win, function() return vim.fn.line('w0') end), 'the topic at the top, as :help puts it')
   t.eq(home, vim.api.nvim_get_current_win(), 'not entered')
@@ -2229,7 +2229,7 @@ t.test('a messages page never follows help into its window', function()
   start()
   local page = open_page(page_text({ 'one' }))
   local help = help_buffer('help-context')
-  t.eq(false, require('neovim4eclipse.windows').follow_page(page, help))
+  t.eq(false, package.loaded['neovim4eclipse.windows'].follow_page(page, help))
 end)
 
 t.test('every write from a help page is refused, and q closes the page editor', function()
@@ -2331,7 +2331,7 @@ t.test("a document's buffer that :help took is never a page", function()
     "the code's q is not the page's")
   -- Its editor closed (CLOSE_DOCUMENT_BUFFER takes its hooks off): its help is a page again.
   t.run('CLOSE_DOCUMENT_BUFFER', tostring(doc))
-  t.eq(false, require('neovim4eclipse.windows').is_document(doc))
+  t.eq(false, package.loaded['neovim4eclipse.windows'].is_document(doc))
   t.forget()
   vim.cmd('help myplug-tag')
   t.wait_for('the page', function() return #t.sent('eclipse_view_page') == 1 end)

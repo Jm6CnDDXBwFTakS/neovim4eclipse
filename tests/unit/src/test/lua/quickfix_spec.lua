@@ -120,7 +120,7 @@ t.test('a buffer number that exists names the entry; one that does not falls bac
   t.eq(buf, items[1].bufnr)
   t.same_file(f[2], vim.api.nvim_buf_get_name(items[2].bufnr))
   t.eq(false, vim.bo[items[2].bufnr].buflisted, 'an unlisted buffer, as Neovim makes for any entry')
-  t.ok(require('neovim4eclipse.project_files') ~= nil)
+  t.ok(package.loaded['neovim4eclipse.project_files'] ~= nil)
 end)
 
 t.test('a command again reuses our list in the stack and makes it current, rather than push a copy', function()

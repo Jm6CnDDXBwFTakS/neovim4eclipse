@@ -283,7 +283,7 @@ end
 --- for every comparison of file names: a raw t.eq of two spellings of one file passes on Linux and
 --- fails on macOS (/var is /private/var) or Windows (\ or /), as quickfix_spec once did twice.
 function t.same_file(expected, actual, what)
-  local paths = require('neovim4eclipse.paths')
+  local paths = package.loaded['neovim4eclipse.paths']
   if not paths.same(expected, actual) then
     error(('%s\n  expected: %s\n  actual:   %s\n  (canonical: %s and %s)'):format(what or 'not the same file',
       vim.inspect(expected), vim.inspect(actual), paths.canonical(expected), paths.canonical(actual)), 2)

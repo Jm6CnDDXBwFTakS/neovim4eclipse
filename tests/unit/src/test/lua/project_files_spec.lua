@@ -163,7 +163,7 @@ end)
 -- (docs/design/DIAGNOSTICS.md, Q-E1).
 t.test(':badd checks the new buffer once, not again on BufAdd', function()
   local root = project()
-  local files = require('neovim4eclipse.project_files')
+  local files = package.loaded['neovim4eclipse.project_files']
   local reads_, calls = files.eclipse_reads, 0
   files.eclipse_reads = function(...)
     calls = calls + 1
@@ -186,14 +186,14 @@ t.test('a file outside the projects is read by the hook too, and its name goes w
   t.eq({ 'class C {}' }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
   t.eq({}, seen, 'no filetype plug-in or language server: Eclipse opens its editor')
   local b = vim.api.nvim_get_current_buf()
-  t.eq(vim.api.nvim_buf_get_name(b), require('neovim4eclipse.project_files').file_of(b))
+  t.eq(vim.api.nvim_buf_get_name(b), package.loaded['neovim4eclipse.project_files'].file_of(b))
   local entered = t.sent('eclipse_buf_enter')
   t.eq(vim.api.nvim_buf_get_name(b), entered[#entered][4])
 end)
 
 t.test('a help page and a plug-in\'s buffer with a scheme are Neovim\'s', function()
   project()
-  local files = require('neovim4eclipse.project_files')
+  local files = package.loaded['neovim4eclipse.project_files']
   vim.cmd('help help')
   t.eq('help', vim.bo.buftype)
   t.ok(vim.api.nvim_buf_line_count(0) > 10, 'Neovim read the help file itself')
@@ -216,7 +216,7 @@ t.test('a project\'s own doc/*.txt beside doc/tags (a Vim plug-in\'s repository)
   vim.fn.mkdir(file(root, 'doc'), 'p')
   vim.fn.writefile({ '*myplugin.txt*  For Vim', '' }, file(root, 'doc', 'myplugin.txt'))
   vim.fn.writefile({ 'myplugin.txt\tmyplugin.txt\t/*myplugin.txt*' }, file(root, 'doc', 'tags'))
-  local files = require('neovim4eclipse.project_files')
+  local files = package.loaded['neovim4eclipse.project_files']
   t.eq(true, files.is_help(file(root, 'doc', 'myplugin.txt')), 'it looks like help')
   vim.cmd.edit(vim.fn.fnameescape(file(root, 'doc', 'myplugin.txt')))
   local b = vim.api.nvim_get_current_buf()
@@ -244,7 +244,7 @@ t.test('a buffer made before the folders came has the hook, and keeps it when it
   local f = file(root, 'B.java')
   vim.fn.writefile({ 'class B {}' }, f)
   local early = vim.fn.bufadd(f)
-  local files = require('neovim4eclipse.project_files')
+  local files = package.loaded['neovim4eclipse.project_files']
   t.eq(vim.api.nvim_buf_get_name(early), files.file_of(early))
   t.run('SET_PROJECT_FOLDERS', { root })
   vim.fn.bufload(early)
