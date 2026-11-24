@@ -53,9 +53,11 @@
 -- - start.lua: the floats a config opened while Neovim started.
 -- - net.lua: the safety nets for windows opened some other way; it answers the home window.
 --
--- How they share: this file registers the module, M (`neovim4eclipse.windows`), and what the
--- files share, S (`neovim4eclipse.windows.shared`), in `package.loaded`; each other file starts
--- by taking both. A value another file sets is a field of S (`S.insert_float`); a table made
+-- How they share: this file puts what the files share, S (`neovim4eclipse.windows.shared`), in
+-- `package.loaded`, and the module, M, on it (`S.module`); each other file starts by taking both
+-- from there. The module itself is registered (`neovim4eclipse.windows` in `package.loaded`) by
+-- the last file, net.lua, so that it is there only once every file has loaded: a file that fails
+-- to load leaves no module half made for the other scripts to call. A value another file sets is a field of S (`S.insert_float`); a table made
 -- once here is a local of each file that uses it (`local own = S.own`, the same table); a helper
 -- another file calls is called as `S.quietly(...)`. A rule worth keeping: a name with `S.` comes
 -- from another file. `M` is what other modules and Eclipse's scripts call.
@@ -82,9 +84,10 @@ local S = {
   -- Whether Eclipse has shown an editor yet (M.show).
   editor_shown = false,
 }
--- Registered first: the other files, each a chunk of its own, find the module and
--- what they share here (core/LuaModules runs them in order, this one first).
-package.loaded['neovim4eclipse.windows'] = M
+-- Registered first: the other files, each a chunk of its own, find what they share here
+-- (core/LuaModules runs them in order, this one first), the module with it. The module
+-- itself is registered by net.lua, the last.
+S.module = M
 package.loaded['neovim4eclipse.windows.shared'] = S
 
 local group = vim.api.nvim_create_augroup('neovim4eclipse_windows', { clear = true })

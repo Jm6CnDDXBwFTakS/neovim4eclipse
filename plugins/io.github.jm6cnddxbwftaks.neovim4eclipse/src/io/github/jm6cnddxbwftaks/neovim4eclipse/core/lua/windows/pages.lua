@@ -11,8 +11,8 @@
 -- page's `q`, keys and write hooks never reach a code editor. Example: `:help options` with the
 -- help editor open: its window changes to options.txt, on the topic's line.
 
-local M = package.loaded['neovim4eclipse.windows']
 local S = package.loaded['neovim4eclipse.windows.shared']
+local M = S.module
 local own = S.own
 local page_buf = S.page_buf
 local page_kind = S.page_kind

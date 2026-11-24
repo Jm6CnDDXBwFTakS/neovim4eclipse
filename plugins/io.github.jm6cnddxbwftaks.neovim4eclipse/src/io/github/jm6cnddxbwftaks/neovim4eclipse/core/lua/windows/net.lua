@@ -12,8 +12,8 @@
 -- Example: `:copen` closes the quickfix window again and shows the list the Eclipse way (the
 -- Problems or Tasks view); `:split` from a plug-in's `vim.cmd` becomes an editor beside this one.
 
-local M = package.loaded['neovim4eclipse.windows']
 local S = package.loaded['neovim4eclipse.windows.shared']
+local M = S.module
 local from_editor = S.from_editor
 local group = S.group
 local opened_from = S.opened_from
@@ -312,6 +312,9 @@ vim.api.nvim_create_autocmd('SafeState', {
     end
   end,
 })
+-- The module, registered now that every file has loaded (init.lua, "How they share"): the
+-- other scripts reach it through package.loaded.
+package.loaded['neovim4eclipse.windows'] = M
 -- The answer of the whole script (LuaScripts.WINDOWS, whose last file this is): the
 -- home window.
 return S.home

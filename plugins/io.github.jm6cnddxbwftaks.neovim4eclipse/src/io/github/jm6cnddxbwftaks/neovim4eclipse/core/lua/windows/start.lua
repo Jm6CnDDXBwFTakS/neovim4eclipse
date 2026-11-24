@@ -11,8 +11,8 @@
 -- Example: LazyVim's first start: its installer stays over the first editor, with the keyboard,
 -- and `q` closes it.
 
-local M = package.loaded['neovim4eclipse.windows']
 local S = package.loaded['neovim4eclipse.windows.shared']
+local M = S.module
 local group = S.group
 local own = S.own
 

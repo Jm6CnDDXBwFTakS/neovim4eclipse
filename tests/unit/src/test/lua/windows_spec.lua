@@ -2362,3 +2362,26 @@ t.test("help reached from the help editor that is an open document's file stays 
   t.eq(nil, vim.api.nvim_buf_call(doc, function() return vim.fn.maparg('q', 'n', false, true).desc end),
     "the code's q is not the page's")
 end)
+
+t.test('the module is registered only once every file has loaded', function()
+  -- WINDOWS is five files, each a chunk of its own (core/lua/windows/init.lua): a later one that
+  -- fails to load must leave no half-made module for the other scripts to call. Here the last,
+  -- net.lua, fails as it makes its WinClosed autocommand.
+  local create = vim.api.nvim_create_autocmd
+  vim.api.nvim_create_autocmd = function(event, opts)
+    if event == 'WinClosed' then
+      error('net.lua cannot load')
+    end
+    return create(event, opts)
+  end
+  local home_buf = vim.api.nvim_create_buf(false, true)
+  local ok, err = pcall(t.run, 'WINDOWS', tostring(home_buf))
+  vim.api.nvim_create_autocmd = create
+  t.ok(not ok and tostring(err):find('net.lua cannot load', 1, true) ~= nil, tostring(err))
+  t.eq(nil, package.loaded['neovim4eclipse.windows'])
+  -- Loaded whole, it is there, the same table the files share.
+  t.run('WINDOWS', tostring(home_buf))
+  t.ok(package.loaded['neovim4eclipse.windows'] ~= nil, 'registered')
+  t.ok(package.loaded['neovim4eclipse.windows'] == package.loaded['neovim4eclipse.windows.shared'].module,
+    'the module the files share')
+end)

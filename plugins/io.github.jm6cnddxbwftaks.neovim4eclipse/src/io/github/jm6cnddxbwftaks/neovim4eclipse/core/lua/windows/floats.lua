@@ -11,8 +11,8 @@
 -- Example: Telescope's prompt open over an editor, the user clicks the text: the insert ends in
 -- the prompt, then Neovim moves to the editor's window, and Telescope closes its picker itself.
 
-local M = package.loaded['neovim4eclipse.windows']
 local S = package.loaded['neovim4eclipse.windows.shared']
+local M = S.module
 local group = S.group
 local own = S.own
 
