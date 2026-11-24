@@ -280,6 +280,9 @@ class MessagesPageEndToEndTest extends EndToEndTestBase {
         NeovimPageEditor page = messagesShowing("prompt away");
         page().activate(editor);
         UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        // The activation queued Neovim's move back to the code's window, and a call from this thread
+        // overtakes the queue: unsettled, that move would run after the prompt opened and leave it.
+        settle();
         try {
             SessionProbe.lua(session, FloatingWindowsEndToEndTest.OPEN_PROMPT);
             waitUntil("the code's caret hidden for the prompt", TIMEOUT_MS, () -> {

@@ -485,10 +485,18 @@ class EditorEndToEndTest extends EndToEndTestBase {
             runCommandLine(widgetOf(other), "e #");
             waitForAttach(editor, "test.txt, after :e #");
 
-            List<String> back = pressAndRecord("<C-o>", 4, this::activeEditorAndLine);
-            assertEquals(List.of("test.txt:2", "other.txt:1", "test.txt:2", "other.txt:1", "test.txt:1"), back,
-                    "a Neovim jump, then Back to the tab clicks and to where test.txt was activated");
-            assertEquals(reversed(back), pressAndRecord("<C-i>", 4, this::activeEditorAndLine));
+            List<String> back = List.of("test.txt:2", "other.txt:1", "test.txt:2", "other.txt:1", "test.txt:1");
+            assertEquals(back.get(0), activeEditorAndLine());
+            for (String place : back.subList(1, back.size())) {
+                session.inputAsync("<C-o>");
+                waitUntil("Ctrl-O to " + place, TIMEOUT_MS, () -> { settle(); return place.equals(activeEditorAndLine()); },
+                        () -> "; at " + activeEditorAndLine());
+            }
+            for (String place : reversed(back).subList(1, back.size())) {
+                session.inputAsync("<C-i>");
+                waitUntil("Ctrl-I to " + place, TIMEOUT_MS, () -> { settle(); return place.equals(activeEditorAndLine()); },
+                        () -> "; at " + activeEditorAndLine());
+            }
         } finally {
             closeAllBut(page, editor);
         }

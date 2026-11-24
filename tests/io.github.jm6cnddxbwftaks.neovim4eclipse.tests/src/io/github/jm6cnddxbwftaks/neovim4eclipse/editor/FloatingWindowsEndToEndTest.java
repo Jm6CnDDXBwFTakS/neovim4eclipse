@@ -412,19 +412,27 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
 
     @Test
     void aPanelOpenedWithoutTheFocusIsDrawnOnTheWindowsBottomEdgeAndTheKeysStayTheEditors() {
+        // Neovim's window first as high as the editor's text, as the plug-in measures it, or the
+        // panel would be placed on a window still being resized.
+        waitUntil("Neovim's window as high as the editor's text", TIMEOUT_MS, () -> {
+            settle();
+            int rows = ViewportFollower.cells(widget, ViewportFollower.averageCharWidth(widget))[1];
+            return Long.valueOf(rows).equals(SessionProbe.lua(session, "return vim.api.nvim_win_get_height(0)"));
+        });
         SessionProbe.lua(session, OPEN_PANEL);
         GridCanvas canvas = floatShowing("w  write");
         assertTrue(rowsOf(canvas.grid()).contains("f  find"));
-        Rectangle area = widget.getClientArea();
         // On the last text row, as on Neovim's screen: above the status line and the command line,
         // which the editor draws under its text (StatusLineRow).
-        int below = widget.getBottomMargin();
         waitUntil("the panel on the window's bottom edge, above the status and command lines", TIMEOUT_MS, () -> {
             settle();
+            Rectangle area = widget.getClientArea();
+            int below = widget.getBottomMargin();
             Rectangle b = canvas.getBounds();
             int bottom = b.y + b.height;
             return bottom <= area.height - below && bottom > area.height - below - widget.getLineHeight();
-        }, () -> "; the panel is at " + canvas.getBounds() + " in " + area + ", " + below + " px below the text");
+        }, () -> "; the panel is at " + canvas.getBounds() + " in " + widget.getClientArea() + ", "
+                + widget.getBottomMargin() + " px below the text");
         assertEquals(2 * canvas.cellHeight(), canvas.getBounds().height);
         assertTrue(widget.isFocusControl(), "the editor keeps the keyboard focus");
         type(widget, "mq"); // Neovim's, through the editor: the panel takes no key

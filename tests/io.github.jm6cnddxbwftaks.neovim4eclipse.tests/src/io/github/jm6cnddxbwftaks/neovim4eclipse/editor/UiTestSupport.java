@@ -205,30 +205,98 @@ final class UiTestSupport {
     private static final int QUIET_TURNS = 3;
 
     /**
+     * How many trips in a row must find nothing for {@link #settle} to end. Two: work Neovim
+     * scheduled while answering the first ({@code vim.schedule}) comes before the second's answer.
+     */
+    private static final int SETTLE_QUIET_TRIPS = 2;
+
+    /** Empty event-loop turns in a row that end one of {@link #settle}'s trips; nothing sleeps. */
+    private static final int SETTLE_QUIET_TURNS = 2;
+
+    /**
      * Waits until everything queued on the session before this call is done and the UI thread has
      * applied what it produced. Use it instead of a fixed {@link #spin} after keys or a document push.
      *
-     * <p>How it knows, in two steps:
+     * <p>How it knows: it makes trips until {@value #SETTLE_QUIET_TRIPS} in a row ran nothing on the
+     * UI thread. One trip is:
      * <ol>
-     *   <li>A no-op is queued on the session's input thread. That thread runs one task at a time in
+     *   <li>A no-op queued on the session's input thread. That thread runs one task at a time in
      *       order, and a key's task returns only after Neovim answered the requests that follow the
      *       key ({@code nvim_get_mode}, and the state read when Neovim is not waiting for more). So
-     *       when the no-op runs, Neovim has handled every earlier key, and the notifications it sent
-     *       before those answers (buffer lines, mode) have arrived.</li>
-     *   <li>Those notifications reach the editor with {@code Display.asyncExec}. The event loop is run
-     *       until it has been empty for {@value #QUIET_TURNS} turns in a row, so the posted work has
-     *       been applied to the widget and the document.</li>
+     *       when the no-op runs, Neovim has handled every earlier key.</li>
+     *   <li>One request to Neovim that changes nothing, whose answer comes after everything Neovim
+     *       sent before it (buffer lines, mode).</li>
+     *   <li>The event loop until it has been empty for {@value #SETTLE_QUIET_TURNS} turns in a row:
+     *       those notifications reach the editor with {@code Display.asyncExec}.</li>
      * </ol>
      *
+     * <p>Why more than one trip: work on the UI thread can queue more for the input thread. Example:
+     * Eclipse activates a file's editor and posts the attach; the attach runs in this event loop and
+     * queues the document's first push. Only a further trip waits for that push. Answers replace a
+     * fixed sleep, so a fast machine does not wait and a slow one is not cut short.
+     *
      * <p>Example: {@code type(widget, "ggVj"); settle(session);} then the selection is on the widget.
-     * Safe while Neovim waits for more keys (after {@code g}): the no-op sends nothing to Neovim.
+     * Safe while Neovim waits for more keys (after {@code g}): the no-op sends nothing to Neovim, and
+     * Neovim answers {@code nvim_get_mode} without taking it as input.
      */
     static void settle(NeovimSession session, long timeoutMs) {
-        // The queue's own barrier: document work (runAsync) is held while Neovim waits for a key.
-        java.util.concurrent.Future<?> done =
-                io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.queuedWorkDone(session);
-        waitUntil("the session to finish the work queued before", timeoutMs, done::isDone);
-        runUntilIdle(timeoutMs);
+        Display display = Display.getCurrent();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        for (int quietTrips = 0; quietTrips < SETTLE_QUIET_TRIPS;) {
+            // The queue's own barrier: document work (runAsync) is held while Neovim waits for a key.
+            boolean ran = pumpUntilDone("the session to finish the work queued before",
+                    io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.queuedWorkDone(session), timeoutMs);
+            ran |= pumpUntilDone("Neovim's answer",
+                    io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe.roundTrip(session), timeoutMs);
+            for (int empty = 0; empty < SETTLE_QUIET_TURNS;) {
+                failOnErrorDialog();
+                if (System.currentTimeMillis() > deadline) {
+                    fail("Timed out after " + timeoutMs + " ms waiting for the UI thread to become idle");
+                }
+                if (display.readAndDispatch()) {
+                    ran = true;
+                    empty = 0;
+                } else {
+                    empty++;
+                }
+            }
+            quietTrips = ran ? 0 : quietTrips + 1;
+        }
+    }
+
+    /**
+     * Runs the event loop until {@code future} is done. It waits on the future itself between events
+     * instead of sleeping, so it returns within a millisecond of the answer. A future that failed
+     * counts as done: a closed session answers nothing more, and waiting on would only time out.
+     * Example: {@code pumpUntilDone("Neovim's answer", SessionProbe.roundTrip(session), TIMEOUT_MS)}.
+     *
+     * @return whether the event loop ran anything meanwhile
+     */
+    private static boolean pumpUntilDone(String what, java.util.concurrent.Future<?> future, long timeoutMs) {
+        Display display = Display.getCurrent();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        boolean ran = false;
+        while (!future.isDone()) {
+            failOnErrorDialog();
+            if (System.currentTimeMillis() > deadline) {
+                fail("Timed out after " + timeoutMs + " ms waiting for: " + what + FailureEvidence.record(what));
+            }
+            if (display.readAndDispatch()) {
+                ran = true;
+            } else {
+                try {
+                    future.get(1, java.util.concurrent.TimeUnit.MILLISECONDS);
+                } catch (java.util.concurrent.TimeoutException e) {
+                    // Not answered yet: the display gets another turn.
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    fail("interrupted");
+                } catch (java.util.concurrent.ExecutionException | java.util.concurrent.CancellationException e) {
+                    return ran;
+                }
+            }
+        }
+        return ran;
     }
 
     /**

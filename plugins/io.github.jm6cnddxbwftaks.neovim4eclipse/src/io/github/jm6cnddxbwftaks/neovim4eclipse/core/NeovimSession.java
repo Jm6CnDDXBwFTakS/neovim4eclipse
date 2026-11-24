@@ -2511,6 +2511,17 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     }
 
     /**
+     * One request to Neovim that changes nothing, sent from the calling thread without going through
+     * the input queue. For tests: Neovim answers requests from one client in order, so when this
+     * completes, everything Neovim sent before its answer has reached the reader thread. It answers
+     * {@code nvim_get_mode} even while it waits for the rest of a command (after {@code g}). Example:
+     * a test's {@code settle} uses it in place of a fixed wait for a notification still on its way.
+     */
+    java.util.concurrent.Future<?> roundTrip() {
+        return api.getMode();
+    }
+
+    /**
      * Completes once the input thread has run everything queued before this call: every
      * {@code *Async} call so far has been sent to Neovim (and answered, for the ones that wait for an
      * answer). For tests: {@code NeovimBarrier.pass} waits for it before its own round trip, since

@@ -226,6 +226,10 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             return active != null && active.getEditorInput() instanceof IFileEditorInput input
                     && input.getFile().equals(svg) && NewFiles.TEXT_EDITOR.equals(active.getSite().getId());
         }, () -> "; active: " + (page().getActiveEditor() == null ? null : page().getActiveEditor().getSite().getId()));
+        waitUntil("x.n4e's text in Neovim", TIMEOUT_MS, () -> {
+            settle();
+            return String.valueOf(SessionProbe.lua(session, "return vim.api.nvim_buf_get_lines(0, 0, 1, false)[1]")).startsWith("<svg");
+        });
     }
 
     /**

@@ -43,6 +43,14 @@ public final class SessionProbe {
     }
 
     /**
+     * Done once Neovim has answered one request that changes nothing, so what it sent before that
+     * answer has arrived. For a test on the UI thread, which keeps the display running meanwhile.
+     */
+    public static java.util.concurrent.Future<?> roundTrip(NeovimSession session) {
+        return session.roundTrip();
+    }
+
+    /**
      * Waits until the session's input thread has done the work queued before this call. Example: an
      * editor's close queues its buffer's close ({@code closeBufferAsync}); a test that checks what
      * that close logged waits here first. Any queued request is a barrier, since the input thread

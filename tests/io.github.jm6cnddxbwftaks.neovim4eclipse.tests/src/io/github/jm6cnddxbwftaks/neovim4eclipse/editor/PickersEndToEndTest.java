@@ -185,8 +185,24 @@ class PickersEndToEndTest extends EndToEndTestBase {
         try {
             String text = document.get();
             type(widget, "gp");
-            waitUntil("Telescope drawn", TIMEOUT_MS, () -> pickerShows("gamma") && resultsCanvas() != null,
-                    () -> "; drawn:\n" + drawn());
+            waitUntil("Telescope's list drawn where Neovim has it", TIMEOUT_MS, () -> {
+                if (!pickerShows("gamma") || resultsCanvas() == null) {
+                    return false;
+                }
+                Object want = SessionProbe.lua(session, """
+                        for _, w in ipairs(vim.api.nvim_list_wins()) do
+                          local b = vim.api.nvim_win_get_buf(w)
+                          if vim.bo[b].filetype == 'TelescopeResults' then
+                            for i, l in ipairs(vim.api.nvim_buf_get_lines(b, 0, -1, false)) do
+                              if l:find('gamma', 1, true) then return i - vim.fn.getwininfo(w)[1].topline end
+                            end
+                          end
+                        end
+                        return -1""");
+                GridSnapshot g = resultsCanvas().grid();
+                int wanted = ((Number) want).intValue();
+                return wanted >= 0 && wanted < g.height() && g.row(wanted).contains("gamma");
+            }, () -> "; drawn:\n" + drawn());
             UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
             GridCanvas results = resultsCanvas();
             assertNotNull(results);
