@@ -126,7 +126,8 @@ class LuaScriptsTest {
         assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)"));
         assertTrue(code(LuaScripts.SETUP).contains("vim.g.neovim4eclipse_channel = chan"), "the channel the request goes to");
         // Each buffer's call reaches the module the session sent, never one require would find.
-        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("package.loaded['neovim4eclipse.document_buffer'].setup("));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("local module = package.loaded['neovim4eclipse.document_buffer']"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("module.setup(tonumber((select(1, ...))))"));
         assertFalse(code(LuaScripts.DOCUMENT_BUFFER).contains("require("));
     }
 
