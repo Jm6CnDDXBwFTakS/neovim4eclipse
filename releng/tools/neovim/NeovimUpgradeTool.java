@@ -223,8 +223,8 @@ public final class NeovimUpgradeTool {
         System.out.println("Moved to Neovim " + target + ". What stays yours:");
         System.out.println("  - On macOS and Windows: java releng/tools/ci/LikeCi.java --all");
         System.out.println("  - Read :help news and each patch release's notes from " + from + " to " + target
-                + " (https://github.com/neovim/neovim/releases) for what the plug-in uses: core/rpc, core/lua, ext_cmdline,");
-        System.out.println("    autocommand events, the options it sets.");
+                + " (https://github.com/neovim/neovim/releases) for what the plug-in uses: core/rpc, the Lua in core/lua");
+        System.out.println("    and LuaScripts, ext_cmdline, autocommand events, the options it sets.");
         System.out.println("  - Remove each workaround the new Neovim makes unnecessary, in a commit of its own; and the guards in");
         System.out.println("    core/lua/setup.lua whose fix the new Neovim has (docs/UPGRADING.md, \"Following Neovim's releases\").");
     }
