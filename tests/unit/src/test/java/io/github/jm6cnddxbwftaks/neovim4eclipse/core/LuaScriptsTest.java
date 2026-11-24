@@ -5,7 +5,10 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
 
@@ -19,8 +22,14 @@ class LuaScriptsTest {
 
     /**
      * {@code lua} without its comments: on each line, from a {@code --} outside a string to the
-     * line's end, and the white space before it. Lines stay where they are. The plug-in's Lua has
-     * line comments only (no {@code --[[ ]]}). Example: {@code x = 1 -- y} becomes {@code x = 1}.
+     * line's end, and the white space before it. Lines stay where they are. Example:
+     * {@code x = 1 -- y} becomes {@code x = 1}.
+     *
+     * <p>Line comments only: a block comment ({@code --[[ ... ]]}, {@code --[==[ ... ]==]}) is
+     * refused, since its lines after the first would read as code here, and a comment could pass a
+     * check again. The plug-in's Lua has none; write one as {@code --} lines instead.
+     *
+     * @throws IllegalArgumentException for a block comment
      */
     static String code(String lua) {
         StringBuilder out = new StringBuilder(lua.length());
@@ -30,6 +39,9 @@ class LuaScriptsTest {
         }
         return out.substring(0, out.length() - 1);
     }
+
+    /** The start of a Lua block comment: {@code --[[} or {@code --[=[}, any number of {@code =}. */
+    private static final Pattern BLOCK_COMMENT = Pattern.compile("--\\[=*\\[");
 
     /** Where the comment on {@code line} starts, or -1: a {@code --} outside quotes and {@code [[ ]]}. */
     private static int commentStart(String line) {
@@ -51,6 +63,9 @@ class LuaScriptsTest {
                 }
                 i = end + 1;
             } else if (line.startsWith("--", i)) {
+                if (BLOCK_COMMENT.matcher(line).region(i, line.length()).lookingAt()) {
+                    throw new IllegalArgumentException("A block comment, which code() cannot read: " + line);
+                }
                 return i;
             }
         }
@@ -62,6 +77,11 @@ class LuaScriptsTest {
     void aScriptsCodeIsItsTextWithoutComments() {
         assertEquals("x = 1\n\ns = '--' .. \"a--\" .. [[--]]\nt = 'it\\'s'",
                 code("x = 1 -- y\n-- z\ns = '--' .. \"a--\" .. [[--]] -- c\nt = 'it\\'s' -- q"));
+        // A block comment is refused; a line comment that starts with - or a space before [[ is not one.
+        assertThrows(IllegalArgumentException.class, () -> code("x = 1 --[[ a\nvim.v.errmsg = msg ]]"));
+        assertThrows(IllegalArgumentException.class, () -> code("--[==[ a ]==]"));
+        assertEquals("", code("---[[ a"));
+        assertEquals("", code("-- [[ a"));
     }
 
     /**

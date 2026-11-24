@@ -57,10 +57,11 @@
 -- `package.loaded`, and the module, M, on it (`S.module`); each other file starts by taking both
 -- from there. The module itself is registered (`neovim4eclipse.windows` in `package.loaded`) by
 -- the last file, net.lua, so that it is there only once every file has loaded: a file that fails
--- to load leaves no module half made for the other scripts to call. A value another file sets is a field of S (`S.insert_float`); a table made
--- once here is a local of each file that uses it (`local own = S.own`, the same table); a helper
--- another file calls is called as `S.quietly(...)`. A rule worth keeping: a name with `S.` comes
--- from another file. `M` is what other modules and Eclipse's scripts call.
+-- to load leaves no module half made for the other scripts to call. A value another file sets is
+-- a field of S (`S.insert_float`); a table made once here is a local of each file that uses it
+-- (`local own = S.own`, the same table); a helper another file calls is called as
+-- `S.quietly(...)`. A rule worth keeping: a name with `S.` comes from another file. `M` is what
+-- other modules and Eclipse's scripts call.
 --
 -- Sent as LuaScripts.WINDOWS (core/LuaModules runs each file as a chunk of its own).
 
