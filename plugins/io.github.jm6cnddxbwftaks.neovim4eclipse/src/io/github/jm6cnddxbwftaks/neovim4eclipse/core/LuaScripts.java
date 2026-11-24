@@ -272,7 +272,7 @@ final class LuaScripts {
      * of the tab; the float stays until the session closes it ({@link #CLOSE_START_FLOAT}, at the
      * start's end).
      * Answers the float's window, or {@code 0} when there was none.
-     * Run first, right after {@link #PATHS}. Example: with lazy.nvim's window 1001 current,
+     * Run first, right after {@link #PATHS} and {@link #DOCUMENT_BUFFER_MODULE}. Example: with lazy.nvim's window 1001 current,
      * answers 1001 and leaves the plain window current.
      */
     static final String LEAVE_START_FLOAT = """

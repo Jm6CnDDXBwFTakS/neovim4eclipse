@@ -53,7 +53,7 @@ The Neovim side:
   `close_undrawn`, asked from each redraw that finds the cursor on a grid the editor does not draw
   (`util/Grids.unseenCursor`), since its keys would go to a window nobody sees. At start,
   before the home buffer goes anywhere (`LuaScripts.LEAVE_START_FLOAT`, the session's first script
-  after `PATHS`), a floating window the config left the focus in (lazy.nvim's installer on a first
+  after `PATHS` and `DOCUMENT_BUFFER_MODULE`), a floating window the config left the focus in (lazy.nvim's installer on a first
   start) is left and a plain window is made current: left current, it got the home buffer. Until
   Neovim has started, each editor shown brings the plug-ins' floats of other tab pages along
   (`bring_start_floats`, from `M.show`), so the installer is drawn over the editor, not left in
