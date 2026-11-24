@@ -406,7 +406,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
                     local b = vim.api.nvim_get_current_buf()
                     return string.format('Neovim in buffer %d %q (file_of %q, loaded %s, buftype %q), quickfix %d'
                         .. ' entries; :ls! %s; :messages %s', b, vim.api.nvim_buf_get_name(b),
-                        require('neovim4eclipse.project_files').file_of(b), tostring(vim.api.nvim_buf_is_loaded(b)),
+                        package.loaded['neovim4eclipse.project_files'].file_of(b), tostring(vim.api.nvim_buf_is_loaded(b)),
                         vim.bo[b].buftype, #vim.fn.getqflist(), vim.fn.execute('ls!'), vim.fn.execute('messages'):sub(-400))
                     """);
             return neovim + "; session: entered " + session.getEnteredBufnr() + ", attached "

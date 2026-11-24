@@ -120,7 +120,7 @@ class RestartNeovimEndToEndTest extends EndToEndTestBase {
             NeovimSession fresh = Activator.getDefault().currentSession();
             attachedTo(editor, "test.txt in the new Neovim");
             waitUntil("the new Neovim to know the project", TIMEOUT_MS, () -> "1".equals(eval(fresh,
-                    "luaeval(\"require('neovim4eclipse.project_files').inside(_A) and 1 or 0\", '" + path + "')")));
+                    "luaeval(\"package.loaded['neovim4eclipse.project_files'].inside(_A) and 1 or 0\", '" + path + "')")));
 
             fresh.inputAsync("gg0gf");
 

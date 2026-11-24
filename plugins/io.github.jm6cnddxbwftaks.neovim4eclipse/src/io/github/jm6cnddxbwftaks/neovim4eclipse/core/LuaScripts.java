@@ -572,11 +572,17 @@ final class LuaScripts {
      * docs/design/BUFFER_NUMBERS.md). Example: a.txt is buffer 1; closing its editor leaves
      * {@code 1u} in {@code :ls!}, and opening it again gives buffer 1, not a new number.
      *
-     * <p>In order: the plug-in's autocommands for the buffer go (the write hook and the safety net
-     * belong to a document with an editor; {@link #DOCUMENT_BUFFER_MODULE}'s {@code close}, which
-     * removes them by their ids, whatever a config did to their group); {@code 'buftype'} goes back to a normal file's, since
-     * Neovim drops the marks of an {@code acwrite} buffer when it unloads it (BUFFER_NUMBERS.md, X4); then unload and
-     * unlist. {@code b:neovim4eclipse_file} stays. Nothing for a buffer that is gone.
+     * <p>In order:
+     * <ol>
+     * <li>The plug-in's autocommands for the buffer go: the write hook and the safety net belong to
+     * a document with an editor. {@link #DOCUMENT_BUFFER_MODULE}'s {@code close} removes them by
+     * their ids, whatever a config did to their group; without the module (a config removed it),
+     * they are cleared by the group's name.
+     * <li>{@code 'buftype'} goes back to a normal file's, since Neovim drops the marks of an
+     * {@code acwrite} buffer when it unloads it (BUFFER_NUMBERS.md, X4).
+     * <li>The buffer is unloaded and unlisted. {@code b:neovim4eclipse_file} stays.
+     * </ol>
+     * Nothing for a buffer that is gone.
      *
      * <p><b>A buffer Neovim unloaded itself</b> is only unlisted: {@code nvim_buf_delete} with
      * {@code unload} fails ("Failed to unload buffer") on a buffer that is not loaded. Example: a
@@ -592,7 +598,12 @@ final class LuaScripts {
             if not vim.api.nvim_buf_is_valid(buf) then
               return
             end
-            package.loaded['neovim4eclipse.document_buffer'].close(buf)
+            local documents = package.loaded['neovim4eclipse.document_buffer']
+            if documents then
+              documents.close(buf)
+            else
+              pcall(vim.api.nvim_clear_autocmds, { group = 'neovim4eclipse_document', buf = buf })
+            end
             vim.bo[buf].buftype = ''
             if vim.api.nvim_buf_is_loaded(buf) then -- not after Neovim's own :bdelete, which unloaded it
               vim.api.nvim_buf_delete(buf, { force = true, unload = true }) -- force: unsaved changes live in Eclipse
@@ -740,7 +751,7 @@ final class LuaScripts {
      * first attach and whenever a project or a linked folder comes or goes.
      */
     static final String SET_PROJECT_FOLDERS = """
-            require('neovim4eclipse.project_files').set_folders((...)) -- one list: every folder
+            package.loaded['neovim4eclipse.project_files'].set_folders((...)) -- one list: every folder
             """;
 
     /**

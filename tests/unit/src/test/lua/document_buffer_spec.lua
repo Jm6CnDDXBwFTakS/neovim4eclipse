@@ -476,13 +476,30 @@ t.test('after :augroup! of the plug-in\'s group, old and new document buffers ke
   vim.schedule(function() next_loop = true end) -- after the unload's own scheduled clean-up
   t.wait_for("Neovim's next loop", function() return next_loop end)
   t.eq('acwrite', vim.bo[old].buftype, 'still a document')
-  -- Its editor closed: no hook of the plug-in's is left on it.
+  -- Its editor closed: none of its autocommands is left (all of them the plug-in's here, the
+  -- ones without a desc too: FileType, OptionSet, BufFilePre).
+  local before = vim.api.nvim_get_autocmds({ buffer = old })
+  t.ok(#before >= 10, 'every hook, in the deleted group: ' .. #before)
   t.run('CLOSE_DOCUMENT_BUFFER', tostring(old))
-  local left = vim.tbl_filter(function(a)
-    return a.desc ~= nil and a.desc:find('^Eclipse') ~= nil
-  end, vim.api.nvim_get_autocmds({ buffer = old }))
-  t.eq({}, left)
-  t.eq(false, package.loaded['neovim4eclipse.document_buffer'].has_hooks(old))
+  t.eq({}, vim.api.nvim_get_autocmds({ buffer = old }))
+  t.eq(false, package.loaded['neovim4eclipse.document_buffer'].is_document(old))
+end)
+
+-- Without the module (a config removed it), a close still takes the hooks off, by the group's name,
+-- and keeps the buffer as :bd does: the session's undo of a buffer it could not make a document's
+-- one relies on it (DocumentBuffers.undoCreate).
+t.test('closing a document buffer without the module clears its hooks by the group', function()
+  t.setup()
+  local buf = t.document('NoModule.txt', { 'x' })
+  vim.cmd('enew')
+  local module = package.loaded['neovim4eclipse.document_buffer']
+  package.loaded['neovim4eclipse.document_buffer'] = nil
+  local ok, err = pcall(t.run, 'CLOSE_DOCUMENT_BUFFER', tostring(buf))
+  package.loaded['neovim4eclipse.document_buffer'] = module
+  t.ok(ok, tostring(err))
+  t.eq(0, plugins_autocmds(buf))
+  t.eq(false, vim.bo[buf].buflisted)
+  t.eq('', vim.bo[buf].buftype)
 end)
 
 -- Kept only for the read that follows the unload at once (:edit! does both in one command): a buffer

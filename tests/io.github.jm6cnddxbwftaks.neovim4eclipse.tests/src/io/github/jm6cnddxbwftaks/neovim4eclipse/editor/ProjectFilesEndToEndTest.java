@@ -554,7 +554,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             other.create(null);
             other.open(null);
             String file = other.getLocation().append("o.txt").toOSString();
-            String inside = "return require('neovim4eclipse.project_files').inside(" + lua(file) + ")";
+            String inside = "return package.loaded['neovim4eclipse.project_files'].inside(" + lua(file) + ")";
             waitUntil("Neovim to know the opened project", TIMEOUT_MS,
                     () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
             other.close(null);
@@ -577,7 +577,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
         Path outside = Files.createTempDirectory("linked");
         Path ext = outside.resolve("ext.txt");
         Files.writeString(ext, "outside text\n", StandardCharsets.UTF_8);
-        String inside = "return require('neovim4eclipse.project_files').inside(" + lua(ext.toString()) + ")";
+        String inside = "return package.loaded['neovim4eclipse.project_files'].inside(" + lua(ext.toString()) + ")";
         IFolder link = project.getFolder("ext");
         ITextEditor a = open(createFile("a.txt", ext + "\n"));
         try {
@@ -702,7 +702,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
                 }
             }, null);
             for (String name : names) {
-                String inside = "return require('neovim4eclipse.project_files').inside("
+                String inside = "return package.loaded['neovim4eclipse.project_files'].inside("
                         + lua(root.resolve(name).resolve("i.txt").toString()) + ")";
                 waitUntil("Neovim to know " + name, TIMEOUT_MS, () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
             }
@@ -733,7 +733,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
      */
     private void wipeBuffersUnder(Path folder) {
         SessionProbe.lua(session, """
-                local paths = require('neovim4eclipse.paths')
+                local paths = package.loaded['neovim4eclipse.paths']
                 local rules = paths.rules(paths.current())
                 for _, buf in ipairs(vim.api.nvim_list_bufs()) do
                   local name = vim.api.nvim_buf_get_name(buf)

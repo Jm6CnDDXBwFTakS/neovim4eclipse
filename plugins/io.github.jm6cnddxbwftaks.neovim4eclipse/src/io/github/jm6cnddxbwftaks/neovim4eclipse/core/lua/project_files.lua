@@ -62,7 +62,7 @@
 
 local M = {}
 local group = vim.api.nvim_create_augroup('neovim4eclipse_projects', { clear = true })
-local paths = require('neovim4eclipse.paths') -- the one rule for comparing paths (PATHS)
+local paths = package.loaded['neovim4eclipse.paths'] -- the one rule for comparing paths (PATHS)
 local roots = {} -- the folders, as paths.canonical() gives them
 local hooked = {} -- buffer number -> true, for the buffers that have the read hook
 local checked = {} -- buffer number -> the name check() last looked at
@@ -84,10 +84,10 @@ local function read(ev)
   local buf = ev.buf
   vim.bo[buf].swapfile = false -- first: a stale swap file would stop the read at E325
   -- A document's buffer: its own hook asks Eclipse for the text (DOCUMENT_BUFFER_MODULE). Known
-  -- by its hooks (the module's has_hooks) as well as by 'acwrite': during :edit! the buffer is
+  -- by its hooks (the module's is_document) as well as by 'acwrite': during :edit! the buffer is
   -- read with 'buftype' '' (its BufUnload set it, to keep the marks), and this hook runs first.
   local documents = package.loaded['neovim4eclipse.document_buffer']
-  if vim.bo[buf].buftype == 'acwrite' or (documents ~= nil and documents.has_hooks(buf)) then
+  if vim.bo[buf].buftype == 'acwrite' or (documents ~= nil and documents.is_document(buf)) then
     return
   end
   local name = ev.match

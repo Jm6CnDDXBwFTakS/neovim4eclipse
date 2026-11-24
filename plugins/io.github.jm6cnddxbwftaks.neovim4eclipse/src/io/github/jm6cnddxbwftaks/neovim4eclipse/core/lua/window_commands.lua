@@ -61,7 +61,7 @@
 
 local windows = require('neovim4eclipse.windows')
 local host = require('neovim4eclipse.host_commands')
-local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
+local canonical = package.loaded['neovim4eclipse.paths'].canonical -- PATHS: case, links, separators
 local M = {}
 
 local JUMP_FIRST = 'a split that jumps to a tag is not supported; Ctrl-] goes to the declaration in this editor'

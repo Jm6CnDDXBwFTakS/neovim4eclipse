@@ -123,7 +123,7 @@ local file_commands = { edit = true, wq = true, xit = true, exit = true } -- tak
 -- :wq, :x and :exit take [++opt] [file] only (:help :wq, :help :x). So :x +foo writes
 -- the file "+foo" and runs no :foo, as in Vim.
 local cmd_commands = { edit = true }
-local canonical = require('neovim4eclipse.paths').canonical -- PATHS: case, links, separators
+local canonical = package.loaded['neovim4eclipse.paths'].canonical -- PATHS: case, links, separators
 -- Runs the +cmd of :e +cmd name as Vim does: + alone goes to the last line, +10 to line
 -- 10, +/pat to the first match, any other an Ex command. It is what you typed (a
 -- completed file name has its + escaped, so a name never becomes one).

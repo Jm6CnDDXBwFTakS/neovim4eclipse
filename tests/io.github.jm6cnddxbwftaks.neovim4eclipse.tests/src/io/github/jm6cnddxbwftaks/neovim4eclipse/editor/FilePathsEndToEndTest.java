@@ -274,7 +274,7 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             assumeTrue(makeLink(via, real), "could make neither a symbolic link nor a junction here");
             folder.createLink(IPath.fromOSString(via.toString()), IResource.NONE, null);
             IFile linked = folder.getFile("ext.txt");
-            String inside = "return require('neovim4eclipse.project_files').inside('"
+            String inside = "return package.loaded['neovim4eclipse.project_files'].inside('"
                     + ext.toString().replace("\\", "\\\\") + "')";
             waitUntil("Neovim to know the linked folder", TIMEOUT_MS,
                     () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
@@ -324,7 +324,7 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             linked.create(description, null);
             linked.open(null);
             IFile bFile = linked.getFile("b.txt");
-            String inside = "return require('neovim4eclipse.project_files').inside(" + lua(b.toString()) + ")";
+            String inside = "return package.loaded['neovim4eclipse.project_files'].inside(" + lua(b.toString()) + ")";
             waitUntil("Neovim to know the project under the link", TIMEOUT_MS,
                     () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
             ITextEditor aEditor = (ITextEditor) IDE.openEditor(page(), linked.getFile("a.txt"), TEXT_EDITOR, true);
@@ -421,7 +421,7 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
         assertEquals(1, List.of(page().getEditorReferences()).stream()
                 .filter(r -> r.getTitle().equals(title)).count(), "one editor on the file, " + spelling);
         assertEquals(1, ((Number) SessionProbe.lua(session, """
-                local paths = require('neovim4eclipse.paths')
+                local paths = package.loaded['neovim4eclipse.paths']
                 local rules, n = paths.rules(paths.current()), 0
                 for _, buf in ipairs(vim.api.nvim_list_bufs()) do
                   local name = vim.api.nvim_buf_get_name(buf)
@@ -447,7 +447,7 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             wanted.append(lua(file.toString())).append(", ");
         }
         SessionProbe.lua(session, """
-                local paths = require('neovim4eclipse.paths')
+                local paths = package.loaded['neovim4eclipse.paths']
                 local rules = paths.rules(paths.current())
                 for _, buf in ipairs(vim.api.nvim_list_bufs()) do
                   local name = vim.api.nvim_buf_get_name(buf)
@@ -472,7 +472,7 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
         description.setLocation(IPath.fromOSString(dir.toString()));
         created.create(description, null);
         created.open(null);
-        String inside = "return require('neovim4eclipse.project_files').inside(" + lua(someFile.toString()) + ")";
+        String inside = "return package.loaded['neovim4eclipse.project_files'].inside(" + lua(someFile.toString()) + ")";
         waitUntil("Neovim to know the project " + name, TIMEOUT_MS,
                 () -> Boolean.TRUE.equals(SessionProbe.lua(session, inside)));
         return created;

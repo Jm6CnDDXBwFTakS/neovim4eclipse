@@ -1175,7 +1175,7 @@ Treat `0` and `false` as off and anything else, unset included, as on. Test the 
 **Compare two file paths.** Never with `equals` or `==`: on Windows one file is `C:\WS\a.txt` and
 `c:/ws/A.TXT`, on macOS `/var/x` and `/private/var/x` (and case does not count). Java: `FilePaths.same`
 or `FilePaths.inside` (this machine's rule), or with a `FilePaths.Platform` of your own in a test;
-Lua: `require('neovim4eclipse.paths').same` / `.inside`; a Lua spec: `t.same_file(expected, actual)`.
+Lua: `package.loaded['neovim4eclipse.paths'].same` / `.inside`; a Lua spec: `t.same_file(expected, actual)`.
 A path's workspace file: `NewFiles.workspaceFileAt` (also for a project or linked folder whose
 location Eclipse recorded through a Windows junction: it compares the folders
 `ProjectFolders.locations()` gives by the rule). A case the rule must handle goes into

@@ -119,7 +119,7 @@ local GROUP = 'neovim4eclipse_document'
 local group = vim.api.nvim_create_augroup(GROUP, { clear = false })
 
 -- Each document buffer's hooks, by buffer number: the ids of the autocommands setup made for
--- it. The one record of which buffers are documents now (M.has_hooks): setup sets it,
+-- it. The one record of which buffers are documents now (M.is_document): setup sets it,
 -- M.close (CLOSE_DOCUMENT_BUFFER, its last editor closed) and a wipe remove it. Kept by id,
 -- not looked up by group, so that it holds whatever happened to the group: after a config's
 -- `:augroup! neovim4eclipse_document`, Vim's rule keeps the autocommands of the deleted group,
@@ -371,7 +371,7 @@ local function on_unload(ev)
   -- dropped on the next loop, never handed to a read much later.
   vim.schedule(function()
     st.kept = nil
-    if vim.api.nvim_buf_is_valid(b) and hooks[b] then
+    if vim.api.nvim_buf_is_valid(b) and M.is_document(b) then
       set_buftype(b, 'acwrite') -- still a document's buffer (not closed meanwhile)
     end
   end)
@@ -413,10 +413,17 @@ local function remove_hooks(b)
   hooks[b], state[b] = nil, nil
 end
 
---- Whether buf is a document's buffer now: setup gave it its hooks, and neither M.close nor
---- a wipe took them since. Example: false for a buffer whose editor closed (CLOSE_DOCUMENT_BUFFER),
---- which keeps b:neovim4eclipse_file.
-function M.has_hooks(buf)
+--- Whether buf is an open document's buffer now: setup gave it its hooks, and neither
+--- M.close nor a wipe took them since. Example: false for a buffer whose editor closed
+--- (CLOSE_DOCUMENT_BUFFER), which keeps b:neovim4eclipse_file.
+---
+--- The record, not a look at the autocommands: whether the buffer is a document is
+--- Eclipse's to say (an editor shows it), and a config that cleared the hooks
+--- (`:autocmd! * <buffer>`) does not make it a plain file's. Each caller's answer for such a
+--- buffer is the safe one: the unload puts 'acwrite' back, so Neovim refuses a :w (E676)
+--- instead of writing the disk behind Eclipse; PROJECT_FILES' read hook and the help pages
+--- leave the buffer alone, as Eclipse's.
+function M.is_document(buf)
   return hooks[buf] ~= nil
 end
 
