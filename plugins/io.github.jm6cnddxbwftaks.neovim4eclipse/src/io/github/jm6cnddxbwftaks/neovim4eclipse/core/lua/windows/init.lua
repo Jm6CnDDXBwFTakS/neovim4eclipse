@@ -46,12 +46,25 @@
 --
 -- Sent as LuaScripts.WINDOWS (core/LuaModules runs this file as a chunk of its own).
 
-local home_buf = tonumber((select(1, ...)))
 local M = {}
-local home = vim.api.nvim_get_current_win()
--- The plug-in's float the current insert began in, or nil (InsertEnter below): leaving
--- ends that insert (M.leave_float), not one begun elsewhere since.
-local insert_float
+-- The module's state that changes as it runs, in one table rather than in locals, so
+-- that every part of the module reads and sets the same value. Example: M.home() opens
+-- the home window again when the user closed it, and every later close (closable)
+-- compares with the new one.
+local S = {
+  -- The home buffer's number (the argument), made anew if Neovim wiped it (M.home_buffer).
+  home_buf = tonumber((select(1, ...))),
+  -- The home window: the one the plug-in started in (M.home opens it again if closed).
+  home = vim.api.nvim_get_current_win(),
+  -- The plug-in's float the current insert began in, or nil (InsertEnter below): leaving
+  -- ends that insert (M.leave_float), not one begun elsewhere since.
+  insert_float = nil,
+  -- The float that had the keyboard as Neovim's start ended, before any editor was
+  -- shown (M.close_start_floats): the first editor takes it along (settle_start_float).
+  pending_start_float = nil,
+  -- Whether Eclipse has shown an editor yet (M.show).
+  editor_shown = false,
+}
 --- What to call a floating window in a message: its buffer's filetype ("lazy",
 --- "TelescopePrompt"), else "a plug-in".
 local function float_name(win)
@@ -83,7 +96,7 @@ M.AT_START = AT_START
 -- The windows the plug-in opened and has not closed (the home window, the editors' and
 -- the pages', these marked 'page'): any other plain window is a stray one (the WinNew
 -- safety net below), and a floating or special one is a side window (M.is_side_window).
-local own = { [home] = true }
+local own = { [S.home] = true }
 -- Each page window's own buffer (M.open_page), which it keeps (M.restore_page).
 local page_buf = {}
 -- Each page window's kind: 'messages', 'help' or 'checkhealth' (M.open_page). It says
@@ -143,22 +156,22 @@ end
 --- and remembered, so that every later call and the home window agree on it. Eclipse
 --- asks for it (HOME_BUFFER) when the home buffer it knows is gone.
 function M.home_buffer()
-  if not vim.api.nvim_buf_is_valid(home_buf) then
-    home_buf = vim.api.nvim_create_buf(false, true)
+  if not vim.api.nvim_buf_is_valid(S.home_buf) then
+    S.home_buf = vim.api.nvim_create_buf(false, true)
   end
-  return home_buf
+  return S.home_buf
 end
 
 --- The home window, opened again (quietly, in a new tab) if the user closed it.
 function M.home()
-  if not vim.api.nvim_win_is_valid(home) then
+  if not vim.api.nvim_win_is_valid(S.home) then
     local buf = M.home_buffer()
-    home = quietly(function()
+    S.home = quietly(function()
       return vim.api.nvim_tabpage_get_win(vim.api.nvim_open_tabpage(buf, false, {}))
     end)
-    own[home] = true
+    own[S.home] = true
   end
-  return home
+  return S.home
 end
 
 --- Shows buf in win without adding to win's jump history (:keepjumps). nvim_win_set_buf
@@ -586,12 +599,6 @@ local function stop_insert_in_place()
   vim.cmd.stopinsert()
 end
 
--- The float that had the keyboard as Neovim's start ended, before any editor was shown
--- (M.close_start_floats): the first editor takes it along (settle_start_float).
-local pending_start_float
--- Whether Eclipse has shown an editor yet (M.show).
-local editor_shown = false
-
 --- Says that a float was closed, or refused to close, as the start ended. Once the caller
 --- is over (vim.schedule): an error message from inside UIEnter gets Neovim's "Error in
 --- UIEnter Autocommands for "*":" above it, as if the check had failed. Said as an error
@@ -607,8 +614,8 @@ end
 --- tab page; one hanging on a window or the cursor stays behind). If not, it is closed,
 --- not by force, with a message: keys go only to a window Eclipse draws.
 local function settle_start_float(win)
-  local float = pending_start_float
-  pending_start_float = nil
+  local float = S.pending_start_float
+  S.pending_start_float = nil
   if not float then
     return
   end
@@ -649,14 +656,14 @@ function M.show(win, buf)
   if win ~= current then
     vim.api.nvim_set_current_win(win) -- BufEnter, with the buffer Eclipse expects
   end
-  editor_shown = true
+  S.editor_shown = true
   -- After entering win: a float moved while current would take Neovim back to its tab page.
-  M.bring_start_floats(win, vim.v.vim_did_enter ~= 1 or pending_start_float ~= nil)
+  M.bring_start_floats(win, vim.v.vim_did_enter ~= 1 or S.pending_start_float ~= nil)
   settle_start_float(win)
   -- One check, where every show ends, from Neovim's state: in the editor's window, an insert
   -- begun in a float (any float, the one waiting or not, closed or left) ends here, or
   -- the keys meant for it would be typed into the document.
-  if insert_float ~= nil and vim.api.nvim_get_current_win() == win and in_insert() then
+  if S.insert_float ~= nil and vim.api.nvim_get_current_win() == win and in_insert() then
     stop_insert_in_place()
   end
   return win
@@ -704,7 +711,7 @@ end
 --- Whether win is an editor's window that M.close and M.release close: still there, and
 --- not the home window, which is never closed (it shows another buffer instead).
 local function closable(win)
-  return vim.api.nvim_win_is_valid(win) and win ~= home
+  return vim.api.nvim_win_is_valid(win) and win ~= S.home
 end
 
 --- Whether closing win (M.close, M.release) takes Neovim out of the plug-in's float it is
@@ -763,7 +770,7 @@ end
 function M.release(buf, fallback)
   local closed = {}
   for _, win in ipairs(vim.fn.win_findbuf(buf)) do
-    if win == home then
+    if win == S.home then
       set_buf(win, fallback_buf(fallback))
     elseif closable(win) then -- leaving a float may have closed one
       leave_float_of(win)
@@ -882,7 +889,7 @@ function M.entered_float(win)
   if not vim.api.nvim_get_mode().mode:match('^[iR]') then
     return true
   end
-  return insert_float ~= nil
+  return S.insert_float ~= nil
 end
 
 --- Closes win, a plug-in's float, as leaving it does: not by force, so that a buffer of
@@ -935,8 +942,8 @@ function M.leave_float(win)
   -- insert begun elsewhere since (Eclipse's, in the editor the user went to). With a float
   -- named, only that float's insert: Neovim is no longer in it, and a float it is in now
   -- may be the next part's picker, whose own insert began since.
-  local stop = in_insert() and insert_float ~= nil
-    and (insert_float == target or (not named and M.focused_float(current)))
+  local stop = in_insert() and S.insert_float ~= nil
+    and (S.insert_float == target or (not named and M.focused_float(current)))
   local closed = false
   if vim.api.nvim_win_is_valid(target) and M.focused_float(target) then
     if named then
@@ -970,8 +977,8 @@ function M.move_out_of_float(win)
   local current = vim.api.nvim_get_current_win()
   local named = names_other(win, current)
   local target = named and win or current
-  local stop = in_insert() and insert_float ~= nil
-    and (insert_float == target or (not named and M.focused_float(current)))
+  local stop = in_insert() and S.insert_float ~= nil
+    and (S.insert_float == target or (not named and M.focused_float(current)))
   local moved = false
   if not named and M.focused_float(current) then
     local to = M.editor_window() -- the float itself when its tab page has no window of ours
@@ -1093,7 +1100,7 @@ function M.end_float_insert(route, ...)
     error('no float exit named ' .. tostring(route))
   end
   local current = vim.api.nvim_get_current_win()
-  if insert_float == nil or current == pending_start_float or not M.focused_float(current)
+  if S.insert_float == nil or current == S.pending_start_float or not M.focused_float(current)
       or vim.api.nvim_get_mode().mode == 'n' or not leaving(...) then
     return false
   end
@@ -1154,10 +1161,10 @@ function M.close_start_floats(left)
     if left and left > 0 and vim.api.nvim_win_is_valid(left) then
       if drawn(left) then
         if not M.focused_float(vim.api.nvim_get_current_win()) then
-          if editor_shown then
+          if S.editor_shown then
             pcall(vim.api.nvim_set_current_win, left)
           else
-            pending_start_float = left
+            S.pending_start_float = left
           end
         end
       else
@@ -1173,8 +1180,8 @@ function M.close_start_floats(left)
       if M.leave_float() then
         name = name or n
       end
-    elseif M.focused_float(current) and not editor_shown then
-      pending_start_float = current
+    elseif M.focused_float(current) and not S.editor_shown then
+      S.pending_start_float = current
     end
     if not drawn(vim.api.nvim_get_current_win()) and has_attached
         and attached ~= vim.api.nvim_get_current_win() then
@@ -1219,7 +1226,7 @@ vim.api.nvim_create_autocmd('InsertEnter', {
   group = group,
   callback = function()
     local w = vim.api.nvim_get_current_win()
-    insert_float = M.focused_float(w) and w or nil
+    S.insert_float = M.focused_float(w) and w or nil
   end,
 })
 vim.api.nvim_create_autocmd('WinClosed', {
@@ -1410,7 +1417,7 @@ local function take_file_window(win)
   pcall(vim.api.nvim_set_current_win, before)
   -- An insert begun in a float must not go on in the editor: a plug-in that opens the
   -- split without :stopinsert would leave the next keys typing into the document.
-  if insert_float ~= nil and in_insert() then
+  if S.insert_float ~= nil and in_insert() then
     stop_insert_in_place()
   end
   local where = 'tab'
@@ -1434,7 +1441,7 @@ end
 -- the new. A window opened without entering it (nvim_open_win(buf, false, ...)) fires
 -- WinNew alone, with that window current for the moment, so only WinEnter says that
 -- left_from is where a window came from: at WinNew it may be an editor left long ago.
-local left_from = home
+local left_from = S.home
 vim.api.nvim_create_autocmd('WinLeave', {
   group = group,
   callback = function()
@@ -1505,4 +1512,4 @@ vim.api.nvim_create_autocmd('SafeState', {
   end,
 })
 package.loaded['neovim4eclipse.windows'] = M
-return home
+return S.home
