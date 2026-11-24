@@ -46,8 +46,8 @@ class LuaModulesTest {
      * Every {@code String} of {@link LuaScripts} has its text when the class has loaded. A script
      * built from another one declared further down would otherwise hold {@code "null"} where that
      * one's text belongs: a field read from a file is no compile-time constant, so the compiler does
-     * not fill it in; the fields are set in the order they are declared. (Lua has no {@code null},
-     * so no script holds the word.)
+     * not fill it in; the fields are set in the order they are declared. (Lua has no {@code null}:
+     * a line that starts with the word is where a missing text went.)
      */
     @Test
     void everyScriptHasItsTextOnceTheClassHasLoaded() throws IllegalAccessException {
@@ -57,7 +57,7 @@ class LuaModulesTest {
                 field.setAccessible(true);
                 String text = (String) field.get(null);
                 assertNotNull(text, field.getName());
-                assertFalse(text.contains("null"), field.getName());
+                assertFalse(text.startsWith("null") || text.contains("\nnull"), field.getName());
             }
         }
     }
@@ -103,6 +103,8 @@ class LuaModulesTest {
         assertEquals("[==[\nt[[[=[x]=]]]\n]==]", LuaModules.longString("t[[[=[x]=]]]\n"));
         // A text ending in ] would close [[...]] one bracket early: x]]] ends at x]].
         assertEquals("[=[\nx]]=]", LuaModules.longString("x]"));
+        // PUC Lua 5.1 refuses [[ inside [[...]], a comment's too.
+        assertEquals("[=[\n-- see [[x\n]=]", LuaModules.longString("-- see [[x\n"));
     }
 
     /** Only a plain name of a file in the folder is read: no way up or out of it. */

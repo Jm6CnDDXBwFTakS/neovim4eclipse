@@ -24,9 +24,11 @@ import java.util.regex.Pattern;
  * ({@link Class#getResourceAsStream}: the bundle's class loader in Eclipse, the class path in
  * {@code tests/unit}; no Eclipse API, since {@code core/} is compiled without Eclipse), and
  * {@link #script} wraps it into a script that Neovim compiles as a chunk named after the file.
- * Nothing is written to disk for Neovim and no folder goes on {@code 'runtimepath'}, so no other
+ * None of these files is written to disk for Neovim or put on {@code 'runtimepath'}, so no other
  * file can stand in for a module: not one in a cloned repository, nor one in the user's config or a
- * plug-in, which a {@code require} of a file on the runtimepath would find first.
+ * plug-in, which a {@code require} of a file on the runtimepath would find first. (The one file the
+ * plug-in does write there, {@code core/HealthCheck}'s {@code :checkhealth} stub, holds none of
+ * this code.)
  *
  * <p><b>Why a wrapper</b> rather than the file's text as it is: {@code nvim_exec_lua} names every
  * chunk the same, so an error would point at a line of "a script". Compiled with
@@ -39,9 +41,9 @@ import java.util.regex.Pattern;
  * <p>Example: {@code script("paths.lua")} gives
  * <pre>{@code
  * local n, args = select('#', ...), { ... }
- * return assert(loadstring([=[
+ * return assert(loadstring([[
  * -- SPDX-FileCopyrightText: ...
- * ...]=], '@neovim4eclipse/core/lua/paths.lua'))(unpack(args, 1, n))
+ * ...]], '@neovim4eclipse/core/lua/paths.lua'))(unpack(args, 1, n))
  * }</pre>
  * Each file gets the script's arguments, and the script answers what the last file returns.
  *
@@ -125,13 +127,16 @@ final class LuaModules {
     /**
      * {@code text} as a Lua long string, {@code [==[...]==]}, with as many {@code =} as it takes for
      * the closing bracket not to occur in the text, nor to begin at its end (a text ending in
-     * {@code ]} would close {@code [[...]]} one bracket early). A long string takes the text as it
-     * is (no escapes are read), so the chunk is the file. The newline after the opening bracket is
-     * one Lua drops, there so that a file's first line is the chunk's line 1 whatever it starts with.
+     * {@code ]} would close {@code [[...]]} one bracket early), and for the opening one not to occur
+     * either: PUC Lua 5.1, which a Neovim may be built with instead of LuaJIT, refuses a {@code [[}
+     * inside {@code [[...]]} ("nesting of [[...]] is deprecated"), even in a comment. A long string
+     * takes the text as it is (no escapes are read), so the chunk is the file. The newline after the
+     * opening bracket is one Lua drops, there so that a file's first line is the chunk's line 1
+     * whatever it starts with.
      */
     static String longString(String text) {
         String level = "";
-        while ((text + "]").contains("]" + level + "]")) {
+        while ((text + "]").contains("]" + level + "]") || text.contains("[" + level + "[")) {
             level += "=";
         }
         return "[" + level + "[\n" + text + "]" + level + "]";
