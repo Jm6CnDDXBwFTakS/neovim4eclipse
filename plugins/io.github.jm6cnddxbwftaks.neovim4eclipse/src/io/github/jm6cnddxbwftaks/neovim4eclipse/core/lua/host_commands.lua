@@ -4,7 +4,9 @@
 -- Hands the ex commands Eclipse carries out (`:w`, `:q`, `:e file`, `:tabn` ...; see
 -- `util/HostCommand`) from Neovim's command line to Eclipse. The argument names those commands by
 -- Neovim's full name, with what each may have after it (`HostCommand.rulesForNeovim()`), as words:
--- `"edit=any quit=none tabnext=count ..."`. <h2>How</h2>
+-- `"edit=any quit=none tabnext=count ..."`.
+--
+-- How
 -- 1. `:Eclipse[!] {command} {args}` is a user command that sends `eclipse_command` to Eclipse
 --    (`:Eclipse tabnext 3`) with the name, the `!`, the arguments and the window it ran in (the
 --    command's origin, `HostCommand.origin`: `:q` typed in a page's window is the page's). Anyone

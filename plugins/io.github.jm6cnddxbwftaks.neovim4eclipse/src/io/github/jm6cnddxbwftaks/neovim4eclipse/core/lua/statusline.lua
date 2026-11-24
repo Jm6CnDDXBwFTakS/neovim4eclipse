@@ -2,14 +2,18 @@
 -- SPDX-License-Identifier: EPL-2.0
 
 -- Neovim's status line of each editor's window, for the row the editor draws under its text
--- (`editor/StatusLineRow`; docs/ARCHITECTURE.md, "The status line in the editor"). <h2>Why Neovim
--- evaluates it, and not the screen</h2> Each editor's window is alone in a hidden tabpage
--- (LuaScripts.WINDOWS), and Neovim redraws only the current tabpage: its screen holds the focused
--- editor's status line only, and a background editor's would stay as it was, in the colors of the
--- window with the cursor. So each window's line is evaluated (`nvim_eval_statusline` with `winid`):
--- Neovim then draws a window that is not current in `StatusLineNC`; and `g:statusline_winid`, which
--- the call does not set but Neovim's own drawing does, is set around it, so that lualine and its
--- like choose their inactive sections, as on Neovim's own screen. <h2>What `line(win)` answers</h2>
+-- (`editor/StatusLineRow`; docs/ARCHITECTURE.md, "The status line in the editor").
+--
+-- Why Neovim evaluates it, and not the screen
+-- Each editor's window is alone in a hidden tabpage (LuaScripts.WINDOWS), and Neovim redraws only
+-- the current tabpage: its screen holds the focused editor's status line only, and a background
+-- editor's would stay as it was, in the colors of the window with the cursor. So each window's line
+-- is evaluated (`nvim_eval_statusline` with `winid`): Neovim then draws a window that is not
+-- current in `StatusLineNC`; and `g:statusline_winid`, which the call does not set but Neovim's own
+-- drawing does, is set around it, so that lualine and its like choose their inactive sections, as
+-- on Neovim's own screen.
+--
+-- What `line(win)` answers
 -- `{shown, cells, hl, attrs}`: whether the window has a status line (`'laststatus'`: 0 none; 1 only
 -- with another window in its tabpage, so none for an editor's window alone; 2 always; 3 one for the
 -- screen, the current window's); the line's cells, one string per screen cell, a wide character's
@@ -22,14 +26,15 @@
 -- A `'statusline'` that a modeline set (with `'modelineexpr'` on) is not evaluated: Neovim runs
 -- such a one in its sandbox, and `nvim_eval_statusline` cannot tell where its string came from. The
 -- default line is drawn instead. Example: `notes.txt` in a window 12 columns wide: cells `n, o, t,
--- e, s, ., t, x, t, " ", " ", " "`, every hl 1, attrs `StatusLine`'s colors. <h2>When it is
--- sent</h2> The focused editor's line comes with each key's state snapshot
--- (LuaScripts.STATE_SNAPSHOT). Every window's line comes as `eclipse_status_lines` (`{{win, line},
--- ...}`) when what a background line shows may have changed: the cursor entered another window (the
--- left one turns `StatusLineNC`), a buffer's modified flag, name or file changed, the colorscheme,
--- `'laststatus'` or `'statusline'`, a window's size. Several events in one moment send once
--- (`vim.schedule`); so does the current directory, a filetype or the diagnostics changing, and an
--- editor's width (`set_width`).
+-- e, s, ., t, x, t, " ", " ", " "`, every hl 1, attrs `StatusLine`'s colors.
+--
+-- When it is sent
+-- The focused editor's line comes with each key's state snapshot (LuaScripts.STATE_SNAPSHOT). Every
+-- window's line comes as `eclipse_status_lines` (`{{win, line}, ...}`) when what a background line
+-- shows may have changed: the cursor entered another window (the left one turns `StatusLineNC`), a
+-- buffer's modified flag, name or file changed, the colorscheme, `'laststatus'` or `'statusline'`,
+-- a window's size. Several events in one moment send once (`vim.schedule`); so does the current
+-- directory, a filetype or the diagnostics changing, and an editor's width (`set_width`).
 --
 -- Sent as LuaScripts.STATUS_LINE (core/LuaModules runs this file as a chunk of its own).
 

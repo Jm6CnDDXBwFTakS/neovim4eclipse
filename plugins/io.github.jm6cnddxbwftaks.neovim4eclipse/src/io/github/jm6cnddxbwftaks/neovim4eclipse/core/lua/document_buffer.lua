@@ -1,21 +1,25 @@
 -- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 -- SPDX-License-Identifier: EPL-2.0
 
--- Makes a new buffer (argument: its number) a document buffer, which only Eclipse writes. <h2>The
--- concept: `buftype=acwrite`</h2> Eclipse owns the files: a `:w` by Neovim itself would write its
--- copy behind Eclipse's back (no save actions, no refresh, a "file changed on disk" dialog later).
--- A buffer with `buftype=acwrite` is never written by Neovim; every write runs the buffer's
--- `BufWriteCmd` autocommands instead (`:help acwrite`, `:help BufWriteCmd`). The one here asks
--- Eclipse to save the document (the `eclipse_write` request, answered by DocumentWrite) and, if
--- that worked, clears `'modified'`, as a real write does, and shows the message Eclipse answers,
--- Vim's `"a.txt" 12L, 140B written`, which Neovim does not give for such a buffer. So `:w`,
--- `:update`, `:bufdo %s/a/b/g | update`, `:w other.txt` and `vim.cmd.write()` all write through
--- Eclipse. `v:cmdarg` passes `++p` along. `'modified'` itself follows Eclipse's dirty flag
--- (LuaScripts.SET_MODIFIED), so `:update` asks for exactly the files Eclipse would save. Neovim
--- pipes `:w !cmd` without these hooks (checked on Neovim 0.12.6). <h2>Which file: the editor's, or
--- a copy</h2> `BufWriteCmd` gets the name being written (`ev.match`), and the script compares it
--- with the file of the editor, kept in `b:neovim4eclipse_file` when the buffer is made a document
--- buffer. Not with the buffer's name: `:saveas` and `:file` change that.
+-- Makes a new buffer (argument: its number) a document buffer, which only Eclipse writes.
+--
+-- The concept: `buftype=acwrite`
+-- Eclipse owns the files: a `:w` by Neovim itself would write its copy behind Eclipse's back (no
+-- save actions, no refresh, a "file changed on disk" dialog later). A buffer with `buftype=acwrite`
+-- is never written by Neovim; every write runs the buffer's `BufWriteCmd` autocommands instead
+-- (`:help acwrite`, `:help BufWriteCmd`). The one here asks Eclipse to save the document (the
+-- `eclipse_write` request, answered by DocumentWrite) and, if that worked, clears `'modified'`, as
+-- a real write does, and shows the message Eclipse answers, Vim's `"a.txt" 12L, 140B written`,
+-- which Neovim does not give for such a buffer. So `:w`, `:update`, `:bufdo %s/a/b/g | update`, `:w
+-- other.txt` and `vim.cmd.write()` all write through Eclipse. `v:cmdarg` passes `++p` along.
+-- `'modified'` itself follows Eclipse's dirty flag (LuaScripts.SET_MODIFIED), so `:update` asks for
+-- exactly the files Eclipse would save. Neovim pipes `:w !cmd` without these hooks (checked on
+-- Neovim 0.12.6).
+--
+-- Which file: the editor's, or a copy
+-- `BufWriteCmd` gets the name being written (`ev.match`), and the script compares it with the file
+-- of the editor, kept in `b:neovim4eclipse_file` when the buffer is made a document buffer. Not
+-- with the buffer's name: `:saveas` and `:file` change that.
 -- - The editor's file (`:w`, `:update`): Eclipse saves the editor (request kind `""`), and
 --   `'modified'` is cleared.
 -- - Another file (`:w other.txt`, `:w! other.txt`): a copy, as in Vim (kind `"copy"`, with the full
@@ -65,20 +69,23 @@
 -- holds the text alone (`Eclipse could not save A.txt: read-only`); the message Neovim shows puts
 -- its usual line in front, `Error in BufWriteCmd Autocommands for "<buffer=3>":`, as for any error
 -- in an autocommand. Neovim shows the two lines (ui2), where Vim would show them above a "Press
--- ENTER" prompt. The buffer stays modified, so `:update` tries again next time. <h2>Deleted by
--- Neovim: a safety net</h2> A `:bd` on Neovim's command line reaches Eclipse as `:Eclipse bdelete`
+-- ENTER" prompt. The buffer stays modified, so `:update` tries again next time.
+--
+-- Deleted by Neovim: a safety net
+-- A `:bd` on Neovim's command line reaches Eclipse as `:Eclipse bdelete`
 -- (LuaScripts.HOST_COMMANDS), which closes the editor. One Neovim runs itself (`<Cmd>bd<CR>`,
 -- `vim.cmd.bdelete()`, `:bufdo bd`) deletes the buffer first; its `BufDelete` or `BufWipeout` then
 -- sends `eclipse_buffer_closed`, and Eclipse closes the editor showing it, asking about changes as
 -- usual, so a buffer and its editor never outlive each other. When Eclipse wipes a buffer itself
--- (its last editor closed), no editor shows it any more and the notice is ignored. <h2>Reloaded by
--- Neovim</h2> A typed `:e!` goes to Eclipse, which reverts the editor (LuaScripts.HOST_COMMANDS). A
--- script's or a plug-in's `:edit!` (one that reloads files after a `git checkout`, say) runs inside
--- Neovim: it unloads the buffer and reads the file from disk, over Eclipse's text and its unsaved
--- changes, and the unload ends the buffer's line events (`nvim_buf_attach`), so later changes in
--- Neovim would never reach the document. Every document's buffer, whether its file is inside a
--- project or not (a file opened with File, Open File...), has two buffer-local autocommands
--- instead:
+-- (its last editor closed), no editor shows it any more and the notice is ignored.
+--
+-- Reloaded by Neovim
+-- A typed `:e!` goes to Eclipse, which reverts the editor (LuaScripts.HOST_COMMANDS). A script's or
+-- a plug-in's `:edit!` (one that reloads files after a `git checkout`, say) runs inside Neovim: it
+-- unloads the buffer and reads the file from disk, over Eclipse's text and its unsaved changes, and
+-- the unload ends the buffer's line events (`nvim_buf_attach`), so later changes in Neovim would
+-- never reach the document. Every document's buffer, whether its file is inside a project or not (a
+-- file opened with File, Open File...), has two buffer-local autocommands instead:
 -- 1. `BufUnload` keeps the buffer's lines, `'modified'` and its marks (the text is still there at
 --    that moment; Neovim drops an `acwrite` buffer's marks on unload, where Vim's `:edit!` keeps
 --    them), until Neovim's next loop.
