@@ -420,9 +420,9 @@ end
 --- The record, not a look at the autocommands: whether the buffer is a document is
 --- Eclipse's to say (an editor shows it), and a config that cleared the hooks
 --- (`:autocmd! * <buffer>`) does not make it a plain file's. Each caller's answer for such a
---- buffer is the safe one: the unload puts 'acwrite' back, so Neovim refuses a :w (E676)
---- instead of writing the disk behind Eclipse; PROJECT_FILES' read hook and the help pages
---- leave the buffer alone, as Eclipse's.
+--- buffer is the safe one: 'acwrite' stays (or, with the unload hook still there, the unload
+--- puts it back), so Neovim refuses a :w (E676) instead of writing the disk behind Eclipse;
+--- PROJECT_FILES' read hook and the help pages leave the buffer alone, as Eclipse's.
 function M.is_document(buf)
   return hooks[buf] ~= nil
 end
@@ -444,6 +444,9 @@ function M.setup(buf)
   state[buf] = {}
   local ids = {}
   hooks[buf] = ids
+  -- Every hook has a desc that starts with "Eclipse " (`:autocmd neovim4eclipse_document`
+  -- shows it), by which CLOSE_DOCUMENT_BUFFER finds them without this module in a group a
+  -- config deleted.
   local function hook(event, opts)
     ids[#ids + 1] = vim.api.nvim_create_autocmd(event, opts)
   end
@@ -454,6 +457,7 @@ function M.setup(buf)
   hook('FileType', {
     group = group,
     buffer = buf,
+    desc = "Eclipse keeps the document's 'iskeyword'",
     callback = function()
       keep_iskeyword(buf)
     end,
@@ -461,6 +465,7 @@ function M.setup(buf)
   hook('OptionSet', {
     group = group,
     buffer = buf,
+    desc = "Eclipse keeps the document's 'iskeyword'",
     callback = function(ev)
       if ev.match == 'iskeyword' then
         keep_iskeyword(buf)
@@ -481,7 +486,12 @@ function M.setup(buf)
       callback = on_line_write,
     })
   end
-  hook('BufFilePre', { buf = buf, group = group, callback = before_rename })
+  hook('BufFilePre', {
+    buf = buf,
+    group = group,
+    desc = 'Eclipse notes the name before a rename',
+    callback = before_rename,
+  })
   hook('BufFilePost', {
     buf = buf,
     group = group,

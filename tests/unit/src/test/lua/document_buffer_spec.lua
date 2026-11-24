@@ -498,8 +498,30 @@ t.test('closing a document buffer without the module clears its hooks by the gro
   package.loaded['neovim4eclipse.document_buffer'] = module
   t.ok(ok, tostring(err))
   t.eq(0, plugins_autocmds(buf))
+  t.eq(true, vim.api.nvim_buf_is_valid(buf), 'kept, with its number')
+  t.eq(false, vim.api.nvim_buf_is_loaded(buf), 'unloaded')
   t.eq(false, vim.bo[buf].buflisted)
   t.eq('', vim.bo[buf].buftype)
+end)
+
+-- The same with the group deleted too (:augroup! keeps its autocommands, as --Deleted--): the close
+-- finds them by their desc, which every hook has.
+t.test('closing without the module, after :augroup!, still takes every hook off', function()
+  t.setup()
+  local buf = t.document('NoGroup.txt', { 'x' })
+  vim.cmd('enew')
+  local before = vim.api.nvim_get_autocmds({ buffer = buf })
+  t.ok(#before >= 10, 'every hook: ' .. #before)
+  for _, a in ipairs(before) do
+    t.ok(a.desc ~= nil and a.desc:find('^Eclipse ') ~= nil, 'a desc: ' .. vim.inspect(a.event))
+  end
+  vim.cmd('silent! augroup! neovim4eclipse_document')
+  local module = package.loaded['neovim4eclipse.document_buffer']
+  package.loaded['neovim4eclipse.document_buffer'] = nil
+  local ok, err = pcall(t.run, 'CLOSE_DOCUMENT_BUFFER', tostring(buf))
+  package.loaded['neovim4eclipse.document_buffer'] = module
+  t.ok(ok, tostring(err))
+  t.eq({}, vim.api.nvim_get_autocmds({ buffer = buf }))
 end)
 
 -- Kept only for the read that follows the unload at once (:edit! does both in one command): a buffer

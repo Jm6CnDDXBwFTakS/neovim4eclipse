@@ -84,7 +84,9 @@ returns to the attached buffer. Then `CLOSE_DOCUMENT_BUFFER`:
    the safety net): they belong to a document with an editor. The module that makes them
    (`DOCUMENT_BUFFER_MODULE`) keeps their ids by buffer, so that they can be removed for that
    buffer alone (its `close`), and are set again, once, when the buffer is reused. They live in the
-   augroup `neovim4eclipse_document` too, which `:autocmd neovim4eclipse_document` lists.
+   augroup `neovim4eclipse_document` too, which `:autocmd neovim4eclipse_document` lists; without
+   the module (a config removed it), the close finds them by that group, or by their `desc`
+   ("Eclipse ...") in a group a config deleted.
 2. Sets `'buftype'` back to `''` (X4, X5), so the marks survive.
 3. `nvim_buf_delete(buf, { force = true, unload = true })`, then `'buflisted'` off: `:bd`. `force`,
    because unsaved changes live in Eclipse. A buffer that is not loaded is only unlisted:

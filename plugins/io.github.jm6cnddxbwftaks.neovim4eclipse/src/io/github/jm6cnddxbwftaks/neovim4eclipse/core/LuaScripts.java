@@ -576,8 +576,10 @@ final class LuaScripts {
      * <ol>
      * <li>The plug-in's autocommands for the buffer go: the write hook and the safety net belong to
      * a document with an editor. {@link #DOCUMENT_BUFFER_MODULE}'s {@code close} removes them by
-     * their ids, whatever a config did to their group; without the module (a config removed it),
-     * they are cleared by the group's name.
+     * their ids, whatever a config did to their group. Without the module (a config removed it),
+     * they are found by their group's name, or, in a group a config deleted ({@code :augroup!}
+     * keeps its autocommands, as {@code --Deleted--}), by their {@code desc}, which starts with
+     * {@code "Eclipse "}.
      * <li>{@code 'buftype'} goes back to a normal file's, since Neovim drops the marks of an
      * {@code acwrite} buffer when it unloads it (BUFFER_NUMBERS.md, X4).
      * <li>The buffer is unloaded and unlisted. {@code b:neovim4eclipse_file} stays.
@@ -602,7 +604,12 @@ final class LuaScripts {
             if documents then
               documents.close(buf)
             else
-              pcall(vim.api.nvim_clear_autocmds, { group = 'neovim4eclipse_document', buf = buf })
+              for _, a in ipairs(vim.api.nvim_get_autocmds({ buffer = buf })) do
+                if a.group_name == 'neovim4eclipse_document'
+                    or (a.group_name == '--Deleted--' and (a.desc or ''):find('^Eclipse ')) then
+                  pcall(vim.api.nvim_del_autocmd, a.id)
+                end
+              end
             end
             vim.bo[buf].buftype = ''
             if vim.api.nvim_buf_is_loaded(buf) then -- not after Neovim's own :bdelete, which unloaded it

@@ -87,9 +87,10 @@ local function page_buffer(buf)
 end
 
 --- Whether buf is an open document's buffer now: DOCUMENT_BUFFER marked it
---- (b:neovim4eclipse_file) and its hooks are on it (DOCUMENT_BUFFER_MODULE's is_document, the
---- one record of them). CLOSE_DOCUMENT_BUFFER removes the hooks and keeps the mark, so a
---- buffer whose editor closed is no document any more: its help may be a page again.
+--- (b:neovim4eclipse_file) and recorded it (DOCUMENT_BUFFER_MODULE's is_document, the one
+--- record of open documents). CLOSE_DOCUMENT_BUFFER takes the record and the hooks off and
+--- keeps the mark, so a buffer whose editor closed is no document any more: its help may be a
+--- page again.
 function M.is_document(buf)
   if vim.b[buf].neovim4eclipse_file == nil then
     return false
