@@ -175,7 +175,7 @@ location, a new file never meets it, so no workaround is needed
 ## 4. Writing (`:w`, `:wq`, `:x`, `ZZ`, `:wa`)
 
 **Where the writes come from.** `:w` and `:update` are Neovim's own writes: the buffer's
-`BufWriteCmd` (`LuaScripts.DOCUMENT_BUFFER`, `core/DocumentWrite`) asks Eclipse to save
+`BufWriteCmd` (`core/lua/document_buffer.lua`, `core/DocumentWrite`) asks Eclipse to save
 (`EditorAttachManager.saveOnUi`, then `EclipseFileCommands.save`), always as a write even of an
 unchanged editor, since Neovim asks only for `:w` or for `:update` of a modified buffer. `:w ++p`
 reaches Eclipse in the write request. `:wq`, `:x` and `:exit` are host commands (`util/HostCommand`,

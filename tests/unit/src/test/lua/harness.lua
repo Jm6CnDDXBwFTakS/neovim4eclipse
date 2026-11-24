@@ -8,7 +8,7 @@ Runs one test of a *_spec.lua file inside a headless Neovim, against the plug-in
 Why this tier exists
 --------------------
 Since Neovim 0.12.6 much of the plug-in's logic is Lua that runs inside Neovim: which ex commands
-Eclipse carries out (HOST_COMMANDS), the write hook (DOCUMENT_BUFFER), the yank hook and the
+Eclipse carries out (HOST_COMMANDS), the write hook (DOCUMENT_BUFFER_MODULE), the yank hook and the
 clipboard provider (SETUP), leaving a folder (LEAVE_FOLDER). Through the Java session such a test
 needs a Neovim process, the message channel, two threads and waits. Here the scripts run in the
 Neovim that runs the test, and what they send to Eclipse is recorded instead of sent:
@@ -81,6 +81,9 @@ local generated = dofile(module_path) -- { scripts = { SETUP = '...', ... }, hos
 -- The one rule for comparing file paths, run first as the session runs it (LuaScripts.PATHS): the
 -- scripts and t.same_file below use it.
 assert(load(generated.scripts.PATHS, '=LuaScripts.PATHS'))()
+-- Then the document buffers' module, as the session sends it next
+-- (LuaScripts.DOCUMENT_BUFFER_MODULE): DOCUMENT_BUFFER, t.document below, calls it for each buffer.
+assert(load(generated.scripts.DOCUMENT_BUFFER_MODULE, '=LuaScripts.DOCUMENT_BUFFER_MODULE'))()
 
 local t = {
   --- HostCommand.rulesForNeovim(): HOST_COMMANDS's argument, as the session passes it.

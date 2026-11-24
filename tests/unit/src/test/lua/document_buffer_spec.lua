@@ -379,6 +379,46 @@ t.test('a script\'s :edit! on a document keeps its text, marks and cursor, in a 
   t.eq({}, t.sent('eclipse_reload'))
 end)
 
+-- The module keeps each buffer's text by its number: two documents unloaded in one go and read
+-- again before Neovim's next loop (a plug-in's :bunload of both, then its reads) each get their
+-- own text back, not the other's.
+t.test('two documents unloaded together each get their own text back', function()
+  t.setup()
+  local a = t.document('A.txt', { 'unsaved a' })
+  local b = t.document('B.txt', { 'unsaved b' })
+  vim.cmd('enew')
+  t.forget()
+  vim.cmd('bunload! ' .. a .. ' ' .. b) -- !: the editors' unsaved changes live in Eclipse
+  vim.cmd('buffer ' .. a)
+  vim.cmd('buffer ' .. b)
+  t.eq({ { a, true }, { b, true } }, t.sent('eclipse_reload'))
+  t.eq({ 'unsaved a' }, vim.api.nvim_buf_get_lines(a, 0, -1, false))
+  t.eq({ 'unsaved b' }, vim.api.nvim_buf_get_lines(b, 0, -1, false))
+end)
+
+-- The session sends the module once (DOCUMENT_BUFFER_MODULE, as the harness does); each buffer then
+-- calls it. The call reads it from package.loaded, never with require, which would search the
+-- runtimepath for a module the session had not sent.
+t.test('the per-buffer call only uses the module the session sent', function()
+  local module = package.loaded['neovim4eclipse.document_buffer']
+  t.ok(module ~= nil and type(module.setup) == 'function', 'installed once, before any buffer')
+  local buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(buf, vim.fn.tempname() .. '-c.txt')
+  -- A module require would find (package.preload comes before the runtimepath's files), as a
+  -- file of the user's config or a plug-in would.
+  local found = false
+  package.loaded['neovim4eclipse.document_buffer'] = nil
+  package.preload['neovim4eclipse.document_buffer'] = function()
+    return { setup = function() found = true end }
+  end
+  local ok = pcall(t.run, 'DOCUMENT_BUFFER', tostring(buf))
+  package.preload['neovim4eclipse.document_buffer'] = nil
+  package.loaded['neovim4eclipse.document_buffer'] = module
+  t.ok(not ok, 'no module sent: an error')
+  t.eq(false, found, 'no other module stood in')
+  t.eq('', vim.bo[buf].buftype)
+end)
+
 -- Kept only for the read that follows the unload at once (:edit! does both in one command): a buffer
 -- a plug-in unloaded (:bunload) and that is read later must not get text that may be stale by then.
 t.test('a document buffer unloaded on its own and read later comes back empty, for Eclipse to fill', function()

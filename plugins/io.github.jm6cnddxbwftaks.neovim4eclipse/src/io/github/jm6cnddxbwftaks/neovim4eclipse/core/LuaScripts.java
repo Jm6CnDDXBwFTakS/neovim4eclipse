@@ -719,8 +719,8 @@ final class LuaScripts {
     /**
      * Module {@code neovim4eclipse.paths}: the one rule for comparing file paths in Neovim, used by
      * every script that compares them ({@link #PROJECT_FILES}, {@link #HOST_COMMANDS},
-     * {@link #DOCUMENT_BUFFER}, {@link #LEAVE_FOLDER}) and by the Lua tests ({@code t.same_file}).
-     * The code and its comments: {@code core/lua/paths.lua}.
+     * {@link #DOCUMENT_BUFFER_MODULE}, {@link #LEAVE_FOLDER}) and by the Lua tests
+     * ({@code t.same_file}). The code and its comments: {@code core/lua/paths.lua}.
      */
     static final String PATHS = LuaModules.script("paths.lua");
 
@@ -1529,10 +1529,23 @@ final class LuaScripts {
             """;
 
     /**
-     * Makes a new buffer (argument: its number) a document buffer, which only Eclipse writes. The
+     * Module {@code neovim4eclipse.document_buffer}: what makes a buffer a document buffer, which
+     * only Eclipse writes ({@code buftype=acwrite} and its write, rename, delete and reload hooks).
+     * Sent once per Neovim, right after {@link #PATHS} (which it uses), from
+     * {@code NeovimSession.initialize}; {@link #DOCUMENT_BUFFER} then calls it for each buffer. The
      * code and its comments: {@code core/lua/document_buffer.lua}.
      */
-    static final String DOCUMENT_BUFFER = LuaModules.script("document_buffer.lua");
+    static final String DOCUMENT_BUFFER_MODULE = LuaModules.script("document_buffer.lua");
+
+    /**
+     * Makes a new buffer (argument: its number) a document buffer, through the module
+     * {@link #DOCUMENT_BUFFER_MODULE} installed ({@code setup(buf)}). Read from
+     * {@code package.loaded}, never with {@code require}, which would search the runtimepath for a
+     * module the session had not sent.
+     */
+    static final String DOCUMENT_BUFFER = """
+            package.loaded['neovim4eclipse.document_buffer'].setup(tonumber((select(1, ...))))
+            """;
 
     /**
      * Runs normal-mode keys without mappings (argument: the keys), like {@code :normal! keys}. An

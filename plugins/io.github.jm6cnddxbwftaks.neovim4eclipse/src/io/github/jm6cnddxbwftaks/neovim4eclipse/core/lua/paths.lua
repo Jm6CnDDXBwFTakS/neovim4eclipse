@@ -3,9 +3,10 @@
 
 -- Module `neovim4eclipse.paths`: the one rule for comparing file paths in Neovim, used by every
 -- script that compares them (LuaScripts.PROJECT_FILES, LuaScripts.HOST_COMMANDS,
--- LuaScripts.DOCUMENT_BUFFER, LuaScripts.LEAVE_FOLDER) and by the Lua tests (`t.same_file`). Java's
--- `util/FilePaths` follows the same rule; both are checked against one table of cases
--- (`tests/unit/src/test/resources/path-cases.tsv`). Run first, before any other script.
+-- LuaScripts.DOCUMENT_BUFFER_MODULE, LuaScripts.LEAVE_FOLDER) and by the Lua tests
+-- (`t.same_file`). Java's `util/FilePaths` follows the same rule; both are checked against one
+-- table of cases (`tests/unit/src/test/resources/path-cases.tsv`). Run first, before any other
+-- script.
 --
 -- Why one rule. The same file reaches Neovim in many spellings: Windows writes `\` or `/` and any
 -- case (`C:\WS\a.txt`, `c:/ws/A.TXT`); macOS ignores case and links `/var` to `/private/var`; a

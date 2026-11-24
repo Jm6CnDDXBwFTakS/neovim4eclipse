@@ -375,7 +375,7 @@ Requests go the other way too. `vim.rpcrequest(channel, name, ...)` sends one to
 this twice: when Neovim pastes from the system clipboard (`"+p`), it asks Eclipse for the text
 (`eclipse_clipboard_paste`, see `core/ClipboardRegisters`); when Neovim writes a document's buffer
 (`:bufdo update`), it asks Eclipse to save the file and waits to hear whether that worked
-(`eclipse_write`, see `LuaScripts.DOCUMENT_BUFFER`). Eclipse learns its own channel number by
+(`eclipse_write`, see `core/lua/document_buffer.lua`). Eclipse learns its own channel number by
 calling `nvim_get_chan_info(0)` itself (0 is "the caller" in a direct API call) and passes it to the
 setup Lua: inside Lua run by `nvim_exec_lua`, `nvim_get_chan_info(0)` does not know who called.
 
@@ -627,7 +627,7 @@ and the number is gone. The plug-in does what `:bd` does when a file's last edit
 file's next editor gets buffer 3 back, not a new number (docs/design/BUFFER_NUMBERS.md).
 `nvim_buf_attach` ends when a buffer unloads. A script's `:edit!` unloads and reads in one command,
 so the plug-in keeps the text across it: `BufUnload` copies the lines and marks, the `BufReadCmd`
-that replaces the read puts them back (`LuaScripts.DOCUMENT_BUFFER`), and Eclipse attaches again
+that replaces the read puts them back (`core/lua/document_buffer.lua`), and Eclipse attaches again
 with `send_buffer` true. Neovim then sends the whole buffer first, in the same stream as every later
 change, so a key handled between the unload and the new attach is in that whole buffer and reaches
 the document as a minimal edit. Example: a plug-in runs `:edit!` and you type `x` at that moment;

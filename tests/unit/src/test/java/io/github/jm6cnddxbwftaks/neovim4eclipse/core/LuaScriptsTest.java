@@ -110,19 +110,22 @@ class LuaScriptsTest {
     /** Document buffers are written only through Eclipse: acwrite, and a write hook that asks it to save. */
     @Test
     void documentBuffersAreWrittenThroughEclipse() {
-        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("buftype = 'acwrite'"));
-        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("'BufWriteCmd'"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("buftype = 'acwrite'"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("'BufWriteCmd'"));
         // Some lines (:5,10w part.txt) and appends (:w >> log.txt) have hooks of their own.
-        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("FileWriteCmd = 'lines', FileAppendCmd = 'append'"));
-        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("'eclipse_write'"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("FileWriteCmd = 'lines', FileAppendCmd = 'append'"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("'eclipse_write'"));
         // Both names are compared by the one rule for paths (PATHS: links resolved, macOS /var;
         // slashes, Windows / against \; case where names ignore it), not a copy of it.
-        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("require('neovim4eclipse.paths').canonical"));
-        assertFalse(code(LuaScripts.DOCUMENT_BUFFER).contains("vim.fn.resolve("), "no comparison of its own");
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("require('neovim4eclipse.paths').canonical"));
+        assertFalse(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("vim.fn.resolve("), "no comparison of its own");
         // Writes are compared with the editor's file, kept when the buffer is made, not with the
         // buffer's name, which :saveas and :file change.
-        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)"));
         assertTrue(code(LuaScripts.SETUP).contains("vim.g.neovim4eclipse_channel = chan"), "the channel the request goes to");
+        // Each buffer's call reaches the module the session sent, never one require would find.
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("package.loaded['neovim4eclipse.document_buffer'].setup("));
+        assertFalse(code(LuaScripts.DOCUMENT_BUFFER).contains("require("));
     }
 
     /**
@@ -133,7 +136,7 @@ class LuaScriptsTest {
      */
     @Test
     void errorsAreEchoedAsErrors() {
-        for (String script : new String[] { LuaScripts.NORMAL_WITHOUT_MAPPINGS, LuaScripts.DOCUMENT_BUFFER }) {
+        for (String script : new String[] { LuaScripts.NORMAL_WITHOUT_MAPPINGS, LuaScripts.DOCUMENT_BUFFER_MODULE }) {
             assertTrue(code(script).contains("vim.api.nvim_echo({ { msg } }, true, { err = true })"), script);
             assertFalse(code(script).contains("vim.v.errmsg = msg"), "no v:errmsg set by hand: " + script);
             assertFalse(code(script).contains("'ErrorMsg'"), "err = true picks the highlight: " + script);

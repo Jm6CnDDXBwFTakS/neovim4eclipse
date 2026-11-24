@@ -524,6 +524,9 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         NeovimApi api = connection.api();
         // First: the one rule for comparing file paths, which later scripts use (LuaScripts.PATHS).
         await(api.execLua(LuaScripts.PATHS, List.of()));
+        // Then what makes a buffer a document buffer, which uses PATHS, before any buffer is made
+        // one (LuaScripts.DOCUMENT_BUFFER_MODULE; each editor's buffer: DOCUMENT_BUFFER).
+        await(api.execLua(LuaScripts.DOCUMENT_BUFFER_MODULE, List.of()));
         // Before the home buffer goes into the current window: the config may have left the focus
         // in a floating window (lazy.nvim's installer), closed below (CLOSE_START_FLOAT).
         Object startFloat = await(api.execLua(LuaScripts.LEAVE_START_FLOAT, List.of()));

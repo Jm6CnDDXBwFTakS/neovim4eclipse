@@ -160,7 +160,7 @@ never reads a project's file itself** (1.1):
    after any read). A buffer that another `BufReadCmd` filled or made read-only already is left to
    that reader (X23). `PROJECT_FILES` leaves `acwrite` buffers (live documents) alone.
 4. **A live document's reload** (X20: `:edit!` from a script, not typed). Every document's buffer,
-   inside a project folder or not, has its own reload hook, in `DOCUMENT_BUFFER` (not
+   inside a project folder or not, has its own reload hook, in `core/lua/document_buffer.lua` (not
    `PROJECT_FILES`: a document outside every project folder would otherwise read the disk and end
    the buffer's line events, so keys typed in Neovim would no longer reach the document). The hook
    does not read the disk; it asks Eclipse to load the document's text into the buffer again
@@ -200,7 +200,7 @@ README's `vim.g.neovim4eclipse` check stays the way to skip them altogether.
 
 | Place | Behavior |
 |---|---|
-| `wipe_left_over` (`DOCUMENT_BUFFER`) | wipes unloaded buffers named like a written file; skips buffers with `b:neovim4eclipse_file`, so a closed document's buffer stays |
+| `wipe_left_over` (`core/lua/document_buffer.lua`) | wipes unloaded buffers named like a written file; skips buffers with `b:neovim4eclipse_file`, so a closed document's buffer stays |
 | `HOST_COMMANDS` `open_document_edited` | loaded document buffers only: a closed one is not loaded (or, after X8, not listed) |
 | `:bd 3` of a closed file's number | an E516-like "no editor" message: nothing to close |
 | `:ls` | closed files are gone from `:ls`, and shown by `:ls!` with `u`, as in Vim |

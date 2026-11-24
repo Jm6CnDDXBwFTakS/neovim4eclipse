@@ -132,7 +132,9 @@ it) in a `core/EditorBuffers` (the bookkeeping, unit-tested without Eclipse) and
 buffer Neovim is in, another file's), but the editor listens for Neovim's changes again. Buffers are
 listed, named after the file path, without a swap file or filetype detection, and `buftype=acwrite`:
 Neovim never writes them itself; a write (`:w`, `:update`, `:bufdo update`, `vim.cmd.write()`) runs their
-`BufWriteCmd` hook (`LuaScripts.DOCUMENT_BUFFER`), which sends the `eclipse_write` request with `v:cmdarg`
+`BufWriteCmd` hook (`core/lua/document_buffer.lua`: a module the session sends once, whose
+`setup(buf)` `LuaScripts.DOCUMENT_BUFFER` calls for each editor's buffer), which sends the
+`eclipse_write` request with `v:cmdarg`
 (`++p`) and waits: `EditorAttachManager.saveForNeovim` saves the document on the UI thread (waiting at
 most 30 s) and answers `[error, message]` (`core/DocumentWrite`); the hook echoes the message, Vim's
 `"a.txt" 12L, 140B written` (`util/WrittenMessage`), which Neovim does not give for an `acwrite` buffer.
@@ -250,7 +252,7 @@ buffer's file as its fourth value, for Eclipse to open; a background job finds a
 workspace file (a refresh waits while a build runs), then the editor opens on the UI thread. The
 folders are walked and sent by one job, so the walks never run on the thread of a change and never
 overtake each other. Every document's buffer, in a project or not, has a `BufUnload` and a `BufReadCmd` of its own
-(`LuaScripts.DOCUMENT_BUFFER`): a script's `:edit!` gets its text and marks back at once instead of
+(`core/lua/document_buffer.lua`): a script's `:edit!` gets its text and marks back at once instead of
 the file from disk, so the cursor keeps its line, and Eclipse attaches the buffer again with the
 whole buffer sent first, so a change Neovim made meanwhile reaches the document (`eclipse_reload`,
 `NeovimSession` "re-attach after a reload"). A buffer loaded empty later (after a plug-in's
@@ -405,7 +407,7 @@ The same file reaches the plug-in in many spellings: `C:\WS\a.txt` and `c:/ws/A.
 its nearest existing folder's, so a new folder under a link such as macOS's `/home` resolves too),
 `/` separators, `.` and `..` resolved, lower case where file names ignore case (Windows, macOS).
 Neovim's side is `LuaScripts.PATHS` (module `neovim4eclipse.paths`, run first; used by
-`PROJECT_FILES`, `HOST_COMMANDS`, `DOCUMENT_BUFFER`, `LEAVE_FOLDER`, and the specs' `t.same_file`),
+`PROJECT_FILES`, `HOST_COMMANDS`, `DOCUMENT_BUFFER_MODULE`, `LEAVE_FOLDER`, and the specs' `t.same_file`),
 Eclipse's `util/FilePaths` (`:wq name`, shortened names). Both take the platform as
 a parameter and pass one table of cases, `tests/unit/src/test/resources/path-cases.tsv`
 (`paths_spec.lua`, `FilePathsTest`), so the Windows and macOS rules run on Linux and CI, and the two
@@ -510,7 +512,7 @@ the page editor ── keys, mouse, size ──▶ NeovimSession (the editing Ne
   page's `q`, keys and write hooks into the code's editor, and left as help Eclipse's edits would
   fail in Neovim and the texts drift apart. So it is never a page: the window closes, the buffer
   gets its document's settings back (`acwrite`, changeable, listed, and its own `'tabstop'` and
-  `'iskeyword'`, which `:help` sets to help's; `SET_INDENTATION` and `DOCUMENT_BUFFER` keep them),
+  `'iskeyword'`, which `:help` sets to help's; `SET_INDENTATION` and `core/lua/document_buffer.lua` keep them),
   again once the command is over (on the `Ctrl-]` route Neovim sets help's `'iskeyword'` after
   `BufEnter`), and a message says the help is open in its editor. `:help` reads nothing from disk
   for a loaded buffer: the document's text, undo history and marks stay.
