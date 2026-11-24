@@ -48,7 +48,12 @@ class SettingsNamesTest {
     private static final String PLUGIN = "plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/";
     private static final String SRC = PLUGIN + "src/io/github/jm6cnddxbwftaks/neovim4eclipse/";
     private static final String PREFERENCES = SRC + "prefs/PreferenceConstants.java";
-    private static final String LUA = SRC + "core/LuaScripts.java";
+    /**
+     * The plug-in's Lua, as a file name in {@link #PROMISED}: the short scripts in
+     * {@code core/LuaScripts.java} and the files below {@code core/lua/} ({@code core/LuaModules}),
+     * read together ({@link #read}).
+     */
+    private static final String LUA = SRC + "core/LuaScripts.java and core/lua/";
     private static final String PLUGIN_XML = PLUGIN + "plugin.xml";
     private static final String COMMAND_ID = "io.github.jm6cnddxbwftaks.neovim4eclipse.commands.";
 
@@ -238,6 +243,15 @@ class SettingsNamesTest {
     }
 
     private static String read(String relative) throws IOException {
+        if (relative.equals(LUA)) {
+            StringBuilder lua = new StringBuilder(read(SRC + "core/LuaScripts.java"));
+            try (var files = Files.walk(repoRoot().resolve(SRC + "core/lua"))) {
+                for (Path file : files.filter(f -> f.toString().endsWith(".lua")).sorted().toList()) {
+                    lua.append('\n').append(Files.readString(file, StandardCharsets.UTF_8));
+                }
+            }
+            return lua.toString();
+        }
         return Files.readString(repoRoot().resolve(relative), StandardCharsets.UTF_8);
     }
 

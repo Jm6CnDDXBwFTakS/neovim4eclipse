@@ -387,7 +387,7 @@ it: closing the page editors at Eclipse's exit as well would avoid it.
 
 - **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** core/LuaScripts.java, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridMouse.java, editor/LineInputMethod.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
+- **Areas:** core/LuaScripts.java, core/lua/**, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridMouse.java, editor/LineInputMethod.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
 
 Telescope's `current_buffer_fuzzy_find` and `:Lazy` are tested at pinned commits
 (`PickersEndToEndTest`, `FloatInsertIntegrationTest`, `NeovimWindowsIntegrationTest`), with the

@@ -57,11 +57,11 @@ final class LuaModules {
     static final String CHUNK_PREFIX = "neovim4eclipse/core/lua/";
 
     /**
-     * A file name as {@link #script} takes it: lowercase words and {@code _}, in folders, ending in
-     * {@code .lua}. Example: {@code windows/floats.lua}. Nothing else is read: no {@code ..}, no
+     * A file name as {@link #script} takes it: lowercase letters, digits and {@code _}, in folders,
+     * ending in {@code .lua}. Examples: {@code windows/floats.lua}, {@code ui2.lua}. Nothing else is read: no {@code ..}, no
      * absolute path.
      */
-    private static final Pattern NAME = Pattern.compile("[a-z][a-z_]*(/[a-z][a-z_]*)*\\.lua");
+    private static final Pattern NAME = Pattern.compile("[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.lua");
 
     /** The files read so far, for {@code LuaModulesTest}: every file in the folder must be one. */
     private static final Set<String> READ = new TreeSet<>();
