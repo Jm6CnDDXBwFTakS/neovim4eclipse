@@ -1224,54 +1224,8 @@ final class LuaScripts {
             return win
             """;
 
-    /**
-     * Installs the module {@code neovim4eclipse.windows}: a Neovim window per Eclipse editor, each
-     * alone in its own tabpage (docs/design/WINDOWS.md; Java side {@code DocumentBuffers} and
-     * {@code EditorWindows}). Argument: the home buffer's number. Returns the <em>home window</em>'s
-     * id: the window the plug-in started in, which shows a document when its editor has no window of
-     * its own, and is never closed by the plug-in.
-     *
-     * <p>Why tabpages: one window per tab fills Neovim's screen, which is the attached editor's size
-     * (VIEWPORT.md), so {@code H}, {@code L} and {@code Ctrl-D} match the editor, and window commands
-     * stay inside the editor's tab. {@code 'showtabline'} is set to 0, a setting the plug-in changes
-     * (docs/USER_GUIDE.md, "Neovim settings the plug-in changes"): Neovim's default, 1, would show a tab line as
-     * soon as a second editor has a window, and take a row from the editor.
-     *
-     * <p>The functions, each called by one of the scripts below:
-     * <ul>
-     *   <li>{@code open(buf, folder)}: {@link #OPEN_WINDOW}.</li>
-     *   <li>{@code show(win, buf)}: {@link #SHOW_WINDOW}.</li>
-     *   <li>{@code travel(win, buf, line, col)}: {@link #TRAVEL_WINDOW}.</li>
-     *   <li>{@code close(win, fallback)}: {@link #CLOSE_WINDOW}.</li>
-     *   <li>{@code release(buf, fallback)}: {@link #RELEASE_BUFFER}.</li>
-     *   <li>{@code home_buffer()}: {@link #HOME_BUFFER}; {@code close} and {@code release} use it
-     *       too, for a fallback buffer Neovim wiped.</li>
-     *   <li>{@code is_side_window(win)}: whether a window is a floating or special one beside an
-     *       editor's, where {@code :q} is Neovim's ({@link #WINDOW_COMMANDS}).</li>
-     * </ul>
-     *
-     * <p><b>Quietly</b> means with {@code 'eventignore'} set to {@code all}: what the plug-in does to
-     * a window that is not the current one fires no autocommand, so Eclipse does not take it for
-     * something the user did. Example: {@code nvim_win_set_buf} on a window of another tab enters it
-     * for a moment and fires {@code BufEnter} (WINDOWS.md, E7), which Eclipse would follow as a jump.
-     *
-     * <p>The safety net: {@code WinClosed} sends {@code eclipse_window_closed(win)}, so that a window
-     * the user closed in Neovim ({@code :tabclose}, a plug-in's {@code nvim_win_close}) is forgotten,
-     * and its editor gets a new one at its next attach. The plug-in's own closes are quiet and do not
-     * send it. A home window closed that way is opened again by the next {@code show} of it.
-     *
-     * <p>The second net, {@code WinNew}, closes a window Eclipse cannot show (a stray split, the
-     * quickfix window) once the command that opened it is over; floats are left to
-     * {@code close_undrawn} ({@link #CLOSE_UNDRAWN_FLOAT}). A changed buffer outlives that close,
-     * whatever its {@code 'bufhidden'}. Two kinds of
-     * window it hands to a page editor instead: a {@code :checkhealth} report's and a help
-     * window ({@code :help}, {@code :helpgrep}). Their buffer stays, and
-     * {@code eclipse_view_page(kind, buf, line)} asks Eclipse to show it in a page window of its
-     * own ({@code show_page}); the window it came in closes, with no message
-     * ({@code docs/ARCHITECTURE.md}, decision 10). A window on a file (a picker's split action)
-     * becomes an Eclipse split or editor tab on that file, at its cursor ({@code take_file_window}).
-     */
-    static final String WINDOWS = """
+    /** The first half of {@link #WINDOWS}, which see. */
+    private static final String WINDOWS_FIRST_HALF = """
             local home_buf = tonumber((select(1, ...)))
             local M = {}
             local home = vim.api.nvim_get_current_win()
@@ -1957,6 +1911,10 @@ final class LuaScripts {
               return { closed, M.home_buffer() }
             end
 
+            """;
+
+    /** The second half of {@link #WINDOWS}, which see. */
+    private static final String WINDOWS_SECOND_HALF = """
             --- Whether win (0: the current one) is a window Neovim opened beside an editor's for a
             --- moment, which :q, :close and Ctrl-W c close in Neovim, not the editor: a floating
             --- window the user entered (hover documentation, a plug-in's picker) or one of Neovim's
@@ -2604,6 +2562,61 @@ final class LuaScripts {
             package.loaded['neovim4eclipse.windows'] = M
             return home
             """;
+
+    /**
+     * Installs the module {@code neovim4eclipse.windows}: a Neovim window per Eclipse editor, each
+     * alone in its own tabpage (docs/design/WINDOWS.md; Java side {@code DocumentBuffers} and
+     * {@code EditorWindows}). Argument: the home buffer's number. Returns the <em>home window</em>'s
+     * id: the window the plug-in started in, which shows a document when its editor has no window of
+     * its own, and is never closed by the plug-in.
+     *
+     * <p>Why tabpages: one window per tab fills Neovim's screen, which is the attached editor's size
+     * (VIEWPORT.md), so {@code H}, {@code L} and {@code Ctrl-D} match the editor, and window commands
+     * stay inside the editor's tab. {@code 'showtabline'} is set to 0, a setting the plug-in changes
+     * (docs/USER_GUIDE.md, "Neovim settings the plug-in changes"): Neovim's default, 1, would show a tab line as
+     * soon as a second editor has a window, and take a row from the editor.
+     *
+     * <p>The functions, each called by one of the scripts below:
+     * <ul>
+     *   <li>{@code open(buf, folder)}: {@link #OPEN_WINDOW}.</li>
+     *   <li>{@code show(win, buf)}: {@link #SHOW_WINDOW}.</li>
+     *   <li>{@code travel(win, buf, line, col)}: {@link #TRAVEL_WINDOW}.</li>
+     *   <li>{@code close(win, fallback)}: {@link #CLOSE_WINDOW}.</li>
+     *   <li>{@code release(buf, fallback)}: {@link #RELEASE_BUFFER}.</li>
+     *   <li>{@code home_buffer()}: {@link #HOME_BUFFER}; {@code close} and {@code release} use it
+     *       too, for a fallback buffer Neovim wiped.</li>
+     *   <li>{@code is_side_window(win)}: whether a window is a floating or special one beside an
+     *       editor's, where {@code :q} is Neovim's ({@link #WINDOW_COMMANDS}).</li>
+     * </ul>
+     *
+     * <p><b>Quietly</b> means with {@code 'eventignore'} set to {@code all}: what the plug-in does to
+     * a window that is not the current one fires no autocommand, so Eclipse does not take it for
+     * something the user did. Example: {@code nvim_win_set_buf} on a window of another tab enters it
+     * for a moment and fires {@code BufEnter} (WINDOWS.md, E7), which Eclipse would follow as a jump.
+     *
+     * <p>The safety net: {@code WinClosed} sends {@code eclipse_window_closed(win)}, so that a window
+     * the user closed in Neovim ({@code :tabclose}, a plug-in's {@code nvim_win_close}) is forgotten,
+     * and its editor gets a new one at its next attach. The plug-in's own closes are quiet and do not
+     * send it. A home window closed that way is opened again by the next {@code show} of it.
+     *
+     * <p>The second net, {@code WinNew}, closes a window Eclipse cannot show (a stray split, the
+     * quickfix window) once the command that opened it is over; floats are left to
+     * {@code close_undrawn} ({@link #CLOSE_UNDRAWN_FLOAT}). A changed buffer outlives that close,
+     * whatever its {@code 'bufhidden'}. Two kinds of
+     * window it hands to a page editor instead: a {@code :checkhealth} report's and a help
+     * window ({@code :help}, {@code :helpgrep}). Their buffer stays, and
+     * {@code eclipse_view_page(kind, buf, line)} asks Eclipse to show it in a page window of its
+     * own ({@code show_page}); the window it came in closes, with no message
+     * ({@code docs/ARCHITECTURE.md}, decision 10). A window on a file (a picker's split action)
+     * becomes an Eclipse split or editor tab on that file, at its cursor ({@code take_file_window}).
+     *
+     * <p><b>In two halves</b>, joined as the class loads: one Lua chunk, so that the module's
+     * locals are seen throughout, but more text than Java allows in one constant (65,535 bytes of
+     * UTF-8 in a class file). Joined with {@code concat}, it is no compile-time constant: classes
+     * that use it read it here, so a change to it needs no rebuild of theirs. The halves split
+     * between two functions; either may grow until it nears that limit.
+     */
+    static final String WINDOWS = WINDOWS_FIRST_HALF.concat(WINDOWS_SECOND_HALF);
 
     /**
      * Vim's window commands, carried out on Eclipse's editors: each Vim window is an editor, and a
