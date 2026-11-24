@@ -1136,15 +1136,15 @@ asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where th
 file there, starting with the two SPDX lines and a comment saying what it does, and a field in
 `LuaScripts` that names it (`static final String QUICKFIX = LuaModules.script("quickfix.lua")`),
 sent once from `NeovimSession.initialize`; `LuaModulesTest` fails on a file no field names. Its
-functions go in a table it puts in `package.loaded` (`package.loaded['neovim4eclipse.quickfix'] =
-M`), and the short scripts call them from there
-(`package.loaded['neovim4eclipse.quickfix'].set(...)`), as every script and module of the plug-in
-does. Not with `require`: should the module be missing (its install failed, or
-a config removed it), `require` would search the runtimepath and `./?.lua`, where a file of the
-user's or of a cloned repository could answer; `package.loaded` gives an error instead.
-`LuaScriptsTest` allows `require` in a script or file only as a load of a module it lists (Neovim's
-own `vim._core.ui2`); a new one goes into that list. Any other use fails, the word in a string
-too (`error('needs require')`): reword the message.
+functions go in a table it puts in `package.loaded`
+(`package.loaded['neovim4eclipse.quickfix'] = M`), and any other script or module of the plug-in
+that calls them finds them there (`package.loaded['neovim4eclipse.quickfix'].set(...)`). Not with
+`require`: should the module be missing (its install failed, or a config removed it), `require`
+would search the runtimepath and `./?.lua`, where a file of the user's or of a cloned repository
+could answer; `package.loaded` gives an error instead. `LuaScriptsTest` allows `require` in a
+script or file only as a load of a module it lists (Neovim's own `vim._core.ui2`); a new one goes
+into that list. Any other use fails, the word in a string too (`error('needs require')`): reword
+the message.
 
 **Add a preference.** Add a key and default to `PreferenceConstants`; set the default in
 `PreferenceDefaults`; add a field to a preference page's body (`NeovimPage`, `StatusBarPage`,
