@@ -3,13 +3,66 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-/** Cheap structural checks; real behavior is covered by the Neovim integration test. */
+/**
+ * Cheap structural checks; real behavior is covered by the Neovim integration test. Each check
+ * reads a script's code only ({@link #code}): the files in {@code core/lua/} carry their comments,
+ * and a comment that names what a check looks for must not pass it, nor one that names what a
+ * check refuses fail it.
+ */
 class LuaScriptsTest {
+
+    /**
+     * {@code lua} without its comments: on each line, from a {@code --} outside a string to the
+     * line's end, and the white space before it. Lines stay where they are. The plug-in's Lua has
+     * line comments only (no {@code --[[ ]]}). Example: {@code x = 1 -- y} becomes {@code x = 1}.
+     */
+    static String code(String lua) {
+        StringBuilder out = new StringBuilder(lua.length());
+        for (String line : lua.split("\n", -1)) {
+            int cut = commentStart(line);
+            out.append(cut < 0 ? line : line.substring(0, cut).stripTrailing()).append('\n');
+        }
+        return out.substring(0, out.length() - 1);
+    }
+
+    /** Where the comment on {@code line} starts, or -1: a {@code --} outside quotes and {@code [[ ]]}. */
+    private static int commentStart(String line) {
+        char quote = 0;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (quote != 0) {
+                if (c == '\\') {
+                    i++; // an escaped character, a quote among them
+                } else if (c == quote) {
+                    quote = 0;
+                }
+            } else if (c == '\'' || c == '"') {
+                quote = c;
+            } else if (line.startsWith("[[", i)) {
+                int end = line.indexOf("]]", i + 2);
+                if (end < 0) {
+                    return -1; // a long string going on past this line: no comment to find here
+                }
+                i = end + 1;
+            } else if (line.startsWith("--", i)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The helper itself: comments go, strings that hold -- stay, and so does every line. */
+    @Test
+    void aScriptsCodeIsItsTextWithoutComments() {
+        assertEquals("x = 1\n\ns = '--' .. \"a--\" .. [[--]]\nt = 'it\\'s'",
+                code("x = 1 -- y\n-- z\ns = '--' .. \"a--\" .. [[--]] -- c\nt = 'it\\'s' -- q"));
+    }
 
     /**
      * Each route of {@link LuaScripts#FLOAT_EXITS} is a key of the windows module's table
@@ -18,7 +71,7 @@ class LuaScriptsTest {
      */
     @Test
     void everyFloatExitRouteIsDecidedInTheWindowsModule() {
-        String windows = LuaModules.text("windows/floats.lua");
+        String windows = code(LuaModules.text("windows/floats.lua"));
         String table = windows.substring(windows.indexOf("local leaves = {"));
         table = table.substring(0, table.indexOf("\n}\n"));
         for (String route : LuaScripts.FLOAT_EXITS.values()) {
@@ -30,26 +83,26 @@ class LuaScriptsTest {
     void setupScriptRegistersTheNotificationsTheBridgeHandles() {
         for (String name : new String[] { "eclipse_mode", "eclipse_cursor", "eclipse_buf_enter", "eclipse_yank",
                 "eclipse_clipboard_copy", "eclipse_clipboard_paste" }) {
-            assertTrue(LuaScripts.SETUP.contains("'" + name + "'"), name);
+            assertTrue(code(LuaScripts.SETUP).contains("'" + name + "'"), name);
         }
     }
 
     /** Document buffers are written only through Eclipse: acwrite, and a write hook that asks it to save. */
     @Test
     void documentBuffersAreWrittenThroughEclipse() {
-        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("buftype = 'acwrite'"));
-        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("'BufWriteCmd'"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("buftype = 'acwrite'"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("'BufWriteCmd'"));
         // Some lines (:5,10w part.txt) and appends (:w >> log.txt) have hooks of their own.
-        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("FileWriteCmd = 'lines', FileAppendCmd = 'append'"));
-        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("'eclipse_write'"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("FileWriteCmd = 'lines', FileAppendCmd = 'append'"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("'eclipse_write'"));
         // Both names are compared by the one rule for paths (PATHS: links resolved, macOS /var;
         // slashes, Windows / against \; case where names ignore it), not a copy of it.
-        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("require('neovim4eclipse.paths').canonical"));
-        assertFalse(LuaScripts.DOCUMENT_BUFFER.contains("vim.fn.resolve("), "no comparison of its own");
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("require('neovim4eclipse.paths').canonical"));
+        assertFalse(code(LuaScripts.DOCUMENT_BUFFER).contains("vim.fn.resolve("), "no comparison of its own");
         // Writes are compared with the editor's file, kept when the buffer is made, not with the
         // buffer's name, which :saveas and :file change.
-        assertTrue(LuaScripts.DOCUMENT_BUFFER.contains("vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)"));
-        assertTrue(LuaScripts.SETUP.contains("vim.g.neovim4eclipse_channel = chan"), "the channel the request goes to");
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER).contains("vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)"));
+        assertTrue(code(LuaScripts.SETUP).contains("vim.g.neovim4eclipse_channel = chan"), "the channel the request goes to");
     }
 
     /**
@@ -61,46 +114,46 @@ class LuaScriptsTest {
     @Test
     void errorsAreEchoedAsErrors() {
         for (String script : new String[] { LuaScripts.NORMAL_WITHOUT_MAPPINGS, LuaScripts.DOCUMENT_BUFFER }) {
-            assertTrue(script.contains("vim.api.nvim_echo({ { msg } }, true, { err = true })"), script);
-            assertFalse(script.contains("vim.v.errmsg = msg"), "no v:errmsg set by hand: " + script);
-            assertFalse(script.contains("'ErrorMsg'"), "err = true picks the highlight: " + script);
+            assertTrue(code(script).contains("vim.api.nvim_echo({ { msg } }, true, { err = true })"), script);
+            assertFalse(code(script).contains("vim.v.errmsg = msg"), "no v:errmsg set by hand: " + script);
+            assertFalse(code(script).contains("'ErrorMsg'"), "err = true picks the highlight: " + script);
         }
     }
 
     /** {@code q:} opens a window Eclipse cannot show: closed at once, with a message saying so. */
     @Test
     void theCommandLineWindowIsToldToEclipse() {
-        assertTrue(LuaScripts.SETUP.contains("'CmdwinEnter'"));
-        assertTrue(LuaScripts.SETUP.contains("'eclipse_cmdwin', vim.api.nvim_get_current_win(), vim.fn.getcmdwintype()"));
-        assertTrue(LuaScripts.SETUP.contains("'CmdwinLeave'"));
-        assertTrue(LuaScripts.SETUP.contains("'eclipse_cmdwin_closed'"));
+        assertTrue(code(LuaScripts.SETUP).contains("'CmdwinEnter'"));
+        assertTrue(code(LuaScripts.SETUP).contains("'eclipse_cmdwin', vim.api.nvim_get_current_win(), vim.fn.getcmdwintype()"));
+        assertTrue(code(LuaScripts.SETUP).contains("'CmdwinLeave'"));
+        assertTrue(code(LuaScripts.SETUP).contains("'eclipse_cmdwin_closed'"));
     }
 
     @Test
     void pasteUsesNeovimsOwnCall() {
-        assertTrue(LuaScripts.PASTE.contains("vim.api.nvim_paste(select(1, ...), false, -1)"));
+        assertTrue(code(LuaScripts.PASTE).contains("vim.api.nvim_paste(select(1, ...), false, -1)"));
     }
 
     @Test
     void yankHookStandsDownWhenNeovimSyncsTheClipboardItself() {
         // Regression guard for linewise yanks turning charwise (P pasting inline) when two writers raced.
-        assertTrue(LuaScripts.SETUP.contains("vim.o.clipboard:find('unnamed'"));
+        assertTrue(code(LuaScripts.SETUP).contains("vim.o.clipboard:find('unnamed'"));
         // "+y goes to the provider; the yank hook must not write the clipboard a second time.
-        assertTrue(LuaScripts.SETUP.contains("e.regname == '+' or e.regname == '*'"));
+        assertTrue(code(LuaScripts.SETUP).contains("e.regname == '+' or e.regname == '*'"));
     }
 
     @Test
     void theClipboardProviderIsInstalledOnlyWhenTheUserHasNone() {
-        assertTrue(LuaScripts.SETUP.contains("if vim.g.clipboard == nil then"));
-        assertTrue(LuaScripts.SETUP.contains("vim.g.loaded_clipboard_provider = nil"));
+        assertTrue(code(LuaScripts.SETUP).contains("if vim.g.clipboard == nil then"));
+        assertTrue(code(LuaScripts.SETUP).contains("vim.g.loaded_clipboard_provider = nil"));
     }
 
     @Test
     void snapshotOnlyAddsTheStatusLineAndReadsFoldsWhenRequested() {
         // The line itself is STATUS_LINE's (status_line_spec.lua); the snapshot asks it for the current window.
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("want_line, want_folds = want_line == '1', want_folds == '1'"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_line and lines then"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if want_folds and package.loaded['neovim4eclipse.folds'] then"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("want_line, want_folds = want_line == '1', want_folds == '1'"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("if want_line and lines then"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("if want_folds and package.loaded['neovim4eclipse.folds'] then"));
     }
 
     /**
@@ -110,41 +163,41 @@ class LuaScriptsTest {
      */
     @Test
     void messagesAndShowcmdAreNotPolled() {
-        assertTrue(LuaScripts.STATUS_LINE.contains("nvim_eval_statusline"));
+        assertTrue(code(LuaScripts.STATUS_LINE).contains("nvim_eval_statusline"));
         for (String gone : new String[] { "statusmsg", "errmsg", "'%S'" }) {
-            assertFalse(LuaScripts.STATE_SNAPSHOT.contains(gone), gone);
-            assertFalse(LuaScripts.STATUS_LINE.contains(gone), gone);
+            assertFalse(code(LuaScripts.STATE_SNAPSHOT).contains(gone), gone);
+            assertFalse(code(LuaScripts.STATUS_LINE).contains(gone), gone);
         }
-        assertFalse(LuaScripts.SETUP.contains("showcmdloc"));
+        assertFalse(code(LuaScripts.SETUP).contains("showcmdloc"));
     }
 
     /** The user's insert mappings stay: the re-typing applies none (nvim_feedkeys 'n'), so nothing clears them. */
     @Test
     void insertModeMappingsAndAbbreviationsAreKept() {
-        assertFalse(LuaScripts.SETUP.contains("imapclear"));
-        assertFalse(LuaScripts.SETUP.contains("iabclear"));
+        assertFalse(code(LuaScripts.SETUP).contains("imapclear"));
+        assertFalse(code(LuaScripts.SETUP).contains("iabclear"));
     }
 
     @Test
     void stateSnapshotIsOneScriptReturningCursorVisualBoundsAndMode() {
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("nvim_win_get_cursor"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("getpos('v')"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("getpos('.')"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("vim.fn.mode()"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("block, vim.api.nvim_get_mode().mode, folds,\n"),
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("nvim_win_get_cursor"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("getpos('v')"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("getpos('.')"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("vim.fn.mode()"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("block, vim.api.nvim_get_mode().mode, folds,\n"),
                 "the full mode, then the folds");
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("vim.api.nvim_get_current_win() }"), "the window last");
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("vim.api.nvim_get_current_win() }"), "the window last");
         // A block's lines come from Neovim; no curswant or tabstop for Java to compute them from.
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("vim.fn.getregionpos(s, e, { type = mode, eol = true })"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("if mode == string.char(22) then"), "blocks only");
-        assertFalse(LuaScripts.STATE_SNAPSHOT.contains("curswant"));
-        assertFalse(LuaScripts.STATE_SNAPSHOT.contains("tabstop"));
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("reg_recording()"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("vim.fn.getregionpos(s, e, { type = mode, eol = true })"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("if mode == string.char(22) then"), "blocks only");
+        assertFalse(code(LuaScripts.STATE_SNAPSHOT).contains("curswant"));
+        assertFalse(code(LuaScripts.STATE_SNAPSHOT).contains("tabstop"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("reg_recording()"));
     }
 
     @Test
     void cursorReportsSayWhichBufferTheyAreAbout() {
-        assertTrue(LuaScripts.STATE_SNAPSHOT.contains("nvim_get_current_buf()"));
-        assertTrue(LuaScripts.SETUP.contains("'eclipse_cursor', p[1], p[2], vim.api.nvim_get_current_buf()"));
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("nvim_get_current_buf()"));
+        assertTrue(code(LuaScripts.SETUP).contains("'eclipse_cursor', p[1], p[2], vim.api.nvim_get_current_buf()"));
     }
 }
