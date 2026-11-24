@@ -18,7 +18,7 @@
 --   `eclipse_clipboard_copy` and whose paste is the `eclipse_clipboard_paste` request (see
 --   ClipboardRegisters).
 -- - The one argument is Eclipse's RPC channel number, which requests are sent to. It is kept in
---   `g:neovim4eclipse_channel` for LuaScripts.DOCUMENT_BUFFER's write hook.
+--   `g:neovim4eclipse_channel` for LuaScripts.DOCUMENT_BUFFER_MODULE's write hook.
 -- - The mappings of `gd`, `K`, the `gr*` keys, `gt` and `gT`, which send `eclipse_action` so that
 --   the IDE does those, are LuaScripts.IDE_KEYS, run right after this script; `ZZ`, `ZQ` and the
 --   history keys below are here.

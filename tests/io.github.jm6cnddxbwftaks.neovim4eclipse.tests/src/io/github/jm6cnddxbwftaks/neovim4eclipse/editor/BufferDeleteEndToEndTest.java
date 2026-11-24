@@ -56,9 +56,9 @@ class BufferDeleteEndToEndTest extends EndToEndTestBase {
 
     /**
      * A buffer Neovim deletes by itself (a Lua plug-in, {@code <Cmd>bd}) closes its editor too: the
-     * safety net of {@code LuaScripts.DOCUMENT_BUFFER}. The buffer's close that follows finds it
-     * unloaded already and must not fail on that: it once logged "Closing buffer 3 (...) failed",
-     * with a stack trace, into the Error Log for every such delete.
+     * safety net of {@code LuaScripts.DOCUMENT_BUFFER_MODULE}. The buffer's close that follows
+     * finds it unloaded already and must not fail on that: it once logged "Closing buffer 3 (...)
+     * failed", with a stack trace, into the Error Log for every such delete.
      */
     @Test
     void aBufferNeovimDeletesByItselfClosesItsEditor() throws Exception {

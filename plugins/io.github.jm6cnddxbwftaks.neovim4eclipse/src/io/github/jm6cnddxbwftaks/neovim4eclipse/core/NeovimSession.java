@@ -1368,7 +1368,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Handles Neovim loading a document's buffer empty by itself (a plug-in's {@code :bunload}, then
-     * a read later: {@link LuaScripts#DOCUMENT_BUFFER}; an {@code :edit!} keeps the text instead). The
+     * a read later: {@link LuaScripts#DOCUMENT_BUFFER_MODULE}; an {@code :edit!} keeps the text instead). The
      * handler should read the document's text and pass it to {@link #reloadDocumentAsync}. Called on
      * an RPC thread.
      */
@@ -1398,7 +1398,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Renews {@code buffer}'s attach after Neovim reloaded it with its text kept
-     * ({@link LuaScripts#DOCUMENT_BUFFER}, "Reloaded by Neovim"): the unload ended
+     * ({@link LuaScripts#DOCUMENT_BUFFER_MODULE}, "Reloaded by Neovim"): the unload ended
      * {@code nvim_buf_attach}, so Neovim's changes since then reached no one.
      *
      * <p><b>Re-attach after a reload.</b> The attach asks Neovim to send the whole buffer first
@@ -1523,7 +1523,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Saves the document when Neovim writes its buffer ({@code :w} from a mapping, {@code :update},
-     * {@code :bufdo update}, {@code :wall}; see {@link LuaScripts#DOCUMENT_BUFFER}). Called on the RPC
+     * {@code :bufdo update}, {@code :wall}; see {@link LuaScripts#DOCUMENT_BUFFER_MODULE}). Called on the RPC
      * thread while Neovim waits for the answer, so it must return, even if the UI thread is busy.
      *
      * @param handler saves the document and answers with the written message or the error;

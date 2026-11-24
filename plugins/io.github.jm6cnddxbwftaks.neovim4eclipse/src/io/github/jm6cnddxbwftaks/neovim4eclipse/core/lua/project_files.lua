@@ -51,8 +51,8 @@
 -- read-only) is left to it: reading the raw bytes on top of it failed with E21.
 --
 -- A document's buffer (`'buftype'` `acwrite`, an editor shows it) is left alone:
--- LuaScripts.DOCUMENT_BUFFER gives every document's buffer, inside a project or not, a `BufReadCmd`
--- of its own, which asks Eclipse for the text instead.
+-- LuaScripts.DOCUMENT_BUFFER_MODULE gives every document's buffer, inside a project or not, a
+-- `BufReadCmd` of its own, which asks Eclipse for the text instead.
 --
 -- Functions: `set_folders(list)`; `file_of(buf)`, the buffer's file name when the hook is on it and
 -- the buffer is a plain one (`'buftype'` empty), else `""` (sent with `eclipse_buf_enter`,
@@ -83,7 +83,7 @@ end
 local function read(ev)
   local buf = ev.buf
   vim.bo[buf].swapfile = false -- first: a stale swap file would stop the read at E325
-  -- A document's buffer: its own hook asks Eclipse for the text (DOCUMENT_BUFFER). Known
+  -- A document's buffer: its own hook asks Eclipse for the text (DOCUMENT_BUFFER_MODULE). Known
   -- by its hooks as well as by 'acwrite': during :edit! the buffer is read with 'buftype'
   -- '' (its BufUnload set it, to keep the marks), and this hook runs first.
   local ok, hooks = pcall(vim.api.nvim_get_autocmds, { group = 'neovim4eclipse_document', buf = buf })

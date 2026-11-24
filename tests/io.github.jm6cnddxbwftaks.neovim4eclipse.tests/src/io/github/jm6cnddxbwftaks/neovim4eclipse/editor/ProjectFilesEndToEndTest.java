@@ -519,7 +519,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
 
     /**
      * The same for a file outside every project (<i>File, Open File...</i>), which Neovim's project
-     * folders do not cover: its buffer has the reload hook all the same (LuaScripts.DOCUMENT_BUFFER).
+     * folders do not cover: its buffer has the reload hook all the same (LuaScripts.DOCUMENT_BUFFER_MODULE).
      */
     @Test
     void aScriptsEditBangOnAFileOutsideTheWorkspaceReloadsEclipsesText() throws Exception {

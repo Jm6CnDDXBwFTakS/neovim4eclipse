@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * A write of a document buffer, asked by Neovim ({@code :w}, {@code :update}, {@code :bufdo update},
- * {@code :w other.txt}; the {@code eclipse_write} request of {@link LuaScripts#DOCUMENT_BUFFER}), and
+ * {@code :w other.txt}; the {@code eclipse_write} request of {@link LuaScripts#DOCUMENT_BUFFER_MODULE}), and
  * Eclipse's answer.
  *
  * <p>The request ({@link Request}) says what to write where: the document to its own file (a save),
@@ -25,7 +25,7 @@ public final class DocumentWrite {
     private DocumentWrite() {
     }
 
-    /** What a write does; the Lua decides it (see {@link LuaScripts#DOCUMENT_BUFFER}). */
+    /** What a write does; the Lua decides it (see {@link LuaScripts#DOCUMENT_BUFFER_MODULE}). */
     public enum Kind {
         /** The document to its own file: Eclipse saves the editor ({@code :w}, {@code :update}). */
         OWN,

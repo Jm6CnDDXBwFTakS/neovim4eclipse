@@ -829,9 +829,9 @@ public final class EditorAttachManager {
     /**
      * Neovim loaded {@code buffer} empty by itself: a plug-in unloaded it ({@code :bunload}) and it
      * was read later, with no text kept from the unload (an {@code :edit!} keeps it, and needs
-     * nothing from here: {@code LuaScripts.DOCUMENT_BUFFER}). The plug-in did not read the disk, so
-     * the document's text, unsaved changes included, goes into it again. Called on an RPC thread;
-     * the document is read on the UI thread.
+     * nothing from here: {@code LuaScripts.DOCUMENT_BUFFER_MODULE}). The plug-in did not read the
+     * disk, so the document's text, unsaved changes included, goes into it again. Called on an RPC
+     * thread; the document is read on the UI thread.
      */
     private void onNeovimReloadedDocument(DocumentBuffer buffer) {
         Display display = Display.getDefault();
@@ -953,8 +953,8 @@ public final class EditorAttachManager {
 
     /**
      * Neovim writes a document's buffer ({@code :update}, {@code :bufdo update}, {@code :wall}, a
-     * mapping's {@code :w}; see {@code core/LuaScripts.DOCUMENT_BUFFER}). Called on the RPC thread
-     * while Neovim waits for the answer; saves on the UI thread.
+     * mapping's {@code :w}; see {@code core/LuaScripts.DOCUMENT_BUFFER_MODULE}). Called on the RPC
+     * thread while Neovim waits for the answer; saves on the UI thread.
      *
      * <p>The wait is bounded ({@value #SAVE_TIMEOUT_MS} ms), like the clipboard paste's
      * ({@link ClipboardBridge}): were the UI thread ever waiting for Neovim, the two would otherwise

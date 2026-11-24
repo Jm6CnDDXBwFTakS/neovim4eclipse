@@ -977,7 +977,7 @@ class EditorEndToEndTest extends EndToEndTestBase {
 
     /**
      * {@code :bufdo ... | update} saves every changed file through Eclipse: the document buffers are
-     * {@code buftype=acwrite}, and their write hook asks Eclipse to save (core/LuaScripts.DOCUMENT_BUFFER).
+     * {@code buftype=acwrite}, and their write hook asks Eclipse to save (core/LuaScripts.DOCUMENT_BUFFER_MODULE).
      */
     @Test
     void bufdoUpdateSavesEveryChangedFileThroughEclipse() throws Exception {

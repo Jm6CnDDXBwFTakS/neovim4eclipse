@@ -99,7 +99,7 @@ final class NotificationBridge implements Incoming {
 
         /**
          * A document's buffer was unloaded and loaded again by Neovim ({@code :edit!} from a script;
-         * {@link LuaScripts#DOCUMENT_BUFFER}). {@code kept}: the text from before the unload was put
+         * {@link LuaScripts#DOCUMENT_BUFFER_MODULE}). {@code kept}: the text from before the unload was put
          * back, and only the attach is to be renewed; otherwise the buffer is empty, for Eclipse to
          * load the document's text into it ({@code false} if not sent).
          */
@@ -135,7 +135,7 @@ final class NotificationBridge implements Incoming {
         /**
          * Neovim deleted document buffer {@code bufnr}, or is quitting its window, by itself
          * ({@code <Cmd>bd}, {@code vim.cmd.quit()}): the safety nets in {@link LuaScripts#HOST_COMMANDS}
-         * and {@link LuaScripts#DOCUMENT_BUFFER}.
+         * and {@link LuaScripts#DOCUMENT_BUFFER_MODULE}.
          */
         void onBufferClosed(int bufnr);
 
@@ -170,7 +170,7 @@ final class NotificationBridge implements Incoming {
 
         /**
          * Neovim writes buffer {@code bufnr} ({@code :w}, {@code :update}, {@code :bufdo update}; see
-         * {@link LuaScripts#DOCUMENT_BUFFER}) and waits until Eclipse has saved it.
+         * {@link LuaScripts#DOCUMENT_BUFFER_MODULE}) and waits until Eclipse has saved it.
          *
          * @param cmdarg the write's {@code ++opt} arguments ({@code v:cmdarg}), e.g. {@code " ++p"}
          * @return the error that fails the write, or the message Neovim shows
@@ -365,7 +365,7 @@ final class NotificationBridge implements Incoming {
         }
     }
 
-    /** Payload: {@code [bufnr, kept]}, from {@link LuaScripts#DOCUMENT_BUFFER} (see {@link Sink#onBufferReload}). */
+    /** Payload: {@code [bufnr, kept]}, from {@link LuaScripts#DOCUMENT_BUFFER_MODULE} (see {@link Sink#onBufferReload}). */
     private void onBufferReload(List<?> args) {
         Integer buf = args.isEmpty() ? null : toInt(args.get(0));
         if (buf != null) {

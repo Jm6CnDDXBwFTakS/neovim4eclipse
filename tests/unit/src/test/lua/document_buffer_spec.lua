@@ -1,10 +1,10 @@
 -- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 -- SPDX-License-Identifier: EPL-2.0
 
--- LuaScripts.DOCUMENT_BUFFER: a document buffer is written only through Eclipse. 'buftype' acwrite
--- runs its BufWriteCmd, which asks Eclipse (the eclipse_write request) and acts on the answer
--- { error, message, saved_as } (saved_as may be left out); and Neovim deleting the buffer by itself
--- tells Eclipse (eclipse_buffer_closed).
+-- LuaScripts.DOCUMENT_BUFFER_MODULE (setup per buffer: DOCUMENT_BUFFER): a document buffer is
+-- written only through Eclipse. 'buftype' acwrite runs its BufWriteCmd, which asks Eclipse (the
+-- eclipse_write request) and acts on the answer { error, message, saved_as } (saved_as may be left
+-- out); and Neovim deleting the buffer by itself tells Eclipse (eclipse_buffer_closed).
 -- Eclipse's side of the request is DocumentWriteTest; one round trip through the real session stays
 -- in NeovimBufferIntegrationTest (aTypedWriteAsksEclipseAndShowsTheWrittenMessage).
 
@@ -401,7 +401,7 @@ end)
 -- runtimepath for a module the session had not sent.
 t.test('the per-buffer call only uses the module the session sent', function()
   local module = package.loaded['neovim4eclipse.document_buffer']
-  t.ok(module ~= nil and type(module.setup) == 'function', 'installed once, before any buffer')
+  t.ok(module ~= nil and type(module.setup) == 'function', 'the module, as the harness sent it')
   local buf = vim.api.nvim_create_buf(true, false)
   vim.api.nvim_buf_set_name(buf, vim.fn.tempname() .. '-c.txt')
   -- A module require would find (package.preload comes before the runtimepath's files), as a
@@ -417,6 +417,54 @@ t.test('the per-buffer call only uses the module the session sent', function()
   t.ok(not ok, 'no module sent: an error')
   t.eq(false, found, 'no other module stood in')
   t.eq('', vim.bo[buf].buftype)
+end)
+
+-- The module finds PATHS, which it uses, in package.loaded, as the session sent it first: without it
+-- the install fails, rather than require searching the runtimepath (or ./?.lua) for it.
+t.test('the module is not installed without PATHS sent first', function()
+  local paths, module = package.loaded['neovim4eclipse.paths'], package.loaded['neovim4eclipse.document_buffer']
+  local found = false
+  package.loaded['neovim4eclipse.paths'] = nil
+  package.preload['neovim4eclipse.paths'] = function()
+    found = true
+    return paths
+  end
+  package.loaded['neovim4eclipse.document_buffer'] = nil
+  local ok, err = pcall(t.run, 'DOCUMENT_BUFFER_MODULE')
+  package.preload['neovim4eclipse.paths'] = nil
+  package.loaded['neovim4eclipse.paths'] = paths
+  local installed = package.loaded['neovim4eclipse.document_buffer']
+  package.loaded['neovim4eclipse.document_buffer'] = module
+  t.ok(not ok and tostring(err):find('LuaScripts.PATHS', 1, true) ~= nil, tostring(err))
+  t.eq(false, found, 'no other module stood in')
+  t.eq(nil, installed)
+end)
+
+-- setup gives a buffer made a document one again nothing of what its hooks kept before: here the
+-- text an unload took, still there in the same loop, does not come back to the buffer reused for
+-- the next editor, which Eclipse fills instead (eclipse_reload, false).
+t.test('a buffer made a document buffer again keeps nothing its unload took', function()
+  t.setup()
+  local buf = t.document('Again.txt', { 'old editor' })
+  vim.cmd('enew')
+  vim.cmd('bunload! ' .. buf) -- the unload keeps the text until Neovim's next loop
+  t.run('CLOSE_DOCUMENT_BUFFER', tostring(buf))
+  t.run('DOCUMENT_BUFFER', tostring(buf)) -- the file's next editor, in the same loop
+  t.forget()
+  vim.cmd('buffer ' .. buf)
+  t.eq({ { buf, false } }, t.sent('eclipse_reload'))
+  t.eq({ '' }, vim.api.nvim_buf_get_lines(buf, 0, -1, false), 'not the old editor\'s text')
+end)
+
+-- The group is made again by each setup, as a script run per buffer made it: a config that deleted
+-- it (:augroup!) does not keep the next editor's buffer from its hooks.
+t.test('a deleted group is made again for the next document buffer', function()
+  t.setup()
+  t.document('First.txt', { 'x' })
+  vim.api.nvim_del_augroup_by_name('neovim4eclipse_document')
+  local buf = t.document('Second.txt', { 'y' })
+  t.ok(plugins_autocmds(buf) > 0, 'the write hook and the safety net')
+  t.eq('acwrite', vim.bo[buf].buftype)
 end)
 
 -- Kept only for the read that follows the unload at once (:edit! does both in one command): a buffer

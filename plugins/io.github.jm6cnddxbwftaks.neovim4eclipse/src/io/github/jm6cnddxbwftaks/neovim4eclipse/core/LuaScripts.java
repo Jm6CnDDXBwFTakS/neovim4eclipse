@@ -581,8 +581,8 @@ final class LuaScripts {
      * {@code unload} fails ("Failed to unload buffer") on a buffer that is not loaded. Example: a
      * Lua plug-in, or {@code <Cmd>bd! 3<CR>}, runs {@code :bdelete! 3} (without {@code !} Neovim
      * refuses with E89 while the editor has unsaved changes, and nothing closes); the safety net in
-     * {@link #DOCUMENT_BUFFER} tells Eclipse, which closes the editor, and this script then finds
-     * buffer 3 unloaded and unlisted already. Its marks are kept all the same: the document's
+     * {@link #DOCUMENT_BUFFER_MODULE} tells Eclipse, which closes the editor, and this script then
+     * finds buffer 3 unloaded and unlisted already. Its marks are kept all the same: the document's
      * {@code BufUnload} hook set {@code 'buftype'} to {@code ''} for that unload (X5), and the
      * {@code ''} set here keeps it a closed file's buffer instead of a document's.
      */
@@ -605,13 +605,14 @@ final class LuaScripts {
      * ({@code editor/EditorAttachManager.rebind}). The buffer stays, with its number, undo history
      * and marks, as after Vim's {@code :saveas}. Returns whether the buffer has the name now.
      *
-     * <p>{@code b:neovim4eclipse_file} is set first: {@link #DOCUMENT_BUFFER}'s {@code BufFilePost}
-     * check puts back a name that is not the file's (it undoes {@code :file new.txt}), and must find
-     * the new name to be the file's. That check also wipes the unloaded buffer the rename leaves
-     * under the old name (Vim's alternate file). Nothing for a buffer already so named (Neovim's own
-     * {@code :saveas} renamed it) or one that is gone (it is made under the new name when shown).
-     * The rename fails (E95) when a loaded buffer has the name already; then the old name and file
-     * stay, and the caller closes the buffer, so that it is made anew under the new name.
+     * <p>{@code b:neovim4eclipse_file} is set first: {@link #DOCUMENT_BUFFER_MODULE}'s
+     * {@code BufFilePost} check puts back a name that is not the file's (it undoes
+     * {@code :file new.txt}), and must find the new name to be the file's. That check also wipes the unloaded buffer the
+     * rename leaves under the old name (Vim's alternate file). Nothing for a buffer already so
+     * named (Neovim's own {@code :saveas} renamed it) or one that is gone (it is made under the new
+     * name when shown). The rename fails (E95) when a loaded buffer has the name already; then the
+     * old name and file stay, and the caller closes the buffer, so that it is made anew under the
+     * new name.
      *
      * <p>Like any rename, it marks the buffer {@code [Not edited]} in its file info until the next
      * write; writes go through Eclipse ({@code BufWriteCmd}) and work as usual.
@@ -746,7 +747,8 @@ final class LuaScripts {
      * list), with {@link #LOAD_WITHOUT_UNDO} (no undo step, marks kept) run in that buffer: for the
      * first load, by number because Neovim may be in a plug-in's float during an attach, whose text
      * it would replace; and again after Neovim loaded it empty by itself, with no text kept from the
-     * unload ({@link #DOCUMENT_BUFFER}, "Reloaded by Neovim"). Nothing for a buffer that is gone.
+     * unload ({@link #DOCUMENT_BUFFER_MODULE}, "Reloaded by Neovim"). Nothing for a buffer that is
+     * gone.
      */
     static final String RELOAD_DOCUMENT_BUFFER = "local function load(...)\n" + LuaScripts.LOAD_WITHOUT_UNDO + """
             end

@@ -199,7 +199,7 @@ class NotificationBridgeTest {
 
     /**
      * LuaScripts.PROJECT_FILES: a project's file without an editor comes with its name, for Eclipse
-     * to open it. LuaScripts.DOCUMENT_BUFFER: a document's buffer reloaded by Neovim says whether it
+     * to open it. LuaScripts.DOCUMENT_BUFFER_MODULE: a document's buffer reloaded by Neovim says whether it
      * kept its text (an :edit!: only the attach is renewed) or is empty (Eclipse loads the text).
      */
     @Test

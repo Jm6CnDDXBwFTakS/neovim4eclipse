@@ -91,8 +91,8 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
     /**
      * A write to a name the file system cannot hold gets Vim's E212 for that name, not "Eclipse could
      * not save" the editor's own file. On Windows {@code :w a<b.txt} is such a name; a NUL byte is one
-     * everywhere, so the test asks for the write as Neovim's write hook does (DOCUMENT_BUFFER's
-     * {@code eclipse_write} request), with a NUL in the name.
+     * everywhere, so the test asks for the write as Neovim's write hook does
+     * (DOCUMENT_BUFFER_MODULE's {@code eclipse_write} request), with a NUL in the name.
      */
     @Test
     void aWriteToANameTheFileSystemCannotHoldIsE212() throws Exception {

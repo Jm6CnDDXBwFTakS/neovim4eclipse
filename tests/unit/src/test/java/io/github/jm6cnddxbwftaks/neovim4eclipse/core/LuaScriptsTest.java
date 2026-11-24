@@ -117,7 +117,9 @@ class LuaScriptsTest {
         assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("'eclipse_write'"));
         // Both names are compared by the one rule for paths (PATHS: links resolved, macOS /var;
         // slashes, Windows / against \; case where names ignore it), not a copy of it.
-        assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("require('neovim4eclipse.paths').canonical"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("local paths = package.loaded['neovim4eclipse.paths']"));
+        assertTrue(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("local canonical = paths.canonical"));
+        assertFalse(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("require("), "PATHS as the session sent it");
         assertFalse(code(LuaScripts.DOCUMENT_BUFFER_MODULE).contains("vim.fn.resolve("), "no comparison of its own");
         // Writes are compared with the editor's file, kept when the buffer is made, not with the
         // buffer's name, which :saveas and :file change.

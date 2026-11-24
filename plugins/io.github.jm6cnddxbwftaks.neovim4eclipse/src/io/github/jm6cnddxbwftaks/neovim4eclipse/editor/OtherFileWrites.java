@@ -40,10 +40,10 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.WrittenMessage;
  * {@code :w >> log.txt} adds lines to the end of a file ({@link #append}); a symbolic link to a
  * file that does not exist is written through only with {@code !} ({@link DanglingLinks}). {@code :saveas new.txt}
  * is Eclipse's Save As without its dialog: the editor moves to the new file ({@link #saveAs}). Neovim decides which
- * writes these are (the write hooks in {@code core/LuaScripts.DOCUMENT_BUFFER}) and has already
- * refused an existing file without {@code !} (E13). The one choice made here: a copy of an untitled
- * editor is a save as ({@link #copyOrSaveAs}), as Vim names a buffer without a file after the file it
- * writes; Neovim learns it from the answer.
+ * writes these are (the write hooks in {@code core/LuaScripts.DOCUMENT_BUFFER_MODULE}) and has
+ * already refused an existing file without {@code !} (E13). The one choice made here: a copy of an
+ * untitled editor is a save as ({@link #copyOrSaveAs}), as Vim names a buffer without a file after
+ * the file it writes; Neovim learns it from the answer.
  *
  * <p>How a copy is written, and why:
  * <ul>

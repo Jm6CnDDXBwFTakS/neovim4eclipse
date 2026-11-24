@@ -15,9 +15,9 @@
 --    of the commands, `setcmdline()` replaces it with the `:Eclipse` form, which Neovim then runs
 --    instead: `:tabn 3` becomes `:Eclipse tabnext 3`, `:q!` `:Eclipse! quit`. Each command after a
 --    `|` gets the same treatment (`:Eclipse` is defined with `bar`): `:w | q` becomes `:w | Eclipse
---    quit`, so Neovim writes through the write hook (LuaScripts.DOCUMENT_BUFFER) and Eclipse then
---    closes the editor, asking first if the save failed. Left to Neovim, that `q` would end the
---    embedded Neovim on its last window. A command that reads `|` as part of its argument
+--    quit`, so Neovim writes through the write hook (LuaScripts.DOCUMENT_BUFFER_MODULE) and Eclipse
+--    then closes the editor, asking first if the save failed. Left to Neovim, that `q` would end
+--    the embedded Neovim on its last window. A command that reads `|` as part of its argument
 --    (`:normal`, `:g`, `:let`; `nvim_parse_cmd()` gives it no next command) keeps the rest of its
 --    line.
 -- 3. `:Eclipse` puts the line as typed back into the history, in place of its own, so Up in the `:`
@@ -66,8 +66,8 @@
 -- `nvim_parse_cmd()` does not split (`:let x = 1 | q`): those reach Neovim. For the ones that close
 -- something there are safety nets, which tell Eclipse but cannot stop Neovim: `QuitPre` here (a
 -- `:quit` Neovim runs; on its last window Neovim ends), and `BufDelete` / `BufWipeout` on each
--- document buffer (LuaScripts.DOCUMENT_BUFFER). Both send `eclipse_buffer_closed`, and Eclipse
--- closes the editor showing that buffer.
+-- document buffer (LuaScripts.DOCUMENT_BUFFER_MODULE). Both send `eclipse_buffer_closed`, and
+-- Eclipse closes the editor showing that buffer.
 --
 -- Sent as LuaScripts.HOST_COMMANDS (core/LuaModules runs this file as a chunk of its own).
 

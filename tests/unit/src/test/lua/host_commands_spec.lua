@@ -70,8 +70,8 @@ t.test('arguments are passed as typed, a count becomes the argument, and | goes 
   t.eq(1, vim.g.after, 'the command after | ran')
 end)
 
---- Eclipse's side of the write hook (DOCUMENT_BUFFER's eclipse_write request): saves, or fails
---- with `err`. Returns the list of buffers asked for.
+--- Eclipse's side of the write hook (DOCUMENT_BUFFER_MODULE's eclipse_write request): saves, or
+--- fails with `err`. Returns the list of buffers asked for.
 local function eclipse_saves(err)
   local asked = {}
   t.answer('eclipse_write', function(buf)

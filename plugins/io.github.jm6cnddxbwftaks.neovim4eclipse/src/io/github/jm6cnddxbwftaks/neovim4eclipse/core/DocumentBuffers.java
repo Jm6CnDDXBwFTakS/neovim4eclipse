@@ -1057,8 +1057,8 @@ final class DocumentBuffers {
 
     /**
      * Neovim deleted or wiped buffer {@code bufnr}, or is quitting a window showing it, by itself
-     * (the safety nets' {@code eclipse_buffer_closed}, {@link LuaScripts#DOCUMENT_BUFFER} and
-     * {@link LuaScripts#HOST_COMMANDS}). Hands the closed handler the document that buffer
+     * (the safety nets' {@code eclipse_buffer_closed}, {@link LuaScripts#DOCUMENT_BUFFER_MODULE}
+     * and {@link LuaScripts#HOST_COMMANDS}). Hands the closed handler the document that buffer
      * {@code bufnr} belongs to as the notice is read; nothing for a buffer that is no document's
      * (the home buffer, help, a closed file's kept buffer, one Eclipse already gave up).
      *

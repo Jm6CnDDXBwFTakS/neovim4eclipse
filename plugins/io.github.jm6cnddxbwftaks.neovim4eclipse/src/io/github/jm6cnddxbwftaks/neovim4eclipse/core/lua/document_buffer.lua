@@ -22,7 +22,7 @@
 -- Neovim 0.12.6).
 --
 -- Which file: the editor's, or a copy
--- `BufWriteCmd` gets the name being written (`ev.match`), and the script compares it with the file
+-- `BufWriteCmd` gets the name being written (`ev.match`), and the hook compares it with the file
 -- of the editor, kept in `b:neovim4eclipse_file` when the buffer is made a document buffer. Not
 -- with the buffer's name: `:saveas` and `:file` change that.
 -- - The editor's file (`:w`, `:update`): Eclipse saves the editor (request kind `""`), and
@@ -112,17 +112,28 @@ local M = {}
 
 -- The plug-in's autocommands for document buffers, in one group: setup gives each buffer its
 -- own (buffer-local) ones, and CLOSE_DOCUMENT_BUFFER removes a buffer's when its last editor
--- closes, so a buffer reused for a new editor gets them once.
-local group = vim.api.nvim_create_augroup('neovim4eclipse_document', { clear = false })
+-- closes, so a buffer reused for a new editor gets them once. Made here and again by each
+-- setup ({ clear = false } keeps the other buffers' autocommands), so that a group deleted
+-- meanwhile (`:augroup! neovim4eclipse_document`) is made anew, as a script run per buffer did.
+local GROUP = 'neovim4eclipse_document'
+local group = vim.api.nvim_create_augroup(GROUP, { clear = false })
 
--- What a hook keeps for a buffer until a later event, by buffer number (Neovim never gives a
--- number twice): kept[b], the text a reload's unload took (BufUnload to BufReadCmd);
--- saveas_tried[b], that a :saveas asked Eclipse (BufWriteCmd to BufFilePost); names_before[b],
--- the name before a rename (BufFilePre to BufFilePost). setup clears a buffer's three, as a
--- buffer made anew starts with none.
-local kept = {}
-local saveas_tried = {}
-local names_before = {}
+-- What a buffer's hooks keep until a later event, one table per buffer, by its number (Neovim
+-- never gives a number twice): `kept`, the text a reload's unload took (BufUnload to
+-- BufReadCmd); `saveas_tried`, that a :saveas asked Eclipse (BufWriteCmd to BufFilePost);
+-- `name_before`, the name before a rename (BufFilePre to BufFilePost). setup gives the buffer a
+-- new table, as a buffer made anew starts with nothing kept; a hook scheduled for the next loop
+-- holds on to the table it began with, so it finishes with what its own event kept, never with
+-- a later setup's. A buffer wiped (BufWipeout) drops its table.
+local state = {}
+local function state_of(b)
+  local st = state[b]
+  if not st then
+    st = {}
+    state[b] = st
+  end
+  return st
+end
 
 -- The document's own 'iskeyword', kept for WINDOWS' give_document_back: :help on the
 -- document's file (a help file open in an editor) makes it help's, which counts
@@ -143,8 +154,14 @@ end
 -- PATHS's rule: the buffer name has its links resolved, ev.match not (/private/var/x and
 -- /var/x on macOS); on Windows ev.match has / where the buffer name has \ (C:/x/a.txt,
 -- C:\x\a.txt); and on Windows and macOS a name in other case is the same file. PATHS is
--- sent before this module (NeovimSession.initialize), so this finds it in package.loaded.
-local canonical = require('neovim4eclipse.paths').canonical
+-- sent before this module (NeovimSession.initialize); read from package.loaded, never with
+-- require, which would search the runtimepath (and ./?.lua) for a module the session had not
+-- sent. Without it, this module is not installed.
+local paths = package.loaded['neovim4eclipse.paths']
+if not paths then
+  error('neovim4eclipse.document_buffer needs neovim4eclipse.paths (LuaScripts.PATHS) first', 0)
+end
+local canonical = paths.canonical
 -- Sets the buffer's 'buftype' without firing OptionSet. The hooks below switch it to ''
 -- for an unload (the marks, X5) and back to 'acwrite' right after: a step of their own,
 -- not a change another plug-in should react to (a status line that hides itself for
@@ -221,7 +238,7 @@ local function on_write(ev)
   elseif own(ev.buf, target) then
     -- :saveas new.txt: Neovim renamed the buffer, then writes it under the new name.
     -- Eclipse saves the document as that file and moves the editor there.
-    saveas_tried[ev.buf] = true -- the BufFilePost check below then stays quiet
+    state_of(ev.buf).saveas_tried = true -- the BufFilePost check below then stays quiet
     if ask(ev.buf, 'saveas', target, 0, 0) then
       vim.b[ev.buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(ev.buf)
       vim.bo[ev.buf].modified = false
@@ -238,7 +255,7 @@ local function on_write(ev)
       -- "[Not edited]" until its next write. As in Vim, an unloaded buffer of that name
       -- (Neovim's alternate file, or the buffer kept from a closed editor of the file)
       -- is wiped by the rename; a loaded one makes it fail (E95).
-      saveas_tried[ev.buf] = true -- the BufFilePost check below then stays quiet
+      state_of(ev.buf).saveas_tried = true -- the BufFilePost check below then stays quiet
       local renamed, rename_err = pcall(vim.api.nvim_buf_set_name, ev.buf, saved_as)
       if renamed then
         vim.b[ev.buf].neovim4eclipse_file = saved_as
@@ -247,7 +264,7 @@ local function on_write(ev)
         -- The buffer keeps its name and its file, so a later :w is still the editor's
         -- own save (Eclipse saves the file the editor shows), never a save as under the
         -- old name.
-        saveas_tried[ev.buf] = nil
+        state_of(ev.buf).saveas_tried = nil
         fail('Eclipse saved ' .. vim.fn.fnamemodify(saved_as, ':t')
           .. ', but Neovim could not name this buffer after it: ' .. tostring(rename_err))
       end
@@ -274,18 +291,19 @@ end
 -- once the command is over (scheduled), the old name is put back; only :file says why.
 -- A rename also leaves a buffer behind under the other name (wipe_left_over).
 local function before_rename(ev)
-  names_before[ev.buf] = vim.api.nvim_buf_get_name(ev.buf)
+  state_of(ev.buf).name_before = vim.api.nvim_buf_get_name(ev.buf)
 end
 local function after_rename(ev)
   local b = ev.buf
-  local names = { names_before[b], vim.api.nvim_buf_get_name(b) }
-  names_before[b] = nil
+  local st = state_of(b)
+  local names = { st.name_before, vim.api.nvim_buf_get_name(b) }
+  st.name_before = nil
   vim.schedule(function()
     if not vim.api.nvim_buf_is_valid(b) then
       return
     end
-    local quiet = saveas_tried[b]
-    saveas_tried[b] = nil
+    local quiet = st.saveas_tried
+    st.saveas_tried = nil
     local file = vim.b[b].neovim4eclipse_file
     if canonical(vim.api.nvim_buf_get_name(b)) ~= canonical(file) then
       vim.api.nvim_buf_call(b, function()
@@ -307,8 +325,13 @@ end
 
 -- Safety net: Neovim deleting this buffer by itself (<Cmd>bd, Lua, :bufdo bd) closes its
 -- editor too. Eclipse ignores it for a buffer no editor shows. (When Eclipse closes the
--- last editor, CLOSE_DOCUMENT_BUFFER removes this autocommand first.)
+-- last editor, CLOSE_DOCUMENT_BUFFER removes this autocommand first.) A wiped buffer is gone
+-- for good, its number never given again: its table goes too (BufWipeout comes last, after
+-- BufUnload and BufDelete).
 local function on_delete(ev)
+  if ev.event == 'BufWipeout' then
+    state[ev.buf] = nil
+  end
   vim.rpcnotify(vim.g.neovim4eclipse_channel, 'eclipse_buffer_closed', ev.buf)
 end
 
@@ -335,7 +358,8 @@ local function on_unload(ev)
       marks[c] = { m[1], m[2] }
     end
   end
-  kept[b] = { lines = vim.api.nvim_buf_get_lines(b, 0, -1, false), modified = vim.bo[b].modified,
+  local st = state_of(b)
+  st.kept = { lines = vim.api.nvim_buf_get_lines(b, 0, -1, false), modified = vim.bo[b].modified,
               marks = marks }
   -- Unloaded as a normal file's buffer, the buffer keeps its marks and last position
   -- (BUFFER_NUMBERS.md, X5): for Neovim's own :bdelete (a Lua plug-in, <Cmd>bd!), whose
@@ -343,7 +367,7 @@ local function on_unload(ev)
   -- 'acwrite' comes back with the read (BufReadCmd below) or on the next loop.
   vim.bo[b].buftype = '' -- no OptionSet: inside an autocommand (see set_buftype)
   vim.schedule(function()
-    kept[b] = nil
+    st.kept = nil
     if vim.api.nvim_buf_is_valid(b)
         and #vim.api.nvim_get_autocmds({ group = group, buf = b }) > 0 then
       set_buftype(b, 'acwrite') -- still a document's buffer (not closed meanwhile)
@@ -353,8 +377,9 @@ end
 local function on_read(ev)
   local b = ev.buf
   vim.bo[b].buftype = 'acwrite' -- BufUnload made it '' for the unload; no OptionSet here
-  local k = kept[b]
-  kept[b] = nil
+  local st = state_of(b)
+  local k = st.kept
+  st.kept = nil
   if k then
     local saved = vim.bo[b].undolevels
     vim.bo[b].undolevels = -1 -- no undo step, as for a file just read
@@ -377,8 +402,9 @@ end
 --- made buffer 3 for /ws/app/A.java.
 function M.setup(buf)
   vim.bo[buf].buftype = 'acwrite'
+  group = vim.api.nvim_create_augroup(GROUP, { clear = false })
   vim.api.nvim_clear_autocmds({ group = group, buf = buf })
-  kept[buf], saveas_tried[buf], names_before[buf] = nil, nil, nil
+  state[buf] = {}
   -- The editor's file, as Neovim names it (links resolved). Writes are compared with it, not
   -- with the buffer's name, which :saveas and :file change.
   vim.b[buf].neovim4eclipse_file = vim.api.nvim_buf_get_name(buf)
