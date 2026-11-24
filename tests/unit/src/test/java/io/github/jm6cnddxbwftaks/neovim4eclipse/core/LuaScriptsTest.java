@@ -18,7 +18,7 @@ class LuaScriptsTest {
      */
     @Test
     void everyFloatExitRouteIsDecidedInTheWindowsModule() {
-        String windows = LuaModules.text("windows/init.lua");
+        String windows = LuaModules.text("windows/floats.lua");
         String table = windows.substring(windows.indexOf("local leaves = {"));
         table = table.substring(0, table.indexOf("\n}\n"));
         for (String route : LuaScripts.FLOAT_EXITS.values()) {

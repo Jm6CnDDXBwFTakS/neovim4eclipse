@@ -337,9 +337,11 @@ final class LuaScripts {
     /**
      * Installs the module {@code neovim4eclipse.windows}: a Neovim window per Eclipse editor, each
      * alone in its own tabpage (docs/design/WINDOWS.md; Java side {@code DocumentBuffers} and
-     * {@code EditorWindows}). The code and its comments: {@code core/lua/windows/init.lua}.
+     * {@code EditorWindows}). The code and its comments: {@code core/lua/windows/}, five files sent
+     * as one script, each a chunk of its own, in this order ({@code init.lua} says how they share).
      */
-    static final String WINDOWS = LuaModules.script("windows/init.lua");
+    static final String WINDOWS = LuaModules.script("windows/init.lua", "windows/pages.lua", "windows/floats.lua",
+            "windows/start.lua", "windows/net.lua");
 
     /**
      * Vim's window commands, carried out on Eclipse's editors: each Vim window is an editor, and a
