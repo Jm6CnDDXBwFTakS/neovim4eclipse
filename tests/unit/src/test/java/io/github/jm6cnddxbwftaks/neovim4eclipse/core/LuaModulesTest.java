@@ -80,7 +80,7 @@ class LuaModulesTest {
         String script = LuaModules.script("paths.lua");
         assertTrue(script.startsWith("local n, args = select('#', ...), { ... }\n"
                 + "return assert(loadstring([[\n" + LuaModules.text("paths.lua") + "]], "
-                + "'@neovim4eclipse/core/lua/paths.lua'))(unpack(args, 1, n))\n"), script);
+                + "'=neovim4eclipse/core/lua/paths.lua'))(unpack(args, 1, n))\n"), script);
     }
 
     /** Several files: each a chunk of its own, in order, with the same arguments; the last one's answer. */
@@ -92,7 +92,7 @@ class LuaModulesTest {
         assertTrue(lines[1].startsWith("assert(loadstring([["), lines[1]);
         int second = script.indexOf("\nreturn assert(loadstring([[\n");
         assertTrue(second > 0, script);
-        assertEquals(2, script.split("'@neovim4eclipse/core/lua/paths.lua'\\)\\)\\(unpack\\(args, 1, n\\)\\)\n", -1).length - 1);
+        assertEquals(2, script.split("'=neovim4eclipse/core/lua/paths.lua'\\)\\)\\(unpack\\(args, 1, n\\)\\)\n", -1).length - 1);
     }
 
     /** A long string's brackets: as many {@code =} as keep the text's own brackets from closing it. */

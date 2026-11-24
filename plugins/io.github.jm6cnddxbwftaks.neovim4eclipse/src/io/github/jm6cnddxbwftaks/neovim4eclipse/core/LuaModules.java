@@ -32,9 +32,14 @@ import java.util.regex.Pattern;
  *
  * <p><b>Why a wrapper</b> rather than the file's text as it is: {@code nvim_exec_lua} names every
  * chunk the same, so an error would point at a line of "a script". Compiled with
- * {@code loadstring(text, '@neovim4eclipse/core/lua/paths.lua')}, Neovim's message names the file
+ * {@code loadstring(text, '=neovim4eclipse/core/lua/paths.lua')}, Neovim's message names the file
  * and its line ({@code neovim4eclipse/core/lua/paths.lua:42: attempt to index a nil value}), which
- * is the line in this folder. And a module made of several files (the windows module, in
+ * is the line in this folder. The name starts with {@code =}, Lua's mark for a chunk named as it
+ * is, not with {@code @}, its mark for a file: Neovim takes a {@code @} name for a file's path and
+ * resolves it against its working folder, the project's, so {@code :verbose map} would say "Last
+ * set from /ws/app/neovim4eclipse/core/lua/setup.lua", a file that is not there (or one a cloned
+ * repository put there). With {@code =} it says "Last set from Lua", as for any
+ * {@code nvim_exec_lua} (probed on 0.12.6). And a module made of several files (the windows module, in
  * {@code windows/}) is sent as one script whose files are each a chunk of their own, run in order:
  * each file's locals stay its own, under Lua's limit of 200 locals per function.
  *
@@ -43,7 +48,7 @@ import java.util.regex.Pattern;
  * local n, args = select('#', ...), { ... }
  * return assert(loadstring([[
  * -- SPDX-FileCopyrightText: ...
- * ...]], '@neovim4eclipse/core/lua/paths.lua'))(unpack(args, 1, n))
+ * ...]], '=neovim4eclipse/core/lua/paths.lua'))(unpack(args, 1, n))
  * }</pre>
  * Each file gets the script's arguments, and the script answers what the last file returns.
  *
@@ -55,7 +60,7 @@ final class LuaModules {
     /** The folder of the files, beside this class. */
     static final String FOLDER = "lua/";
 
-    /** What a chunk is named: {@value} and the file, as Neovim's error messages show it. */
+    /** What a chunk is named, after Lua's {@code =}: {@value} and the file, as Neovim's error messages show it. */
     static final String CHUNK_PREFIX = "neovim4eclipse/core/lua/";
 
     /**
@@ -88,7 +93,7 @@ final class LuaModules {
             // The last file's call is returned, so that all its answers are the script's.
             lua.append(i == files.length - 1 ? "return " : "")
                     .append("assert(loadstring(").append(longString(text(files[i])))
-                    .append(", '@").append(CHUNK_PREFIX).append(files[i]).append("'))(unpack(args, 1, n))\n");
+                    .append(", '=").append(CHUNK_PREFIX).append(files[i]).append("'))(unpack(args, 1, n))\n");
         }
         return lua.toString();
     }
