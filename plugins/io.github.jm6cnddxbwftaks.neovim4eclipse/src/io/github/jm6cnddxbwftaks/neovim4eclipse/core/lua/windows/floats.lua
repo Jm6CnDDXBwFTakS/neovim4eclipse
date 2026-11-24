@@ -82,6 +82,8 @@ S.leave_float_of = leave_float_of
 --- plug-in's own and not one of ui2's: a picker's prompt (Telescope), :Lazy, a hover
 --- float the user entered. An insert that begins in one is Neovim's to its end
 --- (SETUP's ModeChanged report): its buffer is no document, so Eclipse must not type it.
+--- It does not ask whether win has the focus: LuaScripts.TERMINALS also calls it on a float
+--- Neovim is not in, to tell a terminal the editor draws (fzf-lua's list) from a hidden one.
 function M.focused_float(win)
   win = win == 0 and vim.api.nvim_get_current_win() or win
   return not own[win] and vim.fn.win_gettype(win) == 'popup' and not S.shows_ui2_buffer(win)

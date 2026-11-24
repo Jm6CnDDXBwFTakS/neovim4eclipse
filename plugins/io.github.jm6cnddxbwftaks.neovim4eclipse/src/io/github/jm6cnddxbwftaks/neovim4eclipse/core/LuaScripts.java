@@ -1289,7 +1289,16 @@ final class LuaScripts {
      * ({@code :terminal lazygit}, {@code jobstart('make', {term = true})}), only the program (its
      * full path) for a list ({@code jobstart({'sh', '-c', 'make'}, {term = true})} names
      * {@code /usr/bin/sh}). A terminal that runs no program ({@code nvim_open_term}, which some
-     * plug-ins use to show coloured text) gets no message: its channel is no job.
+     * plug-ins use to show coloured text) gets no message: its channel is no job. Nor does one in
+     * a plug-in's floating window that is shown: the editor draws such a float (fzf-lua's list is
+     * fzf running in a terminal float), so that terminal is not hidden. Decided from Neovim's own
+     * state as the terminal opens, by the windows module's own test for a plug-in's float
+     * ({@code windows.focused_float}: {@code win_gettype} {@code popup}, not ui2's), on the window
+     * showing the buffer, and only when its config's {@code hide} is not set. Anything else gets
+     * the message: no window ({@code nvim_buf_call} on a hidden buffer runs in Neovim's
+     * autocommand window, a float of type {@code autocmd} that closes after the call), a split, a
+     * hidden float, or no windows module. Example: fzf-lua's {@code blines} gets no message, a
+     * {@code <Cmd>terminal lazygit<CR>} in the editor's window does.
      *
      * <p>Shown with {@code nvim_echo}, which changes no mode (this may run in insert mode; a plain
      * {@code :normal} would fire {@code ModeChanged}).
@@ -1301,6 +1310,12 @@ final class LuaScripts {
               callback = function(a)
                 if not pcall(vim.fn.jobpid, vim.bo[a.buf].channel) then
                   return -- nvim_open_term: no program runs
+                end
+                local win = vim.fn.bufwinid(a.buf)
+                local windows = package.loaded['neovim4eclipse.windows']
+                if win ~= -1 and windows and windows.focused_float(win)
+                    and not vim.api.nvim_win_get_config(win).hide then
+                  return -- a plug-in's float, shown: the editor draws it (fzf-lua's list)
                 end
                 local command = vim.api.nvim_buf_get_name(a.buf):match('^term://.-//%d+:(.*)$')
                 local what = command and ('"' .. command .. '"') or 'a terminal'

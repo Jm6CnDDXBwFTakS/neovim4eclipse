@@ -466,7 +466,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:w ++p` | as `:w`, and for a new file also create its missing folders (`:wq ++p`, `:x ++p` too) |
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
 | `:ene[w]` | open a new untitled editor (*File → New → Untitled Text File*), working in this editor's folder (its `:lcd` too), so `:w notes.txt` saves it there. Unlike Vim's `:enew`, which empties the window, this editor stays open (so `:enew!` is the same). `Ctrl-^` goes back |
-| `:te[rminal] [cmd]` | open Eclipse's *Terminal* view with a shell in the file's folder, instead of a Neovim terminal (which Eclipse cannot show). A command after it (`:terminal make`) is not run, and a message says so: type it in the shell. In an Eclipse without the Terminal nothing opens, and a message says how to get it. A terminal started another way (a `<Cmd>` mapping, a plug-in) still starts in Neovim, out of sight, with a message naming it |
+| `:te[rminal] [cmd]` | open Eclipse's *Terminal* view with a shell in the file's folder, instead of a Neovim terminal (which Eclipse cannot show). A command after it (`:terminal make`) is not run, and a message says so: type it in the shell. In an Eclipse without the Terminal nothing opens, and a message says how to get it. A terminal started another way (a `<Cmd>` mapping, a plug-in) still starts in Neovim, out of sight, with a message naming it; one in a plug-in's floating window (fzf-lua's list) is drawn over the editor instead |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
 | `:tabfir[st]`, `:tabr[ewind]`, `:tabl[ast]` | first / last editor tab |
 | `:sp[lit]`, `:vs[plit]`, `:new`, `:vne[w]`, `:sv[iew]`, `:sf[ind]`, `:sb[uffer]`, `:on[ly]`, `:res[ize]`, `:winc[md]` | Vim's windows as editors: see [Splits](#splits-split-vsplit-ctrl-w) |
@@ -876,7 +876,9 @@ in Neovim. Eclipse has no view for it: the editor goes back to its file, and the
 of sight until it exits or Neovim stops. A message names it
 (`terminal: "lazygit" is running hidden: Eclipse cannot show a Neovim terminal. It stops when it
 exits or Neovim does.`). It is not stopped, since by then it has started, and a stop could leave
-its work half done.
+its work half done. A terminal in a plug-in's floating window, such as fzf-lua's list (fzf
+running in a terminal), is not hidden: the editor draws it like any other floating window, and it
+gets no message. One the plug-in later moves out of its float, or hides, gets none either.
 
 `Ctrl-R` is Neovim's own, in insert mode and on the `:` line. As in Vim, some registers are
 inserted as if typed (the file's name `%`, the last search `/`, the unnamed register `"`), so a

@@ -49,6 +49,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- A plug-in's terminal in a floating window, such as fzf-lua's list, no longer brings the message
+  `terminal: "/usr/bin/sh" is running hidden`: the editor draws that window. A terminal in a split
+  or a hidden floating window still gets it.
 - Switching editors in the middle of a command (after `r` or `f`) no longer stalls the keyboard for
   five seconds and leaves the new editor's text unsent. As in Neovim, the next key finishes the
   command in the editor it was typed in, and the keys after it go to the new editor.

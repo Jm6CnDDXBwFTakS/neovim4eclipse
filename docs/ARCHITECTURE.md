@@ -1391,7 +1391,13 @@ which matters because it was renamed in 2025-09 (`org.eclipse.tm.terminal.*` bef
 `:terminal` is not run (the command opens a shell only), and a message says so. A terminal started
 where the `:` line is not read (`<Cmd>`, `:execute`, Lua, a plug-in) has already started when
 Neovim's `TermOpen` fires: `LuaScripts.TERMINALS` names it in a message and leaves it running, so
-no program is stopped part way.
+no program is stopped part way. One in a plug-in's floating window that is shown (fzf-lua's list,
+fzf in a terminal float) gets no message, since the editor draws it (within `util/Grids`' limits,
+which only the session knows: past them such a float is not drawn and gets none either; one
+Neovim is in is closed with `close_undrawn`'s message): the windows module's own test
+for such a float (`focused_float`), on the window showing the buffer as the terminal opens, and
+not `hide`. A hidden float, or `nvim_buf_call`'s autocommand window, gets the message. Decided as
+the terminal opens: one a plug-in later moves out of its float, or hides, gets no message then.
 
 **`Ctrl-X Ctrl-O` is Eclipse's content assist wherever Eclipse gets the insert back.** In an
 insert Eclipse types, `KeyRouter` keeps the `Ctrl-X` until the next key and runs content assist for

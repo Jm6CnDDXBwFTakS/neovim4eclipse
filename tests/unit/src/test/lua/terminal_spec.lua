@@ -3,15 +3,25 @@
 
 -- :terminal (HostCommand.Kind.TERMINAL, EclipseTerminal): a typed :terminal is handed to Eclipse
 -- before Neovim runs it, so no program starts in Neovim; a terminal started any other way runs on
--- and LuaScripts.TERMINALS names it. What Eclipse does with :Eclipse terminal is
+-- and LuaScripts.TERMINALS names it, unless it is in a plug-in's floating window that is shown,
+-- which the editor draws. What Eclipse does with :Eclipse terminal is
 -- EclipseTerminalTest and HostCommandRunnerTest. See harness.lua for how these tests run.
 
 local t = ...
 
 local function start()
   t.setup()
+  -- As the session sends them: the windows module, whose test for a plug-in's float TERMINALS uses.
+  local home_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(home_buf)
+  t.run('WINDOWS', tostring(home_buf))
   t.run('HOST_COMMANDS', t.host_rules)
   t.run('TERMINALS')
+end
+
+--- A program that ends at once, for a terminal of its own.
+local function quick()
+  return { vim.v.progpath, '--clean', '--headless', '-c', 'qa!' }
 end
 
 --- The terminal buffers there are.
@@ -78,6 +88,40 @@ t.test('a terminal that runs no program (nvim_open_term) gets no message', funct
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_open_term(buf, {})
   t.eq(nil, messages():find('running hidden', 1, true), 'no message: ' .. messages())
+end)
+
+t.test('a terminal in a floating window gets no message: the editor draws it', function()
+  start()
+  -- As fzf-lua opens its list: a float on a new buffer, then the program started in it.
+  local win = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), true,
+    { relative = 'editor', row = 1, col = 1, width = 40, height = 5 })
+  vim.fn.jobstart(quick(), { term = true })
+  t.eq(1, #terminals(), 'Neovim started it')
+  t.eq(nil, messages():find('running hidden', 1, true), 'no message: ' .. messages())
+  vim.api.nvim_win_close(win, true)
+end)
+
+t.test('a terminal started in a hidden buffer through nvim_buf_call gets the message', function()
+  start()
+  -- Neovim runs the call in its autocommand window, a float of type 'autocmd' that closes after.
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_call(buf, function()
+    vim.fn.jobstart(quick(), { term = true })
+  end)
+  t.eq(1, #terminals(), 'Neovim started it')
+  t.ok(messages():find('running hidden', 1, true), 'the message: ' .. messages())
+end)
+
+t.test('a terminal in a hidden float gets the message: nothing draws it', function()
+  start()
+  local win = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false,
+    { relative = 'editor', row = 1, col = 1, width = 40, height = 5, hide = true })
+  vim.api.nvim_win_call(win, function()
+    vim.fn.jobstart(quick(), { term = true })
+  end)
+  t.eq(1, #terminals(), 'Neovim started it')
+  t.ok(messages():find('running hidden', 1, true), 'the message: ' .. messages())
+  vim.api.nvim_win_close(win, true)
 end)
 
 t.test('a <Cmd> mapping is not a : line: its terminal starts, with the message', function()
