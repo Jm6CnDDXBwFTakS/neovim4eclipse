@@ -26,9 +26,9 @@ import java.util.regex.Pattern;
  * {@link #script} wraps it into a script that Neovim compiles as a chunk named after the file.
  * None of these files is written to disk for Neovim or put on {@code 'runtimepath'}, so no other
  * file can stand in for a module: not one in a cloned repository, nor one in the user's config or a
- * plug-in, which a {@code require} of a file on the runtimepath would find first. (The one file the
- * plug-in does write there, {@code core/HealthCheck}'s {@code :checkhealth} stub, holds none of
- * this code.)
+ * plug-in, which a {@code require} of a file on the runtimepath would find first. (The one Lua file
+ * the plug-in does write there, {@code core/HealthCheck}'s {@code :checkhealth} stub, holds none
+ * of this code; beside it are only the plug-in's help page and its tags, {@code core/PluginHelp}.)
  *
  * <p><b>Why a wrapper</b> rather than the file's text as it is: {@code nvim_exec_lua} names every
  * chunk the same, so an error would point at a line of "a script". Compiled with
