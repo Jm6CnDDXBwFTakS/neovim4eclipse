@@ -153,7 +153,10 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
   in `core/lua/` that `core/LuaModules` reads from the plug-in's own jar. Never put a folder of the
   plug-in's Lua on `'runtimepath'` or write it to disk for Neovim: a file earlier on the
   runtimepath (the user's config, a plug-in) would stand in for a module. A new file needs a field
-  that names it (`LuaModulesTest` fails on a file no script reads).
+  that names it (`LuaModulesTest` fails on a file no script reads). The one file the plug-in writes
+  for Neovim is `core/HealthCheck`'s `:checkhealth` stub, on the runtimepath because `:checkhealth`
+  finds checks only there: it holds none of the plug-in's code, and answers only when the check
+  the plug-in sends was not registered.
 - Prefer putting decisions in small pure classes (testable in `tests/unit`) and keeping Eclipse
   classes as thin glue. Large classes are split by concern (see `core/package-info.java`).
 
