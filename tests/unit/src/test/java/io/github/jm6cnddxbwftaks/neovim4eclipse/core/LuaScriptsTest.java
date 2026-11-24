@@ -147,7 +147,8 @@ class LuaScriptsTest {
     void requireLoadsOnlyTheListedModules() throws IllegalAccessException {
         for (String script : LuaModulesTest.scriptsOfLuaScripts()) {
             String found = disallowedRequire(script);
-            assertNull(found, () -> "require of a module outside REQUIRED_MODULES: " + found);
+            assertNull(found, () -> "a use of require other than a load of a module of REQUIRED_MODULES"
+                    + " (a call, an alias, or the word in a string): " + found);
         }
         // The check itself: every other use is found; a comment, a longer name and an allowed module not.
         for (String use : new String[] {"require('neovim4eclipse.windows').open()",
