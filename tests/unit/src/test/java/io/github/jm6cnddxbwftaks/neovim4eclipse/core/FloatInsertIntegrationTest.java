@@ -101,7 +101,7 @@ class FloatInsertIntegrationTest {
                     vim.keymap.set('n', 'gS', function()
                       local buf = vim.api.nvim_create_buf(false, true)
                       local win = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 20, height = 1 })
-                      vim.api.nvim_create_autocmd('BufLeave', { buffer = buf, once = true, callback = function()
+                      vim.api.nvim_create_autocmd('BufLeave', { buf = buf, once = true, callback = function()
                         vim.schedule(function() pcall(vim.api.nvim_win_close, win, true) end)
                       end })
                       vim.cmd.startinsert()

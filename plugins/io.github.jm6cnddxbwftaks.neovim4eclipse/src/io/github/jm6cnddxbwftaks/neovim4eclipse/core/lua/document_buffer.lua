@@ -473,7 +473,7 @@ function M.setup(buf)
     end,
   })
   hook('BufWriteCmd', {
-    buf = buf, -- named "buffer" before Neovim 0.12.2
+    buf = buf,
     group = group,
     desc = 'Eclipse saves the document',
     callback = on_write,
