@@ -18,8 +18,9 @@ class LuaScriptsTest {
      */
     @Test
     void everyFloatExitRouteIsDecidedInTheWindowsModule() {
-        String table = LuaScripts.WINDOWS.substring(LuaScripts.WINDOWS.indexOf("local leaves = {"));
-        table = table.substring(0, table.indexOf("\n}\n")); // the text block's indentation is gone
+        String windows = LuaModules.text("windows/init.lua");
+        String table = windows.substring(windows.indexOf("local leaves = {"));
+        table = table.substring(0, table.indexOf("\n}\n"));
         for (String route : LuaScripts.FLOAT_EXITS.values()) {
             assertTrue(table.contains("\n  " + route + " = function("), route);
         }
