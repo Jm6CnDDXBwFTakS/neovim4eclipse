@@ -14,8 +14,12 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
@@ -31,15 +35,30 @@ class LuaModulesTest {
             "plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/src/io/github/jm6cnddxbwftaks/neovim4eclipse/core/lua";
 
     /**
+     * How a script names a file it runs: the chunk name after the file's long string, as
+     * {@link LuaModules#script} writes it. Group 1 is the file.
+     */
+    private static final Pattern CHUNK = Pattern.compile(
+            "\\]=*\\], '=" + Pattern.quote(LuaModules.CHUNK_PREFIX) + "([^']+)'\\)\\)\\(unpack\\(args, 1, n\\)\\)\n");
+
+    /**
      * Every file in {@code core/lua/} is one that {@link LuaScripts} sends, and the other way round:
      * a file no script names would be dead code that still looks maintained, and a name with no
-     * file would fail every session's start. (A file left in {@code target/} after its source was
-     * deleted is never read: only names the scripts give are.)
+     * file would fail every session's start. The files named are read from the scripts' own text,
+     * each field's, so what other tests read cannot hide a file no script sends. (A file left in
+     * {@code target/} after its source was deleted is never read: only names the scripts give are.)
      */
     @Test
-    void theScriptsSendEveryFileInTheFolderAndNoOther() throws IOException {
-        assertNotNull(LuaScripts.PATHS); // loads the class: every file it names is read now
-        assertEquals(filesInSources(), new TreeSet<>(LuaModules.read()));
+    void theScriptsSendEveryFileInTheFolderAndNoOther() throws IOException, IllegalAccessException {
+        assertEquals(filesInSources(), filesNamedBy(scriptsOfLuaScripts()));
+    }
+
+    /** The check above sees a file only when a script runs it, not when the file is merely read. */
+    @Test
+    void aFileIsCountedOnlyWhereAScriptRunsIt() {
+        assertEquals(Set.of("paths.lua"), filesNamedBy(List.of(LuaModules.script("paths.lua"))));
+        assertEquals(Set.of(), filesNamedBy(List.of(LuaModules.text("paths.lua"),
+                "-- an error reads neovim4eclipse/core/lua/folds.lua:120\n")));
     }
 
     /**
@@ -122,6 +141,30 @@ class LuaModulesTest {
     void aMissingFileIsNamed() {
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> LuaModules.text("no_such_file.lua"));
         assertTrue(e.getMessage().contains("core/lua/no_such_file.lua"), e.getMessage());
+    }
+
+    /** Every {@code String} field of {@link LuaScripts}: the scripts the plug-in sends. */
+    private static List<String> scriptsOfLuaScripts() throws IllegalAccessException {
+        List<String> scripts = new ArrayList<>();
+        for (Field field : LuaScripts.class.getDeclaredFields()) {
+            if (Modifier.isStatic(field.getModifiers()) && field.getType() == String.class) {
+                field.setAccessible(true);
+                scripts.add((String) field.get(null));
+            }
+        }
+        return scripts;
+    }
+
+    /** The files {@code scripts} run, as {@link #CHUNK} finds them. */
+    private static Set<String> filesNamedBy(List<String> scripts) {
+        Set<String> files = new TreeSet<>();
+        for (String script : scripts) {
+            Matcher m = CHUNK.matcher(script);
+            while (m.find()) {
+                files.add(m.group(1));
+            }
+        }
+        return files;
     }
 
     /** The {@code .lua} files below {@code core/lua/} in the plug-in's sources, as {@link LuaModules#text} names them. */

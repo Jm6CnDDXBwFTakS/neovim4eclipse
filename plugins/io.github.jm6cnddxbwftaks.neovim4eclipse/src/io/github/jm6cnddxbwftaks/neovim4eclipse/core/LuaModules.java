@@ -7,8 +7,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Set;
-import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 /**
@@ -65,13 +63,10 @@ final class LuaModules {
 
     /**
      * A file name as {@link #script} takes it: lowercase letters, digits and {@code _}, in folders,
-     * ending in {@code .lua}. Examples: {@code windows/floats.lua}, {@code ui2.lua}. Nothing else is read: no {@code ..}, no
-     * absolute path.
+     * ending in {@code .lua}. Examples: {@code windows/floats.lua}, {@code ui2.lua}. Nothing else is
+     * read: no {@code ..}, no absolute path.
      */
     private static final Pattern NAME = Pattern.compile("[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.lua");
-
-    /** The files read so far, for {@code LuaModulesTest}: every file in the folder must be one. */
-    private static final Set<String> READ = new TreeSet<>();
 
     private LuaModules() {
     }
@@ -112,20 +107,9 @@ final class LuaModules {
             if (in == null) {
                 throw new IllegalStateException("The plug-in's Lua file core/" + FOLDER + file + " is missing");
             }
-            String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            synchronized (READ) {
-                READ.add(file);
-            }
-            return text;
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read the plug-in's Lua file core/" + FOLDER + file, e);
-        }
-    }
-
-    /** The files {@link #text} has read, sorted; {@code LuaModulesTest} compares them with the folder. */
-    static Set<String> read() {
-        synchronized (READ) {
-            return Set.copyOf(READ);
         }
     }
 
