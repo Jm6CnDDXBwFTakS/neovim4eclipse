@@ -52,7 +52,7 @@
 -- nvim_exec_lua, nvim_get_chan_info(0) does not know which channel called.
 local chan = tonumber(select(1, ...))
 vim.g.neovim4eclipse_channel = chan
--- Guards against files of a cloned repository (see the javadoc): no R Markdown chunk
+-- Guards against files of a cloned repository (see this file's header): no R Markdown chunk
 -- language guessing, which runs a crafted header's backticks in Neovim 0.12.6, and no
 -- Lua modules from the working folder (the project's).
 if vim.g.rmd_dynamic_fenced_languages == nil then
