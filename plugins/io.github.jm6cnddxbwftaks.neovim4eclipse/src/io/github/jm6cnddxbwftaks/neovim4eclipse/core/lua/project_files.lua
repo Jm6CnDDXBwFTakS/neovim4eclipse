@@ -60,14 +60,15 @@
 --
 -- Sent as LuaScripts.PROJECT_FILES (core/LuaModules runs this file as a chunk of its own).
 
-local M = {}
-local group = vim.api.nvim_create_augroup('neovim4eclipse_projects', { clear = true })
 local paths = package.loaded['neovim4eclipse.paths'] -- the one rule for comparing paths (PATHS)
 if not paths then
   -- Not installed without it: every read of a project file would fail, and Neovim would read
-  -- the disk itself. PATHS is the session's first script (NeovimSession.initialize).
+  -- the disk itself. PATHS is the session's first script (NeovimSession.initialize). Checked
+  -- first, so that a failed install changes nothing (the group below is cleared when made).
   error('neovim4eclipse.project_files needs neovim4eclipse.paths (LuaScripts.PATHS) first', 0)
 end
+local M = {}
+local group = vim.api.nvim_create_augroup('neovim4eclipse_projects', { clear = true })
 local roots = {} -- the folders, as paths.canonical() gives them
 local hooked = {} -- buffer number -> true, for the buffers that have the read hook
 local checked = {} -- buffer number -> the name check() last looked at

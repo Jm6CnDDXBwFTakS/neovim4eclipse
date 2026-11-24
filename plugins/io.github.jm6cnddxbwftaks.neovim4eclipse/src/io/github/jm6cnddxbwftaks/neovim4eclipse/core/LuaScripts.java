@@ -604,7 +604,7 @@ final class LuaScripts {
             if documents then
               documents.close(buf)
             else
-              for _, a in ipairs(vim.api.nvim_get_autocmds({ buffer = buf })) do
+              for _, a in ipairs(vim.api.nvim_get_autocmds({ buf = buf })) do
                 if a.group_name == 'neovim4eclipse_document'
                     or (a.group_name == '--Deleted--' and (a.desc or ''):find('^Eclipse ')) then
                   pcall(vim.api.nvim_del_autocmd, a.id)
