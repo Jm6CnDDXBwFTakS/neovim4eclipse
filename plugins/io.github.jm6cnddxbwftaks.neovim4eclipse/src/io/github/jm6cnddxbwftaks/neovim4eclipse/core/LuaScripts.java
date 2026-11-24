@@ -21,9 +21,10 @@ import java.util.Map;
  * </ul>
  *
  * <p>A field read from a file is no compile-time constant: a change to the file needs no rebuild
- * of the classes that use the field. The text blocks are constants, which javac copies into every
- * class that uses them (AGENTS.md, "Pitfalls"). Note {@code string.char(34)} is the {@code "}
- * (unnamed) register name, written that way to avoid Java string escaping.
+ * of the classes that use the field, only the build's copy of the file (it is a resource) and,
+ * for an Eclipse already running, a restart, since the file is read once, when this class loads.
+ * The text blocks are constants, which javac copies into every class that uses them (AGENTS.md,
+ * "Pitfalls").
  */
 final class LuaScripts {
 

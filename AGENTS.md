@@ -174,7 +174,9 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - The same goes for a changed `static final String` constant (such as a short `LuaScripts` script,
   a text block): javac copies its text into every class that uses it, so those classes keep the old
   text until they are recompiled. Delete `plugins/.../target/classes` after changing one. A file in
-  `core/lua/` is read as the plug-in runs and needs no such rebuild.
+  `core/lua/` needs no such rebuild of other classes, but it is a resource: the build copies it
+  into `target/classes` (Maven's resources step, or Eclipse's own build), and a running Eclipse
+  read it once, when `LuaScripts` loaded, so it needs a restart to send the new text.
 - Synthetic SWT key events in UI tests need `event.doit = true`.
 - Folding has several deliberate workarounds (a key watcher that drops `zE` and its like while `z` is pending, `:noautocmd
   normal! zE`, fold sends held and cursor reports dropped while Eclipse types). Read the table
