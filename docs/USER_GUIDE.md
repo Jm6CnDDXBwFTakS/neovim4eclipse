@@ -655,8 +655,10 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   and during an insert Eclipse types the mouse is not sent.
 - **A window that takes the keyboard** (a picker's prompt, `:Lazy`, hover documentation entered
   with a second `K`, with Neovim's own `K`: `vim.g.neovim4eclipse_ide_keys = 0`) is drawn with Neovim's cursor in it, a bar in Insert mode, and the editor's
-  caret is hidden meanwhile: your keys go to that window, as in Neovim, Esc and Enter included.
-  **Clicking away moves Neovim out of it**, as in a terminal, its insert ended: another editor or
+  caret is hidden meanwhile: your keys go to that window, as in Neovim, Esc and Enter included. A
+  window running a program in a terminal (fzf-lua's list, which runs fzf) has the keys in Terminal
+  mode, and they go to that program.
+  **Clicking away moves Neovim out of it**, as in a terminal, its insert or Terminal mode ended: another editor or
   view, or a click in the editor's text (a left click then lands there; a right click or Ctrl+click
   goes on to Eclipse). The plug-in decides whether its window survives that: Telescope closes
   itself, `:Lazy` stays, drawn without the cursor, until you click it or close it. **Eclipse mode

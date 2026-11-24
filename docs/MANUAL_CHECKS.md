@@ -389,9 +389,10 @@ it: closing the page editors at Eclipse's exit as well would avoid it.
 - **Launch:** normal
 - **Areas:** core/LuaScripts.java, core/lua/**, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridMouse.java, editor/LineInputMethod.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
 
-Telescope's `current_buffer_fuzzy_find` and `:Lazy` are tested at pinned commits
-(`PickersEndToEndTest`, `FloatInsertIntegrationTest`, `NeovimWindowsIntegrationTest`), with the
-plug-ins' defaults. Your own config, with its pickers, previews, borders and colorscheme, and an
+Telescope's `current_buffer_fuzzy_find`, fzf-lua's `blines` and `files` and `:Lazy` are tested at
+pinned commits (`PickersEndToEndTest`, `FloatInsertIntegrationTest`, `FzfLuaEndToEndTest`,
+`FzfLuaIntegrationTest`, `NeovimWindowsIntegrationTest`), with the plug-ins' defaults; fzf-lua's
+only where fzf is on `PATH`. Your own config, with its pickers, previews, borders and colorscheme, and an
 input method in a prompt, are only seen on screen. Use a config that has Telescope (or another
 picker, fzf-lua, snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
 

@@ -26,7 +26,7 @@ it works, read [docs/LEARNING.md](docs/LEARNING.md) (Eclipse and Neovim concepts
 **Before a push, run `java releng/tools/ci/LikeCi.java`** (from the repository's root). It runs the
 tests as the *Build* workflow on GitHub does: it installs the pinned Neovim under `.tool-cache/like-ci/`
 with CI's own command (downloaded once, kept while its files match the pin), fetches the pinned
-Neovim plug-ins the jump-label tests run (`releng/test-plugins.properties`; without a network they
+Neovim plug-ins the tests run (`releng/test-plugins.properties`; without a network they
 are left out and those tests skipped), runs CI's Maven commands with it (on Linux under `xvfb-run`, as CI), and
 lists what each module skipped. A failure that only CI would show shows up here first, a change
 that does not compile included. `--all` runs every test group (`-Pall`) the same way, for a
@@ -250,6 +250,11 @@ than skipping them. `TestIsolationTest` and `TestIsolationUiTest` fail if the is
 given setting sets it in the test itself (for example `session.commandAsync("set shortmess-=F")`),
 so it runs the same everywhere. To try the plug-in with your own config, run it from Eclipse (see
 "Run it from Eclipse").
+
+The fzf-lua tests are the one exception on purpose: fzf is not pinned, so they run the `fzf` on
+your `PATH` (and `fzf-lua`'s `files` the `fd` or `rg` you have, else `find`; a
+`core.excludesFile` in your `~/.gitconfig` still reaches those), and are skipped without one (docs/UPGRADING.md, "The plug-ins the tests run"). The
+variables fzf reads its options from are taken out of their Neovim.
 
 Earlier builds left a test data folder in your real one: `~/.local/share/neovim4eclipse-plugin/tests`
 (on Windows `%LOCALAPPDATA%\neovim4eclipse-plugin\tests-data`), and before that

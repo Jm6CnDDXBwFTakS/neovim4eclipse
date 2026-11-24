@@ -326,7 +326,8 @@ and actions* above); the bullets say what each needs besides, and how to move it
 
 The tests of the jump labels run four real Neovim plug-ins (flash, leap, hop, mini.jump2d), the
 gallery's pictures a fifth, which-key, and the tests of floating windows that take the keyboard
-three more: Telescope with its library plenary (a picker's prompt) and lazy.nvim (`:Lazy`). flash's help page also stands for a user's plug-in in
+four more: Telescope with its library plenary (a picker's prompt), fzf-lua (a picker that runs
+fzf in a terminal float) and lazy.nvim (`:Lazy`). flash's help page also stands for a user's plug-in in
 the help editor's test (`windows_spec.lua`). They are third-party
 code that runs in the test Neovim, on your machine and wherever `LikeCi`
 or the gallery runs, so each is pinned: `releng/test-plugins.properties` holds, per plug-in, its repository, one commit,
@@ -335,6 +336,17 @@ hash is written. Nothing of a plug-in is in the repository; `TestPlugins.java fe
 into `.tool-cache/test-plugins/`, and stops if an archive's hash is not the pinned one. Without a
 network it leaves the plug-ins out and their tests are skipped; a connection that is not secure
 (a certificate that does not fit, a proxy that opens TLS) stops it instead.
+
+fzf-lua also needs the fzf program, which is not pinned: it is a Go program built per system and
+processor, not a plug-in's source the tool could fetch and hash once for every machine. Its tests
+(`FzfLuaIntegrationTest`, `FzfLuaEndToEndTest`) use the fzf in an absolute folder of `PATH`
+(`apt install fzf`, `brew install fzf`, `winget install fzf`), and are skipped without one, or
+with one older than the pinned fzf-lua accepts (it checks the version itself and names its
+minimum; an old distribution's package can be too old). The *Build* workflow fetches no test
+plug-ins, so they run only where a developer has fetched them and installed fzf. fzf reads options
+from the environment (`FZF_DEFAULT_OPTS`, `FZF_DEFAULT_OPTS_FILE`, `FZF_DEFAULT_COMMAND`); the
+tests take those out of the test Neovim before fzf-lua starts fzf, so your own fzf config does
+not reach them (checked on Linux; on Windows the C runtime may keep a copy fzf-lua still reads).
 
 Move a pin when a plug-in changed something the tests should see (new highlight groups, a new way
 of drawing labels), not routinely. The tool never looks for a newer commit and never moves a pin
