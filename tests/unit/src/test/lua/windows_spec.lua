@@ -358,6 +358,25 @@ t.test("before a buffer is wiped, the editor windows on it close and the home wi
   t.eq({}, t.sent('eclipse_window_closed'))
 end)
 
+-- WINDOW_COMMANDS finds the modules it calls in package.loaded, as the session sent them first
+-- (PATHS, WINDOWS, HOST_COMMANDS): without one of them the install fails at once and leaves nothing,
+-- rather than require searching the runtimepath for it.
+t.test('the window commands are not installed without the modules they call', function()
+  start()
+  t.run('HOST_COMMANDS', t.host_rules)
+  for _, name in ipairs({ 'neovim4eclipse.paths', 'neovim4eclipse.windows', 'neovim4eclipse.host_commands' }) do
+    local module = package.loaded[name]
+    package.loaded[name] = nil
+    local ok, err = pcall(t.run, 'WINDOW_COMMANDS')
+    package.loaded[name] = module
+    t.ok(not ok and tostring(err):find('LuaScripts.PATHS, WINDOWS, HOST_COMMANDS', 1, true) ~= nil,
+      name .. ': ' .. tostring(err))
+    t.eq(nil, package.loaded['neovim4eclipse.window_commands'], name)
+  end
+  t.run('WINDOW_COMMANDS')
+  t.ok(package.loaded['neovim4eclipse.window_commands'] ~= nil, 'installed once all three are there')
+end)
+
 --- The window commands as the session installs them: HOST_COMMANDS, then WINDOW_COMMANDS.
 local function commands()
   local home, home_buf = start()

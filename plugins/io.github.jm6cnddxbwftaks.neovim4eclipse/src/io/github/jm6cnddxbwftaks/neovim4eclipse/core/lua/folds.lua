@@ -1,12 +1,12 @@
 -- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 -- SPDX-License-Identifier: EPL-2.0
 
--- Installs the fold module, `require('neovim4eclipse.folds')`, unless the user's config turned
--- folding off with `vim.g.neovim4eclipse_folds = 0` (or `false`), and returns whether folding is
--- on. The session runs it once at start, right after LuaScripts.SETUP (so after `init.lua`), and
--- keeps the answer (`NeovimSession.foldsEnabled()`): when it is off, no other fold script is ever
--- sent, so the opt-out costs nothing (docs/design/FOLDING.md, 3.6). Changing the variable later
--- needs a Neovim restart.
+-- Installs the fold module, `package.loaded['neovim4eclipse.folds']`, unless the user's config
+-- turned folding off with `vim.g.neovim4eclipse_folds = 0` (or `false`), and returns whether
+-- folding is on. The session runs it once at start, right after LuaScripts.SETUP (so after
+-- `init.lua`), and keeps the answer (`NeovimSession.foldsEnabled()`): when it is off, no other fold
+-- script is ever sent, so the opt-out costs nothing (docs/design/FOLDING.md, 3.6). Changing the
+-- variable later needs a Neovim restart.
 --
 -- What the module does. Eclipse's fold regions become Neovim manual folds (`'foldmethod'=manual`,
 -- `:{first},{last}fold`) in the window that shows the buffer, and each fold gets an extmark in the

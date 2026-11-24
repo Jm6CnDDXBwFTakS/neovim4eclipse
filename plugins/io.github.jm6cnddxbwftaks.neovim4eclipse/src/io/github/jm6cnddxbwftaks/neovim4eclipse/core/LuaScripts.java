@@ -358,7 +358,7 @@ final class LuaScripts {
      * ({@link #WINDOW_COMMANDS}; {@code editor/SplitEditorHandler}).
      */
     static final String SPLIT_WINDOW = """
-            require('neovim4eclipse.window_commands').split(select(1, ...) == '1')
+            package.loaded['neovim4eclipse.window_commands'].split(select(1, ...) == '1')
             """;
 
     /**
@@ -368,7 +368,7 @@ final class LuaScripts {
      * gone when it goes back to it, gets 9, a new unlisted scratch buffer, and shows that.
      */
     static final String HOME_BUFFER = """
-            return require('neovim4eclipse.windows').home_buffer()
+            return package.loaded['neovim4eclipse.windows'].home_buffer()
             """;
 
     /**
@@ -465,7 +465,7 @@ final class LuaScripts {
      * the IDE keys are Neovim's in that buffer. See {@link #WINDOWS} ({@code open_page}).
      */
     static final String OPEN_PAGE_WINDOW = """
-            return require('neovim4eclipse.windows').open_page(tonumber((select(1, ...))))
+            return package.loaded['neovim4eclipse.windows'].open_page(tonumber((select(1, ...))))
             """;
 
     /**
@@ -476,7 +476,7 @@ final class LuaScripts {
      */
     static final String SHOW_PAGE_BUFFER = """
             local win, buf, line, kind = ...
-            return require('neovim4eclipse.windows').show_page(tonumber(win), tonumber(buf), tonumber(line), kind)
+            return package.loaded['neovim4eclipse.windows'].show_page(tonumber(win), tonumber(buf), tonumber(line), kind)
             """;
 
     /**
@@ -485,7 +485,7 @@ final class LuaScripts {
      * {@code {-1, -1}} when it is no page window. See {@link #WINDOWS} ({@code open_page_like}).
      */
     static final String OPEN_PAGE_LIKE = """
-            return require('neovim4eclipse.windows').open_page_like(tonumber((select(1, ...))))
+            return package.loaded['neovim4eclipse.windows'].open_page_like(tonumber((select(1, ...))))
             """;
 
     /**
@@ -494,7 +494,7 @@ final class LuaScripts {
      * {@link #WINDOWS} ({@code restore_page}).
      */
     static final String RESTORE_PAGE_WINDOW = """
-            return require('neovim4eclipse.windows').restore_page(tonumber((select(1, ...))))
+            return package.loaded['neovim4eclipse.windows'].restore_page(tonumber((select(1, ...))))
             """;
 
     /**
@@ -505,7 +505,7 @@ final class LuaScripts {
      */
     static final String OPEN_WINDOW = """
             local buf, folder = tonumber((select(1, ...))), (select(2, ...))
-            return require('neovim4eclipse.windows').open(buf, folder)
+            return package.loaded['neovim4eclipse.windows'].open(buf, folder)
             """;
 
     /**
@@ -519,7 +519,7 @@ final class LuaScripts {
      */
     static final String SHOW_WINDOW = """
             local win, buf = tonumber((select(1, ...))), tonumber((select(2, ...)))
-            return require('neovim4eclipse.windows').show(win, buf)
+            return package.loaded['neovim4eclipse.windows'].show(win, buf)
             """;
 
     /**
@@ -531,7 +531,7 @@ final class LuaScripts {
     static final String TRAVEL_WINDOW = """
             local win, buf = tonumber((select(1, ...))), tonumber((select(2, ...)))
             local line, col = tonumber((select(3, ...))), tonumber((select(4, ...)))
-            require('neovim4eclipse.windows').travel(win, buf, line, col)
+            package.loaded['neovim4eclipse.windows'].travel(win, buf, line, col)
             """;
 
     /**
@@ -540,7 +540,7 @@ final class LuaScripts {
      * {@link #SETUP} forgets them, so that {@code Ctrl-I} does not undo steps that moved nothing.
      */
     static final String HISTORY_NOWHERE = """
-            require('neovim4eclipse.history').nowhere(tonumber((select(1, ...))), tonumber((select(2, ...))))
+            package.loaded['neovim4eclipse.history'].nowhere(tonumber((select(1, ...))), tonumber((select(2, ...))))
             """;
 
     /**
@@ -549,7 +549,7 @@ final class LuaScripts {
      * (Neovim's newer jump, else Forward) instead of undoing a Back Eclipse no longer remembers.
      */
     static final String HISTORY_FORGET = """
-            require('neovim4eclipse.history').forget()
+            package.loaded['neovim4eclipse.history'].forget()
             """;
 
     /**
@@ -562,7 +562,7 @@ final class LuaScripts {
      */
     static final String CLOSE_WINDOW = """
             local win, fallback = tonumber((select(1, ...))), tonumber((select(2, ...)))
-            return require('neovim4eclipse.windows').close(win, fallback)
+            return package.loaded['neovim4eclipse.windows'].close(win, fallback)
             """;
 
     /**
@@ -788,7 +788,7 @@ final class LuaScripts {
      */
     static final String RELEASE_BUFFER = """
             local buf, fallback = tonumber((select(1, ...))), tonumber((select(2, ...)))
-            return require('neovim4eclipse.windows').release(buf, fallback)
+            return package.loaded['neovim4eclipse.windows'].release(buf, fallback)
             """;
 
     /**
@@ -1026,19 +1026,19 @@ final class LuaScripts {
      */
     static final String SET_QUICKFIX = """
             local a = ...
-            require('neovim4eclipse.quickfix').set(a[1], a[2], a[3], a[4], vim.list_slice(a, 5))
+            package.loaded['neovim4eclipse.quickfix'].set(a[1], a[2], a[3], a[4], vim.list_slice(a, 5))
             """;
 
     /**
      * The current quickfix list's kind and argument ({@code {"problems", "warning"}}) when it is one
      * of Eclipse's, else {@code nil}; see {@link #QUICKFIX}.
      */
-    static final String QUICKFIX_CURRENT = "return require('neovim4eclipse.quickfix').current()";
+    static final String QUICKFIX_CURRENT = "return package.loaded['neovim4eclipse.quickfix'].current()";
 
     /**
-     * Installs the fold module, {@code require('neovim4eclipse.folds')}, unless the user's config
-     * turned folding off with {@code vim.g.neovim4eclipse_folds = 0} (or {@code false}), and
-     * returns whether folding is on. The code and its comments: {@code core/lua/folds.lua}.
+     * Installs the fold module, {@code package.loaded['neovim4eclipse.folds']}, unless the user's
+     * config turned folding off with {@code vim.g.neovim4eclipse_folds = 0} (or {@code false}),
+     * and returns whether folding is on. The code and its comments: {@code core/lua/folds.lua}.
      */
     static final String FOLDS = LuaModules.script("folds.lua");
 
@@ -1070,8 +1070,8 @@ final class LuaScripts {
             """;
 
     /**
-     * Installs the viewport module, {@code require('neovim4eclipse.viewport')}. The code and its
-     * comments: {@code core/lua/viewport.lua}.
+     * Installs the viewport module, {@code package.loaded['neovim4eclipse.viewport']}. The code and
+     * its comments: {@code core/lua/viewport.lua}.
      */
     static final String VIEWPORT = LuaModules.script("viewport.lua");
 
@@ -1096,7 +1096,7 @@ final class LuaScripts {
     static final String VIEWPORT_OVERHEAD = """
             local windows = package.loaded['neovim4eclipse.windows']
             local win = windows and windows.editor_window() or vim.api.nvim_get_current_win()
-            return vim.api.nvim_win_call(win, require('neovim4eclipse.viewport').overhead)
+            return vim.api.nvim_win_call(win, package.loaded['neovim4eclipse.viewport'].overhead)
             """;
 
     /**
@@ -1450,7 +1450,7 @@ final class LuaScripts {
               return
             end
             vim.api.nvim_win_call(win, function()
-              require('neovim4eclipse.viewport').set_wrap(on == true or on == 1 or on == '1')
+              package.loaded['neovim4eclipse.viewport'].set_wrap(on == true or on == 1 or on == '1')
             end)
             """;
 
@@ -1469,7 +1469,7 @@ final class LuaScripts {
             if vim.api.nvim_win_get_buf(win) ~= buf or not line then
               return
             end
-            vim.api.nvim_win_call(win, function() require('neovim4eclipse.viewport').set_topline(line, mode) end)
+            vim.api.nvim_win_call(win, function() package.loaded['neovim4eclipse.viewport'].set_topline(line, mode) end)
             """;
 
     /**
@@ -1485,7 +1485,7 @@ final class LuaScripts {
             if vim.api.nvim_win_get_buf(win) ~= buf or not n or n == 0 then
               return
             end
-            vim.api.nvim_win_call(win, function() require('neovim4eclipse.viewport').scroll_lines(n) end)
+            vim.api.nvim_win_call(win, function() package.loaded['neovim4eclipse.viewport'].scroll_lines(n) end)
             """;
 
     /**

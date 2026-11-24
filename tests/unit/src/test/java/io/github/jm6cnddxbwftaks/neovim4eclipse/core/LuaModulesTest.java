@@ -144,7 +144,7 @@ class LuaModulesTest {
     }
 
     /** Every {@code String} field of {@link LuaScripts}: the scripts the plug-in sends. */
-    private static List<String> scriptsOfLuaScripts() throws IllegalAccessException {
+    static List<String> scriptsOfLuaScripts() throws IllegalAccessException {
         List<String> scripts = new ArrayList<>();
         for (Field field : LuaScripts.class.getDeclaredFields()) {
             if (Modifier.isStatic(field.getModifiers()) && field.getType() == String.class) {

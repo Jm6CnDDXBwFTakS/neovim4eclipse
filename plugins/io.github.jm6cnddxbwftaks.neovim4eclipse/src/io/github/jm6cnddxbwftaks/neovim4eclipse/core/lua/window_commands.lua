@@ -54,14 +54,23 @@
 --
 -- A window opened some other way (a plug-in's `vim.cmd.split()`) reaches the `WinNew` safety net of
 -- LuaScripts.WINDOWS: on a file it becomes an editor through `open_beside`, on anything else it is
--- closed. The module is `require('neovim4eclipse.window_commands')`; LuaScripts.SPLIT_WINDOW calls
--- it.
+-- closed. The module is `package.loaded['neovim4eclipse.window_commands']`;
+-- LuaScripts.SPLIT_WINDOW calls it.
 --
 -- Sent as LuaScripts.WINDOW_COMMANDS (core/LuaModules runs this file as a chunk of its own).
 
-local windows = require('neovim4eclipse.windows')
-local host = require('neovim4eclipse.host_commands')
-local canonical = package.loaded['neovim4eclipse.paths'].canonical -- PATHS: case, links, separators
+-- The modules this one calls, each sent before it (NeovimSession.initialize: PATHS first, then
+-- WINDOWS, then HOST_COMMANDS). Read from package.loaded, never with require, which would search
+-- the runtimepath (and ./?.lua) for a module the session had not sent. Checked first, so that a
+-- failed install changes nothing.
+local windows = package.loaded['neovim4eclipse.windows']
+local host = package.loaded['neovim4eclipse.host_commands']
+local paths = package.loaded['neovim4eclipse.paths']
+if not (windows and host and paths) then
+  error('neovim4eclipse.window_commands needs neovim4eclipse.paths, neovim4eclipse.windows and '
+    .. 'neovim4eclipse.host_commands (LuaScripts.PATHS, WINDOWS, HOST_COMMANDS) first', 0)
+end
+local canonical = paths.canonical -- PATHS: case, links, separators
 local M = {}
 
 local JUMP_FIRST = 'a split that jumps to a tag is not supported; Ctrl-] goes to the declaration in this editor'

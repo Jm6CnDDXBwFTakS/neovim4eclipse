@@ -23,13 +23,14 @@
 -- 3. `:Eclipse` puts the line as typed back into the history, in place of its own, so Up in the `:`
 --    box recalls `tabn 3`.
 -- 4. Refused commands. Other scripts can make a built-in command an error where it must not run,
---    through `require('neovim4eclipse.host_commands').refuse(name, why)`: `why(p)` returns the
---    reason, or `nil` to let the command run; `p` is the command as `nvim_parse_cmd()` gives it, or
---    `nil` for an `:Eclipse name` typed or mapped as such. Such a line becomes `:Eclipse name`,
---    which shows `name: reason` as an error and tells Eclipse nothing. A built-in command cannot be
---    mapped, so this is the only way to stop one. Example: LuaScripts.FOLDS refuses `:fold` in
---    buffers whose folds are Eclipse's, so `:3,5fold` shows `fold: Eclipse defines the folds in
---    this editor`; LuaScripts.WINDOW_COMMANDS refuses `:tabonly`.
+--    through `package.loaded['neovim4eclipse.host_commands'].refuse(name, why)`: `why(p)`
+--    returns the reason, or `nil` to let the command run; `p` is the command as
+--    `nvim_parse_cmd()` gives it, or `nil` for an `:Eclipse name` typed or mapped as such. Such a
+--    line becomes `:Eclipse name`, which shows `name: reason` as an error and tells Eclipse
+--    nothing. A built-in command cannot be mapped, so this is the only way to stop one. Example:
+--    LuaScripts.FOLDS refuses `:fold` in buffers whose folds are Eclipse's, so `:3,5fold` shows
+--    `fold: Eclipse defines the folds in this editor`; LuaScripts.WINDOW_COMMANDS refuses
+--    `:tabonly`.
 -- 5. Translated commands. `translate(name, fn)`: a built-in command that Eclipse carries out in a
 --    form of its own. `fn(p)` returns the words of the `:Eclipse` line to run instead, or `nil` and
 --    why the command may not run, or nothing for the usual handling (the table's command of that

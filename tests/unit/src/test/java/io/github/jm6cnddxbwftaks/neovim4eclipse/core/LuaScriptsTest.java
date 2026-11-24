@@ -85,6 +85,41 @@ class LuaScriptsTest {
     }
 
     /**
+     * A call of {@code require} on one of the plug-in's own modules:
+     * {@code require('neovim4eclipse.x')}, {@code require "neovim4eclipse.x"},
+     * {@code pcall(require, 'neovim4eclipse.x')}.
+     */
+    private static final Pattern REQUIRE_OF_A_PLUGIN_MODULE =
+            Pattern.compile("\\brequire\\b[\\s(,]*['\"]neovim4eclipse\\.");
+
+    /**
+     * No script finds one of the plug-in's modules with {@code require}; each reads it from
+     * {@code package.loaded}, where the session put it ({@code docs/LEARNING.md}, "Change or add Lua
+     * that runs in Neovim"). Should the module be missing (its install failed, or a config removed
+     * it), {@code require} would search the runtimepath and {@code ./?.lua}, where a file of the
+     * user's or of a cloned repository could answer; {@code package.loaded} gives an error instead.
+     * Every file in {@code core/lua/} is in a script's text ({@code LuaModulesTest}), so this reads
+     * them too. Other modules, Neovim's own among them ({@code vim._core.ui2}), may be required.
+     */
+    @Test
+    void noScriptFindsAPluginModuleWithRequire() throws IllegalAccessException {
+        for (String script : LuaModulesTest.scriptsOfLuaScripts()) {
+            var found = REQUIRE_OF_A_PLUGIN_MODULE.matcher(code(script));
+            assertFalse(found.find(), () -> "require of a plug-in module: "
+                    + code(script).substring(found.start()).lines().findFirst().orElse(""));
+        }
+        // The pattern itself: each form is found, a comment, another module and a longer name not.
+        for (String call : new String[] {"require('neovim4eclipse.windows').open()",
+                "local w = require \"neovim4eclipse.windows\"", "pcall(require, 'neovim4eclipse.folds')"}) {
+            assertTrue(REQUIRE_OF_A_PLUGIN_MODULE.matcher(code(call)).find(), call);
+        }
+        for (String other : new String[] {"x = 1 -- require('neovim4eclipse.windows')",
+                "pcall(require, 'vim._core.ui2')", "my_require('neovim4eclipse.windows')"}) {
+            assertFalse(REQUIRE_OF_A_PLUGIN_MODULE.matcher(code(other)).find(), other);
+        }
+    }
+
+    /**
      * Each route of {@link LuaScripts#FLOAT_EXITS} is a key of the windows module's table
      * {@code leaves}, which decides it: the names are the one copy across Java and Lua, and a
      * route Lua does not know would make every first step of it fail (logged, the insert kept).

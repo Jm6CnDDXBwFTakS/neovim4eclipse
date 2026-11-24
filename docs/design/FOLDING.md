@@ -376,9 +376,9 @@ plug-in does. Lines are 1-based.
   `nvim_parse_cmd`. The refusal is a hook, not a rule in the Java table of host commands: that table
   lists what Eclipse carries out, and `:fold` is not that; it is refused only in mirrored buffers,
   which only Lua knows. So `HOST_COMMANDS` offers
-  `require('neovim4eclipse.host_commands').refuse(name, why)`, and the fold module registers `fold`
-  there (so `FOLDS` runs after `HOST_COMMANDS`). In a buffer with `b:neovim4eclipse_folds` a
-  refused line becomes `:Eclipse fold`, and the `Eclipse` user command shows the error itself
+  `package.loaded['neovim4eclipse.host_commands'].refuse(name, why)`, and the fold module registers
+  `fold` there (so `FOLDS` runs after `HOST_COMMANDS`). In a buffer with `b:neovim4eclipse_folds`
+  a refused line becomes `:Eclipse fold`, and the `Eclipse` user command shows the error itself
   instead of notifying Eclipse. Being an error, it ends the rest of a `|` chain, as any error does in
   Vim (`:10,12fold | let x = 1` does not set `x`). Elsewhere (an editor that cannot fold, or the
   opt-out) the hook does not apply and Neovim runs the command. Like the other host commands this
@@ -420,9 +420,9 @@ plug-in does. Lines are 1-based.
    - from the snapshot's closed ids, the previous ones and the nesting to "collapse these, expand
      those", leaving folds inside a closed one alone (`stateChange`, 3.2).
 2. **`core`**:
-   - `LuaScripts.FOLDS`: the opt-out and the module `require('neovim4eclipse.folds')`, with `set`
-     (3.1, including the handle lines and the `zn` states), `closed`, `watch` and `poll` (3.2), the
-     `z` mapping and the `fold` refusal (3.5);
+   - `LuaScripts.FOLDS`: the opt-out and the module `package.loaded['neovim4eclipse.folds']`, with
+     `set` (3.1, including the handle lines and the `zn` states), `closed`, `watch` and `poll`
+     (3.2), the `z` mapping and the `fold` refusal (3.5);
    - `LuaScripts.SET_FOLDS`, which calls `set`; the snapshot's second argument, element 12 and
      `StateSnapshot.FOLDS`;
    - the `refuse` hook in `LuaScripts.HOST_COMMANDS`;

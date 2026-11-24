@@ -1,9 +1,9 @@
 -- SPDX-FileCopyrightText: 2026 Jm6CnDDXBwFTakS
 -- SPDX-License-Identifier: EPL-2.0
 
--- Installs the viewport module, `require('neovim4eclipse.viewport')`. The session runs it once at
--- start, after LuaScripts.SETUP (so after `init.lua`): Neovim's window then follows the editor, as
--- in a terminal it follows the terminal's size (docs/design/VIEWPORT.md).
+-- Installs the viewport module, `package.loaded['neovim4eclipse.viewport']`. The session runs it
+-- once at start, after LuaScripts.SETUP (so after `init.lua`): Neovim's window then follows the
+-- editor, as in a terminal it follows the terminal's size (docs/design/VIEWPORT.md).
 --
 -- What it is for. Neovim's window is made the size of the editor (`nvim_ui_try_resize`, sent by the
 -- session), so that `H`, `L`, `Ctrl-D` and `'scrolloff'` work on the lines the editor shows. The
