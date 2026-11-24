@@ -170,7 +170,7 @@ class QuickfixEndToEndTest extends EndToEndTestBase {
         waitForTheJob();
         settle();
         SessionProbe.lua(session, """
-                local qf = require('neovim4eclipse.quickfix')
+                local qf = package.loaded['neovim4eclipse.quickfix']
                 _G.neovim4eclipse_test_sets, _G.neovim4eclipse_test_set = 0, qf.set
                 qf.set = function(...)
                   _G.neovim4eclipse_test_sets = _G.neovim4eclipse_test_sets + 1
@@ -187,7 +187,7 @@ class QuickfixEndToEndTest extends EndToEndTestBase {
             marker(file(), IMarker.PROBLEM, IMarker.SEVERITY_WARNING, "another", 6, 2);
             waitForTexts(List.of("only", "another"));
         } finally {
-            SessionProbe.lua(session, "require('neovim4eclipse.quickfix').set = _G.neovim4eclipse_test_set return 0");
+            SessionProbe.lua(session, "package.loaded['neovim4eclipse.quickfix'].set = _G.neovim4eclipse_test_set return 0");
         }
     }
 

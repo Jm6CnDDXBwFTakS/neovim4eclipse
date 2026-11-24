@@ -133,7 +133,7 @@ class NeovimViewportIntegrationTest {
             waitFor(() -> windowIs(s, 80, 20), "80 × 20");
             List<String> heard = follow(s);
             // What SET_TOPLINE runs (the script itself, with its buffer check, is viewport_spec.lua).
-            s.lua("require('neovim4eclipse.viewport').set_topline(40, 'keep')");
+            s.lua("package.loaded['neovim4eclipse.viewport'].set_topline(40, 'keep')");
             waitFor(() -> heard.contains("top 40"), "WinScrolled reports the line Neovim kept: " + heard);
             assertEquals(40, line(s, "w0"));
         }

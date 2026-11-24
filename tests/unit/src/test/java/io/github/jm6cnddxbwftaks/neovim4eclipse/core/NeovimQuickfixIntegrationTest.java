@@ -83,7 +83,7 @@ class NeovimQuickfixIntegrationTest {
     @Test
     void neovimsErrorIsTheCauseOfTheFailedQuestion() throws Exception {
         try (NeovimSession s = start()) {
-            s.commandAsync("lua require('neovim4eclipse.quickfix').current = function() error('no list today') end");
+            s.commandAsync("lua package.loaded['neovim4eclipse.quickfix'].current = function() error('no list today') end");
             CompletableFuture<QuickfixEntries.Current> answer = s.currentQuickfixAsync();
             ExecutionException e = assertThrows(ExecutionException.class,
                     () -> answer.get(TestWait.millis(), TimeUnit.MILLISECONDS));
