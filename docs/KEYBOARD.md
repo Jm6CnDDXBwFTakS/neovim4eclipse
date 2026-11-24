@@ -268,7 +268,7 @@ editor shares.
 
 - `util/VimCtrlKeys`: the letters, their defaults (`ECLIPSE_BY_DEFAULT`), and what each does in Vim.
 - `prefs/CtrlKeysPage`: the check boxes (`CtrlKeysPreferencePage` gives it the plug-in's store).
-- `core/LuaScripts` (`SETUP`) and `editor/IdeActions`: the keys handed to Eclipse.
+- `core/lua/setup.lua` and `core/lua/ide_keys.lua` (`LuaScripts.SETUP`, `IDE_KEYS`) and `editor/IdeActions`: the keys handed to Eclipse.
 - `editor/VimKeyContexts`: activates the contexts of the letters sent to Neovim.
 - `editor/EditorKeyContext`: when they are active: while the editor's text has
   the keyboard and Neovim owns the keys. A page editor taking the keyboard turns every editor's

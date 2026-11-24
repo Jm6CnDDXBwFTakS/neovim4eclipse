@@ -133,8 +133,8 @@ does nothing for these settings on macOS.
 **Which module a test belongs in.** Put a test in the cheapest module that can run it:
 
 1. `tests/unit` when the code is in `util` or `core` (no Eclipse at all).
-   - **Lua that runs inside Neovim** (`core/LuaScripts`: which `:` commands Eclipse carries out,
-     the write hook, the yank hook, leaving a folder) is tested in Lua, in
+   - **Lua that runs inside Neovim** (`core/LuaScripts` and the files in `core/lua/`: which `:`
+     commands Eclipse carries out, the write hook, the yank hook, leaving a folder) is tested in Lua, in
      `tests/unit/src/test/lua/*_spec.lua`, inside a headless Neovim without the Java session:
      what a script sends to Eclipse is recorded instead of sent, and keys typed with
      `nvim_feedkeys(keys, 'xt')` are done when the call returns, so nothing waits.
@@ -530,7 +530,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 |------|----------|
 | `plugins/io.github.jm6cnddxbwftaks.neovim4eclipse` | the plug-in; its packages under `src/io/github/jm6cnddxbwftaks/neovim4eclipse/` follow |
 | `.../util/` | pure Java, no Eclipse: key mapping, mode strings, text and column conversion, the decisions the Eclipse classes call |
-| `.../core/` | `NeovimSession` (the Neovim process, RPC and events) and the Lua it sends (`LuaScripts`); no Eclipse imports |
+| `.../core/` | `NeovimSession` (the Neovim process, RPC and events) and the Lua it sends (`LuaScripts`, and the files in `core/lua/`); no Eclipse imports |
 | `.../core/rpc/` | the plug-in's own msgpack-rpc client: connection, encoding, the typed Neovim API |
 | `.../sync/` | `BufferSynchronizer`: an Eclipse document and its Neovim buffer, kept equal; the text model only |
 | `.../editor/` | attaching to editors, key interception, the caret, status bar and command line, `:w` and `:q` |

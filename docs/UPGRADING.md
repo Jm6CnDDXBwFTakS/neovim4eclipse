@@ -460,7 +460,7 @@ put back as it was. It needs a JDK of release 22 or newer, as the Release tool d
    the move.
 
 What stays yours: read the release notes (`:help news`, and each patch release's changelog on
-GitHub) for changes to what the plug-in uses (the API calls in `core/rpc`, the Lua in `LuaScripts`,
+GitHub) for changes to what the plug-in uses (the API calls in `core/rpc`, the Lua in `core/lua/` and `LuaScripts`,
 `ext_cmdline`, autocommand events, options it sets), then remove the workarounds the new version
 makes unnecessary, each as its own commit after the move. Read every entry about **ui2**
 (`vim._core.ui2`, its windows, `msg_history_show`, `'cmdheight'`) in particular: ui2 is
@@ -482,7 +482,7 @@ too, as they are one setting. For a release that fixes something urgent, `--allo
 sooner.
 
 Where the plug-in can guard against a known issue in the pinned Neovim, it does so in
-`LuaScripts.SETUP` until a release fixes it. Example: Neovim 0.12.6 runs a crafted R Markdown chunk
+`core/lua/setup.lua` (`LuaScripts.SETUP`) until a release fixes it. Example: Neovim 0.12.6 runs a crafted R Markdown chunk
 header's backticks in a shell (Vim 9.2.1178, GHSA-x2w5-pj55-7hpc; fixed on master, not in
 release-0.12 when 0.12.6 was pinned), so SETUP turns `g:rmd_dynamic_fenced_languages` off; remove
 that guard, and the `setup_spec.lua` test for it, once the pinned Neovim has the fix.

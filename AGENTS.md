@@ -145,9 +145,15 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
   the `XDG_*` folders in their `pom.xml`). A test about a Neovim setting sets it itself. See
   CONTRIBUTING.md, "Your Neovim config and the UI tests".
 - Put each test in the cheapest module that can run it: `tests/unit`, then `tests/text`, then
-  `tests/swt`, then the UI tests (see CONTRIBUTING.md, "Which module a test belongs in"). Lua in
-  `core/LuaScripts` is tested in Lua (`tests/unit/src/test/lua/*_spec.lua`, a headless Neovim, no
-  Java session), not through `NeovimSession`.
+  `tests/swt`, then the UI tests (see CONTRIBUTING.md, "Which module a test belongs in"). The Lua
+  the plug-in sends (`core/LuaScripts`, and the files in `core/lua/` it reads) is tested in Lua
+  (`tests/unit/src/test/lua/*_spec.lua`, a headless Neovim, no Java session), not through
+  `NeovimSession`.
+- Lua reaches Neovim only as text a `core/LuaScripts` field holds: a short script there, or a file
+  in `core/lua/` that `core/LuaModules` reads from the plug-in's own jar. Never put a folder of the
+  plug-in's Lua on `'runtimepath'` or write it to disk for Neovim: a file earlier on the
+  runtimepath (the user's config, a plug-in) would stand in for a module. A new file needs a field
+  that names it (`LuaModulesTest` fails on a file no script reads).
 - Prefer putting decisions in small pure classes (testable in `tests/unit`) and keeping Eclipse
   classes as thin glue. Large classes are split by concern (see `core/package-info.java`).
 
@@ -161,9 +167,10 @@ Follow [docs/UPGRADING.md](docs/UPGRADING.md). In short:
 - After changing a constructor or method signature, callers whose source did not change are not
   recompiled and fail at run time with `NoSuchMethodError` (in UI tests: every attach times out).
   Delete `plugins/.../target/classes` (not `clean`) and build again.
-- The same goes for a changed `static final String` constant (such as a `LuaScripts` script): javac
-  copies its text into every class that uses it, so those classes keep the old text until they are
-  recompiled. Delete `plugins/.../target/classes` after changing one.
+- The same goes for a changed `static final String` constant (such as a short `LuaScripts` script,
+  a text block): javac copies its text into every class that uses it, so those classes keep the old
+  text until they are recompiled. Delete `plugins/.../target/classes` after changing one. A file in
+  `core/lua/` is read as the plug-in runs and needs no such rebuild.
 - Synthetic SWT key events in UI tests need `event.doit = true`.
 - Folding has several deliberate workarounds (a key watcher that drops `zE` and its like while `z` is pending, `:noautocmd
   normal! zE`, fold sends held and cursor reports dropped while Eclipse types). Read the table

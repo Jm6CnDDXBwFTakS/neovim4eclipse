@@ -673,7 +673,14 @@ Every column crossing the boundary goes through `util/Utf8Columns`.
 ### 2.9 Running Lua inside Neovim
 
 `nvim_exec_lua(code, args)` runs a Lua chunk and returns its result; `...` holds the arguments.
-`core/LuaScripts` keeps every chunk the plug-in sends, with comments. Two uses:
+`core/LuaScripts` has a field for every chunk the plug-in sends. A short one (a call into a
+module, `SHOW_WINDOW`) is a Java text block there. A large one, and every Neovim module the
+plug-in installs (`neovim4eclipse.windows`, `neovim4eclipse.paths`, ...), is a Lua file in
+`core/lua/`, with its comments: `core/LuaModules` reads the file from the plug-in's jar and wraps
+it so that Neovim compiles it as a chunk named after the file. An error in one then reads
+`neovim4eclipse/core/lua/paths.lua:42: ...`, the file's own line. A module too large for one
+file is a folder (`core/lua/windows/`): its files are sent as one script, each a chunk of its
+own, and share a table (`windows/init.lua` explains how). Two uses:
 
 - **Setup**: options and *autocommands* (`ModeChanged`, `CursorMoved`, `BufEnter`, `TextYankPost`)
   whose callbacks call `vim.rpcnotify(0, 'eclipse_mode', ...)`. Those notifications arrive at the
@@ -1122,6 +1129,17 @@ asking for it works. See CONTRIBUTING.md, "Test helpers and fakes", for where th
 ---
 
 ## Part 4: Recipes
+
+**Change or add Lua that runs in Neovim.** Edit the file in `core/lua/` (or the short script in
+`core/LuaScripts`) and its spec in `tests/unit/src/test/lua/`; run the specs with
+`./mvnw test -f tests/unit/pom.xml -Pintegration -Dnvim.path=...` (seconds). A new module is a new
+file there, starting with the two SPDX lines and a comment saying what it does, and a field in
+`LuaScripts` that names it (`static final String QUICKFIX = LuaModules.script("quickfix.lua")`),
+sent once from `NeovimSession.initialize`; `LuaModulesTest` fails on a file no field names. Its
+functions go in a table it puts in `package.loaded` (`package.loaded['neovim4eclipse.quickfix'] =
+M`), and the short scripts call them by name (`require('neovim4eclipse.quickfix').set(...)`).
+Never a `require` of a module the session has not sent: Lua would search the runtimepath, where a
+file of the user's could answer.
 
 **Add a preference.** Add a key and default to `PreferenceConstants`; set the default in
 `PreferenceDefaults`; add a field to a preference page's body (`NeovimPage`, `StatusBarPage`,

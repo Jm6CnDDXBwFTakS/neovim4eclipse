@@ -3,7 +3,7 @@
 
 --[[
 Runs one test of a *_spec.lua file inside a headless Neovim, against the plug-in's Lua scripts
-(core/LuaScripts), without Eclipse or the Java session.
+(core/LuaScripts, and the files in core/lua/ that it reads), without Eclipse or the Java session.
 
 Why this tier exists
 --------------------
@@ -39,7 +39,9 @@ spec that passes on Linux passes on the other two as well.
 How it is run
 -------------
 core/LuaScriptsInNeovimTest (JUnit, tagged "integration") writes the scripts' current text to a
-Lua module and starts, per test:
+Lua module and starts, per test (a script made of a file in core/lua/ is the text the session
+sends, which compiles the file as a chunk named after it: an error reads
+neovim4eclipse/core/lua/folds.lua:120, the file's line):
 
   nvim --clean --headless --cmd "let g:neovim4eclipse=1" -l harness.lua <module> <spec> --number <n>
 
