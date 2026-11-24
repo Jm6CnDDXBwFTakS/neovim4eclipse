@@ -178,6 +178,61 @@ class FloatInsertIntegrationTest {
         }
     }
 
+    /**
+     * Closing a page (its editor closed) while Neovim is in a plug-in's float over it, in an insert:
+     * the close leaves the float first, by the same two steps as the routes above
+     * ({@code DocumentBuffers.leavingFloat}), so that the insert ends in the float. Ended later, from
+     * the window Neovim goes to after the close, the attached document's, an insert that has only
+     * auto-indented ({@code o}) would take that window's white space with it: here the document is
+     * only white space, so a strip would show ({@code o}; after {@code Ctrl-O} no indent is left, and
+     * that case shows only that the insert ends). Example: {@code :messages} open as a page, a picker
+     * opened from it, the page's editor closed with the picker's prompt in insert.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = { "o", "ctrl-o" })
+    void closingAPageLeavesItsFloatsInsertAndTheDocumentAlone(String insert) throws Exception {
+        TestNeovim.require();
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean"))) {
+            EditorWindow editor = new EditorWindow();
+            s.showWindow(new DocumentBuffer(""), editor, "");
+            s.setBufferLines(List.of("    ", "  "));
+            int doc = ((Number) s.lua("return vim.api.nvim_get_current_buf()")).intValue();
+            String docLines = "return vim.api.nvim_buf_get_lines(" + doc + ", 0, -1, false)";
+            int pageBuf = ((Number) s.lua("local b = vim.api.nvim_create_buf(false, true)"
+                    + " vim.api.nvim_buf_set_lines(b, 0, -1, false, { 'p1' }) return b")).intValue();
+            int page = s.openPageWindow(pageBuf);
+            assertTrue(page > 0, "the page's window");
+            s.focusPageAsync(page);
+            NeovimBarrier.pass(s); // the queued focus done, before the float opens
+            assertEquals(page, s.focusedPage(), "the page with the focus");
+            assertEquals(page, ((Number) s.lua("return vim.api.nvim_get_current_win()")).intValue(), "Neovim in the page's window");
+            s.lua("""
+                    local b = vim.api.nvim_create_buf(false, true)
+                    vim.bo[b].autoindent = true
+                    vim.api.nvim_buf_set_lines(b, 0, -1, false, { '  indented' })
+                    vim.api.nvim_open_win(b, true, { relative = 'editor', row = 2, col = 2, width = 20, height = 3 })
+                    return 0
+                    """);
+            waitFor(s::inPluginFloat, "Neovim in the float over the page");
+            String mode = "return vim.api.nvim_get_mode().mode";
+            if (insert.equals("o")) {
+                s.inputAsync("o");
+                waitFor(() -> "i".equals(s.lua(mode)), "the insert");
+            } else {
+                s.inputAsync("i");
+                s.inputAsync("<C-o>");
+                waitFor(() -> "niI".equals(s.lua(mode)), "Ctrl-O waiting for its command");
+            }
+            s.closePageWindowAsync(page);
+            waitFor(() -> "n".equals(s.lua(mode)) && !s.inPluginFloat()
+                    && ((Number) s.lua("return vim.api.nvim_get_current_win()")).intValue() == editor.winid(),
+                    "the insert over, Neovim in the editor's window");
+            NeovimBarrier.pass(s);
+            assertEquals("0", String.valueOf(s.lua("return vim.api.nvim_win_is_valid(" + page + ") and 1 or 0")), "the page's window closed");
+            assertEquals(List.of("    ", "  "), s.lua(docLines), "the document's lines");
+        }
+    }
+
     @ParameterizedTest(name = "insert begun {0}")
     @ValueSource(strings = { "within the command", "later", "telescope" })
     void keysTypedRightAfterThePickerOpensAllGoToNeovim(String when) throws Exception {
