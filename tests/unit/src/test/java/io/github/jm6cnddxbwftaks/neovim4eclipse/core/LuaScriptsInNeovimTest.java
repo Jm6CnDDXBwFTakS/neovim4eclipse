@@ -181,38 +181,24 @@ class LuaScriptsInNeovimTest {
      * passes them.
      */
     static String scriptsModule() throws IllegalAccessException {
-        StringBuilder lua = new StringBuilder("return {\n  host_rules = ").append(longString(HostCommand.rulesForNeovim()))
+        StringBuilder lua = new StringBuilder("return {\n  host_rules = ").append(LuaModules.longString(HostCommand.rulesForNeovim()))
                 .append(",\n  ide_keys = {");
         for (String arg : IdeKeys.toLuaArgs()) {
-            lua.append(' ').append(longString(arg)).append(',');
+            lua.append(' ').append(LuaModules.longString(arg)).append(',');
         }
         lua.append(" },\n  jump_label_prefixes = {");
         for (String prefix : JumpLabels.BUILT_IN_PREFIXES) {
-            lua.append(' ').append(longString(prefix)).append(',');
+            lua.append(' ').append(LuaModules.longString(prefix)).append(',');
         }
         lua.append(" },\n  scripts = {\n");
         for (Field field : LuaScripts.class.getDeclaredFields()) {
             int m = field.getModifiers();
             if (Modifier.isStatic(m) && Modifier.isFinal(m) && field.getType() == String.class) {
                 field.setAccessible(true);
-                lua.append("    ").append(field.getName()).append(" = ").append(longString((String) field.get(null))).append(",\n");
+                lua.append("    ").append(field.getName()).append(" = ").append(LuaModules.longString((String) field.get(null))).append(",\n");
             }
         }
         return lua.append("  },\n}\n").toString();
-    }
-
-    /**
-     * {@code text} as a Lua long string, {@code [==[...]==]}, with as many {@code =} as it takes for
-     * the closing bracket not to occur in the text. A long string takes the text as it is: no
-     * escapes are read, so the script reaches Neovim exactly as {@code nvim_exec_lua} would get it.
-     * (A newline right after the opening bracket would be dropped, so none is put there.)
-     */
-    static String longString(String text) {
-        String level = "";
-        while (text.contains("]" + level + "]")) {
-            level += "=";
-        }
-        return "[" + level + "[" + text + "]" + level + "]";
     }
 
     // A check of the module itself, so a broken one fails here and not as every Lua test at once.
@@ -220,6 +206,5 @@ class LuaScriptsInNeovimTest {
     void theModuleHasEveryScript() throws Exception {
         String lua = scriptsModule();
         assertTrue(lua.contains("    SETUP = [") && lua.contains("    HOST_COMMANDS = [") && lua.contains("    DOCUMENT_BUFFER = ["), lua);
-        assertEquals("[=[a]]b]=]", longString("a]]b"));
     }
 }
