@@ -422,7 +422,7 @@ final class LuaScripts {
                 -- "Error in BufWriteCmd Autocommands for ...", as for any autocommand's error.
                 for _, event in ipairs({ 'BufWriteCmd', 'FileWriteCmd', 'FileAppendCmd' }) do
                   vim.api.nvim_create_autocmd(event, {
-                    buffer = buf,
+                    buf = buf,
                     callback = function()
                       vim.api.nvim_echo({ { "E382: Cannot write, 'buftype' option is set" } }, true, { err = true })
                     end,

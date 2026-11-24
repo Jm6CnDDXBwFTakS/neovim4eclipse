@@ -1563,7 +1563,7 @@ t.test("an undrawn float counts as closed though a plug-in's close handler fails
     local buf = vim.api.nvim_create_buf(false, true)
     local float = vim.api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 10, height = 1 })
     local handler = vim.api.nvim_create_autocmd(event, {
-      buffer = event ~= 'WinClosed' and buf or nil,
+      buf = event ~= 'WinClosed' and buf or nil,
       pattern = event == 'WinClosed' and tostring(float) or nil,
       callback = function() error('a handler that fails (expected by the test)') end,
     })
@@ -1651,7 +1651,7 @@ t.test('a start float in Insert mode that closes on leaving does not carry its i
   t.run('WINDOWS', tostring(home_buf))
   local float_buf = buffer(1)
   local float = vim.api.nvim_open_win(float_buf, true, { relative = 'editor', row = 1, col = 1, width = 9, height = 1 })
-  vim.api.nvim_create_autocmd('BufLeave', { buffer = float_buf, once = true, nested = true,
+  vim.api.nvim_create_autocmd('BufLeave', { buf = float_buf, once = true, nested = true,
     callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, float, true) end) end })
   t.eq(false, t.run('CLOSE_START_FLOAT', '0'))
   local doc = buffer(3)
@@ -1856,7 +1856,7 @@ t.test('moving out of a float leaves it open, unless its plug-in closes it on le
   vim.api.nvim_win_close(float, true)
   -- A picker: Telescope closes its windows on BufLeave.
   local picker = enter_float()
-  vim.api.nvim_create_autocmd('BufLeave', { buffer = vim.api.nvim_win_get_buf(picker), once = true,
+  vim.api.nvim_create_autocmd('BufLeave', { buf = vim.api.nvim_win_get_buf(picker), once = true,
     callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, picker, true) end) end })
   t.eq(true, windows.move_out_of_float(-1))
   t.wait_for('the plug-in closed its window', function() return not vim.api.nvim_win_is_valid(picker) end)

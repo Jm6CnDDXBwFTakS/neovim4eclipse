@@ -141,14 +141,14 @@ end
 local function hook(buf)
   if not hooked[buf] then
     hooked[buf] = true
-    vim.api.nvim_create_autocmd('BufReadCmd', { group = group, buffer = buf, callback = read })
+    vim.api.nvim_create_autocmd('BufReadCmd', { group = group, buf = buf, callback = read })
   end
 end
 
 local function unhook(buf)
   if hooked[buf] then
     hooked[buf] = nil
-    pcall(vim.api.nvim_clear_autocmds, { group = group, buffer = buf, event = 'BufReadCmd' })
+    pcall(vim.api.nvim_clear_autocmds, { group = group, buf = buf, event = 'BufReadCmd' })
   end
 end
 

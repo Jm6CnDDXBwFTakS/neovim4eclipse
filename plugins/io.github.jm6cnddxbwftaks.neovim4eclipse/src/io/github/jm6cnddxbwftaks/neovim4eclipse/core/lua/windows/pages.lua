@@ -72,7 +72,7 @@ local function page_buffer(buf)
   vim.b[buf].neovim4eclipse_page_ready = true
   for _, event in ipairs({ 'BufWriteCmd', 'FileWriteCmd', 'FileAppendCmd' }) do
     vim.api.nvim_create_autocmd(event, {
-      buffer = buf,
+      buf = buf,
       callback = function()
         vim.api.nvim_echo({ { "E382: Cannot write, 'buftype' option is set" } }, true, { err = true })
       end,

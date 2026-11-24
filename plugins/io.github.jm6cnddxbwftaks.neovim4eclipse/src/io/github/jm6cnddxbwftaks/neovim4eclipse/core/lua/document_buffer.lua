@@ -456,7 +456,7 @@ function M.setup(buf)
   keep_iskeyword(buf)
   hook('FileType', {
     group = group,
-    buffer = buf,
+    buf = buf,
     desc = "Eclipse keeps the document's 'iskeyword'",
     callback = function()
       keep_iskeyword(buf)
@@ -464,7 +464,7 @@ function M.setup(buf)
   })
   hook('OptionSet', {
     group = group,
-    buffer = buf,
+    buf = buf,
     desc = "Eclipse keeps the document's 'iskeyword'",
     callback = function(ev)
       if ev.match == 'iskeyword' then

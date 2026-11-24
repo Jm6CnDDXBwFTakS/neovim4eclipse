@@ -310,7 +310,7 @@ t.test('a stale swap file does not stop the read at E325', function()
   vim.o.directory = vim.fn.tempname() .. '//'
   vim.fn.mkdir(vim.o.directory, 'p')
   local probe = vim.fn.bufadd(path)
-  vim.api.nvim_clear_autocmds({ group = 'neovim4eclipse_projects', buffer = probe }) -- Neovim's own read
+  vim.api.nvim_clear_autocmds({ group = 'neovim4eclipse_projects', buf = probe }) -- Neovim's own read
   vim.bo[probe].swapfile = true
   vim.fn.bufload(probe)
   vim.api.nvim_buf_call(probe, function() vim.cmd('silent! noautocmd normal! ix') vim.cmd('preserve') end)

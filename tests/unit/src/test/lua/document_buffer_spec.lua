@@ -478,10 +478,10 @@ t.test('after :augroup! of the plug-in\'s group, old and new document buffers ke
   t.eq('acwrite', vim.bo[old].buftype, 'still a document')
   -- Its editor closed: none of its autocommands is left (all of them the plug-in's here,
   -- whatever their desc).
-  local before = vim.api.nvim_get_autocmds({ buffer = old })
+  local before = vim.api.nvim_get_autocmds({ buf = old })
   t.ok(#before >= 10, 'every hook, in the deleted group: ' .. #before)
   t.run('CLOSE_DOCUMENT_BUFFER', tostring(old))
-  t.eq({}, vim.api.nvim_get_autocmds({ buffer = old }))
+  t.eq({}, vim.api.nvim_get_autocmds({ buf = old }))
   t.eq(false, package.loaded['neovim4eclipse.document_buffer'].is_document(old))
 end)
 
@@ -510,7 +510,7 @@ t.test('closing without the module, after :augroup!, still takes every hook off'
   t.setup()
   local buf = t.document('NoGroup.txt', { 'x' })
   vim.cmd('enew')
-  local before = vim.api.nvim_get_autocmds({ buffer = buf })
+  local before = vim.api.nvim_get_autocmds({ buf = buf })
   t.ok(#before >= 10, 'every hook: ' .. #before)
   for _, a in ipairs(before) do
     t.ok(a.desc ~= nil and a.desc:find('^Eclipse ') ~= nil, 'a desc: ' .. vim.inspect(a.event))
@@ -521,7 +521,7 @@ t.test('closing without the module, after :augroup!, still takes every hook off'
   local ok, err = pcall(t.run, 'CLOSE_DOCUMENT_BUFFER', tostring(buf))
   package.loaded['neovim4eclipse.document_buffer'] = module
   t.ok(ok, tostring(err))
-  t.eq({}, vim.api.nvim_get_autocmds({ buffer = buf }))
+  t.eq({}, vim.api.nvim_get_autocmds({ buf = buf }))
 end)
 
 -- Kept only for the read that follows the unload at once (:edit! does both in one command): a buffer
