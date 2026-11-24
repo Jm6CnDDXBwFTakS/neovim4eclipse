@@ -34,12 +34,14 @@ import java.util.regex.Pattern;
  * and its line ({@code neovim4eclipse/core/lua/paths.lua:42: attempt to index a nil value}), which
  * is the line in this folder. The name starts with {@code =}, Lua's mark for a chunk named as it
  * is, not with {@code @}, its mark for a file: Neovim takes a {@code @} name for a file's path and
- * resolves it against its working folder, the project's, so {@code :verbose map} would say "Last
- * set from /ws/app/neovim4eclipse/core/lua/setup.lua", a file that is not there (or one a cloned
- * repository put there). With {@code =} it says "Last set from Lua", as for any
- * {@code nvim_exec_lua} (probed on 0.12.6). And a module made of several files (the windows module, in
- * {@code windows/}) is sent as one script whose files are each a chunk of their own, run in order:
- * each file's locals stay its own, under Lua's limit of 200 locals per function.
+ * resolves it against its working folder, the project's, so with {@code 'verbose'} on ({@code -V1},
+ * or set in {@code init.lua}) {@code :verbose map} would say "Last set from
+ * /ws/app/neovim4eclipse/core/lua/setup.lua", a file that is not there (or one a cloned repository
+ * put there). With {@code =} it says "Last set from Lua", as for any {@code nvim_exec_lua}, and a
+ * mapping the plug-in made with a Lua function shows as {@code <Lua N>}, without a file and line
+ * (probed on 0.12.6). And a module made of several files (the windows module, in {@code windows/})
+ * is sent as one script whose files are each a chunk of their own, run in order: each file's
+ * locals stay its own, under Lua's limit of 200 locals per function.
  *
  * <p>Example: {@code script("paths.lua")} gives
  * <pre>{@code
@@ -58,7 +60,10 @@ final class LuaModules {
     /** The folder of the files, beside this class. */
     static final String FOLDER = "lua/";
 
-    /** What a chunk is named, after Lua's {@code =}: {@value} and the file, as Neovim's error messages show it. */
+    /**
+     * What a chunk is named, after Lua's {@code =}: {@value} and the file, as Neovim's error
+     * messages show it.
+     */
     static final String CHUNK_PREFIX = "neovim4eclipse/core/lua/";
 
     /**
