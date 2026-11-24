@@ -252,8 +252,7 @@ so it runs the same everywhere. To try the plug-in with your own config, run it 
 "Run it from Eclipse").
 
 The fzf-lua tests are the one exception on purpose: fzf is not pinned, so they run the `fzf` on
-your `PATH` (and `fzf-lua`'s `files` the `fd` or `rg` you have, else `find`; a
-`core.excludesFile` in your `~/.gitconfig` still reaches those), and are skipped without one (docs/UPGRADING.md, "The plug-ins the tests run"). The
+your `PATH`, and are skipped without one (docs/UPGRADING.md, "The plug-ins the tests run"). The
 variables fzf reads its options from are taken out of their Neovim.
 
 Earlier builds left a test data folder in your real one: `~/.local/share/neovim4eclipse-plugin/tests`

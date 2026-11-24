@@ -145,24 +145,30 @@ class FzfLuaEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * fzf-lua's {@code files} in the project's folder, {@code Ctrl-V} on {@code other.txt}: fzf-lua
-     * closes its list and makes a vertical split on the file, which the editor turns into an
-     * Eclipse split on it (a window Eclipse does not draw would take keys unseen). {@code files}
-     * lists with {@code fd}, {@code rg} or {@code find}, whichever the machine has.
+     * {@code Ctrl-V} on a file in an fzf-lua list: fzf-lua's own action for it ({@code file_vsplit},
+     * which its {@code files} binds to {@code Ctrl-V}) closes the list and makes a vertical split on
+     * the file, which the editor turns into an Eclipse split on it (a window Eclipse does not draw
+     * would take keys unseen). The list is one of the test's own ({@code fzf_exec} on two names in
+     * the project's folder: {@code other.txt}, a file there, and {@code notes.md}, which the
+     * letters typed leave out), so that it is the same on every system: {@code files} lists with
+     * whatever the machine has ({@code fd}, {@code rg}, {@code find}), and on Windows Git Bash's
+     * {@code find} gives full paths, cut at the window's width, so no row would show the name.
      */
     @Test
     void ctrlVOnAFileOpensItInASplit() throws Exception {
         String text = document.get();
         createFile("other.txt", "one\ntwo\nthree\n");
-        SessionProbe.lua(session, "vim.keymap.set('n', 'gZ', function() require('fzf-lua').files({ cwd = "
-                + PinnedPlugins.longString(project.getLocation().toFile().toPath()) + " }) end)");
+        SessionProbe.lua(session, "vim.keymap.set('n', 'gZ', function() require('fzf-lua').fzf_exec("
+                + "{ 'other.txt', 'notes.md' }, { cwd = " + PinnedPlugins.longString(project.getLocation().toFile().toPath())
+                + ", actions = { ['ctrl-v'] = require('fzf-lua.actions').file_vsplit } }) end)");
         try {
             UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
             type(widget, "gZ");
-            waitUntil("fzf-lua's files drawn, other.txt in them", TIMEOUT_MS,
-                    () -> listShows("other.txt") && fzfWindows("other.txt") == 1, () -> "; drawn:\n" + drawn());
+            waitUntil("the list drawn, other.txt and notes.md in it", TIMEOUT_MS,
+                    () -> listShows("other.txt") && fzfWindows("other.txt") == 1 && fzfWindows("notes.md") == 1,
+                    () -> "; drawn:\n" + drawn());
             type(widget, "other");
-            waitUntil("narrowed to other.txt", TIMEOUT_MS, () -> fzfWindows("other.txt") == 1 && fzfWindows(".project") == 0,
+            waitUntil("narrowed to other.txt", TIMEOUT_MS, () -> fzfWindows("other.txt") == 1 && fzfWindows("notes.md") == 0,
                     () -> "; drawn:\n" + drawn());
             ctrlKey(widget, 'v');
             waitUntil("other.txt in a new editor, a split", TIMEOUT_MS, () -> {
