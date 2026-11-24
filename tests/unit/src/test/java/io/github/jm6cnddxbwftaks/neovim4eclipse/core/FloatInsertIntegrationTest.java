@@ -135,6 +135,49 @@ class FloatInsertIntegrationTest {
         }
     }
 
+    /**
+     * Each of Eclipse's routes out of a float ends its insert in the float: nothing of the
+     * document's changes, also where every line is white space, the insert has only auto-indented
+     * ({@code o}) or waits in {@code Ctrl-O} for one command, whose insert must not go on there.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = { "move o", "move ctrl-o", "leave o", "leave ctrl-o", "show o", "show ctrl-o" })
+    void leavingAFloatsInsertLeavesTheDocumentAlone(String route) throws Exception {
+        TestNeovim.require();
+        String[] parts = route.split(" ");
+        try (NeovimSession s = NeovimSession.start(NVIM, List.of("--clean"))) {
+            s.setBufferLines(List.of("    ", "  "));
+            int doc = ((Number) s.lua("return vim.api.nvim_get_current_buf()")).intValue();
+            String docLines = "return vim.api.nvim_buf_get_lines(" + doc + ", 0, -1, false)";
+            s.lua("""
+                    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+                    local b = vim.api.nvim_create_buf(false, true)
+                    vim.bo[b].autoindent = true
+                    vim.api.nvim_buf_set_lines(b, 0, -1, false, { '  indented' })
+                    vim.api.nvim_open_win(b, true, { relative = 'editor', row = 2, col = 2, width = 20, height = 3 })
+                    return 0
+                    """);
+            waitFor(s::inPluginFloat, "Neovim in the float");
+            String mode = "return vim.api.nvim_get_mode().mode";
+            if (parts[1].equals("o")) {
+                s.inputAsync("o");
+                waitFor(() -> "i".equals(s.lua(mode)), "the insert");
+            } else {
+                s.inputAsync("i");
+                s.inputAsync("<C-o>");
+                waitFor(() -> "niI".equals(s.lua(mode)), "Ctrl-O waiting for its command");
+            }
+            switch (parts[0]) {
+                case "move" -> s.moveOutOfFloatAsync(-1);
+                case "leave" -> s.leaveFloatAsync();
+                default -> s.showWindow(new DocumentBuffer(""), new EditorWindow(), "");
+            }
+            waitFor(() -> "n".equals(s.lua(mode)) && !s.inPluginFloat(), "out of the float, the insert over");
+            NeovimBarrier.pass(s);
+            assertEquals(List.of("    ", "  "), s.lua(docLines), "the document's lines");
+        }
+    }
+
     @ParameterizedTest(name = "insert begun {0}")
     @ValueSource(strings = { "within the command", "later", "telescope" })
     void keysTypedRightAfterThePickerOpensAllGoToNeovim(String when) throws Exception {

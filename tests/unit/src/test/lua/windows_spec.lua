@@ -1687,9 +1687,134 @@ t.test('a float opened after the start check does not carry its insert into the 
 end)
 
 -- 'o' on an indented line, nothing typed: as the insert ends, Neovim removes the white space at the
--- cursor of the window it is in. That must be the float's, never the document's line.
+-- cursor of the window it is in. Ended in the float (the first of the two steps), that is the float's.
 for _, leave in ipairs({ 'move_out_of_float', 'leave_float' }) do
-  t.test("ending a float's auto-indented insert keeps the document's indentation: " .. leave, function()
+  for _, text in ipairs({ { '    keep indent', 'two' }, { '    ', '  ' } }) do
+    t.test("ending a float's auto-indented insert keeps the document's line: " .. leave .. ', ' .. text[2], function()
+      local win = commands()
+      local doc = vim.api.nvim_win_get_buf(win)
+      vim.api.nvim_buf_set_lines(doc, 0, -1, false, text)
+      vim.api.nvim_win_set_cursor(win, { 1, 0 })
+      local b = buffer(1)
+      vim.api.nvim_buf_set_lines(b, 0, -1, false, { '  indented' })
+      vim.bo[b].autoindent = true
+      vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 1, width = 20, height = 3 })
+      local windows = require('neovim4eclipse.windows')
+      vim.keymap.set('i', '<F6>', function() t.eq(true, windows.end_float_insert('move', -1)) end)
+      vim.keymap.set('n', '<F7>', function() windows[leave](-1) end)
+      vim.api.nvim_feedkeys(vim.keycode('o<F6><F7>'), 'mx', false)
+      vim.keymap.del('i', '<F6>')
+      vim.keymap.del('n', '<F7>')
+      t.eq(text, vim.api.nvim_buf_get_lines(doc, 0, -1, false))
+      t.eq(win, vim.api.nvim_get_current_win())
+      t.eq({ 1, 0 }, vim.api.nvim_win_get_cursor(win), "the document's cursor stays")
+      t.eq('n', vim.api.nvim_get_mode().mode)
+    end)
+  end
+end
+
+-- The first step (END_FLOAT_INSERT) is told the route and the arguments of the script sent next,
+-- and ends the float's insert only where that script leaves the float (the windows module's
+-- leaves): a route that leaves Neovim where it is must not turn the next letters into commands.
+t.test("the first step ends a float's insert only where the next script leaves the float", function()
+  local win = commands()
+  local doc = vim.api.nvim_win_get_buf(win)
+  local other_doc = buffer(2)
+  local other = open(other_doc) -- another editor, in a tab page of its own
+  vim.api.nvim_set_current_win(win)
+  local named = vim.api.nvim_open_win(buffer(1), false, { relative = 'editor', row = 4, col = 1, width = 9, height = 1 })
+  local float = enter_float()
+  local answers
+  vim.keymap.set('i', '<F6>', function()
+    answers = {
+      t.run('END_FLOAT_INSERT', 'close', tostring(other), tostring(doc)), -- a background editor closes
+      t.run('END_FLOAT_INSERT', 'release', tostring(other_doc), tostring(doc)), -- and its document
+      t.run('END_FLOAT_INSERT', 'move', tostring(named)), -- another float named: Neovim went on since
+      t.run('END_FLOAT_INSERT', 'undrawn', '-1', 'past the limits'), -- drawn: another window's grid
+      t.run('END_FLOAT_INSERT', 'show', tostring(other), '99999'), -- a wiped buffer: no show
+      t.run('END_FLOAT_INSERT', 'focus', '99999'), -- a page's window closed in Neovim
+      vim.api.nvim_get_mode().mode,
+    }
+  end)
+  vim.api.nvim_feedkeys(vim.keycode('i<F6>z<Esc>'), 'mx', false)
+  vim.keymap.del('i', '<F6>')
+  t.eq({ false, false, false, false, false, false, 'i' }, answers)
+  t.eq({ 'zline 1' }, vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(float), 0, -1, false),
+    'the insert went on in the float')
+  -- Where the script leaves the float, the insert ends.
+  for _, route in ipairs({
+    { 'close', tostring(win), tostring(doc) },
+    { 'release', tostring(doc), tostring(doc) },
+    { 'move', '-1' },
+    { 'move', tostring(float) },
+    { 'undrawn', tostring(float), 'past the limits' },
+    { 'show', tostring(other), tostring(other_doc) },
+    { 'focus', tostring(other) },
+  }) do
+    local answer
+    vim.keymap.set('i', '<F6>', function() answer = t.run('END_FLOAT_INSERT', unpack(route)) end)
+    vim.api.nvim_feedkeys(vim.keycode('i<F6>'), 'mx', false)
+    vim.keymap.del('i', '<F6>')
+    t.eq(true, answer, table.concat(route, ' '))
+    t.eq(float, vim.api.nvim_get_current_win(), 'the first step only ends the insert')
+  end
+end)
+
+-- A float on a document another editor has open (a peek window), the user typing in it, and that
+-- editor closing in the background: the release closes the float too and leaves for the home
+-- window, so step one must count the float itself, or the insert goes on in the home window's
+-- document. Typed: 'Z' after an insert; or 'o', only auto-indented, on a line of only white space.
+for _, case in ipairs({ { keys = 'i', after = 'Z', text = { 'line 1', 'line 2', 'line 3' } },
+    { keys = 'o', after = '', text = { '\t\t' } } }) do
+  t.test("releasing the buffer a float shows ends the float's insert first: " .. case.keys, function()
+    local win = commands()
+    local a = vim.api.nvim_win_get_buf(win)
+    vim.api.nvim_buf_set_lines(a, 0, -1, false, case.text)
+    local b = buffer(2)
+    vim.bo[b].autoindent = true
+    vim.api.nvim_buf_set_lines(b, 0, -1, false, { '  peek' })
+    open(b) -- b's own editor, in a tab page of its own
+    vim.api.nvim_set_current_win(win)
+    vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 1, width = 20, height = 3 })
+    local answer
+    vim.keymap.set('i', '<F6>', function() answer = t.run('END_FLOAT_INSERT', 'release', tostring(b), tostring(a)) end)
+    vim.keymap.set({ 'i', 'n' }, '<F7>', function() t.run('RELEASE_BUFFER', tostring(b), tostring(a)) end)
+    vim.api.nvim_feedkeys(vim.keycode(case.keys .. '<F6><F7>' .. case.after .. '<Esc>'), 'mx', false)
+    vim.keymap.del('i', '<F6>')
+    vim.keymap.del({ 'i', 'n' }, '<F7>')
+    t.eq(true, answer)
+    t.eq(a, vim.api.nvim_get_current_buf(), "the home window shows the attached document")
+    t.eq(case.text, vim.api.nvim_buf_get_lines(a, 0, -1, false))
+  end)
+end
+
+-- After Ctrl-O in an insert, Neovim reports Visual or Select mode while the insert waits to go on:
+-- leaving the float then must end that wait, or the insert goes on in the document.
+for _, keys in ipairs({ 'v', 'gh' }) do
+  t.test('an insert waiting after Ctrl-O ' .. keys .. ' in a float does not go on in the document', function()
+    local win = commands()
+    local doc = vim.api.nvim_win_get_buf(win)
+    enter_float()
+    local windows = require('neovim4eclipse.windows')
+    local answer
+    vim.keymap.set({ 'x', 's' }, '<F6>', function() answer = t.run('END_FLOAT_INSERT', 'move', '-1') end)
+    vim.keymap.set({ 'x', 's' }, '<F7>', function() windows.move_out_of_float(-1) end)
+    -- The space would be typed into the document if the insert went on there.
+    vim.api.nvim_feedkeys(vim.keycode('i<C-o>' .. keys .. '<F6><F7><Space><Esc>'), 'mx', false)
+    vim.keymap.del({ 'x', 's' }, '<F6>')
+    vim.keymap.del({ 'x', 's' }, '<F7>')
+    t.eq(true, answer)
+    t.eq(win, vim.api.nvim_get_current_win())
+    t.eq({ 'line 1', 'line 2', 'line 3' }, vim.api.nvim_buf_get_lines(doc, 0, -1, false))
+  end)
+end
+
+-- A plug-in that takes Neovim out of its float during an insert ('o', nothing typed yet): the
+-- insert ends from the document's window, its cursor waiting on text so that the document's line
+-- keeps its indentation (stop_insert_in_place), and back where it was afterwards. Eclipse's route
+-- after it: the editor shown again, or a click naming the float Neovim was in.
+for _, route in ipairs({ 'show', 'move' }) do
+  t.test("an auto-indented insert a plug-in carries out of its float keeps the document's indentation: " .. route, function()
     local win = commands()
     local doc = vim.api.nvim_win_get_buf(win)
     vim.api.nvim_buf_set_lines(doc, 0, -1, false, { '    keep indent', 'two' })
@@ -1697,13 +1822,22 @@ for _, leave in ipairs({ 'move_out_of_float', 'leave_float' }) do
     local b = buffer(1)
     vim.api.nvim_buf_set_lines(b, 0, -1, false, { '  indented' })
     vim.bo[b].autoindent = true
-    vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 1, width = 20, height = 3 })
-    vim.keymap.set('i', '<F6>', function() require('neovim4eclipse.windows')[leave](-1) end)
-    vim.api.nvim_feedkeys(vim.keycode('o<F6><Esc>'), 'mx', false)
+    local float = vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 1, width = 20, height = 3 })
+    local windows = require('neovim4eclipse.windows')
+    vim.keymap.set('i', '<F6>', function() vim.api.nvim_set_current_win(win) end) -- the plug-in's move
+    vim.keymap.set('i', '<F7>', function()
+      if route == 'show' then
+        show(win, doc)
+      else
+        windows.move_out_of_float(float)
+      end
+    end)
+    vim.api.nvim_feedkeys(vim.keycode('o<F6><F7>'), 'mx', false)
     vim.keymap.del('i', '<F6>')
+    vim.keymap.del('i', '<F7>')
     t.eq({ '    keep indent', 'two' }, vim.api.nvim_buf_get_lines(doc, 0, -1, false))
-    t.eq(win, vim.api.nvim_get_current_win())
     t.eq({ 1, 0 }, vim.api.nvim_win_get_cursor(win), "the document's cursor stays")
+    t.eq('n', vim.api.nvim_get_mode().mode)
   end)
 end
 

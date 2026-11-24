@@ -53,12 +53,24 @@ class DocumentBuffersTest {
      * arguments and gives the answer. Unlisted calls answer null.
      */
     private final Map<String, Object> answers = new HashMap<>();
+    /** The arguments of each first step of a route out of a float (END_FLOAT_INSERT), in order. */
+    private final List<String> firstSteps = new CopyOnWriteArrayList<>();
+    /** The first step's answer: false (nothing ended), or an Exception that fails it. */
+    private Object firstStepAnswer = false;
 
     @SuppressWarnings("unchecked") // the Function answers take the call's argument list
     private final DocumentBuffers buffers = new DocumentBuffers(new MsgpackNeovimApi((method, params) -> {
         String name = method;
         List<Object> args = new ArrayList<>(List.of(params));
         if (method.equals("nvim_exec_lua")) {
+            // The first step of every route out of a float, kept apart since no float is open: the
+            // lists most tests compare hold the steps that move or close. FloatInsertIntegrationTest
+            // and windows_spec.lua test the step itself, in a real Neovim.
+            if (LuaScripts.END_FLOAT_INSERT.equals(params[0])) {
+                firstSteps.add(String.valueOf(params[1]));
+                return firstStepAnswer instanceof Exception e ? CompletableFuture.failedFuture(e)
+                        : CompletableFuture.completedFuture(firstStepAnswer);
+            }
             name = SCRIPT_NAMES.getOrDefault((String) params[0], "some other script");
             args = new ArrayList<>((List<?>) params[1]);
         }
@@ -650,6 +662,48 @@ class DocumentBuffersTest {
         assertEquals("RELEASE_BUFFER [5, 1]", calls.get(0));
         assertEquals("CLOSE_DOCUMENT_BUFFER [5]", calls.get(calls.size() - 1));
         assertFalse(called("nvim_buf_delete"));
+    }
+
+    // ---- the first step of a route out of a float ----
+
+    /**
+     * The first step is sent the route and the script's own arguments, so that it ends the insert
+     * of a float only where that script leaves it (windows_spec.lua, "leaves"): here the release
+     * of buffer 5, the attached buffer 1 to show instead.
+     */
+    @Test
+    void theFirstStepNamesTheRouteAndTheScriptsArguments() throws Exception {
+        DocumentBuffer doc = shown("/ws/a.txt", 5);
+        firstSteps.clear();
+
+        buffers.close(doc);
+
+        assertEquals("[release, 5, 1]", firstSteps.get(0), firstSteps.toString());
+        assertEquals("RELEASE_BUFFER [5, 1]", calls.get(0));
+    }
+
+    /**
+     * A first step that fails (Neovim busy past the wait) does not cost the second: the window is
+     * closed all the same, as the caller has already forgotten it.
+     */
+    @Test
+    void aFailedFirstStepStillSendsTheClose() throws Exception {
+        EditorWindow other = shownInWindow("/ws/b.txt", 6);
+        calls.clear();
+        firstSteps.clear();
+        firstStepAnswer = new IllegalStateException("Neovim is busy");
+
+        buffers.closeWindow(other);
+
+        assertEquals(List.of("[close, 1001, 1]"), firstSteps);
+        assertEquals(List.of("CLOSE_WINDOW [1001, 1]"), calls);
+    }
+
+    /** Only the scripts listed with their route go through the two steps; any other is refused. */
+    @Test
+    void aScriptWithoutARouteIsRefused() {
+        assertThrows(IllegalArgumentException.class, () -> buffers.leavingFloat(LuaScripts.HOME_BUFFER, List.of()));
+        assertTrue(firstSteps.isEmpty() && calls.isEmpty(), calls.toString());
     }
 
     // ---- a buffer renamed after its file ----

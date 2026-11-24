@@ -201,7 +201,7 @@ final class DocumentBuffers {
         focusedPage = win;
         boolean entered = false;
         try {
-            Object answer = await(api.execLua(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(win), String.valueOf(attachedWin))));
+            Object answer = leavingFloat(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(win), String.valueOf(attachedWin)));
             entered = answer instanceof Number n && n.intValue() == win;
             return entered;
         } finally {
@@ -281,7 +281,7 @@ final class DocumentBuffers {
         if (focused) {
             focusedPage = EditorWindow.UNKNOWN;
         }
-        Object answer = await(api.execLua(LuaScripts.CLOSE_WINDOW, List.of(String.valueOf(win), String.valueOf(attachedBufnr))));
+        Object answer = leavingFloat(LuaScripts.CLOSE_WINDOW, List.of(String.valueOf(win), String.valueOf(attachedBufnr)));
         WithHome<Number> closed = WithHome.of("CLOSE_WINDOW", answer, Number.class);
         boolean attachedHome = attachedWin == homeWin;
         homeWin = closed.first().intValue();
@@ -508,6 +508,47 @@ final class DocumentBuffers {
     }
 
     /**
+     * Runs {@code script}, one that can take Neovim out of a plug-in's float, in two steps: first
+     * an insert begun in the float ends while Neovim is still in it
+     * ({@link LuaScripts#END_FLOAT_INSERT}), then the script moves or closes. The one way every
+     * route of Eclipse's leaves a float: a click, the keyboard going to another part, showing or
+     * closing an editor or a page. Ended from the window Neovim lands in, an insert that has only
+     * auto-indented would strip the white space at that window's cursor, a line of the document.
+     * Two calls because {@code :stopinsert} takes effect once the running call is over, and before
+     * Neovim reads the next one. Input thread.
+     *
+     * <p>The first step is sent the script's route ({@link LuaScripts#FLOAT_EXITS}) and arguments,
+     * so that it ends an insert only where the script will leave the float: a background editor
+     * closing leaves the user's Telescope prompt in its insert.
+     *
+     * <p>A first step that fails (Neovim busy past {@link Rpc#await}'s limit, a script error) is
+     * logged, and the script is sent all the same: the caller has already forgotten what it
+     * closes (a page's window, say), and Neovim would leave the float, only with the insert ended
+     * in the window it lands in, as before the two steps.
+     *
+     * @return the script's answer
+     * @throws IllegalArgumentException for a script that is not in {@link LuaScripts#FLOAT_EXITS}
+     */
+    Object leavingFloat(String script, List<?> args) throws Exception {
+        String route = LuaScripts.FLOAT_EXITS.get(script);
+        if (route == null) {
+            throw new IllegalArgumentException("Not a script that leaves a float: " + script.lines().findFirst().orElse(""));
+        }
+        List<Object> first = new ArrayList<>(args.size() + 1);
+        first.add(route);
+        first.addAll(args);
+        try {
+            await(api.execLua(LuaScripts.END_FLOAT_INSERT, first));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // kept: the script below is still sent, its wait ends at once
+            LOG.fine("Interrupted while ending a float's insert; leaving the float all the same");
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "Could not end a float's insert first; leaving the float all the same", e);
+        }
+        return await(api.execLua(script, args));
+    }
+
+    /**
      * Enters window {@code win} showing buffer {@code bufnr} ({@link LuaScripts#SHOW_WINDOW}), and
      * returns the window shown: for the home window its (perhaps new) id, which is remembered; for
      * an editor window {@link EditorWindow#UNKNOWN} when it was closed in Neovim; and
@@ -515,8 +556,8 @@ final class DocumentBuffers {
      */
     private int showWindow(int win, int bufnr) throws Exception {
         boolean toHome = win == EditorWindow.UNKNOWN || win == homeWin;
-        Object answer = await(api.execLua(LuaScripts.SHOW_WINDOW,
-                List.of(String.valueOf(toHome ? -1 : win), String.valueOf(bufnr))));
+        Object answer = leavingFloat(LuaScripts.SHOW_WINDOW,
+                List.of(String.valueOf(toHome ? -1 : win), String.valueOf(bufnr)));
         if (answer instanceof Number n && n.intValue() == BUFFER_GONE) {
             return BUFFER_GONE;
         }
@@ -546,8 +587,8 @@ final class DocumentBuffers {
             attachHome(); // first, without a call: should the close fail, the closed editor is not attached
             attachedWin = homeWin;
         }
-        Object answer = await(api.execLua(LuaScripts.CLOSE_WINDOW,
-                List.of(String.valueOf(win), String.valueOf(attachedBufnr))));
+        Object answer = leavingFloat(LuaScripts.CLOSE_WINDOW,
+                List.of(String.valueOf(win), String.valueOf(attachedBufnr)));
         WithHome<Number> closed;
         try {
             closed = WithHome.of("CLOSE_WINDOW", answer, Number.class);
@@ -792,8 +833,8 @@ final class DocumentBuffers {
             // Leave the buffer first: unloading the window's buffer makes Neovim enter some other one,
             // which Eclipse would follow by activating that editor. Editor windows still showing it
             // are closed; the home window shows the attached buffer instead.
-            Object answer = await(api.execLua(LuaScripts.RELEASE_BUFFER,
-                    List.of(String.valueOf(bufnr(doomed)), String.valueOf(attachedBufnr))));
+            Object answer = leavingFloat(LuaScripts.RELEASE_BUFFER,
+                    List.of(String.valueOf(bufnr(doomed)), String.valueOf(attachedBufnr)));
             // The closed windows' ids and the home buffer's number, made anew if Neovim wiped it.
             WithHome<List<?>> released = WithHome.of("RELEASE_BUFFER", answer, WithHome.LIST);
             // The windows first: should taking a new home buffer fail, none stays known after its
@@ -943,7 +984,7 @@ final class DocumentBuffers {
             // A page has the focus (the attached document closed under it, Neovim went elsewhere by
             // itself): back into the page's window, which keeps the keyboard. One place every way
             // back to the attached window passes; focusAttached ended the page's focus before.
-            await(api.execLua(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(page), "-1")));
+            leavingFloat(LuaScripts.FOCUS_WINDOW, List.of(String.valueOf(page), "-1"));
         }
     }
 

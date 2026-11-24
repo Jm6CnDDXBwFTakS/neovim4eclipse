@@ -346,6 +346,12 @@ t.test(':e +cmd that fails says so, one that moves windows keeps its move, and f
   t.eq(3, vim.api.nvim_win_get_cursor(here)[1], "the +cmd ran in the document's window")
   vim.api.nvim_win_close(float, true)
   t.eq(a, vim.api.nvim_win_get_buf(here))
+
+  -- A failed +cmd stops a macro, as any failed command does: its next key must not run.
+  vim.api.nvim_win_set_cursor(here, { 1, 0 })
+  vim.fn.setreg('q', ':e +nosuchcmd ' .. vim.fn.fnameescape(a_name) .. '\rdd')
+  pcall(t.type, '@q')
+  t.eq({ 'one', 'two', 'three' }, vim.api.nvim_buf_get_lines(a, 0, -1, false))
 end)
 
 t.test('%, ~ and $HOME are expanded as Neovim\'s :edit expands them; # without one is E194', function()

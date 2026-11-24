@@ -205,12 +205,20 @@ followed the same way; a switch to any other buffer (`:help`, a scratch buffer) 
 entered outside an insert, showing no document or project file), where
 Neovim is left, so that the insert the picker starts begins there. Leaving the editor moves Neovim
 out of the float, which stays open unless its plug-in closes it on `BufLeave`, as in a terminal
-(`WINDOWS`' `move_out_of_float`, from the two places every leave passes: `editor/LineOnFocusLoss`
-as the keyboard goes to another part, the float read as it goes, and the click handler before a
-click in the text, `NeovimEditorController.abandonLineAndFloat`). Eclipse mode closes it
-(`leave_float`), since its keys are gone, and so does closing the editor, since `WINDOWS`' `close`
-leaves its tab's float before closing the tab quietly. Then the
-window Neovim enters next decides as usual. Keys go only to a window Eclipse draws, checked in one
+(`WINDOWS`' `move_out_of_float`). The leave comes from the two places every leave passes:
+`editor/LineOnFocusLoss` as the keyboard goes to another part, the float read as it goes, and the
+click handler before a click in the text, `NeovimEditorController.abandonLineAndFloat`. An insert
+begun in the float ends first, in the float, in a call of its own (`DocumentBuffers.leavingFloat`,
+`end_float_insert`), since an insert that has only auto-indented removes the white space at the
+cursor of the window it ends in, and from the editor's window that would be the document's line.
+That first call is told the route and its arguments (`LuaScripts.FLOAT_EXITS`), and ends the insert
+only where the second will leave the float, by the same rule (`WINDOWS`' `leaves`): a background
+editor closing leaves a picker's prompt in its insert, and one whose document a float shows ends
+that float's insert. It also ends an insert waiting to go on after `Ctrl-O` (`i<C-o>v`), which
+Neovim reports as Visual, Select or command-line mode. A first call that fails is logged, and the
+second is sent all the same. Eclipse mode closes it (`leave_float`), since its keys are gone, and
+so does closing the editor, since `WINDOWS`' `close` leaves its tab's float before closing the tab
+quietly. Then the window Neovim enters next decides as usual. Keys go only to a window Eclipse draws, checked in one
 place for every route: each redraw that ends with Neovim's cursor on a grid the editor does not
 draw (`Grids.unseenCursor`, a known set allowed: any window of Neovim's layout, which Eclipse
 shows as an editor or page or the command-line window, Neovim's own floats, and the floats

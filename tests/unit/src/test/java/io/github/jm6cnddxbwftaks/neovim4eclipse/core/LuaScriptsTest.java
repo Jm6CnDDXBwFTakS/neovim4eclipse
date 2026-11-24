@@ -11,6 +11,20 @@ import org.junit.jupiter.api.Test;
 /** Cheap structural checks; real behavior is covered by the Neovim integration test. */
 class LuaScriptsTest {
 
+    /**
+     * Each route of {@link LuaScripts#FLOAT_EXITS} is a key of the windows module's table
+     * {@code leaves}, which decides it: the names are the one copy across Java and Lua, and a
+     * route Lua does not know would make every first step of it fail (logged, the insert kept).
+     */
+    @Test
+    void everyFloatExitRouteIsDecidedInTheWindowsModule() {
+        String table = LuaScripts.WINDOWS.substring(LuaScripts.WINDOWS.indexOf("local leaves = {"));
+        table = table.substring(0, table.indexOf("\n}\n")); // the text block's indentation is gone
+        for (String route : LuaScripts.FLOAT_EXITS.values()) {
+            assertTrue(table.contains("\n  " + route + " = function("), route);
+        }
+    }
+
     @Test
     void setupScriptRegistersTheNotificationsTheBridgeHandles() {
         for (String name : new String[] { "eclipse_mode", "eclipse_cursor", "eclipse_buf_enter", "eclipse_yank",

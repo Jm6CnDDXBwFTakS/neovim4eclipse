@@ -3,6 +3,8 @@
 
 package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
+import java.util.Map;
+
 /**
  * Lua snippets executed inside Neovim via {@code nvim_exec_lua}.
  *
@@ -536,18 +538,24 @@ final class LuaScripts {
             -- Runs the +cmd of :e +cmd name as Vim does: + alone goes to the last line, +10 to line
             -- 10, +/pat to the first match, any other an Ex command. It is what you typed (a
             -- completed file name has its + escaped, so a name never becomes one).
-            local function run_open_command(command)
+            local function run_open_command(command, later)
               local ok, err = pcall(vim.cmd, command == '' and '$' or command)
               if not ok then
-                -- Said once the caller is over: inside nvim_win_call (GO_TO_LAST_POSITION, with Neovim
-                -- in a float) an error message would become an error of that call, and show nothing.
                 local message = tostring(err):gsub('^Vim:', '')
-                vim.schedule(function()
+                local function say()
                   vim.api.nvim_echo({ { message } }, true, { err = true })
-                end)
+                end
+                -- At once, so that a failed +cmd stops a macro, as any failed command does. Later only
+                -- inside nvim_win_call (later: GO_TO_LAST_POSITION, with Neovim in a float), where an
+                -- error message would become an error of that call, and show nothing.
+                if later then
+                  vim.schedule(say)
+                else
+                  say()
+                end
               end
             end
-            package.loaded['neovim4eclipse.host_commands'].take_open_command = function(file)
+            package.loaded['neovim4eclipse.host_commands'].take_open_command = function(file, later)
               -- GO_TO_LAST_POSITION, after the attach push of file's editor: runs a waiting +cmd for
               -- that file, and says whether there was one (then the caret follows Neovim's cursor).
               local key = canonical(file)
@@ -556,7 +564,7 @@ final class LuaScripts {
                 return false
               end
               open_commands[key] = nil
-              run_open_command(command)
+              run_open_command(command, later)
               return true
             end
             -- A plug-in's split of a file, handed to Eclipse (WINDOW_COMMANDS' open_beside): the new
@@ -1096,12 +1104,11 @@ final class LuaScripts {
             if file and host and host.take_open_command then
               -- In the document's window as it is, so that a +cmd that moves (:e +tabnext name) keeps its
               -- move. Only with Neovim in a float does it run from there, and Neovim stays in the float.
-              local ran = false
-              local function take() ran = host.take_open_command(file) end
+              local ran
               if win == vim.api.nvim_get_current_win() then
-                take()
+                ran = host.take_open_command(file)
               else
-                vim.api.nvim_win_call(win, take)
+                vim.api.nvim_win_call(win, function() ran = host.take_open_command(file, true) end)
               end
               if ran then
                 return true
@@ -1727,17 +1734,31 @@ final class LuaScripts {
               return buf
             end
 
-            --- Ends the current insert, keeping the cursor of the window Neovim is in now. :stopinsert
-            --- takes effect once the running call is over, in that window, and Esc moves the cursor a
-            --- column left there: it is put back as the insert ends, so the editor's caret stays.
-            --- Until then the cursor waits on the next character that is not white space, or an empty
-            --- line: an insert that has only auto-indented ('o' in a float, nothing typed) ends by
-            --- removing the white space at the cursor of the window Neovim is in, which here is the
-            --- document's. Example: 'o' in a float, a click in the text, the document's cursor at the
-            --- start of "    keep": the cursor waits on the k, and the line keeps its indentation.
-            --- Not by a nested insert in the float that does the clean-up there: Neovim would then
-            --- report no ModeChanged as the real insert ends.
+            --- Whether Neovim is in an insert, or in the one command of Ctrl-O inside one ('niI'), after
+            --- which the insert would go on.
+            local function in_insert()
+              local mode = vim.api.nvim_get_mode().mode
+              return mode:match('^[iR]') ~= nil or mode:match('^ni') ~= nil
+            end
+
+            --- Ends an insert that a plug-in carried out of its float, keeping the cursor of the window
+            --- Neovim is in now. For Eclipse's own routes the insert has ended already, in the float
+            --- (M.end_float_insert); this is what is left for a float that moved Neovim itself.
+            --- :stopinsert takes effect once the running call is over, in that window, and Esc moves the
+            --- cursor a column left there: it is put back as the insert ends, so the editor's caret
+            --- stays. Until then the cursor waits on the next character that is not white space, or
+            --- an empty line: an insert that has only auto-indented ('o' in the float, nothing typed)
+            --- ends by removing the white space at the cursor of the window Neovim is in, here the
+            --- document's. Example: 'o' in a float whose plug-in then enters the editor's window, the
+            --- document's cursor at the start of "    keep": the cursor waits on the k, and the line
+            --- keeps its indentation. A document of only white space has no such place: its line
+            --- loses that white space (Eclipse's routes do not come here, M.end_float_insert).
+            --- After Ctrl-O no Esc comes and no indent is left, so there is nothing to put back.
             local function stop_insert_in_place()
+              if vim.api.nvim_get_mode().mode:match('^ni') then
+                vim.cmd.stopinsert()
+                return
+              end
               local landed = vim.api.nvim_get_current_win()
               local at = vim.api.nvim_win_get_cursor(landed)
               local safe = vim.fn.searchpos([[\\S\\|^$]], 'cnw')
@@ -1795,14 +1816,20 @@ final class LuaScripts {
               end
             end
 
+            --- Whether M.show enters a window for win and buf: buf still there (a plug-in's :bwipeout
+            --- wipes it), and win the home window (-1) or a window still there.
+            local function shows(win, buf)
+              return vim.api.nvim_buf_is_valid(buf) and (win < 0 or vim.api.nvim_win_is_valid(win))
+            end
+
             function M.show(win, buf)
-              if not vim.api.nvim_buf_is_valid(buf) then
-                return -2 -- wiped in Neovim (a plug-in's :bwipeout): Eclipse shows the home buffer
+              if not shows(win, buf) then
+                -- -2: wiped in Neovim, Eclipse shows the home buffer; -1: closed in Neovim, Eclipse
+                -- opens a new one
+                return vim.api.nvim_buf_is_valid(buf) and -1 or -2
               end
               if win < 0 then
                 win = M.home()
-              elseif not vim.api.nvim_win_is_valid(win) then
-                return -1 -- closed in Neovim: Eclipse opens a new one
               end
               local current = vim.api.nvim_get_current_win()
               set_buf(win, buf)
@@ -1816,8 +1843,7 @@ final class LuaScripts {
               -- One check, where every show ends, from Neovim's state: in the editor's window, an insert
               -- begun in a float (any float, the one waiting or not, closed or left) ends here, or
               -- the keys meant for it would be typed into the document.
-              if insert_float ~= nil and vim.api.nvim_get_current_win() == win
-                  and vim.api.nvim_get_mode().mode:match('^[iR]') then
+              if insert_float ~= nil and vim.api.nvim_get_current_win() == win and in_insert() then
                 stop_insert_in_place()
               end
               return win
@@ -1852,6 +1878,32 @@ final class LuaScripts {
               end
             end
 
+            --- Whether Neovim is in a plug-in's float in the tab page of win, an editor's window it is
+            --- not in: the float that closing win leaves first (leave_float_of), and so the one whose
+            --- insert ends first (M.end_float_insert). Example: Telescope's prompt open over editor A,
+            --- A closing: true; B closing in the background: false, the prompt keeps its insert.
+            local function in_float_of(win)
+              local current = vim.api.nvim_get_current_win()
+              return current ~= win and M.focused_float(current)
+                and vim.api.nvim_win_get_tabpage(current) == vim.api.nvim_win_get_tabpage(win)
+            end
+
+            --- Whether win is an editor's window that M.close and M.release close: still there, and
+            --- not the home window, which is never closed (it shows another buffer instead).
+            local function closable(win)
+              return vim.api.nvim_win_is_valid(win) and win ~= home
+            end
+
+            --- Whether closing win (M.close, M.release) takes Neovim out of the plug-in's float it is
+            --- in: a float in win's tab page, left first (leave_float_of), or win itself, a float on
+            --- the buffer being released, left for the home window (leave). Example: an insert in a
+            --- peek float on b.txt, b.txt's editor closing in the background: true, so that the
+            --- insert ends in the float and does not go on in the home window's document.
+            local function closing_leaves_float(win)
+              local current = vim.api.nvim_get_current_win()
+              return closable(win) and (in_float_of(win) or (win == current and M.focused_float(win)))
+            end
+
             --- Before win, an editor's window, closes: a plug-in's float with the cursor in win's tab
             --- page is left first (M.leave_float), closed as Eclipse mode closes one, so that its insert
             --- ends and its plug-in cleans up (Telescope's BufLeave). Closing the tab quietly would
@@ -1860,9 +1912,8 @@ final class LuaScripts {
             --- normal-mode keys in editor B. And a float on a file with unsaved changes that the tab's
             --- close takes along keeps its buffer, hidden, whatever 'hidden' and 'bufhidden' say.
             local function leave_float_of(win)
-              local current = vim.api.nvim_get_current_win()
               local tab = vim.api.nvim_win_get_tabpage(win)
-              if current ~= win and M.focused_float(current) and vim.api.nvim_win_get_tabpage(current) == tab then
+              if in_float_of(win) then
                 M.leave_float()
               end
               -- A float leaving could not close (close_float: Neovim refused, closing would unload
@@ -1888,7 +1939,7 @@ final class LuaScripts {
             end
 
             function M.close(win, fallback)
-              if vim.api.nvim_win_is_valid(win) and win ~= home then
+              if closable(win) then
                 leave_float_of(win)
                 leave(win, fallback)
                 close_quietly(win)
@@ -1901,7 +1952,7 @@ final class LuaScripts {
               for _, win in ipairs(vim.fn.win_findbuf(buf)) do
                 if win == home then
                   set_buf(win, fallback_buf(fallback))
-                elseif vim.api.nvim_win_is_valid(win) then -- leaving a float may have closed one
+                elseif closable(win) then -- leaving a float may have closed one
                   leave_float_of(win)
                   leave(win, fallback)
                   close_quietly(win)
@@ -2049,6 +2100,13 @@ final class LuaScripts {
               return false
             end
 
+            --- Whether win, the float a route of Eclipse's names (M.leave_float, M.move_out_of_float),
+            --- is another than current, the window Neovim is in: then Neovim has gone on since, and
+            --- stays where it is. nil, 0 or -1 name none.
+            local function names_other(win, current)
+              return win ~= nil and win > 0 and win ~= current
+            end
+
             --- Leaves the plug-in's float the cursor is in, closing it (close_float): the user turned
             --- Neovim mode off, its editor is closing, or the editor does not draw it. For the user
             --- clicking away, M.move_out_of_float keeps it open. An insert in it ends first. Again
@@ -2061,14 +2119,14 @@ final class LuaScripts {
             --- closes its results and preview, Neovim is back in the editor's window.
             function M.leave_float(win)
               local current = vim.api.nvim_get_current_win()
-              local named = win and win > 0 and win ~= current
+              local named = names_other(win, current)
               local target = named and win or current
               -- The insert begun in the float ends, also when Neovim already went on with it and the
               -- float closed itself on leaving (a plug-in's input that closes on BufLeave); not an
               -- insert begun elsewhere since (Eclipse's, in the editor the user went to). With a float
               -- named, only that float's insert: Neovim is no longer in it, and a float it is in now
               -- may be the next part's picker, whose own insert began since.
-              local stop = vim.api.nvim_get_mode().mode:match('^[iR]') and insert_float ~= nil
+              local stop = in_insert() and insert_float ~= nil
                 and (insert_float == target or (not named and M.focused_float(current)))
               local closed = false
               if vim.api.nvim_win_is_valid(target) and M.focused_float(target) then
@@ -2101,9 +2159,9 @@ final class LuaScripts {
             --- insert ends. Whether Neovim moved.
             function M.move_out_of_float(win)
               local current = vim.api.nvim_get_current_win()
-              local named = win and win > 0 and win ~= current
+              local named = names_other(win, current)
               local target = named and win or current
-              local stop = vim.api.nvim_get_mode().mode:match('^[iR]') and insert_float ~= nil
+              local stop = in_insert() and insert_float ~= nil
                 and (insert_float == target or (not named and M.focused_float(current)))
               local moved = false
               if not named and M.focused_float(current) then
@@ -2114,6 +2172,20 @@ final class LuaScripts {
                 stop_insert_in_place() -- in the window Neovim is in by now, the editor's
               end
               return moved
+            end
+
+            --- Why the window Neovim is in, a plug-in's float, is one the editor does not draw, as
+            --- M.close_undrawn words it, or nil when it is none (see there).
+            local function undrawn_why(win, past_limits)
+              local current = vim.api.nvim_get_current_win()
+              if not M.focused_float(current) then
+                return nil
+              elseif vim.api.nvim_win_get_config(current).hide then
+                return HIDDEN
+              elseif win == current then
+                return 'the editor cannot draw it' .. (past_limits and ' (' .. past_limits .. ')' or '')
+              end
+              return nil
             end
 
             --- Closes the plug-in's float Neovim is in when the editor does not draw it, with a message:
@@ -2133,18 +2205,11 @@ final class LuaScripts {
             --- with "Closed the floating window of TelescopePrompt: it is hidden, and it would take the
             --- keys unseen".
             function M.close_undrawn(win, past_limits)
+              local why = undrawn_why(win, past_limits)
+              if not why then
+                return false
+              end
               local current = vim.api.nvim_get_current_win()
-              if not M.focused_float(current) then
-                return false
-              end
-              local why
-              if vim.api.nvim_win_get_config(current).hide then
-                why = HIDDEN
-              elseif win == current then
-                why = 'the editor cannot draw it' .. (past_limits and ' (' .. past_limits .. ')' or '')
-              else
-                return false
-              end
               local name = float_name(current)
               if not M.leave_float() then
                 -- Said whether Neovim got out of it or, with no editor's window in its tab page to
@@ -2153,6 +2218,77 @@ final class LuaScripts {
                 return false
               end
               vim.api.nvim_echo({ { M.float_closed_message(name, why .. UNSEEN) } }, true, { err = true })
+              return true
+            end
+
+            --- For each route of Eclipse's that can take Neovim out of a float, with the arguments of
+            --- its script (core/LuaScripts.FLOAT_EXITS names the route of each script): whether that
+            --- script will leave the plug-in's float Neovim is in now. The same rule as the script's
+            --- own, in one place each (closable, in_float_of, names_other, undrawn_why), so that the
+            --- first step (M.end_float_insert) ends an insert only where the second leaves its float.
+            --- Example: a background editor closing while the user types in Telescope's prompt over
+            --- another: close is false, and the prompt keeps its insert.
+            local leaves = {
+              -- FOCUS_WINDOW (win, from): enters win, a page's window, when it is still there.
+              focus = function(win)
+                return win ~= nil and vim.api.nvim_win_is_valid(win)
+              end,
+              -- SHOW_WINDOW (win, buf): enters win (-1: the home window) unless M.show refuses.
+              show = function(win, buf)
+                return shows(win, buf)
+              end,
+              -- CLOSE_WINDOW (win, fallback): leaves a float in win's tab page (M.close).
+              close = function(win)
+                return closing_leaves_float(win)
+              end,
+              -- RELEASE_BUFFER (buf, fallback): leaves a float in the tab page of a window it closes,
+              -- or a float that shows buf itself (M.release).
+              release = function(buf)
+                for _, win in ipairs(vim.api.nvim_buf_is_valid(buf) and vim.fn.win_findbuf(buf) or {}) do
+                  if closing_leaves_float(win) then
+                    return true
+                  end
+                end
+                return false
+              end,
+              -- LEAVE_FLOAT, MOVE_OUT_OF_FLOAT (win), LEAVE_FLOAT_WITH_LINE (): the current float,
+              -- unless another is named.
+              move = function(win)
+                return not names_other(win, vim.api.nvim_get_current_win())
+              end,
+              -- CLOSE_UNDRAWN_FLOAT (win, past_limits): the current float, when it is undrawn.
+              undrawn = function(win, past_limits)
+                return undrawn_why(win, past_limits) ~= nil
+              end,
+            }
+
+            --- The first of two steps for every route of Eclipse's that takes Neovim out of a float
+            --- (core/DocumentBuffers.leavingFloat): ends the insert begun in the float while Neovim is
+            --- still in it, when the second step, route's script with these arguments, will leave it
+            --- (leaves). The second step, the move or the close, is the next call: :stopinsert takes
+            --- effect as this call returns, before Neovim reads the next one. Why not in one step: an
+            --- insert that has only auto-indented ('o', nothing typed) ends by removing the white space
+            --- at the cursor of the window Neovim is in, and ended from the editor's window that is the
+            --- document's line. Example: 'o' in a float, a click on the text: the float's empty line
+            --- loses its indent, the document keeps its own. Also an insert waiting to go on after
+            --- Ctrl-O: Neovim reports Visual, Select or the command line then ('i<C-o>v', 'i<C-o>:'),
+            --- not insert, so only plain Normal mode ('n', where no insert waits) is left alone;
+            --- elsewhere :stopinsert ends the insert or the wait for it, and else only Terminal mode
+            --- (a terminal in the float), which the second step leaves anyway.
+            --- Not the float waiting for the first editor (settle_start_float), which keeps the
+            --- keyboard and its insert. An unknown route is an error, a script without its entry.
+            --- Whether :stopinsert ran.
+            function M.end_float_insert(route, ...)
+              local leaving = leaves[route]
+              if not leaving then
+                error('no float exit named ' .. tostring(route))
+              end
+              local current = vim.api.nvim_get_current_win()
+              if insert_float == nil or current == pending_start_float or not M.focused_float(current)
+                  or vim.api.nvim_get_mode().mode == 'n' or not leaving(...) then
+                return false
+              end
+              vim.cmd.stopinsert()
               return true
             end
 
@@ -2465,7 +2601,7 @@ final class LuaScripts {
               pcall(vim.api.nvim_set_current_win, before)
               -- An insert begun in a float must not go on in the editor: a plug-in that opens the
               -- split without :stopinsert would leave the next keys typing into the document.
-              if insert_float ~= nil and vim.api.nvim_get_mode().mode:match('^[iR]') then
+              if insert_float ~= nil and in_insert() then
                 stop_insert_in_place()
               end
               local where = 'tab'
@@ -5914,6 +6050,27 @@ final class LuaScripts {
             """;
 
     /**
+     * Ends an insert begun in the plug-in's float Neovim is in, while it is still there, when the
+     * script sent next will leave that float ({@link #WINDOWS}' {@code end_float_insert}): the first
+     * of the two steps of every route that takes Neovim out of a float
+     * ({@code DocumentBuffers.leavingFloat}). Arguments: the route ({@link #FLOAT_EXITS}), then the
+     * next script's own arguments. Example: {@code ("close", "1002", "3")} before
+     * {@code CLOSE_WINDOW} of window 1002 ends the insert only if Neovim's float is in 1002's tab
+     * page. Answers whether {@code :stopinsert} ran.
+     */
+    static final String END_FLOAT_INSERT = """
+            local windows = package.loaded['neovim4eclipse.windows']
+            if windows == nil then
+              return false
+            end
+            local args = { ... }
+            for i = 2, #args do
+              args[i] = tonumber(args[i]) or args[i] -- window and buffer numbers; past_limits stays words
+            end
+            return windows.end_float_insert(unpack(args))
+            """;
+
+    /**
      * Moves Neovim out of the plug-in's float it is in, to the editor's window, the float staying
      * open ({@link #WINDOWS}' {@code move_out_of_float}): the user clicked the text or left for
      * another part. The argument names the float the cursor was in when the keyboard left, or is
@@ -5952,6 +6109,23 @@ final class LuaScripts {
             local win, past_limits = ...
             return package.loaded['neovim4eclipse.windows'].close_undrawn(tonumber(win), past_limits)
             """;
+
+    /**
+     * The route of each script that can take Neovim out of a float, as {@link #WINDOWS}' table
+     * {@code leaves} names it: {@link #END_FLOAT_INSERT} is sent with it and the script's own
+     * arguments, and ends a float's insert only when that script will leave the float. The one list
+     * of those scripts: {@code DocumentBuffers.leavingFloat} refuses a script not in it.
+     * {@code LuaScriptsTest} checks that each route is a key of {@code leaves}.
+     */
+    static final Map<String, String> FLOAT_EXITS = Map.of(
+            FOCUS_WINDOW, "focus",
+            SHOW_WINDOW, "show",
+            CLOSE_WINDOW, "close",
+            RELEASE_BUFFER, "release",
+            LEAVE_FLOAT, "move",
+            MOVE_OUT_OF_FLOAT, "move",
+            LEAVE_FLOAT_WITH_LINE, "move",
+            CLOSE_UNDRAWN_FLOAT, "undrawn");
 
     /**
      * Turns on Neovim's ui2, which draws the command line, its prompts, the pager and messages

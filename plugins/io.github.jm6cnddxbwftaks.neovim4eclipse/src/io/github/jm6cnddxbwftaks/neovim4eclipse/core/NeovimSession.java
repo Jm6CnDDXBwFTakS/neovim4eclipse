@@ -2366,7 +2366,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 LOG.fine("The floating window stays: Neovim waits for the rest of a command");
                 return;
             }
-            await(api.execLua(LuaScripts.LEAVE_FLOAT, List.of(String.valueOf(win))));
+            buffers.leavingFloat(LuaScripts.LEAVE_FLOAT, List.of(String.valueOf(win)));
         });
     }
 
@@ -2391,7 +2391,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 LOG.fine("Neovim stays in the floating window: it waits for the rest of a command");
                 return;
             }
-            await(api.execLua(LuaScripts.MOVE_OUT_OF_FLOAT, List.of(String.valueOf(win))));
+            buffers.leavingFloat(LuaScripts.MOVE_OUT_OF_FLOAT, List.of(String.valueOf(win)));
         });
     }
 
@@ -2412,7 +2412,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 LOG.fine("A press left to Eclipse dropped: Neovim waits for the rest of a command");
                 return;
             }
-            await(api.execLua(LuaScripts.LEAVE_FLOAT_WITH_LINE, List.of()));
+            buffers.leavingFloat(LuaScripts.LEAVE_FLOAT_WITH_LINE, List.of());
         });
     }
 
@@ -2920,8 +2920,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
                 Grids.UnseenCursor at = unseen.get();
                 unseenAsked = at; // once for each: each redraw would ask again
                 submit("close an undrawn floating window", Level.FINE,
-                        () -> await(api.execLua(LuaScripts.CLOSE_UNDRAWN_FLOAT,
-                                List.of(String.valueOf(at.window()), Grids.PAST_LIMITS))));
+                        () -> buffers.leavingFloat(LuaScripts.CLOSE_UNDRAWN_FLOAT,
+                                List.of(String.valueOf(at.window()), Grids.PAST_LIMITS)));
             }
         }
 
