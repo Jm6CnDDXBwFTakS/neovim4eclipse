@@ -941,6 +941,37 @@ final class DocumentBuffers {
     }
 
     /**
+     * {@link #returnToAttached}, for a {@code BufEnter} that named {@code entered} as the window
+     * Neovim went into ({@link EnterDecision.Action#RETURN_BACK}), unless that window is one
+     * Eclipse does not show (neither the attached editor's nor a page's) and Neovim is by now in
+     * another window that is a plug-in's float the editor draws, asked of Neovim now
+     * ({@link LuaScripts#IN_OTHER_FLOAT}), not taken from the notice. A plug-in that sets a buffer
+     * into a window it does not enter (a picker's preview float showing the open file) fires
+     * {@code BufEnter} there for a moment while Neovim stays in the picker's input; going back to
+     * the editor's window would take it out, which closes the picker. Anywhere else Neovim goes back
+     * as before: the window named is the editor's or a page's (whose buffer must be put back, a
+     * picker's preview set into the editor's window too), Neovim is in the window named or in a
+     * plain window of another tab page, the question fails, or the notice named no window
+     * ({@link EditorWindow#UNKNOWN}).
+     */
+    void returnFromEnter(int entered) throws Exception {
+        if (entered != EditorWindow.UNKNOWN && entered != attachedWin && !pageWindows.containsKey(entered)) {
+            Object inFloat;
+            try {
+                inFloat = await(api.execLua(LuaScripts.IN_OTHER_FLOAT, List.of(String.valueOf(entered))));
+            } catch (Exception e) {
+                LOG.log(Level.FINE, "Could not ask where Neovim is after entering window " + entered + "; going back", e);
+                inFloat = false;
+            }
+            if (Boolean.TRUE.equals(inFloat)) {
+                LOG.fine(() -> "Window " + entered + " was entered for a moment; Neovim stays in the plug-in's float it is in");
+                return;
+            }
+        }
+        returnToAttached();
+    }
+
+    /**
      * Switches Neovim back to the attached buffer in the attached window. If that window was closed
      * in Neovim, the home window shows the attached buffer from then on, until the editor's next
      * show opens it a window again. If the attached buffer itself was wiped in Neovim, the home
@@ -1098,7 +1129,8 @@ final class DocumentBuffers {
      * handler, whose editor Eclipse then opens (docs/design/BUFFER_NUMBERS.md, 2.3). In a page's
      * window, anything but the page is put back with {@code restorePage}, and a document or file
      * goes to its handler as well, which opens its editor in a window of its own
-     * ({@link #enteredFromPage}). The whole decision is {@link EnterDecision}.
+     * ({@link #enteredFromPage}). The whole decision is {@link EnterDecision}; {@code returnBack}
+     * carries out its way back ({@link #returnFromEnter}).
      *
      * @param jumped      whether the move is in the window's jump history ({@code :b}, {@code Ctrl-O};
      *                    not {@code :keepjumps})

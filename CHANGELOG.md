@@ -49,6 +49,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- A picker whose preview shows the file you are in, such as snacks.nvim's `lines` picker, no
+  longer closes as it opens: setting the file into its preview window no longer sends Neovim back
+  to the editor's window, out of the picker's input.
 - A plug-in's terminal in a floating window, such as fzf-lua's list, no longer brings the message
   `terminal: "/usr/bin/sh" is running hidden`: the editor draws that window. A terminal in a split
   or a hidden floating window still gets it.

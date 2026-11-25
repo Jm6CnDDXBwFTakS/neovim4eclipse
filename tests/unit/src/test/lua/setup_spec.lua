@@ -310,3 +310,30 @@ t.test('Lua modules are not loaded from the working folder (a project\'s)', func
   t.eq(false, (pcall(require, 'n4e_probe_module')))
   t.eq(nil, vim.g.loaded_from_folder)
 end)
+
+-- A plug-in's preview float on the open file (snacks.nvim's picker): nvim_win_set_buf on a window
+-- Neovim does not enter fires BufEnter, which SETUP reports with that window, current only for the
+-- moment of the call. IN_OTHER_FLOAT, asked once the call is over (as Eclipse does before sending
+-- Neovim back), says Neovim is in another window, a plug-in's float: it stays there. For the window
+-- named itself, a plain window, or a hidden float, it says no, and Neovim goes back as before.
+t.test('a BufEnter in a preview float leaves Neovim in the plug-in\'s float it is in', function()
+  t.setup()
+  local doc = vim.api.nvim_get_current_buf()
+  local home = t.run('WINDOWS', tostring(doc)) -- WINDOWS' focused_float, which the script asks
+  local input = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), true,
+    { relative = 'editor', row = 1, col = 1, width = 20, height = 1 })
+  local preview = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false,
+    { relative = 'editor', row = 3, col = 1, width = 20, height = 3 })
+  t.forget()
+  vim.api.nvim_win_set_buf(preview, doc)
+  local reported = t.sent('eclipse_buf_enter')
+  t.eq(1, #reported)
+  t.eq({ doc, preview }, { reported[1][1], reported[1][2] }, 'the enter names the preview float')
+  t.eq(input, vim.api.nvim_get_current_win(), 'Neovim stays in the input')
+  t.eq(true, t.run('IN_OTHER_FLOAT', tostring(preview)), 'in another float: it stays')
+  t.eq(false, t.run('IN_OTHER_FLOAT', tostring(input)), 'in the window named: it goes back')
+  vim.api.nvim_win_set_config(input, { hide = true })
+  t.eq(false, t.run('IN_OTHER_FLOAT', tostring(preview)), 'a hidden float: it goes back')
+  vim.api.nvim_set_current_win(home)
+  t.eq(false, t.run('IN_OTHER_FLOAT', tostring(preview)), 'a plain window: it goes back')
+end)

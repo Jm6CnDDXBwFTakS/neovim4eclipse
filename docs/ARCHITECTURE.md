@@ -351,6 +351,13 @@ window, its `BufEnter` is known as the focus moving (not undone; every `BufEnter
 page gets its buffer back), its cursor reports are no caret's, and the
 caret's calls (`setCursor`, `getCursor`) name the attached window instead of Neovim's current one.
 `focusAttachedAsync`, an editor shown, or the page window's close give the focus back.
+A `BufEnter` in a window Eclipse does not show sends Neovim back to the editor's window unless,
+asked of Neovim when the return happens, Neovim is by then in another window that is a plug-in's
+float the editor draws (`LuaScripts.IN_OTHER_FLOAT`, `DocumentBuffers.returnFromEnter`): a plug-in
+that sets a buffer into a window it does not enter (`nvim_win_set_buf` on a preview float, as
+snacks.nvim's picker does with the open file) fires `BufEnter` there only for the moment of the
+call, while Neovim stays in the picker's input, and taking it from there would close the picker.
+Anywhere else (the window named, a plain window of another tab page) Neovim goes back as before.
 A host command carries the window it ran in (`HostCommand.origin`, the fourth value of
 `eclipse_command`), and `util/CommandOrigin` is the one rule for whose it is: a page with the
 focus takes only its own window's commands, a text editor every command not from a page's window,

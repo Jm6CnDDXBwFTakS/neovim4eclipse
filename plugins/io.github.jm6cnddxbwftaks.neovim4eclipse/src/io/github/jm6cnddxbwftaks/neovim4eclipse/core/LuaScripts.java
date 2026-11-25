@@ -290,6 +290,26 @@ final class LuaScripts {
             """;
 
     /**
+     * Whether Neovim, after a {@code BufEnter} that named a window (argument: its id), is now in
+     * another window that is a plug-in's float the editor draws ({@code WINDOWS}' {@code focused_float},
+     * not hidden), asked as that {@code BufEnter}'s way back to the editor is about to act
+     * ({@code DocumentBuffers.returnFromEnter}). A plug-in that puts a buffer into a window it does
+     * not enter ({@code nvim_win_set_buf} on a preview float, as snacks.nvim's picker does with the
+     * file it previews) fires {@code BufEnter} with that window current only for the moment of the
+     * call; by the time Eclipse acts, Neovim is back in the picker's input, and taking it from there
+     * would close the picker. Any other window Neovim is in (the one named, a plain window of
+     * another tab page) answers {@code false}, and Neovim goes back as before. Example: {@code true}
+     * for snacks' preview float, Neovim in its input; {@code false} after a {@code :tabnext} typed
+     * by the user.
+     */
+    static final String IN_OTHER_FLOAT = """
+            local current = vim.api.nvim_get_current_win()
+            local windows = package.loaded['neovim4eclipse.windows']
+            return current ~= tonumber((...)) and windows ~= nil and windows.focused_float(current)
+              and not vim.api.nvim_win_get_config(current).hide
+            """;
+
+    /**
      * Settles the float that has the keyboard as Neovim's start ends ({@link #WINDOWS}'
      * {@code close_start_floats}): one the editor draws keeps it, as in a terminal, the one
      * {@link #LEAVE_START_FLOAT} left (argument: its window, or 0) being entered again; one it does

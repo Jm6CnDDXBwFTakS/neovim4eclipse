@@ -48,7 +48,11 @@ public final class EnterDecision {
         FOLLOW,
         /** The file entered gets an editor; the attached window travels into it. */
         OPEN_FILE,
-        /** Neovim goes back to the attached editor's window and document. */
+        /**
+         * Neovim goes back to the attached editor's window and document; from a window Eclipse
+         * does not show, not while Neovim is by then in another plug-in's float the editor draws (a
+         * picker's preview float entered only for the moment of a call: {@code core/DocumentBuffers.returnFromEnter}).
+         */
         RETURN_BACK,
         /** The page's window gets its page back; nothing opens. */
         PAGE_BACK,

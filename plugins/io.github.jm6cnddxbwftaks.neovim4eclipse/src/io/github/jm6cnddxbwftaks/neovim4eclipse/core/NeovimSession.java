@@ -1335,7 +1335,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
     /**
      * Handles Neovim switching by itself to the buffer of another open document; the handler should
      * show that document, or call {@link #returnToAttachedBufferAsync()}. Without a handler, and for
-     * any buffer that is not a document's, Neovim is switched back to the attached buffer.
+     * any buffer that is not a document's, Neovim is switched back to the attached buffer, unless it
+     * is by then in a plug-in's float the editor draws ({@link DocumentBuffers#returnFromEnter}).
      */
     public void setBufferEnterHandler(Consumer<Integer> handler) {
         buffers.setEnterHandler(handler);
@@ -2674,7 +2675,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         public void onBufferEnter(int bufnr, int winid, boolean jumped, String projectFile, boolean pageFollows,
                 boolean floatEntered) {
             buffers.onEntered(bufnr, winid, jumped, projectFile, pageFollows, floatEntered,
-                    NeovimSession.this::returnToAttachedBufferAsync,
+                    () -> submit("return to attached buffer", Level.FINE, () -> buffers.returnFromEnter(winid)),
                     () -> restorePageAsync(winid));
         }
 

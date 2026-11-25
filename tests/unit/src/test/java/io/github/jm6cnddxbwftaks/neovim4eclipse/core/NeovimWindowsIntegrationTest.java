@@ -823,6 +823,48 @@ class NeovimWindowsIntegrationTest {
         }
     }
 
+    /**
+     * A picker's preview float showing the open document, as snacks.nvim's picker draws it: the
+     * plug-in sets the document's buffer into a float it does not enter ({@code nvim_win_set_buf}),
+     * which fires {@code BufEnter} with that float current for the moment of the call. Neovim
+     * stays in the picker's input, in its insert, and is not taken back to the editor's window
+     * (which would close such a picker, as snacks' does on losing the cursor). A window Neovim does
+     * stay in is still sent back (the home window, entered for good: the last step).
+     */
+    @Test
+    void aPreviewFloatShowingTheDocumentLeavesNeovimInThePicker() throws Exception {
+        try (NeovimSession s = start()) {
+            int home = currentWin(s);
+            List<Integer> entered = new CopyOnWriteArrayList<>();
+            s.setBufferEnterHandler(entered::add);
+            DocumentBuffer doc = new DocumentBuffer("");
+            EditorWindow a = new EditorWindow();
+            s.showWindow(doc, a, "");
+            s.setBufferLines(lines(3));
+            s.lua("""
+                    local input = vim.api.nvim_create_buf(false, true)
+                    vim.g.n4e_input = vim.api.nvim_open_win(input, true, { relative = 'editor', row = 1, col = 1, width = 30, height = 1 })
+                    vim.g.n4e_preview = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false,
+                      { relative = 'editor', row = 3, col = 1, width = 30, height = 5 })
+                    vim.cmd.startinsert()
+                    """);
+            waitFor(() -> s.inPluginFloat() && "i".equals(s.getMode()), "Neovim in the input, in Insert mode");
+            int input = number(s, "return vim.g.n4e_input");
+
+            s.lua("vim.api.nvim_win_set_buf(vim.g.n4e_preview, " + doc.bufnr() + ")"); // the preview
+            s.queuedWorkDone().get(TestWait.millis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+            s.lua("return 0"); // a round trip: the return, had one been queued, was sent before this answer
+            s.queuedWorkDone().get(TestWait.millis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+
+            assertEquals(input, currentWin(s), "Neovim stays in the picker's input");
+            assertEquals("i", s.lua("return vim.api.nvim_get_mode().mode"), "in its insert");
+            assertEquals(doc.bufnr(), number(s, "return vim.api.nvim_win_get_buf(vim.g.n4e_preview)"), "the preview shows the document");
+
+            s.lua("vim.cmd.stopinsert() vim.api.nvim_set_current_win(" + home + ")"); // one Neovim stays in, not shown by Eclipse
+            waitFor(() -> currentWin(s) == a.winid(), "Neovim sent back to the editor's window");
+        }
+    }
+
     /** The editor jumped into was never attached in this session: it simply takes the window. */
     @Test
     void anEditorWithoutAWindowYetTakesTheOneThatJumped() throws Exception {
