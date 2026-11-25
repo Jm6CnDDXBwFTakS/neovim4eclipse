@@ -85,7 +85,18 @@ vim.opt.showmode = false
 -- mode, not on its own at WinEnter: the plug-in switches windows quietly in places
 -- ('eventignore'), so only a value read at the mode change itself is sure to be current
 -- when Eclipse decides who types an insert that begins (KeyInput.onModeReport).
-vim.api.nvim_create_autocmd('ModeChanged', {
+-- Also at every SafeState, as Neovim is about to wait for a key, and even when the mode is
+-- the one reported last: ModeChanged does not fire for a change made inside another
+-- autocommand that is not ++nested (a plug-in's `:normal! v` in its WinEnter, an insert a
+-- prompt buffer begins and ends there), and Eclipse may have read such a passing mode with
+-- nvim_get_mode in between. Example: Neovim reports n, i, n as it leaves a picker, Eclipse's
+-- own nvim_get_mode answers i after that, and nothing more changes: without this report
+-- Eclipse would keep i. So whenever Neovim waits for a key, the last mode Eclipse has from
+-- it is its mode (core/StateSync, "A report beats an answer"), with the exceptions of
+-- SafeState itself (:help SafeState): not while an operator is pending, during Insert-mode
+-- or command-line completion, and not in Terminal mode at all (measured), where a mode that
+-- passed unreported stands until the next ModeChanged.
+vim.api.nvim_create_autocmd({ 'ModeChanged', 'SafeState' }, {
   callback = function()
     local windows = package.loaded['neovim4eclipse.windows']
     vim.rpcnotify(0, 'eclipse_mode', vim.api.nvim_get_mode().mode,

@@ -49,6 +49,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- Leaving the editor while a picker that runs its own autocommands, such as snacks.nvim's, has the
+  keyboard no longer leaves Eclipse in Insert mode while Neovim is in Normal mode. A mode a plug-in
+  changes inside one of its autocommands, which Neovim announces to no one, now reaches Eclipse as
+  Neovim waits for the next key.
+- `'mouse'` set with `:noautocmd`, or by a plug-in's config inside an autocommand (lazy.nvim's
+  `VeryLazy`), now counts for the next click on a floating window, the command-line window or a
+  page, not only after the next mode change.
 - A picker whose preview shows the file you are in, such as snacks.nvim's `lines` picker, no
   longer closes as it opens: setting the file into its preview window no longer sends Neovim back
   to the editor's window, out of the picker's input.

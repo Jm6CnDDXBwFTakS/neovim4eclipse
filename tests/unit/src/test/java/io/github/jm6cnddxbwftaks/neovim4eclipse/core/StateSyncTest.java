@@ -513,6 +513,49 @@ class StateSyncTest {
         assertTrue(state.isTypingMode());
     }
 
+    /**
+     * The case {@code SafeState}'s report is for (see the class comment): Neovim's last
+     * {@code ModeChanged} said {@code "n"}, an answer asked after it says {@code "i"} and counts, and
+     * Neovim returns to Normal mode without another {@code ModeChanged}. Its report as it waits for
+     * the next key repeats {@code "n"}, and that ends Eclipse's Insert mode.
+     */
+    @Test
+    void aReportThatRepeatsTheLastModeCorrectsAnAnswerInBetween() {
+        state.dispatchMode("n");
+        nvim.mode = new Mode("i", false);
+        state.readMode();
+        assertEquals("i", state.mode(), "no report while it was out: the answer counts");
+
+        state.dispatchMode("n");
+
+        assertEquals("n", state.mode());
+        assertFalse(state.isTypingMode());
+    }
+
+    /**
+     * A report of the mode the listeners last heard reaches {@code KeyInput.onModeChanged}, not the
+     * listeners: {@code SafeState} repeats it after every key. One of a mode they have not heard
+     * reaches them, also when an answer recorded that mode first without telling them.
+     */
+    @Test
+    void aReportOfTheModeTheListenersLastHeardIsNotPassedOn() {
+        state.dispatchMode("n");
+        listeners.heard.clear();
+
+        state.dispatchMode("n");
+        assertEquals(List.of("onModeChanged n"), listeners.heard);
+
+        nvim.mode = new Mode("i", false);
+        state.readMode(); // records "i", tells no listener
+        state.dispatchMode("i");
+        assertEquals(List.of("onModeChanged n", "onModeChanged i", "mode i"), listeners.heard);
+
+        state.publishState(); // the snapshot after a key tells the mode, heard or not
+        listeners.heard.clear();
+        state.dispatchMode("n");
+        assertEquals(List.of("onModeChanged n", "mode n"), listeners.heard, "the snapshot's mode was i");
+    }
+
     @Test
     void aCursorSetByEclipseIsRememberedWithoutTellingTheListeners() {
         state.rememberCursor(new CursorPos(5, 2));

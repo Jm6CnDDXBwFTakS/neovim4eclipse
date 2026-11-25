@@ -1261,7 +1261,7 @@ t.test("a float passed through quietly does not make the editor's insert a float
   t.eq({ false }, entered_floats())
 end)
 
-t.test("'mouse' is told at each change, a :noautocmd one at the next mode change, h as a in help", function()
+t.test("'mouse' is told at each change, a :noautocmd one at the next mode change or SafeState, h as a in help", function()
   start()
   local function last()
     local sent = t.sent('eclipse_mouse_option')
@@ -1274,6 +1274,22 @@ t.test("'mouse' is told at each change, a :noautocmd one at the next mode change
   t.eq(nil, last(), 'no autocommand heard it')
   vim.api.nvim_feedkeys(vim.keycode('v<Esc>'), 'nx', false)
   t.eq('i', last(), 'the next mode change does')
+  t.forget()
+  vim.cmd('noautocmd set mouse=nv')
+  vim.api.nvim_exec_autocmds('SafeState', {})
+  t.eq('nv', last(), 'so does SafeState, as Neovim is about to wait for a key')
+  t.forget()
+  vim.api.nvim_exec_autocmds('SafeState', {})
+  t.eq(nil, last(), 'told once')
+  -- Set inside another autocommand that is not ++nested (a plug-in's config run on lazy.nvim's
+  -- VeryLazy): OptionSet does not fire there either.
+  vim.api.nvim_create_autocmd('User', { pattern = 'N4eLazy', once = true, callback = function()
+    vim.o.mouse = 'i'
+  end })
+  vim.api.nvim_exec_autocmds('User', { pattern = 'N4eLazy' })
+  t.eq(nil, last(), 'no OptionSet heard it')
+  vim.api.nvim_exec_autocmds('SafeState', {})
+  t.eq('i', last(), 'SafeState does')
   vim.o.mouse = 'h'
   t.eq('h', last())
   vim.bo.buftype = 'help'

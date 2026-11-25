@@ -684,7 +684,11 @@ own, and share a table (`windows/init.lua` explains how). Two uses:
 
 - **Setup**: options and *autocommands* (`ModeChanged`, `CursorMoved`, `BufEnter`, `TextYankPost`)
   whose callbacks call `vim.rpcnotify(0, 'eclipse_mode', ...)`. Those notifications arrive at the
-  matching `case` of `NotificationBridge.notification`. Setup also makes Eclipse
+  matching `case` of `NotificationBridge.notification`. An autocommand does not fire for a change
+  made inside another autocommand unless that one is `++nested` (`:help autocmd-nested`): a
+  plug-in's `:normal! v` in its `WinEnter` changes the mode with no `ModeChanged`. So the mode is
+  also reported at `SafeState`, which fires whenever Neovim is about to wait for a key, except
+  while an operator is pending, during completion and in Terminal mode (`:help SafeState`). Setup also makes Eclipse
   Neovim's clipboard provider (`g:clipboard`, see `:help clipboard`), whose functions are Lua
   closures that notify or ask Eclipse.
 - **Snapshots**: `STATE_SNAPSHOT` returns cursor, visual selection, mode, recording register and

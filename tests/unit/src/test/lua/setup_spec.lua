@@ -337,3 +337,25 @@ t.test('a BufEnter in a preview float leaves Neovim in the plug-in\'s float it i
   vim.api.nvim_set_current_win(home)
   t.eq(false, t.run('IN_OTHER_FLOAT', tostring(preview)), 'a plain window: it goes back')
 end)
+
+-- ModeChanged does not fire for a mode changed inside another autocommand that is not ++nested:
+-- here a plug-in's `:normal! v` in a User event leaves Neovim in Visual mode, unreported. SETUP
+-- reports the mode again at SafeState, as Neovim is about to wait for a key, and also when it is
+-- the mode it reported last: an nvim_get_mode answer of Eclipse's may have caught a passing mode in
+-- between (core/StateSync, "A report beats an answer").
+t.test('the mode is reported at SafeState, also one no ModeChanged told', function()
+  t.setup()
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'abc def' })
+  vim.api.nvim_create_autocmd('User', { pattern = 'N4eVisual', once = true, callback = function()
+    vim.cmd('normal! v')
+  end })
+  t.forget()
+  vim.api.nvim_exec_autocmds('User', { pattern = 'N4eVisual' })
+  t.eq('v', vim.api.nvim_get_mode().mode)
+  t.eq({}, t.sent('eclipse_mode'), 'no ModeChanged heard it')
+  vim.api.nvim_exec_autocmds('SafeState', {})
+  t.eq({ { 'v', false } }, t.sent('eclipse_mode'), 'SafeState does')
+  t.forget()
+  vim.api.nvim_exec_autocmds('SafeState', {})
+  t.eq({ { 'v', false } }, t.sent('eclipse_mode'), 'the same mode again')
+end)

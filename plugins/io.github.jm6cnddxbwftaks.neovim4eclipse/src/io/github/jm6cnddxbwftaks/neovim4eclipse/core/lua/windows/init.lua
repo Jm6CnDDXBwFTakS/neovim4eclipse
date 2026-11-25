@@ -501,9 +501,14 @@ S.shows_ui2_buffer = shows_ui2_buffer
 -- window, q:, a page; util/MouseOption). Eclipse cannot ask at the click: Neovim holds an
 -- option read while it waits for a key (after f or r). Nor can Neovim drop the click as
 -- it reads it: vim.on_key runs after mappings, and dropping the first key of a mapping's
--- right-hand side would run the rest as commands on the user's text. Told at each change,
--- and looked at again at each mode change, for a :noautocmd set. "h" means every mode in
--- a help buffer, so there it is told with an "a". Example: "nvi"; "ha" in :help with "h".
+-- right-hand side would run the rest as commands on the user's text. Told at each change
+-- (OptionSet), and looked at again at each mode change and buffer enter and at every
+-- SafeState, as Neovim is about to wait for a key: OptionSet does not fire for a
+-- :noautocmd set, nor for one made inside another autocommand that is not ++nested (a
+-- plug-in's config run on lazy.nvim's VeryLazy, a User event), and SafeState comes before
+-- the next key all the same, except where SafeState does not (an operator pending,
+-- completion, Terminal mode: setup.lua's mode report). "h" means every mode in a help
+-- buffer, so there it is told with an "a". Example: "nvi"; "ha" in :help with "h".
 local told_mouse
 local function tell_mouse()
   local value = vim.o.mouse
@@ -515,7 +520,7 @@ local function tell_mouse()
     vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_mouse_option', value)
   end
 end
-vim.api.nvim_create_autocmd({ 'ModeChanged', 'BufEnter', 'BufWinEnter', 'UIEnter' },
+vim.api.nvim_create_autocmd({ 'ModeChanged', 'BufEnter', 'BufWinEnter', 'UIEnter', 'SafeState' },
   { group = group, callback = tell_mouse })
 vim.api.nvim_create_autocmd('OptionSet',
   { group = group, pattern = { 'mouse', 'buftype' }, callback = tell_mouse })

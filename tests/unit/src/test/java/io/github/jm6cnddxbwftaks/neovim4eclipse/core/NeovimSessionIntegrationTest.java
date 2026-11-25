@@ -678,6 +678,37 @@ class NeovimSessionIntegrationTest {
         }
     }
 
+    /**
+     * {@code 'mouse'} set inside another autocommand that is not {@code ++nested}, as a plug-in's
+     * config run on lazy.nvim's {@code VeryLazy} (a {@code User} event) is: no {@code OptionSet}
+     * fires there, and Neovim tells Eclipse as it is about to wait for a key ({@code SafeState}).
+     * Before that, a click on a float still ran a {@code <LeftMouse>} mapping with the mouse off.
+     */
+    @Test
+    void aMouseOptionSetInsideAnAutocommandCountsForTheNextClick() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("alpha beta"));
+            s.lua("""
+                    vim.o.mouse = 'nvi'
+                    vim.g.clicks = 0
+                    vim.keymap.set('n', '<LeftMouse>', function() vim.g.clicks = vim.g.clicks + 1 end)
+                    local b = vim.api.nvim_create_buf(false, true)
+                    vim.api.nvim_buf_set_lines(b, 0, -1, false, { 'one', 'two', 'three' })
+                    vim.g.float = vim.api.nvim_open_win(b, false,
+                      { relative = 'editor', row = 1, col = 2, width = 20, height = 3 })
+                    vim.api.nvim_create_autocmd('User', { pattern = 'VeryLazy', once = true,
+                      callback = function() vim.opt.mouse = '' end })
+                    """);
+            int grid = mouseGridOfTheFloat(s);
+            s.lua("vim.api.nvim_exec_autocmds('User', { pattern = 'VeryLazy' })");
+            floatClick(s, grid, 1);
+            assertEquals(0L, s.lua("return vim.g.clicks"), "with the mouse off, the click is left out");
+            s.lua("vim.o.mouse = 'nvi'");
+            floatClick(s, grid, 1);
+            assertEquals(1L, s.lua("return vim.g.clicks"), "with the mouse on again, the mapping runs");
+        }
+    }
+
     /** The command-line window's mouse goes through the same check: with {@code 'mouse'} empty, nothing. */
     @Test
     void theCommandLineWindowsMouseFollowsTheMouseOption() throws Exception {
@@ -1079,6 +1110,27 @@ class NeovimSessionIntegrationTest {
             assertTrue(handled.await(WAIT_MS, TimeUnit.MILLISECONDS), "Neovim left insert mode");
         } finally {
             s.removeInputHandledListener(listener);
+        }
+    }
+
+    /**
+     * A mode a plug-in changes inside another autocommand that is not {@code ++nested} (here
+     * {@code :normal! v} in a {@code User} event) fires no {@code ModeChanged}; Neovim reports it as
+     * it is about to wait for a key ({@code SafeState}, {@code core/StateSync}). Without that, the
+     * session kept Normal mode while Neovim was in Visual mode, as it once kept Insert mode after
+     * snacks.nvim's picker was left.
+     */
+    @Test
+    void aModeChangedInsideAnAutocommandReachesTheSession() throws Exception {
+        try (NeovimSession s = start()) {
+            s.setBufferLines(List.of("alpha beta"));
+            s.lua("""
+                    vim.api.nvim_create_autocmd('User', { pattern = 'N4eVisual', once = true,
+                      callback = function() vim.cmd('normal! v') end })
+                    """);
+            assertEquals("n", s.getMode());
+            s.lua("vim.api.nvim_exec_autocmds('User', { pattern = 'N4eVisual' })");
+            waitFor(() -> "v".equals(s.getMode()), "Visual mode reported");
         }
     }
 

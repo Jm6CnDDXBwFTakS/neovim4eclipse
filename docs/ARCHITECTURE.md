@@ -1186,8 +1186,12 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   Vim's raw tag jump). `'mouse'` is honored before the send, for floats, `q:` and pages in one place
   (`NeovimSession.gridMouse`, `util/MouseOption`): `nvim_get_mode` is answered even while Neovim
   waits for a key, and the option is a copy `LuaScripts.WINDOWS` reports at each change and looks
-  at again at each mode change. Not read at the click: Neovim holds an option read while it waits
-  for a key (after `f` or `r`). Not dropped in `vim.on_key`: that runs after mappings, and dropping
+  at again at each mode change and at every `SafeState`, as Neovim is about to wait for a key:
+  `OptionSet` does not fire for a `:noautocmd set mouse=`, nor for one inside another autocommand
+  that is not `++nested` (a plug-in's config run on lazy.nvim's `VeryLazy`). `SafeState` does not
+  fire while an operator is pending, during completion or in Terminal mode, where such a value
+  stands until the next mode change. Not read at the click: Neovim holds an option read while it
+  waits for a key (after `f` or `r`). Not dropped in `vim.on_key`: that runs after mappings, and dropping
   the first key of a mapping's right-hand side would run the rest as commands on the text. Unlike a click in the text it leaves nothing, so a picker stays; a click into
   a second float from a prompt's insert stays there (`entered_float`). A click after the window closed names
   a grid no window has, and Neovim drops it, as for the command-line window. While the cursor is
@@ -1252,7 +1256,13 @@ Neovim out of the float. Where an insert begins is told by
 Neovim's mode report itself (`eclipse_mode`'s second value), not by window events: the plug-in
 switches windows quietly in places, and pickers start their insert after the key that opened them
 was answered (Telescope with `nvim_feedkeys("A")`, others from a `vim.schedule` callback), so only
-the report sees it (`KeyInput.onModeReport`, `FloatInsertIntegrationTest`). People rarely type that fast;
+the report sees it (`KeyInput.onModeReport`, `FloatInsertIntegrationTest`). The report comes at each
+`ModeChanged` and again at every `SafeState`, even with the mode unchanged: `ModeChanged` does not fire
+for a mode changed inside another autocommand that is not `++nested`, and an `nvim_get_mode` answer can
+catch such a passing mode, so the mode an answer brings stands only until Neovim next waits for a key
+(but `SafeState` does not fire while an operator is pending, during completion or in Terminal mode;
+`StateSync`, "A report beats an answer"; the listeners hear a repeat only when they last heard
+another mode). People rarely type that fast;
 `EditorEndToEndTest` does. Keys sent before Neovim even reports insert mode simply reach Neovim in order
 and are inserted there.
 

@@ -34,6 +34,21 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimModes;
  * ({@link #settleRead}). Whatever Neovim did before the answer it has reported by then, so the
  * report is at least as current.
  *
+ * <p><b>And Neovim reports its mode each time it is about to wait for a key</b> ({@code SafeState},
+ * {@code core/lua/setup.lua}), even when it is the mode it reported last. {@code ModeChanged}
+ * alone leaves gaps: it does not fire for a change made inside another autocommand that is not
+ * {@code ++nested}, and an answer can catch such a passing mode. Example, seen with snacks.nvim's
+ * picker on Windows: leaving the picker, Neovim reports {@code "n"}, {@code "i"}, {@code "n"};
+ * an {@code nvim_get_mode} asked after the last of them answers {@code "i"}, which counts, as no
+ * report came while it was out; Neovim then returns to Normal mode without a {@code ModeChanged}.
+ * The {@code SafeState} report that follows sets it right, so the mode an answer brings stands
+ * only until Neovim next waits for a key, except where {@code SafeState} does not fire: while an
+ * operator is pending, during Insert-mode or command-line completion, and in Terminal mode
+ * ({@code :help SafeState}; Terminal mode measured), where it stands until the next
+ * {@code ModeChanged}. A report that repeats the mode the listeners last heard
+ * is not passed on to them ({@link #dispatchMode}): it comes after every key and every request
+ * of the plug-in's.
+ *
  * <p>The reading methods block and run on the session's input thread; the getters and dispatch
  * methods may be called from any thread (the fields are volatile; the typing generation is guarded
  * by the instance, see {@link #typingGeneration}). Neovim is reached only through
@@ -107,6 +122,11 @@ final class StateSync {
     private long typingGeneration;
     /** How many mode reports Neovim has sent ({@link #dispatchMode}). Guarded by {@code this}. */
     private long modeReports;
+    /**
+     * The mode the listeners were last told, {@code null} before the first: a report that repeats
+     * it ({@code SafeState}'s, see the class comment) is not passed on. Guarded by {@code this}.
+     */
+    private String modeTold;
     /** The generation in which Eclipse may type, -1 for none yet (see {@link #typingGeneration}). */
     private long readyGeneration = -1;
     /**
@@ -311,9 +331,11 @@ final class StateSync {
             // -- COMMAND -- in normal mode.
             String snapshotMode = StateSnapshot.mode(raw);
             String current = settleAndTell(reportsBefore, snapshotMode);
+            markTold(current);
             listeners.mode(current);
             String newest = mode;
             if (!current.equals(newest)) {
+                markTold(newest);
                 listeners.mode(newest); // a report came as the listeners were told: they end on it
             }
             if (isAttached.test(StateSnapshot.window(raw), StateSnapshot.buffer(raw))) {
@@ -401,20 +423,36 @@ final class StateSync {
     }
 
     /**
-     * Neovim reported {@code newMode} ({@code ModeChanged}), newer than any answer on its way:
-     * records it and tells {@code onModeChanged}, then the listeners.
+     * Neovim reported {@code newMode} ({@code ModeChanged}, or {@code SafeState}'s report of the
+     * mode it waits for a key in), newer than any answer on its way: records it and tells
+     * {@code onModeChanged}, then the listeners, unless they were last told this mode already.
      *
      * @param withTheReport runs first, in one step with the recording ({@link #settleAndTell}):
      *                      {@code KeyInput.onModeReport}, where an insert began
      */
     void dispatchMode(String newMode, Runnable withTheReport) {
+        boolean tell;
         synchronized (this) {
             withTheReport.run();
-            modeReports++;
+            modeReports++; // a repeat too: it is as current as any answer on its way
             setMode(newMode); // leaving insert ends Eclipse's typing (a new generation)
             onModeChanged.accept(newMode);
+            tell = !newMode.equals(modeTold);
+            modeTold = newMode;
         }
-        listeners.mode(newMode);
+        if (tell) {
+            listeners.mode(newMode);
+        }
+    }
+
+    /**
+     * Records that the listeners are told {@code told} now, right before they are: a report after
+     * it that repeats it is not passed on ({@link #dispatchMode}). Example: the snapshot after a
+     * key tells {@code "n"}, and the {@code SafeState} report that follows the key says
+     * {@code "n"} too.
+     */
+    private synchronized void markTold(String told) {
+        modeTold = told;
     }
 
     void dispatchCursor(int line1, int col0) {
