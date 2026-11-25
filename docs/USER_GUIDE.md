@@ -554,12 +554,13 @@ its own popup menu, is drawn under the word, as Neovim draws it. Example: after 
 | any other character | keeps the match, closes the list and is typed |
 
 - **Where the keys go.** Eclipse types in insert mode. `Ctrl-N` first hands Neovim what you typed,
-  and from there Neovim types until the completion has ended; then Eclipse types again. While
+  and from there Neovim types until the completion has ended; then Eclipse types again (with
+  `'autocomplete'` on, only in the next insert: see *With `'autocomplete'` on* below). While
   Neovim completes, *every* `Ctrl` letter is Neovim's, whatever the *Ctrl Keys* preference page
   says: `Ctrl-Y` accepts also where you gave the key back to Eclipse's Redo.
 - **The character that ends it is typed by Neovim**, so Eclipse's typing helpers skip that one
   character: a `(` right after a completed name gets no closing `)`, a `.` does not open content
-  assist. The next character is Eclipse's again.
+  assist. The next character is Eclipse's again, unless `'autocomplete'` is on (below).
 - **The `Ctrl-X` modes** work where `Ctrl+X` is ticked for insert mode (*Ctrl Keys*; the
   default): `Ctrl-X Ctrl-N` words of this file, `Ctrl-X Ctrl-L` whole lines, `Ctrl-X Ctrl-F` file
   names, and Vim's others. `Ctrl-X Ctrl-O` stays Eclipse's Content Assist, which knows the
@@ -586,7 +587,14 @@ its own popup menu, is drawn under the word, as Neovim draws it. Example: after 
 - **A click into the text**, or leaving the editor, ends the completion and keeps the match.
 - **Not completed as you type.** Neovim sees what Eclipse typed only at such a key or at `Esc`, so
   a setting or plug-in that opens the list by itself while you type (`'autocomplete'`, nvim-cmp)
-  has nothing to work with. Eclipse's own content assist does that job.
+  has nothing to work with until then. Eclipse's own content assist does that job.
+- **With `'autocomplete'` on**, the first `Ctrl-N` hands Neovim the rest of the insert:
+  `'autocomplete'` keeps Neovim completing after every key it types (at times with no list, where
+  nothing matches), so Neovim types each key until `Esc`, its list following your typing as in a
+  terminal. Eclipse's typing helpers (a closing `)`, content assist after a `.`) do not act on
+  those keys. Example: with `vim.o.autocomplete = true`, type `ap` (no list yet), `Ctrl-N`, then
+  `(x ap`: Neovim types `(x ap`, and its list opens again under the second `ap`; after `Esc` the
+  file holds the completed word and `(x ap`, and `u` undoes the whole insert.
 
 `vim.g.neovim4eclipse_completion_menu = 0`, which once turned this off for Eclipse's *Word
 Completion* (`Alt+/`), was removed in 0.3.0: Neovim draws its popup menu itself, so `Ctrl-N` is
