@@ -155,7 +155,8 @@ public final class PinnedPlugins {
 
     /**
      * The ripgrep program, found as {@link #fzf} finds fzf, or empty: what Telescope's
-     * {@code live_grep} runs (given this path). Not pinned either
+     * {@code live_grep} runs (given this path) and snacks.nvim's {@code files} with {@code cmd = 'rg'}
+     * (by name, from a {@code PATH} of absolute folders: {@link #FOR_PROGRAMS}). Not pinned either
      * (a Rust program built per system), so a test that needs it skips without one, saying
      * {@link #RG_HOW}. Example: {@code /usr/bin/rg} after {@code apt install ripgrep}.
      */
@@ -278,8 +279,56 @@ public final class PinnedPlugins {
             """;
 
     /**
+     * Lua that loads snacks.nvim from {@code folder} and maps {@code gs} to its picker's
+     * {@code lines} (the current buffer's lines, pure Lua: no program), as a user's
+     * {@code <leader>/} would. snacks' {@code setup()} is not called: it would turn on the
+     * library's other parts (dashboard, scrolling, notifications...) in the Neovim the UI tests
+     * share, and the picker works without it. Undo the mapping with {@code vim.keymap.del('n', 'gs')}.
+     */
+    public static String loadSnacks(Path folder) {
+        return onRuntimePath(folder)
+                + " vim.keymap.set('n', 'gs', function() require('snacks').picker.lines() end)";
+    }
+
+    /**
+     * Lua (a chunk taking {@code ...}) that answers how many of snacks' picker windows are open:
+     * its input, list and preview, known by their buffers' filetypes
+     * ({@code snacks_picker_input}, {@code snacks_picker_list}, {@code snacks_picker_preview}).
+     * With a word as its one argument, only those whose lines have it.
+     */
+    public static final String SNACKS_WINDOWS = """
+            local text = ...
+            local n = 0
+            for _, w in ipairs(vim.api.nvim_list_wins()) do
+              local b = vim.api.nvim_win_get_buf(w)
+              if vim.bo[b].filetype:match('^snacks_picker') and (text == nil
+                  or vim.iter(vim.api.nvim_buf_get_lines(b, 0, -1, false)):any(function(l) return l:find(text, 1, true) end)) then
+                n = n + 1
+              end
+            end
+            return n
+            """;
+
+    /**
+     * Lua that closes every open snacks picker, its insert ended: a test's clean-up. The picker's
+     * own {@code close} (it also closes its layout's box and backdrop), then any window of a
+     * {@code snacks_} filetype left over.
+     */
+    public static final String CLOSE_SNACKS = """
+            vim.cmd.stopinsert()
+            local ok, pickers = pcall(function() return require('snacks').picker.get() end)
+            for _, p in ipairs(ok and pickers or {}) do pcall(p.close, p) end
+            for _, w in ipairs(vim.api.nvim_list_wins()) do
+              if vim.api.nvim_win_is_valid(w) and vim.bo[vim.api.nvim_win_get_buf(w)].filetype:match('^snacks_') then
+                pcall(vim.api.nvim_win_close, w, true)
+              end
+            end
+            """;
+
+    /**
      * Lua that prepares Neovim for a picker that runs a program it picks by name (Telescope's
-     * {@code find_files}: {@code rg}, {@code fd}, {@code find} or {@code where}): {@code PATH} keeps only its absolute folders, the rule {@link #fzf} keeps for
+     * {@code find_files}: {@code rg}, {@code fd}, {@code find} or {@code where}; snacks.nvim's
+     * {@code files}): {@code PATH} keeps only its absolute folders, the rule {@link #fzf} keeps for
      * the tests' own lookup, so that a relative entry ({@code .}) cannot make Neovim run a file of
      * the test project's folder, where the picker starts it (on Windows the program's own folder may
      * still be searched first, as Windows does; that folder holds only the files the test makes);
@@ -295,6 +344,24 @@ public final class PinnedPlugins {
               if dir ~= '' and vim.fn.isabsolutepath(dir) == 1 then table.insert(kept, dir) end
             end
             vim.env.PATH = table.concat(kept, sep)
+            """;
+
+    /**
+     * Lua (a chunk taking {@code ...}, a plain word of the test's own) that answers how many lines
+     * of snacks' picker list have it: its list only, not its preview, which shows the whole file.
+     */
+    public static final String SNACKS_LIST_HAS = """
+            local word = ...
+            local n = 0
+            for _, w in ipairs(vim.api.nvim_list_wins()) do
+              local b = vim.api.nvim_win_get_buf(w)
+              if vim.bo[b].filetype == 'snacks_picker_list' then
+                for _, l in ipairs(vim.api.nvim_buf_get_lines(b, 0, -1, false)) do
+                  if l:find(word, 1, true) then n = n + 1 end
+                end
+              end
+            end
+            return n
             """;
 
     /**

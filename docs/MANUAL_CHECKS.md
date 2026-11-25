@@ -389,13 +389,14 @@ it: closing the page editors at Eclipse's exit as well would avoid it.
 - **Launch:** normal
 - **Areas:** core/LuaScripts.java, core/lua/**, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridMouse.java, editor/LineInputMethod.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
 
-Telescope's `current_buffer_fuzzy_find`, `find_files` and `live_grep`, fzf-lua's `blines` and
-its `Ctrl-V` on a file, and `:Lazy` are tested at pinned commits (`PickersEndToEndTest`,
+Telescope's `current_buffer_fuzzy_find`, `find_files` and `live_grep`, snacks.nvim's `lines`
+and `files`, fzf-lua's `blines` and its `Ctrl-V` on a file, and `:Lazy` are tested at pinned
+commits (`PickersEndToEndTest`, `SnacksPickerEndToEndTest`, `SnacksPickerIntegrationTest`,
 `FloatInsertIntegrationTest`, `FzfLuaEndToEndTest`, `FzfLuaIntegrationTest`,
 `NeovimWindowsIntegrationTest`), with the plug-ins' defaults (but for the `Ctrl-V` test, which
 binds fzf-lua's split action itself): typing narrows the list, Enter jumps to the line or opens
 the file in an Eclipse editor, the document you came from is unchanged. fzf-lua's only where fzf
-is on `PATH`, `live_grep` only where `rg` is.
+is on `PATH`, `live_grep` and snacks' `files` only where `rg` is.
 Your own config, with its pickers, previews, borders and colorscheme, and an input method in a
 prompt, are only seen on screen. Use a config that has Telescope (or another picker, fzf-lua,
 snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
