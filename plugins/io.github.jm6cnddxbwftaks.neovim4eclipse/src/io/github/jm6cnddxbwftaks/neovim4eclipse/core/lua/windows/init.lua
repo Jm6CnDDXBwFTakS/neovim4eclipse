@@ -79,6 +79,9 @@ local S = {
   -- The plug-in's float the current insert began in, or nil (InsertEnter, floats.lua): leaving
   -- ends that insert (M.leave_float), not one begun elsewhere since.
   insert_float = nil,
+  -- Counts the inserts begun (InsertEnter, floats.lua), so that a stop asked for in this
+  -- insert is told from one left over from an earlier insert (stop_insert_in_place).
+  insert_seq = 0,
   -- The float that had the keyboard as Neovim's start ended, before any editor was
   -- shown (M.close_start_floats): the first editor takes it along (settle_start_float).
   pending_start_float = nil,
@@ -304,25 +307,51 @@ S.in_insert = in_insert
 --- ends by removing the white space at the cursor of the window Neovim is in, here the
 --- document's. Example: 'o' in a float whose plug-in then enters the editor's window, the
 --- document's cursor at the start of "    keep": the cursor waits on the k, and the line
---- keeps its indentation. A document of only white space has no such place: its line
---- loses that white space (Eclipse's routes do not come here, M.end_float_insert).
---- After Ctrl-O no Esc comes and no indent is left, so there is nothing to put back.
+--- keeps its indentation. A document of only white space, with no empty line, has no such
+--- place: its line loses that white space (Eclipse's routes do not come here,
+--- M.end_float_insert). After Ctrl-O no Esc comes and no indent is left, so there is nothing
+--- to put back.
+--- The insert ends in the window Neovim is in when the call is over, not in the one current
+--- here: a caller that moves Neovim on after this calls it again from there (leave,
+--- close_start_floats), so that that window's cursor waits too. Each window's cursor is put
+--- back, current or not, while it still shows the buffer it was read in. Example:
+--- close_start_floats leaves an undrawn start float for the window under it, then goes to
+--- the attached editor's window in another tab page; without the second call the Insert
+--- would end at the attached document's cursor, unguarded.
+--- A window is guarded once per insert and buffer (guarded): asked again for the same one,
+--- the cursor is already waiting, and reading it again would put the waiting place back
+--- instead of the real one. Example: a hidden start float in the attached editor's tab page,
+--- left for that editor's window (M.leave_float's stop), then close_start_floats' own check
+--- there; the caret stays where it was.
+local guarded = {} -- window -> { buf, insert_seq } while its cursor waits for the insert's end
 local function stop_insert_in_place()
   if vim.api.nvim_get_mode().mode:match('^ni') then
     vim.cmd.stopinsert()
     return
   end
   local landed = vim.api.nvim_get_current_win()
-  local at = vim.api.nvim_win_get_cursor(landed)
-  local safe = vim.fn.searchpos([[\S\|^$]], 'cnw')
-  if safe[1] > 0 then
-    pcall(vim.api.nvim_win_set_cursor, landed, { safe[1], safe[2] - 1 })
-  end
-  vim.api.nvim_create_autocmd('ModeChanged', { once = true, pattern = '[iR]*:*', callback = function()
-    if vim.api.nvim_win_is_valid(landed) and vim.api.nvim_get_current_win() == landed then
-      pcall(vim.api.nvim_win_set_cursor, landed, at)
+  local shown = vim.api.nvim_win_get_buf(landed)
+  local mark = guarded[landed]
+  if not (mark and mark[1] == shown and mark[2] == S.insert_seq) then
+    -- An entry from an earlier insert (its ModeChanged never came) is replaced, not trusted.
+    local this = { shown, S.insert_seq }
+    guarded[landed] = this
+    local at = vim.api.nvim_win_get_cursor(landed)
+    local safe = vim.fn.searchpos([[\S\|^$]], 'cnw')
+    if safe[1] > 0 then
+      pcall(vim.api.nvim_win_set_cursor, landed, { safe[1], safe[2] - 1 })
     end
-  end })
+    local function put_back()
+      if guarded[landed] == this then
+        guarded[landed] = nil
+      end
+      if vim.api.nvim_win_is_valid(landed) and vim.api.nvim_win_get_buf(landed) == shown then
+        pcall(vim.api.nvim_win_set_cursor, landed, at)
+      end
+    end
+    local ends = '[iR]*:*' -- the insert, or Replace, over
+    vim.api.nvim_create_autocmd('ModeChanged', { once = true, pattern = ends, callback = put_back })
+  end
   vim.cmd.stopinsert()
 end
 S.stop_insert_in_place = stop_insert_in_place
@@ -380,6 +409,11 @@ local function fallback_buf(fallback)
 end
 
 --- Leaves win (quietly) for the home window showing fallback, if win is the current one.
+--- An insert begun in a float that is still on, or that leaving a float has just ended
+--- (leave_float_of: when Eclipse's first step failed), ends in the home window, where Neovim
+--- is when the call is over: its cursor waits there (stop_insert_in_place), on the buffer
+--- it shows by then. Example: 'o' in a picker's prompt, the first step lost, the editor
+--- closed: the home buffer keeps its indentation.
 local function leave(win, fallback)
   if win == vim.api.nvim_get_current_win() then
     local to = M.home()
@@ -387,6 +421,9 @@ local function leave(win, fallback)
       vim.api.nvim_set_current_win(to)
       put_buf(to, fallback_buf(fallback))
     end)
+    if S.insert_float ~= nil and in_insert() then
+      stop_insert_in_place()
+    end
   end
 end
 

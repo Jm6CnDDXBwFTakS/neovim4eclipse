@@ -354,5 +354,6 @@ vim.api.nvim_create_autocmd('InsertEnter', {
   callback = function()
     local w = vim.api.nvim_get_current_win()
     S.insert_float = M.focused_float(w) and w or nil
+    S.insert_seq = S.insert_seq + 1
   end,
 })

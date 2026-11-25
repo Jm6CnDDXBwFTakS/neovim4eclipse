@@ -679,12 +679,16 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   Eclipse shows, with its progress, and keeps the keyboard when the start is over, as in a
   terminal: the keys you type meanwhile wait, and go to it (in lazy.nvim's window `U`, `S`, `X` and
   `R` are its commands, and `q` closes it). If the editor does not draw it (hidden, or in another
-  tab page) it is closed with a message, and those keys go to your file. When a plug-in moves
-  Neovim out of its own window during an Insert, or such a window is closed as the start ends, the
-  Insert goes on in the window Neovim lands in, as in a terminal, until it ends there; an Insert
-  that only indented (`o`, nothing typed) can then take the white space of the line it ends on.
-  One too large to draw (past the *Limits* below) is closed, with a message; if Neovim refuses to
-  close it, as for unsaved changes it would discard, the message says so and the window stays open.
+  tab page) it is closed with a message, and those keys go to your file. One too large to draw (past
+  the *Limits* below) is closed, with a message; if Neovim refuses to close it, as for unsaved
+  changes it would discard, the message says so and the window stays open. When a plug-in moves
+  Neovim out of its own window during an Insert, the Insert goes on in the window Neovim lands in,
+  as in a terminal, until you end it there or Eclipse does: as you switch to another file's editor
+  (not a page) or close the one it goes on in, as the plug-in opens a file in a split or tab, or as
+  Neovim's start is over with Neovim out of such windows. Ended with `Esc`, an Insert that only
+  indented (`o`, nothing typed) takes the white space of the line the cursor is on, as in a
+  terminal; ended by Eclipse, the line keeps it, unless the document holds only white space, with no
+  empty line.
 - **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In
   insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your
   typing (signature help, a completion plug-in's documentation or menu) does not open, or lags.

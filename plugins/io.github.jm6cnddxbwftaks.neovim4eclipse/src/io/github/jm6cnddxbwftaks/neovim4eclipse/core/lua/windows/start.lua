@@ -102,8 +102,9 @@ end
 --- up (LEAVE_START_FLOAT hands it over) is entered again, since only the plug-in took Neovim
 --- out of it. A float the editor does not draw is closed (not by force, a changed buffer
 --- stays), with one message naming the first, and Neovim goes to the attached window: keys go
---- only to a window Eclipse draws. When Neovim has already entered (an init that does not
---- wait: the usual start), it happens at once. With no editor shown yet, the float cannot be
+--- only to a window Eclipse draws; an insert begun in a float ends there, once Neovim is out
+--- of every float. When Neovim has already entered (an init that does not wait: the usual
+--- start), it happens at once. With no editor shown yet, the float cannot be
 --- drawn anywhere: it waits for the first one, whose M.show brings it along and enters it
 --- (settle_start_float). A float opened after that is any other plug-in's, and
 --- M.close_undrawn watches it. As in a terminal, keys typed during an install
@@ -156,6 +157,17 @@ function M.close_start_floats(left)
     if not drawn(vim.api.nvim_get_current_win()) and has_attached
         and attached ~= vim.api.nvim_get_current_win() then
       pcall(vim.api.nvim_set_current_win, attached)
+    end
+    -- One check where the close ends, from Neovim's state, as M.show's: out of every float,
+    -- an insert begun in one (the float closed, or the one left) ends in the window Neovim is
+    -- in now, its cursor waiting so that the document keeps its indentation, or the keys meant
+    -- for the float would be typed into the document. Also after leave_float's own stop,
+    -- which guarded the window Neovim left the float for, maybe not this one (a second stop
+    -- in the same window changes nothing, stop_insert_in_place). Not while Neovim is still in
+    -- a float: one waiting for the first editor keeps its insert.
+    local now = vim.api.nvim_get_current_win()
+    if S.insert_float ~= nil and S.in_insert() and not M.focused_float(now) then
+      S.stop_insert_in_place()
     end
     if name then
       say_at_start(M.float_closed_message(name, AT_START)) -- the keys typed meanwhile come first

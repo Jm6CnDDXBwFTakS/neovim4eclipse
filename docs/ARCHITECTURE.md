@@ -218,19 +218,23 @@ only where the second will leave the float, by the same rule (`WINDOWS`' `leaves
 editor closing leaves a picker's prompt in its insert, and one whose document a float shows ends
 that float's insert. It also ends an insert waiting to go on after `Ctrl-O` (`i<C-o>v`), which
 Neovim reports as Visual, Select or command-line mode. A first call that fails is logged, and the
-second is sent all the same. Two ways out have no first call. A plug-in that moves Neovim out of its
-own float leaves its insert going on, as in a terminal, until one of three ends it from the window
-Neovim is in (`stop_insert_in_place`): leaving for another part of Eclipse while the session still
-sees Neovim in that float (`LineOnFocusLoss` names it; a click in the text names none, and ends
-nothing then), the next show, or the plug-in opening a window on a file that Eclipse takes over as a
-split or tab (`take_file_window`, a picker's split action). The cursor waits on the next character
+second is sent all the same. Two ways out have no first call: a plug-in's own move out of its float,
+and the start's end (`close_start_floats`, sent as `LuaScripts.CLOSE_START_FLOAT`, not in
+`FLOAT_EXITS`). A plug-in that moves Neovim out of its own float leaves its insert going on, as in a
+terminal, until one of five ends it from the window Neovim is in (`stop_insert_in_place`): leaving
+for another part of Eclipse while the session still sees Neovim in that float (`LineOnFocusLoss`
+names it; a click in the text names none, and ends nothing then), the next show, closing the editor
+Neovim is in (`leave`), the plug-in opening a window on a file that Eclipse takes over as a split or
+tab (`take_file_window`, a picker's split action), or the start's end, once Neovim is out of every
+float. That last also ends an insert in a start float it closes or leaves, in the window it leaves
+Neovim in (the attached editor's, when Eclipse names one). The cursor waits on the next character
 that is not white space, or the next empty line, until the insert is over, so that the line keeps
 its indentation; a document of only white space, with no empty line, has no such place, and its line
-loses that white space. Other routes (focusing a page, say) end nothing then. And
-`close_start_floats` (`LuaScripts.CLOSE_START_FLOAT`, not in `FLOAT_EXITS`) has no first call, and
-on its branch that closes the float the config left the focus in (`LEAVE_START_FLOAT`'s) no stop
-either: an insert left going in a start float it closes ends, or goes on, in the window Neovim goes
-to (USER_GUIDE.md, "Floating windows"). Eclipse mode closes the float Neovim is in (`leave_float`),
+loses that white space. The insert ends in the window Neovim is in when the call is over, not where
+the stop was asked: a call that moves Neovim on after a stop asks again from there (`leave`,
+`close_start_floats`), each window is guarded once per insert and buffer, and each window's cursor
+is put back while it shows the same buffer (USER_GUIDE.md, "Floating windows"). Other routes
+(focusing a page, say) end nothing then. Eclipse mode closes the float Neovim is in (`leave_float`),
 since its keys are gone, and so does closing the editor, since `WINDOWS`' `close` leaves its tab's
 float before closing the tab quietly. Then the window Neovim enters next decides as usual. Keys go only to a window Eclipse draws, checked in one
 place for every route: each redraw that ends with Neovim's cursor on a grid the editor does not

@@ -1860,6 +1860,91 @@ for _, route in ipairs({ 'show', 'move' }) do
   end)
 end
 
+-- close_start_floats on a start float the editor does not draw (in another tab page than the
+-- attached editor's), Neovim in it in an insert that has only auto-indented ('o'): both branches,
+-- the float the config left the focus in closed with Neovim back in it (left, as lazy.nvim's
+-- VimEnter does), and the one Neovim is in left (current). Neovim then goes to the attached
+-- editor's window, where the insert ends: its document keeps its indentation and its cursor, and
+-- the window Neovim left the float for keeps its own. And one hidden in the editor's own tab page
+-- (hidden here), left for the editor's window, where both the leave and the close's own check stop
+-- the insert: the second changes nothing, so the caret stays too. Eclipse's answer
+-- (eclipse_attached_window) is the editor's window here.
+for _, branch in ipairs({ 'left', 'current', 'hidden here' }) do
+  t.test("an insert close_start_floats ends keeps the attached document's indentation: " .. branch, function()
+    local win, home, home_buf = commands()
+    local doc = vim.api.nvim_win_get_buf(win)
+    vim.api.nvim_buf_set_lines(doc, 0, -1, false, { '    keep indent', 'two' })
+    vim.api.nvim_win_set_cursor(win, { 1, 0 })
+    vim.api.nvim_buf_set_lines(home_buf, 0, -1, false, { '  home indent' })
+    vim.api.nvim_set_current_win(home)
+    vim.api.nvim_win_set_cursor(home, { 1, 0 })
+    t.ok(vim.api.nvim_win_get_tabpage(home) ~= vim.api.nvim_win_get_tabpage(win), 'the float not in the editor\'s tab page')
+    local b = buffer(1)
+    vim.api.nvim_buf_set_lines(b, 0, -1, false, { '  indented' })
+    vim.bo[b].autoindent = true
+    local config = { relative = 'editor', row = 3, col = 1, width = 20, height = 3 }
+    if branch == 'hidden here' then
+      vim.api.nvim_set_current_win(win)
+      config.hide = true
+    end
+    local float = vim.api.nvim_open_win(b, true, config)
+    local rpcrequest = vim.rpcrequest
+    vim.rpcrequest = function(chan, method, ...)
+      if method == 'eclipse_attached_window' then
+        return win
+      end
+      return rpcrequest(chan, method, ...)
+    end
+    local ok, err = pcall(function()
+      vim.keymap.set('i', '<F7>', function()
+        t.run('CLOSE_START_FLOAT', branch == 'left' and tostring(float) or '0')
+      end)
+      vim.api.nvim_feedkeys(vim.keycode('o<F7>'), 'mx', false)
+    end)
+    vim.rpcrequest = rpcrequest
+    pcall(vim.keymap.del, 'i', '<F7>')
+    t.ok(ok, err)
+    t.ok(not vim.api.nvim_win_is_valid(float), 'the float closed')
+    t.eq(win, vim.api.nvim_get_current_win(), "Neovim in the attached editor's window")
+    t.eq('n', vim.api.nvim_get_mode().mode, 'the insert over')
+    t.eq({ '    keep indent', 'two' }, vim.api.nvim_buf_get_lines(doc, 0, -1, false))
+    t.eq({ 1, 0 }, vim.api.nvim_win_get_cursor(win), "the document's cursor stays")
+    t.eq({ '  home indent' }, vim.api.nvim_buf_get_lines(home_buf, 0, -1, false))
+    t.eq({ 1, 0 }, vim.api.nvim_win_get_cursor(home), "the home window's cursor back too")
+  end)
+end
+
+-- Closing the editor Neovim is in, or whose float Neovim is in, during an insert begun in a float
+-- that has only auto-indented ('o'), with no first step (Eclipse's, end_float_insert, failed):
+-- carried, the plug-in moved Neovim into the editor's window; in the float, Neovim still there.
+-- The insert ends in the home window, where the close leaves Neovim, its buffer (fallback)
+-- keeping its indentation, and so does the document.
+for _, where in ipairs({ 'carried', 'in the float' }) do
+  t.test("an insert going on as its editor closes keeps the home buffer's indentation: " .. where, function()
+    local win, home = commands()
+    local doc = vim.api.nvim_win_get_buf(win)
+    vim.api.nvim_buf_set_lines(doc, 0, -1, false, { '    keep indent', 'two' })
+    vim.api.nvim_win_set_cursor(win, { 1, 0 })
+    local fallback = buffer(1)
+    vim.api.nvim_buf_set_lines(fallback, 0, -1, false, { '    fallback' })
+    local b = buffer(1)
+    vim.api.nvim_buf_set_lines(b, 0, -1, false, { '  indented' })
+    vim.bo[b].autoindent = true
+    vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 1, width = 20, height = 3 })
+    vim.keymap.set('i', '<F6>', function() vim.api.nvim_set_current_win(win) end) -- the plug-in's move
+    vim.keymap.set('i', '<F7>', function() t.run('CLOSE_WINDOW', tostring(win), tostring(fallback)) end)
+    vim.api.nvim_feedkeys(vim.keycode(where == 'carried' and 'o<F6><F7>' or 'o<F7>'), 'mx', false)
+    vim.keymap.del('i', '<F6>')
+    vim.keymap.del('i', '<F7>')
+    t.eq(home, vim.api.nvim_get_current_win(), 'Neovim in the home window')
+    t.eq(fallback, vim.api.nvim_win_get_buf(home))
+    t.eq('n', vim.api.nvim_get_mode().mode, 'the insert over')
+    t.eq({ '    fallback' }, vim.api.nvim_buf_get_lines(fallback, 0, -1, false))
+    t.eq({ 1, 0 }, vim.api.nvim_win_get_cursor(home), "the home window's cursor back")
+    t.eq({ '    keep indent', 'two' }, vim.api.nvim_buf_get_lines(doc, 0, -1, false))
+  end)
+end
+
 t.test('moving out of a float leaves it open, unless its plug-in closes it on leaving', function()
   local win = commands()
   local windows = package.loaded['neovim4eclipse.windows']
