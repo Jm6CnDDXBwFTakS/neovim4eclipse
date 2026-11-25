@@ -21,6 +21,7 @@ import java.util.Optional;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
@@ -32,6 +33,8 @@ import org.eclipse.ui.contexts.IContextService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
@@ -244,6 +247,50 @@ class PickersEndToEndTest extends EndToEndTestBase {
         } finally {
             SessionProbe.lua(session, "vim.o.mousetime = " + mousetime);
         }
+    }
+
+    /**
+     * The same through the operating system ({@link RealInput}): a real click on gamma's row of
+     * the results selects it, the picker keeping the keyboard in its prompt; a real click in the
+     * editor's text, on beta's line, moves Neovim out of the picker, which Telescope closes, and
+     * the click lands there (USER_GUIDE.md, "Floating windows"). Not on macOS (sending input needs
+     * the Accessibility permission); skipped where the system does not move the pointer (Wayland).
+     */
+    @Test
+    @DisabledOnOs(OS.MAC)
+    void aRealClickOnTheResultsSelectsTheRowAndOneInTheTextLeavesThePicker() {
+        String text = document.get();
+        type(widget, "gp");
+        waitUntil("Telescope's list drawn with gamma", TIMEOUT_MS, () -> pickerShows("gamma") && resultsCanvas() != null
+                && rowsOf(resultsCanvas().grid()).contains("gamma"), () -> "; drawn:\n" + drawn());
+        RealInput.requireFront(widget, TIMEOUT_MS);
+        GridCanvas results = resultsCanvas();
+        int row = -1;
+        for (int r = 0; r < results.grid().height() && row < 0; r++) {
+            row = results.grid().row(r).contains("gamma") ? r : -1;
+        }
+        int col = results.grid().row(row).indexOf("gamma");
+        assertFalse(selectedLine() == 3, "another entry is selected first");
+        assumeTrue(RealInput.leftClick(results, col * results.cellWidth() + 1, row * results.cellHeight() + results.cellHeight() / 2,
+                false), "the system did not move the pointer (a Wayland session)");
+        waitUntil("gamma selected by the real click", TIMEOUT_MS, () -> {
+            settle();
+            return selectedLine() == 3;
+        }, () -> "; selected line " + selectedLine());
+        assertTrue(pickerShows("gamma"), "the picker stays, its prompt with the cursor");
+        assertEquals("i", session.getMode(), "the prompt keeps its insert");
+        assertTrue(widget.isFocusControl(), "the editor keeps the keyboard");
+
+        Point beta = widget.getLocationAtOffset(widget.getOffsetAtLine(1) + 1);
+        assertTrue(RealInput.leftClick(widget, beta.x + 1, beta.y + widget.getLineHeight() / 2, false), "the second click sent");
+        waitUntil("the picker gone, the caret on beta's line", TIMEOUT_MS, () -> {
+            settle();
+            return telescopeWindows(null) == 0 && pluginFloats().isEmpty() && widget.getCaret() != null
+                    && widget.getLineAtOffset(widget.getCaretOffset()) == 1;
+        }, () -> "; picker windows " + telescopeWindows(null) + ", mode " + session.getMode() + ", caret on line "
+                + widget.getLineAtOffset(widget.getCaretOffset()));
+        assertTrue(widget.isFocusControl(), "the editor keeps the keyboard");
+        assertEquals(text, document.get(), "the document keeps its text");
     }
 
     /** Whether the binding context of {@code Ctrl+letter} is active now. */

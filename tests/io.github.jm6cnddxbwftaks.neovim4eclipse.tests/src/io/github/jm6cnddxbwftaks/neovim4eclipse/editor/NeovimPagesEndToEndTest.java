@@ -28,7 +28,6 @@ import org.eclipse.swt.graphics.ImageData;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.widgets.Control;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IEditorPart;
@@ -537,12 +536,15 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
         SessionProbe.lua(session, "vim.cmd.echomsg(\"'before a real Ctrl-W'\") return 0");
         colon("messages");
         NeovimPageEditor view = pageShowing("before a real Ctrl-W");
-        UiTestSupport.requireKeyboardFocus(view.canvasForTests(), TIMEOUT_MS);
-        Display display = view.canvasForTests().getDisplay();
-        post(display, SWT.KeyDown, SWT.CTRL);
-        postLetter(display, 'w');
-        post(display, SWT.KeyUp, SWT.CTRL);
-        postLetter(display, 'p');
+        Control canvas = view.canvasForTests();
+        RealInput.requireFront(canvas, TIMEOUT_MS);
+        RealInput.key(canvas, SWT.KeyDown, SWT.CTRL);
+        try {
+            RealInput.letter(canvas, 'w');
+        } finally {
+            RealInput.key(canvas, SWT.KeyUp, SWT.CTRL);
+        }
+        RealInput.letter(canvas, 'p');
         waitUntil("the editor has the keyboard back", TIMEOUT_MS, () -> {
             settle();
             return widget.isFocusControl();
@@ -590,24 +592,6 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
             handlers.executeCommand(CTRL_W, null);
         } catch (Exception e) {
             throw new AssertionError("the Ctrl-W command did not run", e);
-        }
-    }
-
-    /** One key event through the operating system; {@code keyCode} an SWT key code such as {@code SWT.CTRL}. */
-    private static void post(Display display, int type, int keyCode) {
-        Event event = new Event();
-        event.type = type;
-        event.keyCode = keyCode;
-        assertTrue(display.post(event), "the system took the key event");
-    }
-
-    /** A letter key pressed and let go through the operating system (a letter is posted by its character). */
-    private static void postLetter(Display display, char letter) {
-        for (int type : new int[] { SWT.KeyDown, SWT.KeyUp }) {
-            Event event = new Event();
-            event.type = type;
-            event.character = letter;
-            assertTrue(display.post(event), "the system took the key event");
         }
     }
 }

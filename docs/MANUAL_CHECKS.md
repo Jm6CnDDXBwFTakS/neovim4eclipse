@@ -396,7 +396,9 @@ commits (`PickersEndToEndTest`, `SnacksPickerEndToEndTest`, `SnacksPickerIntegra
 `NeovimWindowsIntegrationTest`), with the plug-ins' defaults (but for the `Ctrl-V` test, which
 binds fzf-lua's split action itself): typing narrows the list, Enter jumps to the line or opens
 the file in an Eclipse editor, the document you came from is unchanged. fzf-lua's only where fzf
-is on `PATH`, `live_grep` and snacks' `files` only where `rg` is.
+is on `PATH`, `live_grep` and snacks' `files` only where `rg` is. Real clicks through the system,
+on a picker's list and in the text, Ctrl+click included, are tested on Linux and Windows
+(`RealMouseEndToEndTest`, `PickersEndToEndTest`), not on macOS, where step 7 does them by hand.
 Your own config, with its pickers, previews, borders and colorscheme, and an input method in a
 prompt, are only seen on screen. Use a config that has Telescope (or another picker, fzf-lua,
 snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
@@ -406,12 +408,12 @@ snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
    ⇒ The picker is drawn over the editor where Neovim put it, with its border and colors; the
    prompt has Neovim's cursor and the editor's caret is hidden; a preview shows the selected
    file.
-2. Open the picker again and switch to another application, then back to Eclipse. Click a row of
-   its list, turn the mouse wheel over the list, press `Ctrl+F` and `Ctrl+A`, then double-click a
-   row.
-   ⇒ The picker is still open after the switch, with the cursor in its prompt; the click selects
-   the row and the picker stays; the wheel moves the list; no Find/Replace dialog opens and the
-   file behind is not selected; the double click opens that row.
+2. Open the picker again and switch to another application, then back to Eclipse. On macOS, click
+   a row of its list. Turn the mouse wheel over the list, press `Ctrl+F` and `Ctrl+A`, then
+   double-click a row.
+   ⇒ The picker is still open after the switch, with the cursor in its prompt; on macOS the
+   click selects the row and the picker stays; the wheel moves the list; no Find/Replace dialog
+   opens and the file behind is not selected; the double click opens that row.
 3. Run `:Lazy`, move with `j` and `k`, and close it with `q`.
    ⇒ The window is drawn with the cursor on its lines, the editor's text visible around it (no
    dark block over the editor, with a colorscheme that sets a background too); `q` closes it,
@@ -428,6 +430,9 @@ snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
    file is unchanged, and `q` closes the window.
 6. Press your leader key and wait.
    ⇒ which-key's panel is drawn at the bottom of the editor, and the next key goes on as usual.
+7. On macOS only, in Normal mode: click into the text on another line, then Cmd+click a word.
+   ⇒ The click moves the caret there and the editor keeps the keyboard; the Cmd+click is
+   Eclipse's (its hyperlinks), and Neovim does not jump.
 
 **Expect:** each step's result, after its ⇒.
 
