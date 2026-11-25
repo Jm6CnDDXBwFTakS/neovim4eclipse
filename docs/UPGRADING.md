@@ -326,8 +326,8 @@ and actions* above); the bullets say what each needs besides, and how to move it
 
 The tests of the jump labels run four real Neovim plug-ins (flash, leap, hop, mini.jump2d), the
 gallery's pictures a fifth, which-key, and the tests of floating windows that take the keyboard
-four more: Telescope with its library plenary (a picker's prompt), fzf-lua (a picker that runs
-fzf in a terminal float) and lazy.nvim (`:Lazy`). flash's help page also stands for a user's plug-in in
+four more: Telescope with its library plenary (a picker's prompt, its file and grep pickers),
+fzf-lua (a picker that runs fzf in a terminal float) and lazy.nvim (`:Lazy`). flash's help page also stands for a user's plug-in in
 the help editor's test (`windows_spec.lua`). They are third-party
 code that runs in the test Neovim, on your machine and wherever `LikeCi`
 or the gallery runs, so each is pinned: `releng/test-plugins.properties` holds, per plug-in, its repository, one commit,
@@ -347,6 +347,13 @@ plug-ins, so they run only where a developer has fetched them and installed fzf.
 from the environment (`FZF_DEFAULT_OPTS`, `FZF_DEFAULT_OPTS_FILE`, `FZF_DEFAULT_COMMAND`); the
 tests take those out of the test Neovim before fzf-lua starts fzf, so your own fzf config does
 not reach them (checked on Linux; on Windows the C runtime may keep a copy fzf-lua still reads).
+
+The pickers that list or search files run a program of the system's as well, which is not pinned
+either, for the same reason. Telescope's `find_files` takes whichever lister the machine has
+(`rg`, `fd`, `find`, on Windows `where`), so its tests run everywhere. Telescope's `live_grep`
+needs ripgrep: its test (`PickersEndToEndTest`) uses the `rg` on `PATH` (`apt install ripgrep`,
+`brew install ripgrep`, `winget install BurntSushi.ripgrep.MSVC`) and is skipped without one. ripgrep reads a
+config file named in `RIPGREP_CONFIG_PATH`; the tests take that out of the test Neovim first.
 
 Move a pin when a plug-in changed something the tests should see (new highlight groups, a new way
 of drawing labels), not routinely. The tool never looks for a newer commit and never moves a pin

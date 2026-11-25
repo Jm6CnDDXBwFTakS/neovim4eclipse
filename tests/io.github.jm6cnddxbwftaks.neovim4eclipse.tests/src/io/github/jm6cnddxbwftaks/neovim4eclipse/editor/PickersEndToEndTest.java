@@ -66,12 +66,26 @@ class PickersEndToEndTest extends EndToEndTestBase {
     @AfterEach
     void closeTelescope() {
         SessionProbe.lua(session, PinnedPlugins.CLOSE_TELESCOPE + " pcall(vim.keymap.del, 'n', 'gp')"
-                + " pcall(vim.keymap.del, 'n', 'gO')");
-        waitUntil("no picker drawn", TIMEOUT_MS, () -> {
+                + " pcall(vim.keymap.del, 'n', 'gO') pcall(vim.keymap.del, 'n', 'gF') pcall(vim.keymap.del, 'n', 'gG')");
+        waitUntil("no picker drawn, no program of a picker's left running", TIMEOUT_MS, () -> {
             settle();
-            return pluginFloats().isEmpty();
-        });
+            return pluginFloats().isEmpty() && "".equals(SessionProbe.lua(session, PICKER_PROGRAMS));
+        }, () -> "; programs " + SessionProbe.lua(session, PICKER_PROGRAMS));
     }
+
+    /**
+     * Lua that answers the names of Neovim's child processes that a file or grep picker starts
+     * ({@code rg}, {@code fd}, {@code fdfind}, {@code find}, {@code where}), joined by spaces, or
+     * {@code ""}: each test leaves none running for the tests after it, which share this Neovim.
+     */
+    static final String PICKER_PROGRAMS = """
+            local names = {}
+            for _, pid in ipairs(vim.api.nvim_get_proc_children(vim.fn.getpid())) do
+              local p = vim.api.nvim_get_proc(pid)
+              local name = p and p.name and p.name:gsub('%.exe$', '') or ''
+              if vim.tbl_contains({ 'rg', 'fd', 'fdfind', 'find', 'where' }, name) then table.insert(names, name) end
+            end
+            return table.concat(names, ' ')""";
 
     /** The canvases of plug-ins' floats over the text (not ui2's windows, the popup menu or a status line). */
     private List<GridCanvas> pluginFloats() {
@@ -358,6 +372,121 @@ class PickersEndToEndTest extends EndToEndTestBase {
     @Test
     void ctrlTInThePickerOpensTheFileInAnEditorTab() throws Exception {
         pickerActionOpensTheFile('t', false);
+    }
+
+    /** The test project's folder, as a Lua long string: the {@code cwd} of a file or grep picker. */
+    private String projectFolder() {
+        return PinnedPlugins.longString(project.getLocation().toFile().toPath());
+    }
+
+    /**
+     * Maps {@code gF} to Telescope's {@code find_files} in the project's folder. Telescope picks
+     * the lister itself, as it does for a user ({@code rg}, {@code fd}, {@code find}, or
+     * {@code where} on Windows, whichever the system has, from Neovim's {@code PATH}, kept to its
+     * absolute folders, and without the developer's ripgrep config: {@link PinnedPlugins#FOR_PROGRAMS}).
+     */
+    private void mapFindFiles() {
+        SessionProbe.lua(session, PinnedPlugins.FOR_PROGRAMS + " vim.keymap.set('n', 'gF', function()"
+                + " require('telescope.builtin').find_files({ cwd = " + projectFolder() + " }) end)");
+    }
+
+    /**
+     * Maps {@code gG} to Telescope's {@code live_grep} in the project's folder, run with
+     * {@code rg}: Telescope's own arguments ({@code vimgrep_arguments}), the program named by its
+     * absolute path ({@link PinnedPlugins#rg}), the developer's config out as for
+     * {@link #mapFindFiles}.
+     */
+    private void mapLiveGrep(Path rg) {
+        SessionProbe.lua(session, PinnedPlugins.FOR_PROGRAMS + " vim.keymap.set('n', 'gG', function()"
+                + " local args = vim.deepcopy(require('telescope.config').values.vimgrep_arguments)"
+                + " args[1] = " + PinnedPlugins.longString(rg)
+                + " require('telescope.builtin').live_grep({ cwd = " + projectFolder() + ", vimgrep_arguments = args })"
+                + " end)");
+    }
+
+    /**
+     * Opens the picker with {@code open} ({@code gone}, another file, listed with {@code file}
+     * before the letters; {@code null}: a picker that lists nothing before them, a grep), types
+     * {@code letters} until {@code file}'s entry is the one selected (by its file's name: a lister
+     * may give whole paths, as Windows' {@code where} does, which the letters can match in another
+     * file's folders too), then {@code Ctrl+key}, or Enter for {@code key == '\r'}:
+     * {@code file} opens in a new editor on line {@code line} (0-based), split or not, in Normal
+     * mode, the picker gone and the test's document unchanged.
+     */
+    private void pickFile(String open, String letters, String file, String gone, char key, boolean split, int line) {
+        String text = document.get();
+        try {
+            UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+            type(widget, open);
+            waitUntil("the picker drawn" + (gone == null ? "" : ", " + file + " and " + gone + " listed"), TIMEOUT_MS,
+                    () -> pickerShows(">") && (gone == null || telescopeWindows(file) >= 1 && telescopeWindows(gone) >= 1),
+                    () -> "; drawn:\n" + drawn());
+            type(widget, letters);
+            waitUntil(file + " selected for " + letters, TIMEOUT_MS,
+                    () -> pickerShows(letters) && file.equals(selectedFile()),
+                    () -> "; selected " + selectedFile() + ", drawn:\n" + drawn());
+            if (key == '\r') {
+                type(widget, "\r");
+            } else {
+                ctrlKey(widget, key);
+            }
+            waitUntil(file + " in a new editor, its caret on line " + (line + 1), TIMEOUT_MS, () -> {
+                settle();
+                IEditorPart active = page().getActiveEditor();
+                return active != editor && file.equals(active.getTitle())
+                        && active.getAdapter(Control.class) instanceof StyledText opened
+                        && opened.getLineAtOffset(opened.getCaretOffset()) == line && pluginFloats().isEmpty();
+            }, () -> "; active " + page().getActiveEditor().getTitle() + ", drawn:\n" + drawn());
+            assertEquals(split, EditorSplits.isSplit(page().getActiveEditor()), "a split, or a tab of this stack");
+            type((StyledText) page().getActiveEditor().getAdapter(Control.class), "zz");
+            settle();
+            assertFalse(page().getActiveEditor().isDirty(), "the keys after the pick change no file");
+            assertEquals(text, document.get(), "the document keeps its text");
+        } finally {
+            closeOtherEditors();
+        }
+    }
+
+    /** The name of the file of the entry selected in the open picker, {@code ""} when none. */
+    private String selectedFile() {
+        return String.valueOf(SessionProbe.lua(session, """
+                local ok, e = pcall(function() return require('telescope.actions.state').get_selected_entry() end)
+                local file = ok and e and (e.filename or e.path or e.value)
+                return type(file) == 'string' and vim.fn.fnamemodify(file, ':t') or ''"""));
+    }
+
+    /**
+     * Telescope's {@code find_files} lists the project's files with the system's lister; the
+     * letters narrow it to other.txt, and Enter opens it in an editor of its own, as {@code :edit}
+     * does: a tab of this stack, the caret on its first line.
+     */
+    @Test
+    void findFilesListsTheProjectAndEnterOpensTheFile() throws Exception {
+        otherFile();
+        mapFindFiles();
+        pickFile("gF", "other", "other.txt", "test.txt", '\r', false, 0);
+    }
+
+    /** {@code find_files}' Ctrl-V on other.txt opens it in an Eclipse split. */
+    @Test
+    void findFilesCtrlVOpensTheFileInASplit() throws Exception {
+        otherFile();
+        mapFindFiles();
+        pickFile("gF", "other", "other.txt", "test.txt", 'v', true, 0);
+    }
+
+    /**
+     * Telescope's {@code live_grep}, ripgrep searching the project's files as you type: the
+     * letters find the one line that has them, in grep.txt, and Enter opens that file on that
+     * line. Skipped without {@code rg} on {@code PATH} ({@link PinnedPlugins#RG_HOW}).
+     */
+    @Test
+    void liveGrepFindsTheLineAndEnterOpensItsFile() throws Exception {
+        Optional<Path> rg = PinnedPlugins.rg();
+        assumeTrue(rg.isPresent(), PinnedPlugins.RG_HOW);
+        createFile("grep.txt", "first\nthe needle is here\nlast\n");
+        mapLiveGrep(rg.get());
+        pickFile("gG", "needle", "grep.txt", null, '\r', false, 1);
     }
 
     /** Ctrl-V on a line of the file itself: a clone of the editor on that line, the first editor where it was. */

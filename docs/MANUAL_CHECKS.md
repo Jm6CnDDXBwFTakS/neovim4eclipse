@@ -389,19 +389,22 @@ it: closing the page editors at Eclipse's exit as well would avoid it.
 - **Launch:** normal
 - **Areas:** core/LuaScripts.java, core/lua/**, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridMouse.java, editor/LineInputMethod.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
 
-Telescope's `current_buffer_fuzzy_find`, fzf-lua's `blines` and its `Ctrl-V` on a file, and
-`:Lazy` are tested at pinned commits (`PickersEndToEndTest`, `FloatInsertIntegrationTest`, `FzfLuaEndToEndTest`,
-`FzfLuaIntegrationTest`, `NeovimWindowsIntegrationTest`), with the plug-ins' defaults (but for
-the `Ctrl-V` test, which binds fzf-lua's split action itself); fzf-lua's only where fzf is on `PATH`. Your own config, with its pickers, previews, borders and colorscheme, and an
-input method in a prompt, are only seen on screen. Use a config that has Telescope (or another
-picker, fzf-lua, snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
+Telescope's `current_buffer_fuzzy_find`, `find_files` and `live_grep`, fzf-lua's `blines` and
+its `Ctrl-V` on a file, and `:Lazy` are tested at pinned commits (`PickersEndToEndTest`,
+`FloatInsertIntegrationTest`, `FzfLuaEndToEndTest`, `FzfLuaIntegrationTest`,
+`NeovimWindowsIntegrationTest`), with the plug-ins' defaults (but for the `Ctrl-V` test, which
+binds fzf-lua's split action itself): typing narrows the list, Enter jumps to the line or opens
+the file in an Eclipse editor, the document you came from is unchanged. fzf-lua's only where fzf
+is on `PATH`, `live_grep` only where `rg` is.
+Your own config, with its pickers, previews, borders and colorscheme, and an input method in a
+prompt, are only seen on screen. Use a config that has Telescope (or another picker, fzf-lua,
+snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
 
 1. In a project of your own with several files, open a file of it, open a file picker with your
-   mapping (`<leader>ff`), type part of another file's name, and press Enter.
+   mapping (`<leader>ff`), and type part of another file's name.
    ⇒ The picker is drawn over the editor where Neovim put it, with its border and colors; the
-   prompt has Neovim's cursor and the editor's caret is hidden; the letters appear in the prompt,
-   the list narrows, a preview shows the selected file; Enter opens that file in an Eclipse
-   editor, and the document you came from is unchanged.
+   prompt has Neovim's cursor and the editor's caret is hidden; a preview shows the selected
+   file.
 2. Open the picker again and switch to another application, then back to Eclipse. Click a row of
    its list, turn the mouse wheel over the list, press `Ctrl+F` and `Ctrl+A`, then double-click a
    row.

@@ -146,7 +146,30 @@ public final class PinnedPlugins {
      * folder with a space or a {@code $} in it spoils the run (fzf-lua then says so).
      */
     public static Optional<Path> fzf() {
-        String name = System.getProperty("os.name", "").startsWith("Windows") ? "fzf.exe" : "fzf";
+        return onPath("fzf");
+    }
+
+    /** Why a ripgrep test skipped: rg is a program of the system's, as fzf is. */
+    public static final String RG_HOW = "rg (ripgrep) is not on PATH: install it (apt install ripgrep,"
+            + " brew install ripgrep, winget install BurntSushi.ripgrep.MSVC), or put the folder of one first on PATH";
+
+    /**
+     * The ripgrep program, found as {@link #fzf} finds fzf, or empty: what Telescope's
+     * {@code live_grep} runs (given this path). Not pinned either
+     * (a Rust program built per system), so a test that needs it skips without one, saying
+     * {@link #RG_HOW}. Example: {@code /usr/bin/rg} after {@code apt install ripgrep}.
+     */
+    public static Optional<Path> rg() {
+        return onPath("rg");
+    }
+
+    /**
+     * The program {@code base} ({@code base.exe} on Windows) in the absolute folders of
+     * {@code PATH}, in their order, or empty: the rule {@link #fzf} explains (a relative entry is
+     * passed over; {@code System.getenv("PATH")} also finds Windows' {@code Path}).
+     */
+    private static Optional<Path> onPath(String base) {
+        String name = System.getProperty("os.name", "").startsWith("Windows") ? base + ".exe" : base;
         String path = System.getenv("PATH");
         for (String folder : (path == null ? "" : path).split(java.io.File.pathSeparator)) {
             try {
@@ -252,6 +275,26 @@ public final class PinnedPlugins {
     /** Lua that answers how many buffers of fzf-lua's lists are left, shown or hidden: 0 after {@link #CLOSE_FZF_LUA}. */
     public static final String FZF_BUFFERS = """
             return #vim.tbl_filter(function(b) return vim.bo[b].filetype == 'fzf' end, vim.api.nvim_list_bufs())
+            """;
+
+    /**
+     * Lua that prepares Neovim for a picker that runs a program it picks by name (Telescope's
+     * {@code find_files}: {@code rg}, {@code fd}, {@code find} or {@code where}): {@code PATH} keeps only its absolute folders, the rule {@link #fzf} keeps for
+     * the tests' own lookup, so that a relative entry ({@code .}) cannot make Neovim run a file of
+     * the test project's folder, where the picker starts it (on Windows the program's own folder may
+     * still be searched first, as Windows does; that folder holds only the files the test makes);
+     * and ripgrep's config file ({@code RIPGREP_CONFIG_PATH}) is taken out, so that a developer's
+     * own cannot change what a list holds (fd reads its ignore file from {@code XDG_CONFIG_HOME},
+     * which the UI tests' pom.xml points into {@code target/}).
+     */
+    public static final String FOR_PROGRAMS = """
+            vim.env.RIPGREP_CONFIG_PATH = nil
+            local sep = vim.fn.has('win32') == 1 and ';' or ':'
+            local kept = {}
+            for _, dir in ipairs(vim.split(vim.env.PATH or '', sep, { plain = true })) do
+              if dir ~= '' and vim.fn.isabsolutepath(dir) == 1 then table.insert(kept, dir) end
+            end
+            vim.env.PATH = table.concat(kept, sep)
             """;
 
     /**

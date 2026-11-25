@@ -251,9 +251,11 @@ given setting sets it in the test itself (for example `session.commandAsync("set
 so it runs the same everywhere. To try the plug-in with your own config, run it from Eclipse (see
 "Run it from Eclipse").
 
-The fzf-lua tests are the one exception on purpose: fzf is not pinned, so they run the `fzf` on
-your `PATH`, and are skipped without one (docs/UPGRADING.md, "The plug-ins the tests run"). The
-variables fzf reads its options from are taken out of their Neovim.
+The picker tests that need a program are the one exception on purpose: fzf and ripgrep are not
+pinned, so the fzf-lua tests run the `fzf` on your `PATH`, and the Telescope `live_grep` test
+the `rg` there, each skipped without one (docs/UPGRADING.md, "The
+plug-ins the tests run"). The variables those programs read their options from are taken out of
+their Neovim.
 
 Earlier builds left a test data folder in your real one: `~/.local/share/neovim4eclipse-plugin/tests`
 (on Windows `%LOCALAPPDATA%\neovim4eclipse-plugin\tests-data`), and before that
