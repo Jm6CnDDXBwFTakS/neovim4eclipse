@@ -230,8 +230,13 @@ float. That last also ends an insert in a start float it closes or leaves, in th
 Neovim in (the attached editor's, when Eclipse names one). The cursor waits on the next character
 that is not white space, or the next empty line, until the insert is over, so that the line keeps
 its indentation; a document of only white space, with no empty line, has no such place, and its line
-loses that white space. The insert ends in the window Neovim is in when the call is over, not where
-the stop was asked: a call that moves Neovim on after a stop asks again from there (`leave`,
+loses that white space in Neovim's buffer. Whether Eclipse's document keeps the loss depends on the
+route, as measured on Linux. Switching to another file's editor, one already open, ended the insert
+in that editor's window: Neovim's buffer lost the white space, got it back right after (the editor's
+attach, as far as measured), and Eclipse's document never changed. In a file opened just then, the
+buffer was still empty when the insert ended. A plug-in's `:split` of the file Neovim is in left the
+loss in Eclipse's document. The insert ends in the window Neovim is in when the call is over, not
+where the stop was asked: a call that moves Neovim on after a stop asks again from there (`leave`,
 `close_start_floats`), each window is guarded once per insert and buffer, and each window's cursor
 is put back while it shows the same buffer (USER_GUIDE.md, "Floating windows"). Other routes
 (focusing a page, say) end nothing then. Eclipse mode closes the float Neovim is in (`leave_float`),

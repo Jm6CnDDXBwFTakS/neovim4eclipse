@@ -695,8 +695,9 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   (not a page) or close the one it goes on in, as the plug-in opens a file in a split or tab, or as
   Neovim's start is over with Neovim out of such windows. Ended with `Esc`, an Insert that only
   indented (`o`, nothing typed) takes the white space of the line the cursor is on, as in a
-  terminal; ended by Eclipse, the line keeps it, unless the document holds only white space, with no
-  empty line.
+  terminal; ended by Eclipse, the line keeps it. One case loses it: a document of only white
+  space, with no empty line, when the Insert ends as a plug-in's `:split` opens that file again.
+  Switching to another file's editor keeps that file's text, also one of only white space.
 - **Modes:** in Normal, Visual and operator-pending mode (`d` and then a panel of motions). In
   insert mode Eclipse types and Neovim gets the text at `Esc`, so a window that follows your
   typing (signature help, a completion plug-in's documentation or menu) does not open, or lags.
