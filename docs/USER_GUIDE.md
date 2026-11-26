@@ -742,6 +742,23 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   ([The plug-in's log](#the-plug-ins-log)). The limits keep a plug-in gone wrong, with a window of
   5000 by 5000 cells or thousands of windows, from slowing Eclipse down: a window far past them
   does not even get memory for its cells.
+- **A file manager's window** (oil.nvim's float, `:Oil --float`) lists a folder and takes the
+  keyboard like any window that does; Enter on a file opens that file's editor. What you change in
+  the listing and write (`:w`, then its confirmation) is done on disk, as in a terminal: a renamed
+  line moves the file, and a deleted line deletes it, for good unless oil's `delete_to_trash` is
+  on. An editor open on a file moved this way follows it to the new name; one open on a saved file
+  deleted this way closes once Eclipse checks its file (as the editor comes to the front, or as
+  the workspace refreshes), as for any file deleted outside Eclipse. An editor with unsaved
+  changes keeps them under the old name, still unsaved, and a moved file opens in an editor of its
+  own as it was saved. Back in that editor, Eclipse asks (*File Not Accessible*): *Save* goes
+  through *Save As*, which proposes the old name (and may ask whether to replace it, as the
+  workspace may still list it), so the file comes back with your changes, beside the moved one if
+  it was moved; *Close* discards them. Eclipse's workspace (the Project Explorer) shows such a
+  change at its next refresh (`F5`, or *Preferences › General › Workspace › Refresh using native
+  hooks or polling*), as for any change made outside Eclipse; a file that an editor opens (the one
+  that followed it, or Enter) shows at once. `:Oil` without `--float` shows nothing: it opens the
+  listing in the editor's own window, and the editor goes back to its file, as for any buffer that
+  is no file.
 - **A row off, sometimes.** A window anchored to a text position is placed by Neovim's rows. Where
   Eclipse's rows differ (a code mining above a line, a long line Eclipse wraps at another
   character), it can sit one row from where Neovim meant it.

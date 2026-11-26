@@ -395,9 +395,9 @@ public final class PinnedPlugins {
     }
 
     /**
-     * Lua, run before a plug-in's setup, after which {@code vim.system} and {@code vim.fn.jobstart}
-     * refuse to start any program in that Neovim: they note the command in {@code _G.n4e_refused}
-     * ({@link #PROGRAMS_REFUSED} answers it) and raise an error. For a plug-in that could start one
+     * Lua, run before a plug-in's setup, after which {@code vim.system}, {@code vim.fn.jobstart} and
+     * {@code vim.fn.termopen} refuse to start any program in that Neovim: they note the command in
+     * {@code _G.n4e_refused} ({@link #PROGRAMS_REFUSED} answers it) and raise an error. For a plug-in that could start one
      * (blink.cmp's downloader, lualine's git), so that a test proves none ran, and a pin moved to a
      * commit that does start one fails instead of running it. Other ways (Vim's {@code system()},
      * {@code io.popen}) are not watched: each plug-in's pin says which it uses.
@@ -410,6 +410,7 @@ public final class PinnedPlugins {
             end
             vim.system = refuse
             vim.fn.jobstart = refuse
+            vim.fn.termopen = refuse
             """;
 
     /** Lua that answers the commands {@link #REFUSE_PROGRAMS} refused so far: "" for none. */
@@ -528,6 +529,46 @@ public final class PinnedPlugins {
     public static String noiceInit(Path noice, Path nui) {
         return onRuntimePath(nui) + "\n" + onRuntimePath(noice) + "\nrequire('noice').setup()\n";
     }
+
+    /**
+     * Lua that loads oil.nvim from {@code folder} and calls its {@code setup()} with its defaults,
+     * as a user's config would, after {@link #REFUSE_PROGRAMS}. oil has no {@code plugin/} file: it
+     * acts once its setup ran, which makes it the reader of every {@code oil://} buffer and of a
+     * folder opened with {@code :edit}, and defines {@code :Oil}. Its float lists a folder, one line
+     * a file ({@code require('oil').open_float(folder)}); a line renamed there moves the file once
+     * the buffer is written and its confirmation answered. That is the whole Neovim's: a test that
+     * shares its Neovim restarts it afterwards.
+     */
+    public static String loadOil(Path folder) {
+        return onRuntimePath(folder) + "\n" + REFUSE_PROGRAMS + "require('oil').setup({})";
+    }
+
+    /**
+     * Lua that opens oil's float on {@code folder}: {@code require('oil').open_float(folder)}.
+     * Example: {@code require('oil').open_float([==[/home/you/project]==])}.
+     */
+    public static String openOilFloat(Path folder) {
+        return "require('oil').open_float(" + longString(folder) + ")";
+    }
+
+    /**
+     * Lua that answers the actions oil's confirmation window lists, one a line, trimmed, while
+     * that window has the keyboard (its buffer's filetype {@code oil_preview}); "" otherwise.
+     * Example: {@code "MOVE open-me.txt -> moved.txt"}. A test answers {@code y} only to the list it
+     * expects: {@code y} carries out every action listed, a {@code DELETE} too.
+     */
+    public static final String OIL_CONFIRMATION = """
+            if vim.bo.filetype ~= 'oil_preview' then
+              return ''
+            end
+            local actions = {}
+            for _, line in ipairs(vim.api.nvim_buf_get_lines(0, 0, -1, false)) do
+              local action = vim.trim(line)
+              if action:match('^%u+ ') then
+                table.insert(actions, action)
+              end
+            end
+            return table.concat(actions, '\\n')""";
 
     /**
      * Lua that puts {@code folder} first on Neovim's {@code 'runtimepath'}, so that

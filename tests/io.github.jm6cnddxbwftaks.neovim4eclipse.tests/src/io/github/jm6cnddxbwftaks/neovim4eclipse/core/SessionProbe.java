@@ -9,7 +9,15 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
  * in the same package, and the test fragment shares the plug-in's class loader, so it may call it.
  *
  * <p>Blocks until Neovim answers. Fine on the UI thread for these small reads; not for anything
- * that makes Neovim ask Eclipse something back (such as the clipboard).
+ * that makes Neovim ask Eclipse something back (such as the clipboard), nor right after a key
+ * that changes the text: the session reads Neovim's messages on one thread, which hands a buffer
+ * change to the UI thread and waits for it ({@code BufferSynchronizer}), so while this call holds
+ * the UI thread, Neovim's answer waits behind that change until the call times out. Example:
+ * {@code x} typed on the editor, then at once {@code lua(session, "require('oil').open_float(...)")}.
+ * Wait for the change to reach the document first ({@code UiTestSupport.waitUntil}). The
+ * plug-in's own code blocks the UI thread on Neovim only in the two bounded waits AGENTS.md names
+ * ("Rules the code depends on"): {@code ProjectFolderExit}, which can meet the same jam and gives
+ * up after 1 s (the change then goes in), and {@code BusyStart}, before any buffer is attached.
  */
 public final class SessionProbe {
 

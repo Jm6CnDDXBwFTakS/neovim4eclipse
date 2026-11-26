@@ -334,7 +334,8 @@ and the tests of plug-ins that work on text three more: vim-surround and vim-rep
 `.` repeats it (`SurroundIntegrationTest`, `SurroundEndToEndTest`), and mini.nvim, for its
 mini.pairs and mini.ai (`MiniIntegrationTest`, `MiniEndToEndTest`), and the test of what noice.nvim
 does in Eclipse two more: noice and its library nui.nvim (`NoiceIntegrationTest`), and the tests
-of a status line one more: lualine (`LualineIntegrationTest`, `LualineEndToEndTest`). flash's help
+of a status line one more: lualine (`LualineIntegrationTest`, `LualineEndToEndTest`), and the
+tests of a file manager one more: oil.nvim (`OilIntegrationTest`, `OilEndToEndTest`). flash's help
 page also stands for a user's plug-in in the help editor's test (`windows_spec.lua`). They are
 third-party
 code that runs in the test Neovim, on your machine and wherever `LikeCi`

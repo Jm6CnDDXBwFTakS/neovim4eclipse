@@ -4,6 +4,7 @@
 package io.github.jm6cnddxbwftaks.neovim4eclipse.testing;
 
 import java.time.Duration;
+import java.util.function.Supplier;
 
 /**
  * How long a test waits for something it expects to happen, the same for every test module.
@@ -63,6 +64,57 @@ public final class TestWait {
     /** The limit as a {@link Duration}, for APIs that take one. */
     public static Duration duration() {
         return Duration.ofMillis(millis());
+    }
+
+    /**
+     * What {@link #until} waits for. It may throw while the answer is not there yet (Neovim busy,
+     * a file not written yet): that counts as "not yet", and the wait goes on.
+     */
+    @FunctionalInterface
+    public interface Condition {
+        boolean holds() throws Exception;
+    }
+
+    /**
+     * Waits until {@code condition} holds, checking it every 25 ms, at most {@link #millis()}.
+     * Example: {@code TestWait.until("the file moved", () -> Files.exists(moved), () -> "on disk: "
+     * + list(folder))}.
+     *
+     * @param what  what is waited for, in the failure's message ("timed out waiting for ...")
+     * @param state what the test sees instead, added to the failure's message; read only then
+     * @throws AssertionError when the limit passes first, naming the condition's last exception, if
+     *         its last check threw one
+     */
+    public static void until(String what, Condition condition, Supplier<String> state)
+            throws InterruptedException {
+        until(what, condition, state, millis());
+    }
+
+    /** {@link #until} with a limit of {@code limitMillis}, for {@code TestWaitTest}'s time-out. */
+    static void until(String what, Condition condition, Supplier<String> state, long limitMillis)
+            throws InterruptedException {
+        long deadline = System.currentTimeMillis() + limitMillis;
+        while (true) {
+            Exception thrown = null;
+            try {
+                if (condition.holds()) {
+                    return;
+                }
+            } catch (InterruptedException e) {
+                throw e;
+            } catch (Exception e) {
+                thrown = e; // not yet: see Condition
+            }
+            if (System.currentTimeMillis() >= deadline) {
+                AssertionError timedOut = new AssertionError("timed out waiting for " + what + "; "
+                        + state.get() + (thrown == null ? "" : "; its last check threw " + thrown));
+                if (thrown != null) {
+                    timedOut.initCause(thrown);
+                }
+                throw timedOut;
+            }
+            Thread.sleep(25);
+        }
     }
 
     /**

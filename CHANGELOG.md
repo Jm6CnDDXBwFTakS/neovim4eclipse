@@ -12,6 +12,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- The user guide says how some IDE-like plug-ins behave in Eclipse, as best effort: oil.nvim's
+  float (*Floating windows*).
+
 ### Changed
 
 - A plug-in's floating window that takes the keyboard (a picker's prompt, `:Lazy`, hover
