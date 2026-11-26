@@ -68,7 +68,7 @@ class CompletionPluginsEndToEndTest extends EndToEndTestBase {
         waitUntil("blink.cmp set up with its Lua matcher, no program asked for", TIMEOUT_MS,
                 () -> "lua".equals(SessionProbe.lua(session, PinnedPlugins.BLINK_READY)),
                 () -> "; " + SessionProbe.lua(session, PinnedPlugins.BLINK_READY));
-        completesAndHandsBack();
+        completesAndHandsBack(true);
         assertEquals("lua", SessionProbe.lua(session, PinnedPlugins.BLINK_READY), "still no program asked for");
     }
 
@@ -80,13 +80,14 @@ class CompletionPluginsEndToEndTest extends EndToEndTestBase {
                 "nvim-cmp and cmp-buffer are not fetched at their pinned commits: " + PinnedPlugins.HOW);
         loaded = true;
         SessionProbe.lua(session, PinnedPlugins.loadNvimCmp(cmp.get(), buffer.get()) + " return 0");
-        completesAndHandsBack();
+        completesAndHandsBack(false);
     }
 
     /**
      * The steps both plug-ins go through, on a fourth line under three words. {@code o} and
      * {@code al} typed by Eclipse, then the plug-in's {@code Ctrl-N}: its menu is drawn with the
-     * words (whether a match is put in at once is a matter of timing: see
+     * words (blink.cmp puts nothing in, its auto-insert off: {@code putsNothingIn}; whether
+     * nvim-cmp puts a match in at once is a matter of timing: see
      * {@code CompletionPluginsIntegrationTest}). {@code Ctrl-E} takes back what it put in, if
      * anything; {@code phab}, typed by Neovim now, opens the menu again by itself, narrowed to
      * {@code alphabet}, the caret after the letters; {@code Ctrl-Y} accepts it, the caret after the
@@ -94,7 +95,7 @@ class CompletionPluginsEndToEndTest extends EndToEndTestBase {
      * nvim-cmp's late match right after the key (the letters then landed inside it) is the
      * stand-in mapping's test, {@code CompletionMenuEndToEndTest}, which controls the delay.
      */
-    private void completesAndHandsBack() throws Exception {
+    private void completesAndHandsBack(boolean putsNothingIn) throws Exception {
         document.set(WORDS);
         settle();
         type(widget, "G");
@@ -106,6 +107,9 @@ class CompletionPluginsEndToEndTest extends EndToEndTestBase {
         ctrlKey(widget, 'n');
         waitUntil("the plug-in's menu drawn, with the words", TIMEOUT_MS,
                 () -> menuShows("alphabet") && menuShows("alpine"), () -> "; " + state());
+        if (putsNothingIn) {
+            assertEquals(WORDS + "al\n", document.get(), "the key put nothing in");
+        }
         assertTrue(session.isNeovimDrivenInsert(), "Neovim types the rest of the insert");
 
         ctrlKey(widget, 'e');

@@ -382,12 +382,22 @@ public final class PinnedPlugins {
      * the setup needs none of it. {@code setup()} acts on the whole Neovim (autocommands, mappings
      * when an insert starts) and cannot be undone: a test that shares its Neovim restarts it
      * afterwards.
+     *
+     * <p>One setting differs from blink.cmp's defaults:
+     * {@code completion.list.selection.auto_insert} is off, so its {@code Ctrl-N} selects the next
+     * entry without putting it in the line. With it on, blink.cmp at times closes its own menu
+     * right after putting a match in (its {@code BlinkCmpMenuClose} as Neovim leaves the
+     * {@code Ctrl-X} mode blink.cmp enters to record the edit for {@code .}), the match left in the
+     * line and no menu: seen on a Windows runner on one core, about 5 tries in 100, with the keys
+     * sent to Neovim directly, no Eclipse in between. That is blink.cmp's own timing, which a test
+     * cannot wait out; with nothing put in, the menu stays open.
      */
     public static String loadBlinkCmp(Path folder) {
         return onRuntimePath(folder) + "\n" + REFUSE_PROGRAMS + """
                 require('blink.cmp').setup({
                   fuzzy = { implementation = 'lua', prebuilt_binaries = { download = false } },
                   sources = { default = { 'buffer' } },
+                  completion = { list = { selection = { auto_insert = false } } },
                   keymap = { preset = 'default' },
                   signature = { enabled = false },
                 })

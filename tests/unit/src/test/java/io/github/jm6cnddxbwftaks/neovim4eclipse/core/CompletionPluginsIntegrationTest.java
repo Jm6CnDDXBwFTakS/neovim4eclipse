@@ -54,7 +54,7 @@ class CompletionPluginsIntegrationTest {
             s.lua(PinnedPlugins.loadBlinkCmp(blink.get()) + " return 0");
             waitFor(() -> "lua".equals(s.lua(PinnedPlugins.BLINK_READY)),
                     "blink.cmp set up with its Lua matcher, no program asked for");
-            completesAndHandsBack(s);
+            completesAndHandsBack(s, true);
             assertEquals("lua", s.lua(PinnedPlugins.BLINK_READY), "still no program asked for");
         }
     }
@@ -68,23 +68,29 @@ class CompletionPluginsIntegrationTest {
                 "nvim-cmp and cmp-buffer are not fetched at their pinned commits: " + PinnedPlugins.HOW);
         try (NeovimSession s = start()) {
             s.lua(PinnedPlugins.loadNvimCmp(cmp.get(), buffer.get()) + " return 0");
-            completesAndHandsBack(s);
+            completesAndHandsBack(s, false);
         }
     }
 
     /**
      * The steps both plug-ins go through. {@code al} typed by Eclipse, then the plug-in's
-     * {@code Ctrl-N}: the menu opens with the buffer's words. Whether a match is put in at once
-     * depends on whether the menu was open already, from the re-typed {@code al}, when the key
-     * came (both plug-ins then select the next entry; otherwise blink.cmp's key does nothing and
-     * nvim-cmp's opens the menu): a matter of timing, so the test does not ask. {@code Ctrl-E} takes it back to {@code al}; then {@code phab}, typed by
-     * Neovim since the key, opens the menu again on its own and narrows it to {@code alphabet};
-     * {@code Ctrl-Y} accepts that. {@code Esc} ends the insert, and the next one is Eclipse's.
+     * {@code Ctrl-N}: the menu opens with the buffer's words. blink.cmp's key selects the next
+     * entry of the menu the re-typed {@code al} opened, and puts nothing in ({@code putsNothingIn}:
+     * its auto-insert is off, {@link PinnedPlugins#loadBlinkCmp} says why); with no menu open yet
+     * the key would do nothing, as its fallback runs other mappings only, not Neovim's own
+     * {@code Ctrl-N}. nvim-cmp's puts the next entry in if its menu was open already, and otherwise
+     * opens it: a matter of timing, so the test does not ask. {@code Ctrl-E} takes it back to
+     * {@code al}; then {@code phab}, typed by Neovim since the key, opens the menu again on its own
+     * and narrows it to {@code alphabet}; {@code Ctrl-Y} accepts that. {@code Esc} ends the insert,
+     * and the next one is Eclipse's.
      */
-    private static void completesAndHandsBack(NeovimSession s) throws Exception {
+    private static void completesAndHandsBack(NeovimSession s, boolean putsNothingIn) throws Exception {
         s.completeInNeovimAsync(eclipseTyped(s, "al"), "<C-n>");
         waitFor(() -> menus(s, "alphabet") >= 1 && menus(s, "alpine") >= 1, "the plug-in's menu, with the buffer's words",
                 () -> state(s));
+        if (putsNothingIn) {
+            assertEquals("al", line(s, 4), "the key put nothing in");
+        }
         assertTrue(s.isNeovimDrivenInsert(), "Neovim types the rest of the insert");
         waitFor(() -> reported(s, "alphabet"), "the menu reported to be drawn", () -> state(s));
 
