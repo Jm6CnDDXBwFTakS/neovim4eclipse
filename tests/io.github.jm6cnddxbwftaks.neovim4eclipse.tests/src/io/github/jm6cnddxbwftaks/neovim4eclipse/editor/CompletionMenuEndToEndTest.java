@@ -265,4 +265,60 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
         expectText("apple\napricot\napple.foo()\n");
         assertEquals(List.of("apple", "apricot", "apple.foo()"), neovimLines(), "Neovim has the same text");
     }
+
+    /**
+     * A completion plug-in's Ctrl-N, as nvim-cmp's: mapped in Insert mode, and its match comes
+     * later than the key's answer (here 150 ms, about what nvim-cmp takes for its sources). Neovim
+     * types the rest of the insert (KeyInput.mappedInInsert), so the caret follows the match and
+     * the next letter lands after it. Handed back to Eclipse at once, the caret stayed before the
+     * match and "s" gave "apsple".
+     */
+    @Test
+    void aMappedCtrlNWhoseMatchComesLaterLeavesTheRestOfTheInsertToNeovim() {
+        SessionProbe.lua(session, "vim.keymap.set('i', '<C-n>', function() vim.defer_fn(function()"
+                + " vim.api.nvim_feedkeys(vim.keycode('<BS><BS>apple'), 'int', true) end, 150) end) return 0");
+        try {
+            ctrlKey(widget, 'n');
+            expectText("apple\napricot\napple\n");
+            assertTrue(session.isNeovimDrivenInsert(), "Neovim types the rest");
+            type(widget, "s");
+            expectText("apple\napricot\napples\n");
+            escape(widget);
+            waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+            settle();
+            expectText("apple\napricot\napples\n");
+            assertEquals(List.of("apple", "apricot", "apples"), neovimLines(), "Neovim has the same text");
+        } finally {
+            SessionProbe.lua(session, "pcall(vim.keymap.del, 'i', '<C-n>') return 0");
+        }
+    }
+
+    /**
+     * Eclipse changes the document by itself (a paste with the mouse, an accepted content-assist
+     * proposal) in the rest of an insert a mapped Ctrl-N left to Neovim: the change is not Neovim's
+     * typing either, so it must reach Neovim, or Neovim's next line events and Esc's read of its
+     * buffer would take it away again.
+     */
+    @Test
+    void anEditEclipseMakesAfterAMappedCtrlNIsKept() throws Exception {
+        SessionProbe.lua(session, "vim.keymap.set('i', '<C-n>', function() vim.defer_fn(function()"
+                + " vim.api.nvim_feedkeys(vim.keycode('<BS><BS>apple'), 'int', true) end, 150) end) return 0");
+        try {
+            ctrlKey(widget, 'n');
+            expectText("apple\napricot\napple\n");
+            int end = document.getLength() - 1; // after "apple" on the third line
+            waitUntil("the caret after the match", TIMEOUT_MS, () -> widget.getCaretOffset() == end);
+            document.replace(0, 0, "pasted ");
+            settle();
+            type(widget, "s");
+            expectText("pasted apple\napricot\napples\n");
+            escape(widget);
+            waitUntil("normal mode", TIMEOUT_MS, () -> !session.isTypingMode());
+            settle();
+            expectText("pasted apple\napricot\napples\n");
+            assertEquals(List.of("pasted apple", "apricot", "apples"), neovimLines(), "Neovim has the same text");
+        } finally {
+            SessionProbe.lua(session, "pcall(vim.keymap.del, 'i', '<C-n>') return 0");
+        }
+    }
 }

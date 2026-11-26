@@ -1743,6 +1743,21 @@ final class LuaScripts {
             return true
             """;
 
+    /**
+     * Whether argument 1, a completion key in Neovim's notation ({@code <C-n>}, {@code <C-p>},
+     * {@code <C-x><C-l>}), would be taken by an Insert-mode mapping in the current buffer.
+     * {@code mapcheck} answers for every mapping that would: one of the key itself, one of its start
+     * ({@code <C-x>} alone takes {@code <C-x><C-l>}), and a longer one it starts (Neovim waits for
+     * the rest); buffer-local or global, a Lua callback or a plain right-hand side (an empty one
+     * reads {@code <Nop>}, never the empty string that means none). Asked by {@link KeyInput} right
+     * before a completion key goes to Neovim: a mapped one is a completion plug-in's or the user's,
+     * and Neovim then types the rest of that insert. Example: with nvim-cmp's {@code <C-n>} mapped,
+     * {@code true}; in plain Neovim, which maps none of these keys, {@code false}.
+     */
+    static final String INSERT_KEY_MAPPED = """
+            return vim.fn.mapcheck(select(1, ...), 'i') ~= ''
+            """;
+
     /** Pastes argument 1 at the cursor, in any mode, as a paste rather than typed keys. */
     static final String PASTE = "vim.api.nvim_paste(select(1, ...), false, -1)";
 

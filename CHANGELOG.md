@@ -49,9 +49,18 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- A completion plug-in's `Ctrl-N`, such as nvim-cmp's, no longer leaves the caret before the word
+  it completed, so that the next letters landed inside it (`al`, `Ctrl-N`, `p` gave `alppha`). A
+  completion key (`Ctrl-N`, `Ctrl-P`, `Ctrl-X`) that a plug-in or your config maps in Insert mode
+  now hands Neovim the rest of the insert: the plug-in's menu follows your typing, and its Enter and
+  `Tab` work as it defines them.
+- While Neovim's own completion list is open in an insert Neovim types to its end (`Ctrl-N` while
+  recording a macro), `Ctrl-Y` accepts and `Ctrl-E` cancels even where the *Ctrl Keys* page gave
+  them back to Eclipse. Before, Eclipse ran Redo or Quick Switch Editor.
 - A change Eclipse makes by itself, such as a paste with the mouse, in an insert that Neovim types
-  (while recording a macro) now reaches Neovim. Before, Neovim never had it: the two texts differed,
-  and the next edit Neovim made on that line put the line back without it.
+  (while recording a macro, or after a completion plug-in's key) now reaches Neovim. Before, Neovim
+  never had it: the two texts differed, and the next edit Neovim made on that line put the line back
+  without it.
 - Leaving the editor while a picker that runs its own autocommands, such as snacks.nvim's, has the
   keyboard no longer leaves Eclipse in Insert mode while Neovim is in Normal mode. A mode a plug-in
   changes inside one of its autocommands, which Neovim announces to no one, now reaches Eclipse as

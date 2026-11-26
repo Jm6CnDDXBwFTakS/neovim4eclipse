@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -52,10 +53,19 @@ class KeyInputTest {
         boolean bufferLinesFail;
         /** Re-typing this text finds Neovim outside an insert (a timer's stopinsert): nothing is typed. */
         String refusedText;
+        /** The keys with an Insert-mode mapping ({@link KeyInput.Neovim#insertKeyMapped}); not recorded in calls. */
+        final java.util.Set<String> mappedInInsert = new java.util.HashSet<>();
+        /** Asking whether a key is mapped fails (a busy Neovim). */
+        boolean mappedQuestionFails;
+        /** The keys asked about ({@link KeyInput.Neovim#insertKeyMapped}), in order. */
+        final List<String> askedMapped = new ArrayList<>();
+        /** Runs while a key is being typed, before its call returns (a report arriving meanwhile). */
+        Runnable whileTyping = () -> { };
 
         @Override
         public void type(String keys) throws Exception {
             calls.add("type " + keys);
+            whileTyping.run();
             if (keys.equals(failingKey)) {
                 throw new IllegalStateException("connection lost");
             }
@@ -96,6 +106,15 @@ class KeyInputTest {
         @Override
         public void setCursor(int line1, int col0) {
             calls.add("setCursor " + line1 + ":" + col0);
+        }
+
+        @Override
+        public boolean insertKeyMapped(String key) {
+            askedMapped.add(key);
+            if (mappedQuestionFails) {
+                throw new IllegalStateException("no answer");
+            }
+            return mappedInInsert.contains(key);
         }
 
         @Override
@@ -770,6 +789,221 @@ class KeyInputTest {
         lastChange().afterApply().run(); // the editor applied the sync
         assertFalse(state.isEclipseTypingReady(), "the next key steers the completion: it is Neovim's");
         assertTrue(keys.isNeovimDrivenInsert());
+    }
+
+    /**
+     * Ctrl-N mapped in Insert mode, as nvim-cmp and blink.cmp map it: their menu leaves Neovim in
+     * plain Insert mode ({@code i}, not {@code ic}), and the match may come later than the key's
+     * answer. Neovim types the rest of the insert: no hand-back, and the applied sync does not
+     * let Eclipse type.
+     */
+    @Test
+    void aMappedCtrlNLeavesTheRestOfTheInsertToNeovim() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.mappedInInsert.add("<C-n>");
+        keys.completionQueued();
+
+        keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-n>");
+
+        assertTrue(keys.isNeovimDrivenInsert());
+        assertFalse(keys.isHandBackPending());
+        lastChange().afterApply().run(); // the editor applied the sync
+        assertFalse(state.isEclipseTypingReady(), "Neovim types on");
+        assertTrue(keys.isNeovimDrivenInsert());
+    }
+
+    /** The same Ctrl-N unmapped, over at once (no match): Eclipse types again, as before. */
+    @Test
+    void anUnmappedCtrlNOverAtOnceHandsTheInsertBack() throws Exception {
+        nvim.mode = new Mode("i", false);
+        keys.completionQueued();
+
+        keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-n>");
+        lastChange().afterApply().run();
+
+        assertTrue(state.isEclipseTypingReady(), "Eclipse types again");
+        assertFalse(keys.isNeovimDrivenInsert());
+    }
+
+    /**
+     * Only the completion keys are asked about: Neovim maps Ctrl-W itself ({@code <C-G>u<C-W>}),
+     * so a mapped Ctrl-W is no sign of a plug-in, and Eclipse types again after it as before.
+     */
+    @Test
+    void aMappedCtrlWIsNotAskedAboutAndHandsBack() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.mappedInInsert.add("<C-w>");
+
+        keys.syncInsertThenInput(new InsertReplay.SyncPoint(null, 1, 2), "<C-w>");
+        lastChange().afterApply().run();
+
+        assertEquals(List.of(), nvim.askedMapped);
+        assertTrue(state.isEclipseTypingReady(), "Eclipse types again");
+    }
+
+    /** A question that fails counts as no mapping: the key is still sent, and the insert handed back. */
+    @Test
+    void aFailedMappingQuestionHandsBackAsBefore() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.mappedQuestionFails = true;
+        keys.completionQueued();
+
+        keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-n>");
+        lastChange().afterApply().run();
+
+        assertEquals(List.of("<C-n>"), nvim.askedMapped);
+        assertTrue(nvim.calls.contains("type <C-n>"), nvim.calls.toString());
+        assertTrue(state.isEclipseTypingReady());
+    }
+
+    /**
+     * A mapped Ctrl-N that leaves the insert (a plug-in's mapping ending in {@code <Esc>}): the
+     * report of Normal mode can arrive while the key is still being sent. The marking was set
+     * before, so that report ends it, and the next insert is Eclipse's again.
+     */
+    @Test
+    void aMappedCompletionKeyThatLeavesTheInsertLeavesNoMarkingBehind() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.mappedInInsert.add("<C-n>");
+        nvim.after.put("<C-n>", new Mode("n", false));
+        nvim.whileTyping = () -> keys.onModeChanged("n");
+        keys.completionQueued();
+
+        keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-n>");
+
+        assertFalse(keys.isNeovimDrivenInsert());
+        assertFalse(keys.isHandBackPending());
+    }
+
+    /**
+     * A mapped Ctrl-N whose send failed (timed out): the key may still reach Neovim and its
+     * mapping run, so the insert stays Neovim's; nothing is handed back to Eclipse.
+     */
+    @Test
+    void aMappedCompletionKeyThatFailsToSendLeavesTheInsertToNeovim() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.mappedInInsert.add("<C-n>");
+        nvim.failingKey = "<C-n>";
+        keys.completionQueued();
+
+        assertThrows(IllegalStateException.class,
+                () -> keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-n>"));
+
+        assertTrue(keys.isNeovimDrivenInsert());
+        assertFalse(keys.isHandBackPending(), "not given back to Eclipse while the match may still come");
+    }
+
+    /**
+     * A mapped Ctrl-N that leaves Neovim waiting for another key (a mapping that calls
+     * {@code getchar()}): nothing more is asked of Neovim, which would answer only after that key,
+     * and the insert stays Neovim's, with no hand-back once the key arrives.
+     */
+    @Test
+    void aMappedCompletionKeyThatWaitsForAnotherKeepsTheInsertNeovims() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.mappedInInsert.add("<C-n>");
+        nvim.after.put("<C-n>", new Mode("i", true));
+        keys.completionQueued();
+
+        keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-n>");
+
+        assertTrue(keys.isNeovimDrivenInsert());
+        assertFalse(keys.isHandBackPending());
+        assertFalse(nvim.calls.contains("bufferLines"), nvim.calls.toString());
+    }
+
+    /**
+     * A mapped Ctrl-N that starts Neovim's own list ({@code inoremap <C-n> <C-n>}, mode {@code ic}):
+     * the insert is Neovim's to its end, so the completion's routing is not that of one handed back
+     * ({@code isCompleting}), but every Ctrl letter is Neovim's while the list is open, so that
+     * {@code Ctrl-Y} accepts even where the Ctrl Keys page gave it to Eclipse. With a plug-in's own
+     * menu Neovim stays in {@code i}, and the page's choice stands.
+     */
+    @Test
+    void aMappedCtrlNThatOpensNeovimsListTakesEveryCtrlLetter() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.mappedInInsert.add("<C-n>");
+        nvim.after.put("<C-n>", new Mode("ic", false));
+        keys.completionQueued();
+
+        keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-n>");
+
+        assertFalse(keys.isCompleting());
+        assertTrue(keys.takesEveryCtrlLetter());
+        nvim.after.put("<C-y>", new Mode("i", false));
+        queue("<C-y>");
+        assertFalse(keys.takesEveryCtrlLetter(), "the list is closed: the page decides again");
+        assertTrue(keys.isNeovimDrivenInsert());
+    }
+
+    /**
+     * Ctrl-O's one command in an insert Neovim owns (here a mapped Ctrl-N's; a mapping that runs
+     * {@code <C-o>} does the same) does not end it: Neovim is back in that insert once the command
+     * ends, and goes on typing it. Esc then ends it.
+     */
+    @Test
+    void ctrlOInAnInsertNeovimOwnsKeepsItNeovims() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.mappedInInsert.add("<C-n>");
+        keys.completionQueued();
+        keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-n>");
+        nvim.after.put("<C-o>", new Mode("niI", false));
+        nvim.after.put("zz", new Mode("i", false));
+
+        keys.onModeChanged("niI"); // the reports, on the reader thread
+        keys.onModeChanged("i");
+        assertTrue(keys.isNeovimDrivenInsert(), "the reports of niI and back keep it");
+        queue("<C-o>");
+        assertTrue(keys.isNeovimDrivenInsert(), "in niI");
+        queue("zz");
+        assertTrue(keys.isNeovimDrivenInsert(), "back in the insert, still Neovim's");
+
+        nvim.after.put("<Esc>", new Mode("n", false));
+        queue("<Esc>");
+        assertFalse(keys.isNeovimDrivenInsert());
+    }
+
+    /** In an insert Eclipse types, Ctrl-O ends a Neovim-driven moment as before. */
+    @Test
+    void ctrlOInAnInsertEclipseTypesEndsItsNeovimDrivenMoment() throws Exception {
+        nvim.mode = new Mode("i", false);
+        keys.driveFromNeovim();
+
+        keys.onModeChanged("niI");
+
+        assertFalse(keys.isNeovimDrivenInsert());
+        assertFalse(keys.isHandBackPending());
+    }
+
+    /**
+     * A key that leaves the insert for a pending operator ({@code inoremap <C-w> <Esc>d}, mode
+     * {@code no}, Neovim waiting for the motion): the insert is over, and no Neovim-driven insert
+     * is left behind for the Normal-mode keys that follow.
+     */
+    @Test
+    void aKeyThatLeavesTheInsertForAPendingOperatorLeavesNoMarking() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.after.put("<C-w>", new Mode("no", true));
+
+        keys.syncInsertThenInput(new InsertReplay.SyncPoint(null, 1, 2), "<C-w>");
+
+        assertFalse(keys.isNeovimDrivenInsert());
+        assertFalse(keys.isHandBackPending());
+    }
+
+    /** The same for a mapped completion key. */
+    @Test
+    void aMappedCompletionKeyThatLeavesForAPendingOperatorLeavesNoMarking() throws Exception {
+        nvim.mode = new Mode("i", false);
+        nvim.mappedInInsert.add("<C-n>");
+        nvim.after.put("<C-n>", new Mode("no", true));
+        nvim.whileTyping = () -> keys.onModeChanged("no");
+        keys.completionQueued();
+
+        keys.syncInsertThenComplete(new InsertReplay.SyncPoint(null, 1, 2), "<C-n>");
+
+        assertFalse(keys.isNeovimDrivenInsert());
+        assertFalse(keys.isHandBackPending());
     }
 
     /** From the moment Ctrl-N is routed, before its task has run, the completion counts as going on. */

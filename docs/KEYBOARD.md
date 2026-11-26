@@ -12,6 +12,7 @@ bindings, contexts, the order in which Eclipse looks at a key) see
 | Normal, visual and operator-pending mode | Neovim, except the `Ctrl` keys left to Eclipse (below) |
 | Insert and replace mode | Eclipse, which types the text; `Esc` hands control back to Neovim. The `Ctrl` letters ticked for insert mode (`Ctrl+W`, `Ctrl+U`, ...) go to Neovim after the typed text (below) |
 | Insert mode started from blockwise visual (`Ctrl+V` then `I`, `A`, `c`), or while recording a macro | Neovim, so it sees every key; the `Ctrl` letters ticked for insert mode too, also ones Eclipse binds (the Java editor's `Ctrl+O`) |
+| The rest of an insert after a completion key (`Ctrl-N`, `Ctrl-P`, `Ctrl-X ...`) that an Insert-mode mapping takes (a completion plug-in's, as nvim-cmp's or blink.cmp's) | Neovim, to `Esc`, so the plug-in's menu follows the typing and its match lands before the next letter; the `Ctrl` letters ticked for insert mode too, as while recording (docs/USER_GUIDE.md, "Completion") |
 | Keys typed within milliseconds of entering insert mode, or of a `Ctrl` key Neovim handles there, before Eclipse has Neovim's text | Neovim, so nothing is lost; then Eclipse types again |
 | The key after `Ctrl-R`, `Ctrl-V`, `Ctrl-Q`, `Ctrl-K`, `Ctrl-G` or `Ctrl-\` (keys after which Neovim waits for another), and any typed before Neovim has it | Neovim; then Eclipse types again |
 | `:`, `/`, `?` in normal mode | Neovim, which opens its command line and draws it itself (ui2) over the editor's last row; the editor's text keeps the keyboard and every key goes to Neovim. Eclipse's Paste goes into Neovim's line (`nvim_paste`); Copy, Cut and Select All do nothing while it is open (`editor/CommandLineEditHandlers`) |
@@ -179,7 +180,7 @@ types until the completion has ended:
 | `Ctrl+N`, `Ctrl+P` | Completes the word before the cursor from the open files; pressed again, the next or previous match. |
 | `Ctrl+Y`, `Ctrl+E`, while Neovim completes | Keep the match; take the completion back. Every `Ctrl` letter is Neovim's then, ticked or not. |
 | any other character, while Neovim completes | Ends the completion and is typed by Neovim; the next key is Eclipse's again. |
-| `Ctrl+X` and another `Ctrl` letter | Vim's other completions (`Ctrl+L` whole lines, `Ctrl+F` file names, `Ctrl+N` this file's words). `Ctrl+X` is ticked by default. `Ctrl+X Ctrl+O` is Eclipse's Content Assist, also while the list is open. `Ctrl+X Ctrl+V` (a Vim command; it could run programs named in the text) is refused. |
+| `Ctrl+X` and another `Ctrl` letter | Vim's other completions (`Ctrl+L` whole lines, `Ctrl+F` file names, `Ctrl+N` this file's words). `Ctrl+X` is ticked by default. `Ctrl+X Ctrl+O` is Eclipse's Content Assist, also while the list is open; not in an insert Neovim types to its end (recording, after a completion plug-in's key), where it is dropped. `Ctrl+X Ctrl+V` (a Vim command; it could run programs named in the text) is refused. |
 | `Ctrl+X` `Ctrl+O` | Eclipse's *Content Assist* (`Ctrl+Space`), in place of Vim's omni completion. `Ctrl+X` then a plain key while Eclipse types: that key, as usual. While the list is open the two go to Neovim together, where `Ctrl+X` `s` is spelling and `Ctrl+X` `Tab` is `Ctrl+X Ctrl+I`. |
 | `Ctrl+C` | Ends the insert, exactly as `Esc` (`.` repeats it). |
 

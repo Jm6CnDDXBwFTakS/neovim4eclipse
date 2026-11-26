@@ -62,3 +62,38 @@ t.test('a pasted command line and its line break stay text, and dot repeats them
     'the text, twice: once re-typed, once by the dot')
   t.eq(nil, vim.g.n4e_ran, 'nothing ran')
 end)
+
+-- LuaScripts.INSERT_KEY_MAPPED: asked right before a completion key goes to Neovim; a mapped one
+-- (a completion plug-in's Ctrl-N) leaves the rest of the insert to Neovim (KeyInput.mappedInInsert).
+t.test('a mapping that takes a completion key is told apart from none: global, buffer-local, Lua, empty, prefix', function()
+  t.setup()
+  vim.keymap.set('n', '<C-n>', 'j')
+  t.eq(false, t.run('INSERT_KEY_MAPPED', '<C-n>'), 'a Normal-mode mapping is not one')
+  vim.keymap.set('i', '<C-n>', function() end)
+  t.eq(true, t.run('INSERT_KEY_MAPPED', '<C-n>'), 'a Lua callback, as nvim-cmp maps it')
+  vim.keymap.del('i', '<C-n>')
+  vim.keymap.set('i', '<C-p>', '<C-p>', { buffer = 0 })
+  t.eq(true, t.run('INSERT_KEY_MAPPED', '<C-p>'), 'a buffer-local one, as blink.cmp maps it')
+  vim.api.nvim_create_buf(true, false)
+  vim.cmd('enew')
+  t.eq(false, t.run('INSERT_KEY_MAPPED', '<C-p>'), 'not in another buffer')
+  vim.keymap.set('i', '<C-x>', '', { noremap = true })
+  t.eq(true, t.run('INSERT_KEY_MAPPED', '<C-x><C-l>'), 'a mapping to nothing of the start takes the key too')
+  vim.keymap.del('i', '<C-x>')
+  vim.keymap.set('i', '<C-x><C-o>x', 'y')
+  t.eq(true, t.run('INSERT_KEY_MAPPED', '<C-x><C-o>'), 'a longer mapping the key starts')
+  t.eq(false, t.run('INSERT_KEY_MAPPED', '<C-x><C-l>'), 'not a key that starts no mapping')
+  vim.keymap.del('i', '<C-x><C-o>x')
+  vim.keymap.del('n', '<C-n>')
+end)
+
+-- KeyInput asks INSERT_KEY_MAPPED only for the completion keys, since Neovim maps none of them
+-- itself; it does map other insert Ctrl keys (Ctrl-W to <C-G>u<C-W>). This fails if a release
+-- starts to map one by default: Eclipse would then stop typing after every plain Ctrl-N.
+t.test("Neovim's own default mappings take no completion key", function()
+  t.setup()
+  t.eq('<C-G>u<C-W>', vim.fn.mapcheck('<C-w>', 'i'), 'the defaults are loaded here (--clean keeps them)')
+  for _, key in ipairs({ '<C-n>', '<C-p>', '<C-x>' }) do
+    t.eq(false, t.run('INSERT_KEY_MAPPED', key), key)
+  end
+end)

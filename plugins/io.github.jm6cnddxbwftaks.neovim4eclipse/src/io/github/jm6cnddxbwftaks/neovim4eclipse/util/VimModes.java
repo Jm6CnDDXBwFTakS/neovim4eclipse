@@ -83,6 +83,16 @@ public final class VimModes {
         return isTyping(mode) || isCmdline(mode);
     }
 
+    /**
+     * Insert mode's one Normal-mode command, after {@code Ctrl-O}: from Insert ({@code niI}),
+     * Replace ({@code niR}) or Virtual Replace ({@code niV}). The insert is not over: once the
+     * command ends Neovim is back in it, as in Vim. Example: {@code ifoo<C-o>zzbar<Esc>} is one
+     * insert, and {@code .} repeats {@code foobar}. Not a terminal's Normal mode ({@code nt}).
+     */
+    public static boolean isInsertCommand(String mode) {
+        return mode != null && mode.startsWith("ni");
+    }
+
     /** Operator-pending (after {@code d}, {@code c}, {@code y}, ... waiting for a motion). */
     public static boolean isOperatorPending(String mode) {
         return mode != null && mode.startsWith("no");

@@ -1253,7 +1253,13 @@ the same handshake hands typing back to Eclipse (`KeyInput.handBackToEclipse`); 
 the editor applies the sync if a key was queued meanwhile, and the next key tries again. An insert from
 blockwise visual, while recording, or begun in a plug-in's focused floating window (a picker's
 prompt, whose buffer is no document) stays Neovim's to Esc, or until leaving the editor moves
-Neovim out of the float. Where an insert begins is told by
+Neovim out of the float. So does the rest of an insert after a completion key (`Ctrl-N`, `Ctrl-P`,
+`Ctrl-X ...`) that an Insert-mode mapping takes (`KeyInput.mappedInInsert`, asked with
+`LuaScripts.INSERT_KEY_MAPPED` right before the key is sent): a completion plug-in may put its match
+in after the key's answer (nvim-cmp about 150 ms later), and with Eclipse typing again by then its
+cursor report was dropped and the next letters landed inside the word. Only those keys are asked
+about, because Neovim maps none of them itself but does map other insert `Ctrl` keys (`Ctrl-W` to
+`<C-G>u<C-W>`); a Lua spec fails if a release starts to map one. Where an insert begins is told by
 Neovim's mode report itself (`eclipse_mode`'s second value), not by window events: the plug-in
 switches windows quietly in places, and pickers start their insert after the key that opened them
 was answered (Telescope with `nvim_feedkeys("A")`, others from a `vim.schedule` callback), so only
@@ -1326,7 +1332,9 @@ through `KeyInterceptor` (`KeyRouter.route` and the insert filter).
    no request: Neovim drives the insert, as after a block-visual `I`, until it has that key and is
    in plain insert mode again. Then the handshake of step 3 hands typing back to Eclipse
    (`KeyInput.handBackToEclipse`), unless a key was still on its way to Neovim: it would arrive
-   while Eclipse types. So the hand-back waits for the last queued key.
+   while Eclipse types. So the hand-back waits for the last queued key. A key that leaves the
+   insert while Neovim waits (a mapping to `<Esc>d`, mode `no`) has ended the insert: nothing is
+   marked Neovim-driven then, or the next insert would start as Neovim's.
 
 Two keys are not sync points: `Ctrl-X` `Ctrl-O` runs Eclipse's Content Assist
 (`KeyRouter.Completion`, run by the controller), and `Ctrl-C` is `Esc`. `Ctrl-N`, `Ctrl-P` and
@@ -1354,17 +1362,27 @@ next key. The cost: Eclipse's typing helpers do not see that one character.
 - **Every `Ctrl` letter is Neovim's meanwhile** (`KeyContextRule.toNeovim`): a user may have
   cleared `Ctrl-Y` and `Ctrl-E` for insert mode, and Eclipse would then run Redo and Quick Switch
   Editor. The state is
-  counted from the moment the key is routed on the UI thread (`KeyInput.isCompleting`), since the
+  counted from the moment the key is routed on the UI thread (`KeyInput.takesEveryCtrlLetter`), since the
   key contexts must be right before the next key is pressed, which can be before Neovim has the first.
+  It holds in an insert Neovim owns too (below), read from Neovim's mode at each key: a mapped
+  `Ctrl-N` that opens Neovim's own list, or `Ctrl-N` while recording, gives mode `ic`, and
+  `Ctrl-Y` must accept there as well. A plug-in's own menu leaves the mode `i`: the page decides.
 - **`Ctrl-X` stays in Java** until its second key (`KeyRouter.ctrlXPending`): `Ctrl-O` is Content
   Assist; another letter is sent together with it, as `<C-x><C-l>`. Sent at once, Neovim would be
   in its `Ctrl-X` mode, and Content Assist would have to wait for a hand-back.
-- **An insert Neovim owns** (recording a macro, a block-visual `I`) is left alone: the list is
-  drawn, but the plug-in sends no key of its own, which would land in the macro.
+- **An insert Neovim owns** (recording a macro, a block-visual `I`, the rest of one after a
+  completion key a mapping took) is left alone: the list is
+  drawn, but the plug-in sends no key of its own, which would land in the macro. `Ctrl-O`'s one
+  command (mode `niI`, also from a mapping that runs `<C-o>`) does not end such an insert
+  (`KeyInput.insertGoesOn`): Neovim is back in it once the command ends. Only `niI` itself: a
+  command that passes through another mode (`<C-o>dw` gives `no`, `<C-o>:` gives `c`) ends it as
+  before, since Neovim reports no sign there that an insert waits to go on. Recording, a block
+  `I` and a float take it up again on the way back to insert mode (`ModeTransition`); the rest of
+  an insert after a mapped completion key goes back to Eclipse.
 - **A change Eclipse makes by itself meanwhile** (a paste with the mouse, an accepted content-assist
   proposal) is pushed to Neovim as outside insert mode (`BufferSynchronizer.pushLocalChanges`, whose
   gate includes `isCompleting`, and `isNeovimDrivenInsert` for any insert Neovim types: recording a
-  macro). It is not typing, so no `Esc` would hand it over, and the text
+  macro, after a completion key a mapping took). It is not typing, so no `Esc` would hand it over, and the text
   Neovim sends at the completion's end would take it away again. The push also ends the
   completion: Neovim's completion remembers the line as it was, and the next `Ctrl-N` or `Ctrl-E`
   would put that line back without the change.
@@ -1634,7 +1652,7 @@ reason is gone.
 | Tab arithmetic, `:e` / `:wq` file names | `util/TabNavigation`, `LuaScripts.HOST_COMMANDS` (Neovim expands the name), `util/EditPath` (fallback) | `TabNavigationTest`, `host_commands_spec.lua`, `EditPathTest` |
 | The command-line window (`q:`) drawn from its grid | `util/GridEvent`, `util/Grids`, `util/GridSnapshot`, `util/CommandWindowView`, `editor/GridCanvas`, `editor/NeovimWindowPanel` | `GridEventTest`, `GridsTest`, `NotificationBridgeTest`, `NeovimSessionIntegrationTest` (real Neovim: drawn, Enter runs the line, closed in insert mode runs nothing), `tests/swt` `GridCanvasTest` (pixels: colors, cursor, text wider than its cell), `NeovimWindowPanelTest` (keys, focus), UI `CommandWindowEndToEndTest` |
 | Floating windows, drawn over the text (the focused one with Neovim's cursor, the editor's caret hidden) | `util/GridEvent` (`WinPos`), `util/Grids` (`floatsIfChanged`, `host`, `dimsOnly`), `util/FloatWindow`, `util/FloatPlacement`, `core/EarlyIncoming` (what Neovim drew before the session listened), `editor/FloatingWindows`, `editor/GridCanvas`, `editor/CursorStyleController` (`setHidden`) | `GridEventTest`, `GridsTest`, `FloatPlacementTest`, `NeovimSessionIntegrationTest` (real Neovim: reported, moves with its text, gone when closed), `tests/swt` `FloatingWindowsTest` (place, order, no focus, the cursor's shape, dispose) and `CursorStyleControllerTest` (the caret hidden and back), UI `PickersEndToEndTest` (Telescope, pinned: drawn, the letters in its prompt, Enter, leaving; `find_files` with the system's lister and `live_grep` with the `rg` on `PATH`: Enter and `Ctrl-V` open the file), UI `SnacksPickerEndToEndTest` and `SnacksPickerIntegrationTest` (snacks.nvim, pinned: its `lines` picker with its defaults, the letters, Enter, leaving, Eclipse mode; `files` with `rg`), UI `FzfLuaEndToEndTest` (fzf-lua, pinned, with the fzf on `PATH`: a terminal float drawn, the letters to fzf, Enter, `Ctrl-V`, leaving) and `FzfLuaIntegrationTest` (the same without a workbench: the letters, Enter, Eclipse mode), `FloatInsertIntegrationTest` (Telescope's keys routed) and `NeovimWindowsIntegrationTest` (`:Lazy`, its backdrop left out, its installer drawn as Neovim starts), `EarlyIncomingTest`, UI `FloatingWindowsEndToEndTest` (a prompt drawn with the cursor, the caret hidden, the wheel), `PickersEndToEndTest` also clicks on the results (synthetic, and a real click through the system: `RealInput`) and Ctrl letters in the prompt, UI `RealMouseEndToEndTest` (real clicks in the text: the caret lands, the editor keeps the keyboard, Ctrl+click stays Eclipse's; not on macOS), gallery picture `float` |
-| Neovim's completion (`Ctrl-N`, `Ctrl-P`, `Ctrl-X` modes): the keys, the hand-back, the list | `core/KeyRouter` (`completeInNeovim`, `afterCtrlX`, `whileCompleting`), `LuaScripts.CTRL_X_GUARD` and `NO_MODELINES` (`ctrl_x_guard_spec.lua`), `core/KeyInput` (`isCompleting`, `syncInsertThenComplete`, `endCompletion`), `util/VimModes.isCompleting`, `util/KeyContextRule.toNeovim`; the list is Neovim's popup menu, drawn as a float (`util/Grids.alwaysDrawn`, `eclipseTypes`) | `KeyRouterTest`, `KeyInputTest`, `KeyContextRuleTest`, `VimModesTest`, `GridsTest`, `NotificationBridgeTest`, `NeovimCompletionIntegrationTest` |
+| Neovim's completion (`Ctrl-N`, `Ctrl-P`, `Ctrl-X` modes): the keys, the hand-back, the list | `core/KeyRouter` (`completeInNeovim`, `afterCtrlX`, `whileCompleting`), `LuaScripts.CTRL_X_GUARD` and `NO_MODELINES` (`ctrl_x_guard_spec.lua`), `core/KeyInput` (`isCompleting`, `takesEveryCtrlLetter`, `insertGoesOn`, `syncInsertThenComplete`, `endCompletion`), `util/VimModes.isCompleting`, `util/KeyContextRule.toNeovim`; the list is Neovim's popup menu, drawn as a float (`util/Grids.alwaysDrawn`, `eclipseTypes`) | `KeyRouterTest`, `KeyInputTest`, `KeyContextRuleTest`, `VimModesTest`, `GridsTest`, `NotificationBridgeTest`, `NeovimCompletionIntegrationTest` |
 | Neovim's command line, prompts, pager and messages drawn by ui2: turning it on, the windows' ids, `'cmdheight'`, `:messages` to its page | `LuaScripts.UI2`, `core/NotificationBridge` (`eclipse_ui2_windows`, `eclipse_cmdline`, `eclipse_messages`), `util/Grids` (`ui2Windows`, `alwaysDrawn`, `rowsBelow`), `NeovimSession.echoAsync` | `ui2_spec.lua`, `GridsTest`, `NotificationBridgeTest`, `NeovimUi2IntegrationTest` (a real UI attached: the typed line, the pager), `NeovimSessionIntegrationTest` (typing, history, Tab, prompts, search preview, `q:`, `:lcd`) |
 | Eclipse's Paste, Copy, Cut and Select All while a line is open; an input method on the line | `editor/CommandLineEditHandlers`, `editor/LineInputMethod`, `util/LineComposition`, `editor/FloatingWindows.cursorCell` | `LineCompositionTest`, `tests/swt` `LineInputMethodTest` (synthetic `ImeComposition` events); a real input method: docs/MANUAL_CHECKS.md, `ime-compose`, `ime-keys` |
 | File paths compared by one rule | `LuaScripts.PATHS` (module `neovim4eclipse.paths`), `util/FilePaths`, `NewFiles.workspaceFileAt` (the one workspace lookup) | `paths_spec.lua` and `FilePathsTest` (both run `tests/unit/src/test/resources/path-cases.tsv` on the Linux, macOS and Windows rules), `EditPathTest`, `t.same_file` in every spec, UI `FilePathsEndToEndTest` (`:e` and `:wq!` through a link; `:e` by the real path into a folder linked through a link), `ProjectFilesEndToEndTest` (a linked folder made and removed while running) |

@@ -791,11 +791,20 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
 
     /**
      * Whether Neovim is completing in an insert it will hand back to Eclipse, or is about to
-     * ({@code KeyInput#isCompleting}): every {@code Ctrl} letter is then Neovim's, whatever the
-     * Ctrl Keys preference page says ({@code util/KeyContextRule}).
+     * ({@code KeyInput#isCompleting}): the completion's keys are routed as such, and a click ends
+     * it.
      */
     public boolean isCompleting() {
         return keyInput.isCompleting();
+    }
+
+    /**
+     * Whether every {@code Ctrl} letter is Neovim's now, whatever the Ctrl Keys preference page
+     * says ({@code util/KeyContextRule}): Neovim completes in any insert it drives, or is about to
+     * ({@code KeyInput#takesEveryCtrlLetter}).
+     */
+    public boolean takesEveryCtrlLetter() {
+        return keyInput.takesEveryCtrlLetter();
     }
 
     /**
@@ -3051,6 +3060,11 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         @Override
         public void setCursor(int line1, int col0) throws Exception {
             NeovimSession.this.setCursor(line1, col0);
+        }
+
+        @Override
+        public boolean insertKeyMapped(String key) throws Exception {
+            return Boolean.TRUE.equals(await(api.execLua(LuaScripts.INSERT_KEY_MAPPED, List.of(key))));
         }
 
         @Override

@@ -99,6 +99,12 @@ final class KeyInput {
 
         /** Hands one mouse event to Neovim's own mouse ({@link LuaScripts#MOUSE}). */
         void mouse(MouseInput event) throws Exception;
+
+        /**
+         * Whether {@code key} (Neovim notation, {@code <C-n>}) has an Insert-mode mapping in the
+         * current buffer ({@link LuaScripts#INSERT_KEY_MAPPED}).
+         */
+        boolean insertKeyMapped(String key) throws Exception;
     }
 
     private final Neovim nvim;
@@ -116,11 +122,14 @@ final class KeyInput {
     private volatile boolean neovimDrivenInsert;
     /**
      * True while insert mode was entered from blockwise visual ({@code I}, {@code A}, {@code c}, ...),
-     * while recording a macro, or in a plug-in's focused floating window ({@link #inFocusedFloat}).
+     * while recording a macro, or in a plug-in's focused floating window ({@link #inFocusedFloat}),
+     * or once an Insert-mode mapping took one of its completion keys ({@link #mappedInInsert}).
      * Vim repeats the text typed on the first line onto every line of the block when Esc is pressed,
-     * a macro must contain every typed key, and a picker's prompt is no document Eclipse could type
-     * into; all three only work if Neovim itself sees the typing, to the end of the insert. Cleared
-     * when the insert ends.
+     * a macro must contain every typed key, a picker's prompt is no document Eclipse could type
+     * into, and a completion plug-in's menu follows only the keys it sees; all of them only work if
+     * Neovim itself sees the typing, to the end of the insert. Cleared when the insert ends; not by
+     * {@code Ctrl-O}'s one command while it stays in {@code niI}, after which the insert goes on
+     * ({@link #insertGoesOn}); one that passes through another mode ({@code <C-o>dw}) clears it.
      */
     private volatile boolean neovimOwnsInsert;
     /**
@@ -282,12 +291,41 @@ final class KeyInput {
      * is Neovim's ({@link #mayHandBack}), the {@code Ctrl} letters too ({@code util/KeyContextRule}):
      * {@code Ctrl-Y} accepts and {@code Ctrl-E} cancels, where Eclipse would redo and switch editors.
      * Not for an insert Neovim owns to its end (recording a macro, a block-visual {@code I}, one
-     * begun in a plug-in's focused floating window): there
+     * begun in a plug-in's focused floating window, the rest of one after a mapped completion key):
+     * there
      * the keys are Neovim's anyway, and the Ctrl Keys page's choice stands as before. Any thread.
      */
     boolean isCompleting() {
         return completionsQueued.get() > 0
                 || (neovimDrivenInsert && !neovimOwnsInsert && VimModes.isCompleting(state.mode()));
+    }
+
+    /**
+     * Whether every {@code Ctrl} letter is Neovim's now, whatever the Ctrl Keys page says
+     * ({@code util/KeyContextRule}): Neovim completes, or is about to, in any insert it drives,
+     * one it owns to its end included. Wider than {@link #isCompleting}, which also decides what
+     * the completion's keys do and when the insert goes back to Eclipse; this decides only whose
+     * the letters are. Example: a mapped {@code Ctrl-N} that starts Neovim's own list
+     * ({@code inoremap <C-n> <C-n>}), or a plain one while recording a macro: Neovim is in
+     * {@code ic}, and {@code Ctrl-Y} accepts the match even where the page gave {@code Ctrl+Y} to
+     * Eclipse's Redo. A plug-in's own menu (nvim-cmp's) leaves Neovim in {@code i}: there the
+     * page's choice stands. Decided from Neovim's mode at the key, not from a flag kept along the
+     * way. Any thread.
+     */
+    boolean takesEveryCtrlLetter() {
+        return completionsQueued.get() > 0 || (neovimDrivenInsert && VimModes.isCompleting(state.mode()));
+    }
+
+    /**
+     * Whether {@code mode} goes on with the insert there was: a typing mode, or {@code Ctrl-O}'s
+     * one command in an insert Neovim owns ({@link VimModes#isInsertCommand}). Neovim is back in
+     * that insert once the command ends, so it stays Neovim's: a recorded macro keeps every key,
+     * and a completion plug-in's mapping that runs {@code <C-o>} (mode {@code niI} for a moment)
+     * does not give the rest of the insert to Eclipse. An insert Eclipse types ends its Neovim-driven
+     * moment at {@code Ctrl-O}, as before: entering insert again is the usual handshake.
+     */
+    private boolean insertGoesOn(String mode) {
+        return VimModes.isTyping(mode) || (neovimOwnsInsert && VimModes.isInsertCommand(mode));
     }
 
     /**
@@ -308,9 +346,12 @@ final class KeyInput {
         }
     }
 
-    /** Called with every mode change: leaving insert mode ends a Neovim-driven insert. */
+    /**
+     * Called with every mode change: leaving insert mode ends a Neovim-driven insert, unless the
+     * insert goes on ({@link #insertGoesOn}).
+     */
     void onModeChanged(String mode) {
-        if (!VimModes.isTyping(mode)) {
+        if (!insertGoesOn(mode)) {
             neovimDrivenInsert = false;
             neovimOwnsInsert = false;
             handBackPending = false;
@@ -485,8 +526,10 @@ final class KeyInput {
                 neovimOwnsInsert = true; // to the end: never handed back, even if a gap key asked for it
             }
             case LEAVE_NEOVIM_INSERT -> {
-                neovimDrivenInsert = false;
-                neovimOwnsInsert = false;
+                if (!insertGoesOn(state.mode())) { // Ctrl-O in an insert Neovim owns: it goes on
+                    neovimDrivenInsert = false;
+                    neovimOwnsInsert = false;
+                }
             }
             // ENTER_INSERT leaves the flag alone, never clears it: the key listener may already have
             // made this insert Neovim-driven (a key typed before the sync below reached the editor).
@@ -813,11 +856,31 @@ final class KeyInput {
             state.publishState();
             return;
         }
+        boolean mapped = completion && mappedInInsert(key);
+        if (mapped) {
+            // The rest of this insert is Neovim's (mappedInInsert): Eclipse types none of it.
+            // Marked before the key is sent, so that a mapping which leaves the insert ends the
+            // marking too (onModeChanged), instead of having it set again behind that report. Kept
+            // if sending fails: a timed-out key may still reach Neovim and its mapping still run,
+            // and an insert Neovim types is right whether the key arrived or not.
+            neovimDrivenInsert = true;
+            neovimOwnsInsert = true;
+            handBackPending = false;
+        }
         nvim.type(key);
         Mode mode = state.readMode();
         if (mode != null && mode.blocking()) {
-            neovimDrivenInsert = true;
-            handBackPending = true; // until Neovim has the key it waits for (inputKey)
+            // Neovim answers no request until it has the key it waits for: nothing more is read.
+            // Marked only while the insert goes on. A key (or a mapping) that left it for a
+            // pending operator (mode no, as after <Esc>d) ended the insert: the report of that mode
+            // ends the marking, and setting it here, after the report, left a Neovim-driven insert
+            // behind with none going on.
+            if (insertGoesOn(mode.mode())) {
+                neovimDrivenInsert = true;
+                if (!mapped && !neovimOwnsInsert) {
+                    handBackPending = true; // until Neovim has the key it waits for (inputKey)
+                }
+            }
             return;
         }
         // The key's buffer events have been dispatched once Neovim has consumed it; the cursor is
@@ -825,6 +888,14 @@ final class KeyInput {
         nvim.awaitKeysConsumed();
         state.readMode(); // again: only now has Neovim surely taken the key, and a completion shows in the mode
         state.publishState();
+        if (mapped) {
+            // Neovim types on; its text came as buffer events, and a short document is compared
+            // whole as well, without ever letting Eclipse type in this insert again.
+            if (state.isTypingMode() && (sync == null || ChangedLines.comparesWhole(sync.documentLines()))) {
+                state.syncBuffer(() -> false);
+            }
+            return;
+        }
         if (completion) {
             // Neovim types this insert since the key was routed (completionQueued). While it
             // completes it types on; its text for the match came as a buffer event, and a short
@@ -845,6 +916,42 @@ final class KeyInput {
             } else {
                 state.letEclipseTypeOnceApplied();
             }
+        }
+    }
+
+    /**
+     * Whether {@code key}, a completion key about to go to Neovim ({@link #syncInsertThenComplete}:
+     * {@code <C-n>}, {@code <C-p>}, {@code <C-x><C-l>}), is taken by an Insert-mode mapping
+     * ({@link Neovim#insertKeyMapped}), asked of Neovim right before the key is sent. Such a mapping
+     * is a completion plug-in's or the user's, and what it does may come later than the key's
+     * answer: nvim-cmp's {@code Ctrl-N} inserts the match about 150 ms after the key, once its
+     * sources have answered. Handed back to Eclipse at once, the insert would have Eclipse typing
+     * while that text arrives: Neovim's cursor report is dropped then ({@code editor/CaretSync}), so
+     * the caret stays before the match and the next letters land inside the word
+     * ({@code al}, {@code Ctrl-N}, {@code p} gave {@code alppha}), and keys typed in those 150 ms
+     * would reach Neovim's text later than its change. So Neovim types the rest of that insert, as
+     * in a macro being recorded ({@link #neovimOwnsInsert}): the plug-in's menu follows the typing,
+     * and its Enter and {@code Tab} work as it defines them. The cost: Eclipse's typing helpers
+     * (closing brackets, auto-indent) are left out until {@code Esc}.
+     *
+     * <p>Only the completion keys are asked about: Neovim maps none of them itself (a Lua spec
+     * fails if a release starts to), while it does map other insert {@code Ctrl} keys
+     * ({@code Ctrl-W} to {@code <C-G>u<C-W>}, {@code Ctrl-U}, {@code Ctrl-S}), and asking about those
+     * would take Eclipse's typing away after a plain {@code Ctrl-W}. An unmapped completion key,
+     * Neovim's own {@code Ctrl-N}, hands back as before. A failed question counts as unmapped, the
+     * behavior before. Input thread.
+     */
+    private boolean mappedInInsert(String key) {
+        try {
+            return nvim.insertKeyMapped(key);
+        } catch (InterruptedException e) {
+            // Counted as unmapped; the flag is kept so that the key's send and waits that follow
+            // end at once, as any interrupted input-thread task's do.
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "Could not ask whether " + key + " is mapped in Insert mode", e);
+            return false;
         }
     }
 

@@ -52,6 +52,18 @@ class VimModesTest {
         }
     }
 
+    /** Ctrl-O's one command from an insert: not typing, not over either. */
+    @Test
+    void anInsertsOneCommandIsToldApart() {
+        for (String m : new String[] { "niI", "niR", "niV" }) {
+            assertTrue(VimModes.isInsertCommand(m), m);
+            assertFalse(VimModes.isTyping(m), m);
+        }
+        for (String m : new String[] { "n", "no", "nt", "ntT", "i", "ic", "", null }) {
+            assertFalse(VimModes.isInsertCommand(m), String.valueOf(m));
+        }
+    }
+
     @Test
     void cmdlineAndThinCaret() {
         assertTrue(VimModes.isCmdline("c"));
