@@ -398,7 +398,7 @@ binds fzf-lua's split action itself): typing narrows the list, Enter jumps to th
 the file in an Eclipse editor, the document you came from is unchanged. fzf-lua's only where fzf
 is on `PATH`, `live_grep` and snacks' `files` only where `rg` is. Real clicks through the system,
 on a picker's list and in the text, Ctrl+click included, are tested on Linux and Windows
-(`RealMouseEndToEndTest`, `PickersEndToEndTest`), not on macOS, where step 7 does them by hand.
+(`RealMouseEndToEndTest`, `PickersEndToEndTest`), not on macOS, where step 6 does them by hand.
 Your own config, with its pickers, previews, borders and colorscheme, and an input method in a
 prompt, are only seen on screen. Use a config that has Telescope (or another picker, fzf-lua,
 snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
@@ -422,15 +422,9 @@ snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
    open the picker and type a word.
    ⇒ The composing text and the candidates appear at the prompt's cursor, nothing of it reaches
    the file, and the committed word reaches the prompt once.
-5. With a config whose lazy.nvim has a plug-in to install (add one to it, or start the LazyVim
-   starter for the first time), choose *Neovim → Restart Neovim...* and type `j` a few times while
-   it installs.
-   ⇒ lazy.nvim's window is drawn over the editor while it installs, its progress moving; when
-   Neovim's start is over the window stays, with the cursor in it, the `j`s moved that cursor, the
-   file is unchanged, and `q` closes the window.
-6. Press your leader key and wait.
+5. Press your leader key and wait.
    ⇒ which-key's panel is drawn at the bottom of the editor, and the next key goes on as usual.
-7. On macOS only, in Normal mode: click into the text on another line, then Cmd+click a word.
+6. On macOS only, in Normal mode: click into the text on another line, then Cmd+click a word.
    ⇒ The click moves the caret there and the editor keeps the keyboard; the Cmd+click is
    Eclipse's (its hyperlinks), and Neovim does not jump.
 
