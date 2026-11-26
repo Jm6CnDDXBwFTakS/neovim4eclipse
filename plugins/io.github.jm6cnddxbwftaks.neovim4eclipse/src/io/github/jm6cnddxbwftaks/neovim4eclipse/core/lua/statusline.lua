@@ -9,9 +9,12 @@
 -- the current tabpage: its screen holds the focused editor's status line only, and a background
 -- editor's would stay as it was, in the colors of the window with the cursor. So each window's line
 -- is evaluated (`nvim_eval_statusline` with `winid`): Neovim then draws a window that is not
--- current in `StatusLineNC`; and `g:statusline_winid`, which the call does not set but Neovim's own
--- drawing does, is set around it, so that lualine and its like choose their inactive sections, as
--- on Neovim's own screen.
+-- current in `StatusLineNC`; and `g:statusline_winid` and `g:actual_curwin`, which the call does
+-- not set but Neovim's own drawing does, are set around it, so that a 'statusline' expression
+-- that reads them draws such a window as on Neovim's own screen (Neovim's default reads
+-- `g:actual_curwin`, a `%!` or `%{%...%}` Lua line often `g:statusline_winid`). lualine is not
+-- one of them: it writes each window's line as finished text, refreshed for the current tabpage
+-- only, so an editor in the background shows the line lualine last wrote for its window.
 --
 -- What `line(win)` answers
 -- `{shown, cells, hl, attrs}`: whether the window has a status line (`'laststatus'`: 0 none; 1 only
@@ -103,7 +106,7 @@ function M.line(win)
   local set_by = vim.api.nvim_get_option_info2('statusline', { win = win }).last_set_sid
   if fmt == '' or set_by == -1 then fmt = DEFAULT end
   -- Neovim sets these two while it draws a status line, and nvim_eval_statusline does
-  -- not: lualine and its like read g:statusline_winid to know which window they draw
+  -- not: a line's expression may read g:statusline_winid to know which window it draws
   -- (its inactive sections for one that is not current), Neovim's default line reads
   -- g:actual_curwin. Set as Neovim does, put back after.
   local old_winid, old_curwin = vim.g.statusline_winid, vim.g.actual_curwin

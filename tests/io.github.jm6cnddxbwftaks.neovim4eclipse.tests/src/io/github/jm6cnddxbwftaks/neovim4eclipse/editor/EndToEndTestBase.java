@@ -30,6 +30,7 @@ import org.eclipse.jface.viewers.StructuredSelection;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CLabel;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
@@ -535,6 +536,24 @@ abstract class EndToEndTestBase {
             return c != null && c.getEditor() == editor && !c.isClosed() && fresh != used && fresh.isAlive();
         });
         return fresh;
+    }
+
+    /**
+     * The text of the status row drawn in editor widget {@code text} for Neovim window
+     * {@code window}: the visible one-row grid that lies just above the command line's row;
+     * {@code null} when none is shown. Example: {@code " NORMAL  test.txt ... 1:1"} with lualine.
+     */
+    static String statusRowText(StyledText text, int window) {
+        Rectangle area = text.getClientArea();
+        int commandLine = StatusLineRow.COMMAND_LINE_ROWS * text.getLineHeight();
+        for (Control child : text.getChildren()) {
+            if (child instanceof GridCanvas canvas && StatusLineRow.isRow(canvas) && canvas.isVisible() && canvas.grid() != null
+                    && canvas.grid().window() == window && canvas.grid().height() == 1
+                    && canvas.getBounds().y + canvas.getBounds().height == area.height - commandLine) {
+                return canvas.grid().row(0);
+            }
+        }
+        return null;
     }
 
     void waitForAttach(ITextEditor target, String what) {

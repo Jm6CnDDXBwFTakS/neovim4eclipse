@@ -48,9 +48,13 @@ pending command and the status line here were removed in 0.3.0 (README, *Setting
 Each editor shows its Neovim window's status line in a row under its text, as Neovim lays out its
 screen: your `'statusline'` (lualine's, or Neovim's default with the file name, `[+]` when
 modified, and the cursor's line and column), in your colors, fitted to the editor's width. The
-editor with the keyboard shows it in `StatusLine`, the others in `StatusLineNC`, and a statusline
-plug-in shows its inactive sections there, as in Neovim's own windows. Example: two editors side
-by side, `notes.txt [+]` in the one you type in, `ideas.txt` dimmed in the other.
+editor with the keyboard shows it in `StatusLine`, the others in `StatusLineNC`, and a
+`'statusline'` expression that reads `g:statusline_winid` shows its inactive sections there, as in
+Neovim's own windows. Example: two editors side by side, `notes.txt [+]` in the one you type in,
+`ideas.txt` dimmed in the other. lualine is different: it writes each window's line itself and
+updates only the one with the keyboard (each editor's window is alone in a tab page of Neovim's,
+and lualine refreshes the current one), so an editor in the background keeps the line lualine
+wrote while it had the keyboard, its mode and colors included.
 
 The row is the editor's own, and so is the command line's row under it: they take two lines of
 the editor's height, Neovim's window is that much shorter, and no text hides behind them. `'laststatus'` decides as in Neovim: `0` and `1` (one window

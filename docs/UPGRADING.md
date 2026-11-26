@@ -333,7 +333,8 @@ blink.cmp, and nvim-cmp with its source cmp-buffer (a `Ctrl-N` they map, their m
 and the tests of plug-ins that work on text three more: vim-surround and vim-repeat, through which
 `.` repeats it (`SurroundIntegrationTest`, `SurroundEndToEndTest`), and mini.nvim, for its
 mini.pairs and mini.ai (`MiniIntegrationTest`, `MiniEndToEndTest`), and the test of what noice.nvim
-does in Eclipse two more: noice and its library nui.nvim (`NoiceIntegrationTest`). flash's help
+does in Eclipse two more: noice and its library nui.nvim (`NoiceIntegrationTest`), and the tests
+of a status line one more: lualine (`LualineIntegrationTest`, `LualineEndToEndTest`). flash's help
 page also stands for a user's plug-in in the help editor's test (`windows_spec.lua`). They are
 third-party
 code that runs in the test Neovim, on your machine and wherever `LikeCi`

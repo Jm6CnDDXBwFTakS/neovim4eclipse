@@ -53,6 +53,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   text under the editor until the next key (`NORMAL` after `i`): the key's own reading of the line,
   older, could be drawn after the new one. Neovim now numbers each line it evaluates, and an older
   line never replaces a newer one, whichever arrives last.
+- The user guide no longer says that lualine shows its inactive sections in an editor without the
+  keyboard: lualine updates only the line of the editor that has it, so the others keep the line
+  lualine wrote while they had it.
 - The README no longer says that noice.nvim turns itself off inside Eclipse: it switches off only
   its command line and message views, and its notifications and completion menu keep working, as
   floating windows.

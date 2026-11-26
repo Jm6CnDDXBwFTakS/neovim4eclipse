@@ -788,9 +788,12 @@ Each code editor draws its Neovim window's status line in a row under its text
   hidden tabpage, and Neovim redraws only the current tabpage. The screen (grid 1) holds the
   focused editor's line only, and a background editor's would stay in the colors of the window
   with the cursor. Evaluated for a window that is not current, Neovim uses `StatusLineNC`; the script
-  sets `g:statusline_winid` around the call (Neovim's drawing sets it, the call does not), by which
-  lualine and its like choose their inactive sections. One source for every editor also keeps
-  them drawn alike.
+  sets `g:statusline_winid` and `g:actual_curwin` around the call (Neovim's drawing sets them, the
+  call does not), by which a `'statusline'` expression that reads them chooses its inactive
+  sections. lualine reads neither when its line is evaluated: it writes each window's line as
+  finished text (its own refresh reads `g:actual_curwin`, which it sets itself), for the current
+  tabpage only, so a background editor shows the line lualine last wrote for its window. One
+  source for every editor also keeps them drawn alike.
 - **Which is newer:** each evaluation takes the next number of one counter, sent with the line, and
   `core/StatusTracker` drops a window's line not newer than its last, whichever thread brings it
   last; the row draws the window's newest line when it paints (`editor/StatusRows`). The comment
@@ -1688,6 +1691,7 @@ reason is gone.
 | One buffer per document | `core/DocumentBuffers` | `NeovimBufferIntegrationTest` (needs nvim) |
 | A window per editor: which token holds which window, the travel swap | `core/EditorWindows`, `core/EditorWindow`; Neovim side `core/DocumentBuffers`, `LuaScripts.WINDOWS` | `EditorWindowsTest`, `windows_spec.lua`, `NeovimWindowsIntegrationTest` (needs nvim) |
 | Status bar parts, messages and output, macro recording | `core/StatusTracker` | `StatusTrackerTest` |
+| A status line plug-in's `'statusline'` drawn under the editor | `LuaScripts.STATUS_LINE` (`core/lua/statusline.lua`: evaluated per window, sent when `'statusline'` changes), `util/StatusLines` (the cells), `core/StatusTracker` (a line older by Neovim's number than the one drawn is dropped), `editor/StatusRows` (draws a window's newest line when it paints), `editor/StatusLineRow` (the row) | `LualineIntegrationTest` and UI `LualineEndToEndTest` (lualine, pinned: its mode names following the mode, the file's name, `[+]` once the document changed; the UI test restarts Neovim after each test) |
 | The status bar's labels: mode texts, widths, the cap, which parts show | `util/ModeLabels`, `util/StatusBarWidths`, `util/StatusItem`, `editor/StatusBarLabels`, `editor/ModeStatusContribution` | `ModeLabelsTest`, `StatusBarWidthsTest`, `StatusItemTest`, `tests/swt` `StatusBarLabelsTest`, `state_snapshot_spec.lua`, UI `StatusBarEndToEndTest` |
 | Ordered RPC thread | `core/InputThread` | `InputThreadTest` |
 | Typed `:` commands and searches, `:normal!` | `core/CommandRunner` (Neovim seen through `CommandRunner.Neovim`) | `CommandRunnerTest` (fake: order of calls, timeout) |

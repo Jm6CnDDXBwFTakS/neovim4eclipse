@@ -375,8 +375,8 @@ public final class PinnedPlugins {
      * ({@code blink/cmp/fuzzy/download/init.lua}, {@code ensure_downloaded}); the download is off as
      * well, should that change. And from before the setup, {@code vim.system} and
      * {@code vim.fn.jobstart} (the only ways blink.cmp starts a program at this pin: git, curl, a
-     * build) refuse to start anything: they note the command and raise an error, so even a changed
-     * pin cannot download behind the test's back. {@link #BLINK_READY} names any command refused,
+     * build) refuse to start anything ({@link #REFUSE_PROGRAMS}), so even a changed pin cannot
+     * download behind the test's back. {@link #BLINK_READY} names any command refused,
      * and tells when the setup, which finishes in a scheduled callback, is done. Its
      * {@code plugin/} file (the {@code :BlinkCmp} command, which can build the matcher) is not run:
      * the setup needs none of it. {@code setup()} acts on the whole Neovim (autocommands, mappings
@@ -384,15 +384,7 @@ public final class PinnedPlugins {
      * afterwards.
      */
     public static String loadBlinkCmp(Path folder) {
-        return onRuntimePath(folder) + """
-
-                _G.n4e_refused = {}
-                local function refuse(cmd)
-                  table.insert(_G.n4e_refused, vim.inspect(cmd))
-                  error('a test refused to start ' .. vim.inspect(cmd))
-                end
-                vim.system = refuse
-                vim.fn.jobstart = refuse
+        return onRuntimePath(folder) + "\n" + REFUSE_PROGRAMS + """
                 require('blink.cmp').setup({
                   fuzzy = { implementation = 'lua', prebuilt_binaries = { download = false } },
                   sources = { default = { 'buffer' } },
@@ -400,6 +392,43 @@ public final class PinnedPlugins {
                   signature = { enabled = false },
                 })
                 """;
+    }
+
+    /**
+     * Lua, run before a plug-in's setup, after which {@code vim.system} and {@code vim.fn.jobstart}
+     * refuse to start any program in that Neovim: they note the command in {@code _G.n4e_refused}
+     * ({@link #PROGRAMS_REFUSED} answers it) and raise an error. For a plug-in that could start one
+     * (blink.cmp's downloader, lualine's git), so that a test proves none ran, and a pin moved to a
+     * commit that does start one fails instead of running it. Other ways (Vim's {@code system()},
+     * {@code io.popen}) are not watched: each plug-in's pin says which it uses.
+     */
+    public static final String REFUSE_PROGRAMS = """
+            _G.n4e_refused = {}
+            local function refuse(cmd)
+              table.insert(_G.n4e_refused, vim.inspect(cmd))
+              error('a test refused to start ' .. vim.inspect(cmd))
+            end
+            vim.system = refuse
+            vim.fn.jobstart = refuse
+            """;
+
+    /** Lua that answers the commands {@link #REFUSE_PROGRAMS} refused so far: "" for none. */
+    public static final String PROGRAMS_REFUSED = "return table.concat(_G.n4e_refused or {}, ', ')";
+
+    /**
+     * Lua that loads lualine from {@code folder} and calls its {@code setup()} as a user's config
+     * would, with two changes: no icons (they need a font and nvim-web-devicons), and its second
+     * section without {@code branch} and {@code diff} ({@code diagnostics} alone). {@code diff}
+     * runs git, a program of the system's ({@code lualine/components/diff/git_diff.lua}), and both
+     * would show this repository's own state; programs are refused anyway
+     * ({@link #REFUSE_PROGRAMS}). lualine has no {@code plugin/} file. It sets
+     * {@code 'statusline'} for the whole Neovim and refreshes it on a timer: a test that shares its
+     * Neovim restarts it afterwards.
+     */
+    public static String loadLualine(Path folder) {
+        return onRuntimePath(folder) + "\n" + REFUSE_PROGRAMS
+                + "require('lualine').setup({ options = { icons_enabled = false },"
+                + " sections = { lualine_b = { 'diagnostics' } } })";
     }
 
     /**

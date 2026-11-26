@@ -84,20 +84,6 @@ class StatusBarEndToEndTest extends EndToEndTestBase {
         return statusRowText(widget, window);
     }
 
-    /** {@link #statusRowText(int)} in editor widget {@code text}, which may be another editor's. */
-    private static String statusRowText(StyledText text, int window) {
-        Rectangle area = text.getClientArea();
-        int commandLine = StatusLineRow.COMMAND_LINE_ROWS * text.getLineHeight();
-        for (Control child : text.getChildren()) {
-            if (child instanceof GridCanvas canvas && StatusLineRow.isRow(canvas) && canvas.isVisible() && canvas.grid() != null
-                    && canvas.grid().window() == window && canvas.grid().height() == 1
-                    && canvas.getBounds().y + canvas.getBounds().height == area.height - commandLine) {
-                return canvas.grid().row(0);
-            }
-        }
-        return null;
-    }
-
     /**
      * Neovim's status line is drawn under the editor's text, evaluated by Neovim for this editor's
      * window (its default format names the file), and {@code :set laststatus=0} takes the row away,
