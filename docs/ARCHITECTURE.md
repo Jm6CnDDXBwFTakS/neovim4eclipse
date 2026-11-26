@@ -52,7 +52,8 @@ undo step when nothing changed and keeps the marks of untouched lines. A few key
 a full re-sync instead of trusting line events alone (`NvimKeys.isBufferMutating`).
 
 Changes **Eclipse makes by itself outside insert mode** (a format, a refactoring, Organize Imports,
-Eclipse's undo, a revert or `:e!`) are pushed too (`BufferSynchronizer.pushLocalChanges`): a document
+Eclipse's undo, a revert or `:e!`), and in an insert Neovim types (a paste with the mouse while a
+macro is recorded), are pushed too (`BufferSynchronizer.pushLocalChanges`): a document
 listener queues one push on the input thread, coalescing a burst of edits, and ignores the changes the
 plug-in itself applies from Neovim. Without it, Neovim's next edit would be applied at stale line
 numbers. Remote listening is paused during that push, so Neovim's echo cannot undo a newer Eclipse edit.
@@ -1362,7 +1363,8 @@ next key. The cost: Eclipse's typing helpers do not see that one character.
   drawn, but the plug-in sends no key of its own, which would land in the macro.
 - **A change Eclipse makes by itself meanwhile** (a paste with the mouse, an accepted content-assist
   proposal) is pushed to Neovim as outside insert mode (`BufferSynchronizer.pushLocalChanges`, whose
-  gate includes `isCompleting`). It is not typing, so no `Esc` would hand it over, and the text
+  gate includes `isCompleting`, and `isNeovimDrivenInsert` for any insert Neovim types: recording a
+  macro). It is not typing, so no `Esc` would hand it over, and the text
   Neovim sends at the completion's end would take it away again. The push also ends the
   completion: Neovim's completion remembers the line as it was, and the next `Ctrl-N` or `Ctrl-E`
   would put that line back without the change.

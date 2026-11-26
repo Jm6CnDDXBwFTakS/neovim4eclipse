@@ -251,15 +251,18 @@ public final class NeovimEditorController implements AutoCloseable {
         // Eclipse types (not Neovim): Neovim's lines are behind until Esc, so its cursor reports are
         // echoes; and while Esc is handled they are of a cursor about to move (KeyInput.leavingInsert).
         this.caretSync.dropNeovimCursorWhile(() -> eclipseTyping() || session.isLeavingInsertMode());
-        // Outside insert mode, and while Neovim completes: Neovim types then, so a change Eclipse makes
-        // by itself (a paste with the mouse, an accepted proposal) is not typing that Esc hands over,
-        // and the text Neovim sends when the completion ends would take it away again.
+        // Outside insert mode, while Neovim completes, and in any insert Neovim types (recording a
+        // macro, the moment after a Ctrl key): Neovim
+        // types then, so a change Eclipse makes by itself (a paste with the mouse, an accepted
+        // proposal) is not typing that Esc hands over, and Neovim's next line events, or the text it
+        // sends when the completion or the insert ends, would take it away again. Eclipse itself
+        // never types in such an insert (eclipseTyping), so nothing pushed here is handed over twice.
         // Such a change ends the completion: Neovim's completion remembers the line as it was, and its
         // next Ctrl-N or Ctrl-E would put that line back, without the change (endCompletion does
         // nothing when no completion is going on).
         this.synchronizer.pushLocalChanges(
                 () -> isNeovimModeActive() && (!session.isTypingMode() || session.isWaitingForArgument()
-                        || session.isCompleting()), () -> {
+                        || session.isCompleting() || session.isNeovimDrivenInsert()), () -> {
                     caretSync.sendEclipseCaretNow();
                     session.endCompletionAsync();
                 });

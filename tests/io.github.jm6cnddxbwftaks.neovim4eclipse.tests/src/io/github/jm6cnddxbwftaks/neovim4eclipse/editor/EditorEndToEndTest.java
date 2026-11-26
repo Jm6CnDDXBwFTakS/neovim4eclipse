@@ -1766,6 +1766,28 @@ class EditorEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * Eclipse changes the document by itself (a paste with the mouse) in an insert Neovim types
+     * while a macro is recorded: the change is not Neovim's typing, so it is pushed to Neovim
+     * (NeovimEditorController's push gate), or Neovim's next line events and Esc would take it away.
+     */
+    @Test
+    void anEditEclipseMakesWhileRecordingIsKept() throws Exception {
+        typeSlowly("jqbA");
+        waitUntil("an insert Neovim drives", TIMEOUT_MS, session::isNeovimDrivenInsert);
+        typeSlowly("x");
+        expectText("alpha\nbetax\ngamma\n");
+        document.replace(0, 0, "pasted ");
+        settle();
+        typeSlowly("y");
+        expectText("pasted alpha\nbetaxy\ngamma\n");
+        escape(widget);
+        typeSlowly("q");
+        settle();
+        expectText("pasted alpha\nbetaxy\ngamma\n");
+        assertEquals(List.of("pasted alpha", "betaxy", "gamma"), session.getBufferLines(), "Neovim's lines");
+    }
+
+    /**
      * A carriage return inserted while a macro is recorded ({@code Ctrl-R Ctrl-R a}, register a
      * holding {@code "1\r2"}, inserts it literally): Neovim types the whole insert, its line is two
      * lines in Eclipse, and the keys after it still land on the right lines (SplitLines). After Esc
