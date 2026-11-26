@@ -271,13 +271,14 @@ final class NeovimConnection implements AutoCloseable {
         Object errors = await(api.execLua(STARTUP_ERRORS, List.of()));
         String all = errors == null ? "" : errors.toString().strip();
         // noice.nvim's "can't work when the GUI has ext_cmdline enabled" lines are no error to fix:
-        // noice turns itself off and Eclipse works. They are logged, not warned about at every start.
+        // noice switches off its command line and message views, the rest of it works, and so does
+        // Eclipse. They are logged, not warned about at every start.
         String text = StartupErrorReport.withoutKnownNotices(all);
         if (!text.isEmpty()) {
             LOG.warning(() -> "Neovim's configuration reported errors while starting:\n" + text);
         } else if (!all.isEmpty()) {
             LOG.info(() -> "Neovim's configuration reported only notices that need no warning"
-                    + " (noice.nvim turning itself off in Eclipse):\n" + all);
+                    + " (noice.nvim switching off its command line and messages in Eclipse):\n" + all);
         }
         return text;
     }

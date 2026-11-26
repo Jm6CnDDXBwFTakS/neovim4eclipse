@@ -912,9 +912,12 @@ behavior the plug-in relies on (`tests/unit/src/test/lua/ui2_spec.lua`) and
 its own tests and would drift. A Neovim of the user's own (`-Dneovim4eclipse.nvim`) without ui2
 shows no command line; the session logs ui2's error.
 
-**noice.nvim** refuses to run beside a UI that draws the command line itself, and turns itself off
-with three lines at start; those stay filtered out of the start-up warning ("Command line",
-start-up).
+**noice.nvim** refuses to draw the command line and the messages beside a UI that draws them
+itself: it switches those views off with two lines at start (one for `ext_cmdline`, one for
+`ext_messages`; the plug-in leaves `ext_popupmenu` off), and those stay filtered out of the
+start-up warning ("Command line", start-up). The rest of it keeps running: its notifications and
+its popup menu are floating windows of its own, drawn as any plug-in's (`NoiceIntegrationTest`,
+with the real plug-in).
 
 ## Command line
 
@@ -1030,10 +1033,11 @@ abbreviations all apply, and nothing in Eclipse edits a text of its own.
   only after the config ran).
   `NeovimConnection.waitForStartup` therefore waits for an idle answer and keeps the errors
   (`:messages`) for a one-time warning
-  (`editor/StartupErrorNotice`, `util/StartupErrorReport`). noice.nvim's three
-  "can't work when the GUI has ext_cmdline enabled" lines are left out of it
-  (`StartupErrorReport.withoutKnownNotices`, those exact sentences only) and logged: noice turns
-  itself off and Eclipse works, so they are no error to fix.
+  (`editor/StartupErrorNotice`, `util/StartupErrorReport`). noice.nvim's two
+  "can't work when the GUI has ext_cmdline enabled" lines (for `ext_cmdline` and `ext_messages`)
+  are left out of it (`StartupErrorReport.withoutKnownNotices`, those exact sentences only) and
+  logged: noice switches off its command line and message views, the rest of it runs, and Eclipse
+  works, so they are no error to fix.
 - **Output:** a command runs in Neovim as typed, so the history, macros and `@:` see it, listings
   such as `:ls` too. What it prints Neovim shows itself, in ui2's windows (see "Messages and
   output"). The plug-in redirects nothing itself, so a user's own `:redir` works as in Vim.

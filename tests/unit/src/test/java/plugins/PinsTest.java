@@ -98,7 +98,7 @@ class PinsTest {
         List<Pin> pins = Pins.parse(Files.readString(root.resolve(TestPluginsTool.PINS_FILE)));
         assertEquals(List.of("flash", "leap", "hop", "mini.jump2d", "which-key", "telescope", "plenary", "lazy", "fzf-lua", "snacks",
                 "blink.cmp", "nvim-cmp", "cmp-buffer", "vim-surround", "vim-repeat",
-                "mini.nvim"),
+                "mini.nvim", "noice", "nui"),
                 pins.stream().map(Pin::name).toList());
     }
 

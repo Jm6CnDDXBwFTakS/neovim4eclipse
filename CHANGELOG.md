@@ -49,6 +49,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- The README no longer says that noice.nvim turns itself off inside Eclipse: it switches off only
+  its command line and message views, and its notifications and completion menu keep working, as
+  floating windows.
 - A completion plug-in's `Ctrl-N`, such as nvim-cmp's, no longer leaves the caret before the word
   it completed, so that the next letters landed inside it (`al`, `Ctrl-N`, `p` gave `alppha`). A
   completion key (`Ctrl-N`, `Ctrl-P`, `Ctrl-X`) that a plug-in or your config maps in Insert mode

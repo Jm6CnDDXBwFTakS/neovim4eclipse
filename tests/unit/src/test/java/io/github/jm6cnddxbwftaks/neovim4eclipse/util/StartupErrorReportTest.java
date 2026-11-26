@@ -22,7 +22,11 @@ class StartupErrorReportTest {
         assertTrue(message.contains("vim.keymap.set"), message);
     }
 
-    /** noice.nvim's three lines, as noice 4.x prints them when it turns itself off under the plug-in's UI. */
+    /**
+     * noice.nvim's line for each of the three UI options it checks, as noice 4.x prints them; under
+     * the plug-in's UI it prints the first and the last ({@code NoiceIntegrationTest}, with the real
+     * plug-in), and the filter takes all three.
+     */
     private static final String NOICE = """
             You're using a GUI that uses ext_cmdline. Noice can't work when the GUI has ext_cmdline enabled.
             You're using a GUI that uses ext_popupmenu. Noice can't work when the GUI has ext_popupmenu enabled.

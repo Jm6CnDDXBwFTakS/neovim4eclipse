@@ -332,9 +332,10 @@ several floats) and lazy.nvim (`:Lazy`), and the tests of completion plug-ins th
 blink.cmp, and nvim-cmp with its source cmp-buffer (a `Ctrl-N` they map, their menu a float),
 and the tests of plug-ins that work on text three more: vim-surround and vim-repeat, through which
 `.` repeats it (`SurroundIntegrationTest`, `SurroundEndToEndTest`), and mini.nvim, for its
-mini.pairs and mini.ai (`MiniIntegrationTest`, `MiniEndToEndTest`). flash's help page also stands
-for a user's plug-in in the help editor's test
-(`windows_spec.lua`). They are third-party
+mini.pairs and mini.ai (`MiniIntegrationTest`, `MiniEndToEndTest`), and the test of what noice.nvim
+does in Eclipse two more: noice and its library nui.nvim (`NoiceIntegrationTest`). flash's help
+page also stands for a user's plug-in in the help editor's test (`windows_spec.lua`). They are
+third-party
 code that runs in the test Neovim, on your machine and wherever `LikeCi`
 or the gallery runs, so each is pinned: `releng/test-plugins.properties` holds, per plug-in, its repository, one commit,
 the SHA-256 of that commit's archive and its license. That file is the only place a commit or a

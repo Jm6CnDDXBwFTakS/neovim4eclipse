@@ -24,16 +24,18 @@ public final class StartupErrorReport {
 
     /**
      * The errors noice.nvim reports when it starts under a UI that draws the command line, the
-     * popup menu and the messages itself, as the plug-in's UI does ({@code ext_cmdline},
-     * {@code ext_messages}); noice then turns itself off, and Neovim's own command line and messages
-     * (ui2) work as usual. Example, one of the three:
+     * popup menu or the messages itself, a line for each: the plug-in's UI draws the command line
+     * and the messages ({@code ext_cmdline}, {@code ext_messages}), so noice reports two. noice then
+     * switches off its own command line and message views (the rest of it, its notifications and
+     * its popup menu, keeps working), and Neovim's own command line and messages (ui2) work as usual
+     * ({@code NoiceIntegrationTest}, with the real plug-in). Example, one of the two:
      * {@code You're using a GUI that uses ext_cmdline. Noice can't work when the GUI has ext_cmdline enabled.}
      *
      * <p>Why they are left out: noice is common (LazyVim turns it on), and these lines are no error to
      * fix in Eclipse, yet they opened the warning at every start. Only these exact sentences are left
-     * out, the three names and the text as noice 4.x prints them (its {@code health.lua}), so no
-     * other error can be hidden by them; should noice change the text, the warning simply shows it
-     * again.
+     * out, for each of the three names noice checks, the text as noice 4.x prints it (its
+     * {@code health.lua}), so no other error can be hidden by them; should noice change the text,
+     * the warning simply shows it again.
      */
     private static final Pattern NOICE_GUI_CHECK = Pattern.compile(
             "You're using a GUI that uses (ext_cmdline|ext_popupmenu|ext_messages)\\."
@@ -44,10 +46,11 @@ public final class StartupErrorReport {
 
     /**
      * Neovim's start-up messages without the lines that are no error to fix in Eclipse (noice.nvim
-     * turning itself off, {@link #NOICE_GUI_CHECK}); "" when nothing else is left, so that no warning
-     * opens. Any other line is kept, an error or not, as {@link #message} shows it.
+     * switching off its command line and messages, {@link #NOICE_GUI_CHECK}); "" when nothing else
+     * is left, so that no warning opens. Any other line is kept, an error or not, as
+     * {@link #message} shows it.
      *
-     * <p>Example: noice's three lines alone give ""; with
+     * <p>Example: noice's lines alone give ""; with
      * {@code E5112: Lua chunk: init.lua:2: '=' expected near '<'} after them, that line alone is
      * left.
      *

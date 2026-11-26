@@ -487,6 +487,20 @@ public final class PinnedPlugins {
     }
 
     /**
+     * An {@code init.lua} that loads noice.nvim from {@code noice} and its library nui.nvim from
+     * {@code nui} and calls noice's {@code setup()} with its defaults, as a user's config (LazyVim's
+     * among them) does while Neovim starts. noice first checks the UI ({@code noice/health.lua},
+     * {@code check}): for each of the command line, the popup menu and the messages that it draws
+     * itself, as Eclipse's does the command line and the messages (ui2), it reports a line. Then it
+     * loads at {@code VimEnter} anyway, without its views of those ({@code noice/init.lua},
+     * {@code setup}; {@code noice/ui/init.lua}): its notifications and its popup menu run. Neither
+     * plug-in has a {@code plugin/} file that would run by itself.
+     */
+    public static String noiceInit(Path noice, Path nui) {
+        return onRuntimePath(nui) + "\n" + onRuntimePath(noice) + "\nrequire('noice').setup()\n";
+    }
+
+    /**
      * Lua that puts {@code folder} first on Neovim's {@code 'runtimepath'}, so that
      * {@code require} finds the plug-in there. Example: {@code vim.opt.rtp:prepend([==[/home/you/
      * src/neovim4eclipse/.tool-cache/test-plugins/telescope]==])}.
