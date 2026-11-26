@@ -386,9 +386,10 @@ gets in your way:
    - **Opened in Eclipse:** a plug-in's own split or tab page on a file, such as a picker's
      `Ctrl+V`, `Ctrl+X` or `Ctrl+T`: an Eclipse split or editor tab.
    - **Not shown:** split windows plug-ins open on anything but a file (file trees).
-   - **Do not open, or lag:** the menus of completion plug-ins (nvim-cmp, blink.cmp) and windows
-     that follow typing in insert mode. Nothing hides them: Eclipse types the insert, so Neovim
-     has no typing to follow until `Esc`.
+   - **Open only at a key:** the menus of completion plug-ins (nvim-cmp, blink.cmp) and windows
+     that follow typing in insert mode. Eclipse types the insert, so Neovim has no typing to
+     follow until `Esc`, or until the plug-in's own `Ctrl-N`: from that key on Neovim types the
+     rest of the insert, and the menu follows your typing ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)).
 
    Plug-ins that work on text (surround, commentary, text objects, mappings of your own) work as in
    a terminal. A floating window takes clicks and the wheel, and one that takes the keyboard gets
