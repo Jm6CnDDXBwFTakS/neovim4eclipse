@@ -96,7 +96,8 @@ class PinsTest {
         }
         assertTrue(root != null, "the repository's root holds " + TestPluginsTool.PINS_FILE);
         List<Pin> pins = Pins.parse(Files.readString(root.resolve(TestPluginsTool.PINS_FILE)));
-        assertEquals(List.of("flash", "leap", "hop", "mini.jump2d", "which-key", "telescope", "plenary", "lazy", "fzf-lua", "snacks"),
+        assertEquals(List.of("flash", "leap", "hop", "mini.jump2d", "which-key", "telescope", "plenary", "lazy", "fzf-lua", "snacks",
+                "blink.cmp", "nvim-cmp", "cmp-buffer"),
                 pins.stream().map(Pin::name).toList());
     }
 

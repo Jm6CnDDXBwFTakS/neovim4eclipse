@@ -365,6 +365,100 @@ public final class PinnedPlugins {
             """;
 
     /**
+     * Lua that loads blink.cmp from {@code folder} and calls its {@code setup()} as a user's config
+     * would, with its {@code default} key preset ({@code Ctrl-N}, {@code Ctrl-P}, {@code Ctrl-Y},
+     * {@code Ctrl-E} mapped in Insert mode) and the words of the open buffers as its one source.
+     *
+     * <p>Its fuzzy matcher is the pure-Lua one ({@code fuzzy.implementation = 'lua'}): by default
+     * blink.cmp downloads a prebuilt Rust program for it, which is not pinned or vetted. With
+     * {@code 'lua'} its downloader returns before it asks git or curl anything
+     * ({@code blink/cmp/fuzzy/download/init.lua}, {@code ensure_downloaded}); the download is off as
+     * well, should that change. And from before the setup, {@code vim.system} and
+     * {@code vim.fn.jobstart} (the only ways blink.cmp starts a program at this pin: git, curl, a
+     * build) refuse to start anything: they note the command and raise an error, so even a changed
+     * pin cannot download behind the test's back. {@link #BLINK_READY} names any command refused,
+     * and tells when the setup, which finishes in a scheduled callback, is done. Its
+     * {@code plugin/} file (the {@code :BlinkCmp} command, which can build the matcher) is not run:
+     * the setup needs none of it. {@code setup()} acts on the whole Neovim (autocommands, mappings
+     * when an insert starts) and cannot be undone: a test that shares its Neovim restarts it
+     * afterwards.
+     */
+    public static String loadBlinkCmp(Path folder) {
+        return onRuntimePath(folder) + """
+
+                _G.n4e_refused = {}
+                local function refuse(cmd)
+                  table.insert(_G.n4e_refused, vim.inspect(cmd))
+                  error('a test refused to start ' .. vim.inspect(cmd))
+                end
+                vim.system = refuse
+                vim.fn.jobstart = refuse
+                require('blink.cmp').setup({
+                  fuzzy = { implementation = 'lua', prebuilt_binaries = { download = false } },
+                  sources = { default = { 'buffer' } },
+                  keymap = { preset = 'default' },
+                  signature = { enabled = false },
+                })
+                """;
+    }
+
+    /**
+     * Lua that answers whether blink.cmp's setup ({@link #loadBlinkCmp}) is done with the Lua
+     * matcher, no program asked for since it began: {@code "lua"} then, else what it found (the
+     * commands refused, or that the setup is not done yet: the matcher's module is first loaded in
+     * the setup's scheduled callback, together with the mappings).
+     */
+    public static final String BLINK_READY = """
+            if _G.n4e_refused and #_G.n4e_refused > 0 then
+              return 'refused: ' .. table.concat(_G.n4e_refused, ', ')
+            end
+            local fuzzy = package.loaded['blink.cmp.fuzzy']
+            if not fuzzy then return 'not set up yet' end
+            return fuzzy.implementation_type
+            """;
+
+    /**
+     * Lua that loads nvim-cmp from {@code cmp} and its source cmp-buffer from {@code buffer}, and
+     * calls {@code setup()} as a user's config would: the words of the buffer as its source, its
+     * {@code preset.insert} keys ({@code Ctrl-N}, {@code Ctrl-P}, {@code Ctrl-E}) and
+     * {@code Ctrl-Y} to confirm. Both plug-ins' {@code plugin/} files run by hand
+     * ({@code :runtime}), since Neovim sourced the runtimepath's long before. As for
+     * {@link #loadBlinkCmp}, nothing of it can be undone.
+     */
+    public static String loadNvimCmp(Path cmp, Path buffer) {
+        return onRuntimePath(cmp) + " " + onRuntimePath(buffer) + """
+
+                vim.cmd('runtime plugin/cmp.lua')
+                vim.cmd('runtime after/plugin/cmp_buffer.lua')
+                local cmp = require('cmp')
+                cmp.setup({
+                  sources = cmp.config.sources({ { name = 'buffer' } }),
+                  mapping = cmp.mapping.preset.insert({ ['<C-y>'] = cmp.mapping.confirm({ select = true }) }),
+                })
+                """;
+    }
+
+    /**
+     * Lua (a chunk taking {@code ...}) that answers how many completion menus are shown: windows
+     * whose buffers have blink.cmp's ({@code blink-cmp-menu}) or nvim-cmp's ({@code cmp_menu})
+     * filetype and are not hidden. With a word as its one argument, only those whose lines have it.
+     */
+    public static final String COMPLETION_MENUS = """
+            local text = ...
+            local n = 0
+            for _, w in ipairs(vim.api.nvim_list_wins()) do
+              local b = vim.api.nvim_win_get_buf(w)
+              local ft = vim.bo[b].filetype
+              if (ft == 'blink-cmp-menu' or ft == 'cmp_menu') and not vim.api.nvim_win_get_config(w).hide
+                  and (text == nil or vim.iter(vim.api.nvim_buf_get_lines(b, 0, -1, false))
+                    :any(function(l) return l:find(text, 1, true) end)) then
+                n = n + 1
+              end
+            end
+            return n
+            """;
+
+    /**
      * Lua that puts {@code folder} first on Neovim's {@code 'runtimepath'}, so that
      * {@code require} finds the plug-in there. Example: {@code vim.opt.rtp:prepend([==[/home/you/
      * src/neovim4eclipse/.tool-cache/test-plugins/telescope]==])}.

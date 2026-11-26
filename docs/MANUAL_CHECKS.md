@@ -399,6 +399,8 @@ the file in an Eclipse editor, the document you came from is unchanged. fzf-lua'
 is on `PATH`, `live_grep` and snacks' `files` only where `rg` is. Real clicks through the system,
 on a picker's list and in the text, Ctrl+click included, are tested on Linux and Windows
 (`RealMouseEndToEndTest`, `PickersEndToEndTest`), not on macOS, where step 6 does them by hand.
+The menus of blink.cmp and nvim-cmp after their `Ctrl-N` are tested too
+(`CompletionPluginsEndToEndTest`), so no step here checks them.
 Your own config, with its pickers, previews, borders and colorscheme, and an input method in a
 prompt, are only seen on screen. Use a config that has Telescope (or another picker, fzf-lua,
 snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.

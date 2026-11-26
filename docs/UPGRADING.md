@@ -328,8 +328,10 @@ The tests of the jump labels run four real Neovim plug-ins (flash, leap, hop, mi
 gallery's pictures a fifth, which-key, and the tests of floating windows that take the keyboard
 five more: Telescope with its library plenary (a picker's prompt, its file and grep pickers),
 fzf-lua (a picker that runs fzf in a terminal float), snacks.nvim (a picker that draws itself in
-several floats) and lazy.nvim (`:Lazy`). flash's help page also stands for a user's plug-in in
-the help editor's test (`windows_spec.lua`). They are third-party
+several floats) and lazy.nvim (`:Lazy`), and the tests of completion plug-ins three more:
+blink.cmp, and nvim-cmp with its source cmp-buffer (a `Ctrl-N` they map, their menu a float).
+flash's help page also stands for a user's plug-in in the help editor's test
+(`windows_spec.lua`). They are third-party
 code that runs in the test Neovim, on your machine and wherever `LikeCi`
 or the gallery runs, so each is pinned: `releng/test-plugins.properties` holds, per plug-in, its repository, one commit,
 the SHA-256 of that commit's archive and its license. That file is the only place a commit or a
@@ -348,6 +350,13 @@ plug-ins, so they run only where a developer has fetched them and installed fzf.
 from the environment (`FZF_DEFAULT_OPTS`, `FZF_DEFAULT_OPTS_FILE`, `FZF_DEFAULT_COMMAND`); the
 tests take those out of the test Neovim before fzf-lua starts fzf, so your own fzf config does
 not reach them (checked on Linux; on Windows the C runtime may keep a copy fzf-lua still reads).
+
+blink.cmp would download a prebuilt program too, its Rust matcher, from its own releases. The
+tests never let it: they set it up with its pure-Lua matcher (`fuzzy.implementation = 'lua'`, the
+download off), and `vim.system` and `vim.fn.jobstart` refuse to start anything in that Neovim
+(`PinnedPlugins.loadBlinkCmp`, `BLINK_READY`). Those two are the only ways blink.cmp starts a
+program at its pin; when you move the pin, check that it still is so before you accept: search the
+new commit's Lua for `io.popen`, `os.execute`, `vim.fn.system`, `uv.spawn` and `termopen`.
 
 The pickers that list or search files run a program of the system's as well, which is not pinned
 either, for the same reason. Telescope's `find_files` takes whichever lister the machine has
