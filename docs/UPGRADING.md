@@ -329,8 +329,10 @@ gallery's pictures a fifth, which-key, and the tests of floating windows that ta
 five more: Telescope with its library plenary (a picker's prompt, its file and grep pickers),
 fzf-lua (a picker that runs fzf in a terminal float), snacks.nvim (a picker that draws itself in
 several floats) and lazy.nvim (`:Lazy`), and the tests of completion plug-ins three more:
-blink.cmp, and nvim-cmp with its source cmp-buffer (a `Ctrl-N` they map, their menu a float).
-flash's help page also stands for a user's plug-in in the help editor's test
+blink.cmp, and nvim-cmp with its source cmp-buffer (a `Ctrl-N` they map, their menu a float),
+and the tests of a plug-in that works on text two more: vim-surround and vim-repeat, through which
+`.` repeats it (`SurroundIntegrationTest`, `SurroundEndToEndTest`). flash's help page also stands
+for a user's plug-in in the help editor's test
 (`windows_spec.lua`). They are third-party
 code that runs in the test Neovim, on your machine and wherever `LikeCi`
 or the gallery runs, so each is pinned: `releng/test-plugins.properties` holds, per plug-in, its repository, one commit,

@@ -48,6 +48,18 @@ public final class TestWait {
         return seconds(System.getProperty(PROPERTY)) * 1000L;
     }
 
+    /**
+     * How long a test Neovim waits for the rest of a mapping ({@code 'timeoutlen'}, in
+     * milliseconds): twice {@link #millis()}, longer than any test waits for anything, so that no
+     * test can come to depend on the wait running out (one that did would time out first), while a
+     * key typed after a loaded machine's pause still completes the mapping. Example: {@code y} then
+     * {@code s} of vim-surround's {@code ys}, more than Neovim's default second apart, would run
+     * Neovim's own {@code y}. The reasons in full: {@code EndToEndTestBase.waitForTheRestOfAMapping}.
+     */
+    public static long mappingMillis() {
+        return 2 * millis();
+    }
+
     /** The limit as a {@link Duration}, for APIs that take one. */
     public static Duration duration() {
         return Duration.ofMillis(millis());

@@ -459,6 +459,21 @@ public final class PinnedPlugins {
             """;
 
     /**
+     * Lua that loads vim-surround from {@code surround} and vim-repeat from {@code repeat}, as a
+     * plug-in manager would: both on the {@code 'runtimepath'}, and vim-surround's
+     * {@code plugin/surround.vim} run by hand ({@code :runtime}, which takes the first on the
+     * runtimepath: the pinned one), since Neovim sourced the runtimepath's long before. vim-repeat
+     * has no {@code plugin/} file: vim-surround calls its {@code repeat#set}, which the runtimepath
+     * finds in its {@code autoload/}. The mappings they make (vim-surround's {@code ys},
+     * {@code cs}, {@code ds}, {@code S} in Visual mode, {@code Ctrl-G s} in Insert mode;
+     * vim-repeat's {@code .}, {@code u}, {@code U} and {@code Ctrl-R}, at its first use) are the
+     * whole Neovim's: a test that shares its Neovim restarts it afterwards.
+     */
+    public static String loadSurround(Path surround, Path repeat) {
+        return onRuntimePath(repeat) + " " + onRuntimePath(surround) + " vim.cmd('runtime plugin/surround.vim')";
+    }
+
+    /**
      * Lua that puts {@code folder} first on Neovim's {@code 'runtimepath'}, so that
      * {@code require} finds the plug-in there. Example: {@code vim.opt.rtp:prepend([==[/home/you/
      * src/neovim4eclipse/.tool-cache/test-plugins/telescope]==])}.

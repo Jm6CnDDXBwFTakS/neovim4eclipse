@@ -196,7 +196,7 @@ abstract class EndToEndTestBase {
      * every test, as a restarted Neovim starts with the default again.
      */
     private static void waitForTheRestOfAMapping(NeovimSession session) {
-        SessionProbe.lua(session, "vim.o.timeoutlen = " + 2 * TestWait.millis() + "; return 0");
+        SessionProbe.lua(session, "vim.o.timeoutlen = " + TestWait.mappingMillis() + "; return 0");
     }
 
     /**
@@ -512,6 +512,29 @@ abstract class EndToEndTestBase {
         IFile file = project.getFile(name);
         file.create(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)), true, null);
         return file;
+    }
+
+    /**
+     * <em>Restart Neovim</em> ({@code Activator.restartNeovim}, as {@code RestartNeovimEndToEndTest}
+     * uses it), waiting until the new Neovim is attached to this test's editor. For a test that
+     * loaded a plug-in whose setup acts on the whole Neovim, with no way to undo it (a completion
+     * plug-in's autocommands, vim-surround's mappings): the next test gets a Neovim that never
+     * loaded it. Call it from a subclass's {@code @AfterEach}, which runs before this class's, so the
+     * editor is closed with the new Neovim attached. The text check has run already, on the
+     * Neovim the test used.
+     *
+     * @return the new Neovim's session
+     */
+    NeovimSession restartNeovimAfterThisTest() {
+        NeovimSession used = session;
+        Activator.getDefault().restartNeovim();
+        NeovimSession fresh = Activator.getDefault().currentSession();
+        assertTrue(fresh != null, "Restart Neovim started no new Neovim (see the test Eclipse's log)");
+        waitUntil("Neovim attached again, a new one", TIMEOUT_MS, () -> {
+            NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
+            return c != null && c.getEditor() == editor && !c.isClosed() && fresh != used && fresh.isAlive();
+        });
+        return fresh;
     }
 
     void waitForAttach(ITextEditor target, String what) {

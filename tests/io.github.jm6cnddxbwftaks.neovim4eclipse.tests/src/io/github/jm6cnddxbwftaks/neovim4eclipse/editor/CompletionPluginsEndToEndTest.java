@@ -22,7 +22,6 @@ import org.eclipse.swt.widgets.Control;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
@@ -42,8 +41,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
  *
  * <p>The UI tests share one Neovim, and a plug-in's {@code setup()} acts on all of it
  * (autocommands, mappings in every buffer) with no way to undo it. So each test that set one up
- * ends with <em>Restart Neovim</em>: the next test gets a Neovim that never loaded it. The restart is
- * the plug-in's own ({@code Activator.restartNeovim}, as {@code RestartNeovimEndToEndTest} uses it).
+ * ends with <em>Restart Neovim</em> ({@code restartNeovimAfterThisTest}): the next test gets a Neovim
+ * that never loaded it.
  */
 class CompletionPluginsEndToEndTest extends EndToEndTestBase {
 
@@ -57,12 +56,7 @@ class CompletionPluginsEndToEndTest extends EndToEndTestBase {
         if (!loaded) {
             return;
         }
-        Activator.getDefault().restartNeovim();
-        NeovimSession fresh = Activator.getDefault().currentSession();
-        waitUntil("Neovim attached again, without the plug-in", TIMEOUT_MS, () -> {
-            NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
-            return c != null && c.getEditor() == editor && !c.isClosed() && fresh != session && fresh.isAlive();
-        });
+        NeovimSession fresh = restartNeovimAfterThisTest();
         assertEquals(true, SessionProbe.lua(fresh,
                 "return package.loaded['blink.cmp'] == nil and package.loaded['cmp'] == nil"),
                 "the next test's Neovim never loaded the plug-in");
