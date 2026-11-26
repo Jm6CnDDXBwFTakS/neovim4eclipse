@@ -13,19 +13,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import org.eclipse.jface.text.BadLocationException;
-import org.eclipse.swt.widgets.Control;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 
 /**
  * Real completion plug-ins in a real editor, at the commits pinned and vetted in
@@ -157,26 +154,6 @@ class CompletionPluginsEndToEndTest extends EndToEndTestBase {
     private boolean menuShows(String word) {
         settle();
         return pluginFloats().stream().anyMatch(c -> c.isVisible() && rowsOf(c.grid()).contains(word));
-    }
-
-    /** The canvases of plug-ins' floats over the text (not ui2's windows, the popup menu or a status line). */
-    private List<GridCanvas> pluginFloats() {
-        List<GridCanvas> floats = new ArrayList<>();
-        for (Control child : widget.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas)
-                    && !isNeovimsOwnFloat(canvas)) {
-                floats.add(canvas);
-            }
-        }
-        return floats;
-    }
-
-    private static String rowsOf(GridSnapshot grid) {
-        StringBuilder rows = new StringBuilder();
-        for (int r = 0; grid != null && r < grid.height(); r++) {
-            rows.append(grid.row(r).stripTrailing()).append('\n');
-        }
-        return rows.toString();
     }
 
     /** For a failure's message: the document, the caret, the floats drawn, Neovim's mode, line and menus. */

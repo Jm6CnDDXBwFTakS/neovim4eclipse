@@ -25,7 +25,6 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.prefs.PreferenceConstants;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 
 /**
  * Neovim's insert-mode completion in a real editor ({@code KeyRouter}, {@code EditorKeyContext}):
@@ -64,15 +63,6 @@ class CompletionMenuEndToEndTest extends EndToEndTestBase {
         store.setToDefault(PreferenceConstants.ctrlKeyInsert('p'));
         store.setToDefault(PreferenceConstants.ctrlKeyInsert('e'));
         store.setToDefault(PreferenceConstants.ctrlKeyInsert('y'));
-    }
-
-    /** The rows of {@code grid}, each without its trailing blanks and ended by a line break. */
-    private static String rowsOf(GridSnapshot grid) {
-        StringBuilder rows = new StringBuilder();
-        for (int r = 0; grid != null && r < grid.height(); r++) {
-            rows.append(grid.row(r).stripTrailing()).append('\n');
-        }
-        return rows.toString();
     }
 
     /**

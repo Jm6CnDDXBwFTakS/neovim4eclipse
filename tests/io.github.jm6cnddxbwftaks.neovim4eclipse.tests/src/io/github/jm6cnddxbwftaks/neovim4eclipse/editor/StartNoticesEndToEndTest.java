@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.jface.preference.IPreferenceStore;
-import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.junit.jupiter.api.AfterEach;
@@ -192,7 +191,6 @@ class StartNoticesEndToEndTest extends EndToEndTestBase {
         Runnable ended = UiTestSupport.dialogWatchStarted();
         AtomicBoolean done = new AtomicBoolean();
         widget.addDisposeListener(e -> done.set(true));
-        int modal = SWT.APPLICATION_MODAL | SWT.PRIMARY_MODAL | SWT.SYSTEM_MODAL;
         display.timerExec(50, new Runnable() {
             @Override
             public void run() {
@@ -201,7 +199,7 @@ class StartNoticesEndToEndTest extends EndToEndTestBase {
                     return;
                 }
                 for (Shell shell : display.getShells()) {
-                    if (shell.isVisible() && (shell.getStyle() & modal) != 0) {
+                    if (shell.isVisible() && UiTestSupport.isModal(shell)) {
                         String now = state.get();
                         seen.add(now == null ? shell.getText() : shell.getText() + " [" + now + "]");
                         shell.close();

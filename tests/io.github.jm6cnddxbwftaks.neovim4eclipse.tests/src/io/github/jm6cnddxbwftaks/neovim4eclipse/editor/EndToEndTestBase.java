@@ -58,6 +58,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.ExpectedLog;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FilePaths;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.FloatWindow;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
 
 /**
@@ -777,6 +778,42 @@ abstract class EndToEndTestBase {
     }
 
     /**
+     * The canvases of plug-ins' floats drawn over {@link #widget} ({@link #pluginFloats(StyledText)}).
+     */
+    List<GridCanvas> pluginFloats() {
+        return pluginFloats(widget);
+    }
+
+    /**
+     * The canvases of plug-ins' floats drawn over {@code text}, an editor's widget: every
+     * {@link GridCanvas} child but ui2's windows and the popup menu ({@link #isNeovimsOwnFloat}) and
+     * the status line's row. Example: a picker's input, list and preview, three canvases; none
+     * while no plug-in has a float open.
+     */
+    List<GridCanvas> pluginFloats(StyledText text) {
+        List<GridCanvas> floats = new ArrayList<>();
+        for (Control child : text.getChildren()) {
+            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas)
+                    && !isNeovimsOwnFloat(canvas)) {
+                floats.add(canvas);
+            }
+        }
+        return floats;
+    }
+
+    /**
+     * A float's rows as text, each without its trailing blanks and ended by a newline; "" for no
+     * grid. Example: oil.nvim's listing of a folder, {@code "a.txt\nb.txt\n~\n"}.
+     */
+    static String rowsOf(GridSnapshot grid) {
+        StringBuilder rows = new StringBuilder();
+        for (int r = 0; grid != null && r < grid.height(); r++) {
+            rows.append(grid.row(r).stripTrailing()).append('\n');
+        }
+        return rows.toString();
+    }
+
+    /**
      * While {@code control} exists, closes every modal dialog that opens and returns their titles. A
      * timer keeps running inside a dialog's own event loop, so this also ends a dialog that would
      * otherwise block the test forever.
@@ -789,7 +826,6 @@ abstract class EndToEndTestBase {
         // UiTestSupport's error-dialog watch stays out of its way until the control is gone.
         Runnable ended = UiTestSupport.dialogWatchStarted();
         control.addDisposeListener(e -> ended.run());
-        int modal = SWT.APPLICATION_MODAL | SWT.PRIMARY_MODAL | SWT.SYSTEM_MODAL;
         Runnable check = new Runnable() {
             @Override
             public void run() {
@@ -797,7 +833,7 @@ abstract class EndToEndTestBase {
                     return;
                 }
                 for (Shell shell : display.getShells()) {
-                    if (shell != owner && shell.isVisible() && (shell.getStyle() & modal) != 0) {
+                    if (shell != owner && shell.isVisible() && UiTestSupport.isModal(shell)) {
                         titles.add(shell.getText());
                         shell.close();
                     }

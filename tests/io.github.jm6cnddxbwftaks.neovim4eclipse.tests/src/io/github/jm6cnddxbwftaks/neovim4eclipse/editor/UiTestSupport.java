@@ -99,7 +99,11 @@ final class UiTestSupport {
         return takeClosedErrorDialog();
     }
 
-    /** {@code closeModalDialogsWhile} has started a watch; {@code ended} when it ends. */
+    /**
+     * A watch that handles every modal dialog itself has started ({@code closeModalDialogsWhile},
+     * {@code OilEndToEndTest}'s answers): the error-dialog watch keeps out of its way until
+     * {@code ended} runs.
+     */
     static Runnable dialogWatchStarted() {
         dialogWatches++;
         return () -> dialogWatches--;
@@ -121,9 +125,17 @@ final class UiTestSupport {
         }
     }
 
+    /**
+     * Whether {@code shell} is modal (a dialog that blocks its parent or the application while
+     * open: any of SWT's three modal styles). Example: JFace's {@code MessageDialog} and
+     * {@code SaveAsDialog}, never the workbench window.
+     */
+    static boolean isModal(Shell shell) {
+        return (shell.getStyle() & (SWT.APPLICATION_MODAL | SWT.PRIMARY_MODAL | SWT.SYSTEM_MODAL)) != 0;
+    }
+
     private static boolean isErrorDialog(Shell shell) {
-        int modal = SWT.APPLICATION_MODAL | SWT.PRIMARY_MODAL | SWT.SYSTEM_MODAL;
-        if ((shell.getStyle() & modal) == 0) {
+        if (!isModal(shell)) {
             return false;
         }
         Object window = shell.getData();

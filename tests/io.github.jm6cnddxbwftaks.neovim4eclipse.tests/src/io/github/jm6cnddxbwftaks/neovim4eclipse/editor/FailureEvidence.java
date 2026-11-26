@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Platform;
-import org.eclipse.swt.SWT;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.Rectangle;
@@ -159,12 +158,11 @@ public final class FailureEvidence {
             if (shell.isDisposed()) {
                 continue;
             }
-            int modal = shell.getStyle() & (SWT.APPLICATION_MODAL | SWT.PRIMARY_MODAL | SWT.SYSTEM_MODAL);
             Object data = shell.getData();
             out.append(shell == active ? "  * " : "    ").append('\'').append(shell.getText()).append('\'')
                     .append(shell.isVisible() ? " visible" : " hidden")
                     .append(shell.getMinimized() ? " minimized" : "")
-                    .append(modal != 0 ? " modal" : "")
+                    .append(UiTestSupport.isModal(shell) ? " modal" : "")
                     .append(" at ").append(shell.getBounds())
                     .append(data == null ? "" : " (" + data.getClass().getName() + ")").append('\n');
         }

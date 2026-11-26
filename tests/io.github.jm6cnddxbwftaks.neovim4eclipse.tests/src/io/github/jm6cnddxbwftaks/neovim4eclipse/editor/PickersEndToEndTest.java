@@ -14,8 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 
 import org.eclipse.core.resources.IFile;
@@ -89,26 +87,6 @@ class PickersEndToEndTest extends EndToEndTestBase {
               if vim.tbl_contains({ 'rg', 'fd', 'fdfind', 'find', 'where' }, name) then table.insert(names, name) end
             end
             return table.concat(names, ' ')""";
-
-    /** The canvases of plug-ins' floats over the text (not ui2's windows, the popup menu or a status line). */
-    private List<GridCanvas> pluginFloats() {
-        List<GridCanvas> floats = new ArrayList<>();
-        for (Control child : widget.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas)
-                    && !isNeovimsOwnFloat(canvas)) {
-                floats.add(canvas);
-            }
-        }
-        return floats;
-    }
-
-    private static String rowsOf(GridSnapshot grid) {
-        StringBuilder rows = new StringBuilder();
-        for (int r = 0; grid != null && r < grid.height(); r++) {
-            rows.append(grid.row(r).stripTrailing()).append('\n');
-        }
-        return rows.toString();
-    }
 
     /** {@link PinnedPlugins#TELESCOPE_WINDOWS}' answer, with {@code word} (a plain word of the test's own) or none. */
     private long telescopeWindows(String word) {

@@ -18,7 +18,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 
 /**
  * Neovim's floating windows in a real editor ({@link FloatingWindows}): a window a plug-in opens
@@ -157,14 +156,6 @@ class FloatingWindowsEndToEndTest extends EndToEndTestBase {
             }
         }
         return null;
-    }
-
-    private static String rowsOf(GridSnapshot grid) {
-        StringBuilder rows = new StringBuilder();
-        for (int r = 0; grid != null && r < grid.height(); r++) {
-            rows.append(grid.row(r).stripTrailing()).append('\n');
-        }
-        return rows.toString();
     }
 
     private GridCanvas floatShowing(String text) {

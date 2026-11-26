@@ -15,7 +15,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 
 /**
  * Neovim's command-line window ({@code q:}) in a real editor: drawn over the editor's bottom
@@ -63,17 +62,6 @@ class CommandWindowEndToEndTest extends EndToEndTestBase {
             return canvas == null ? "; no panel" : "; it shows " + rowsOf(canvas.grid());
         });
         return canvasOf(widget);
-    }
-
-    private static String rowsOf(GridSnapshot grid) {
-        if (grid == null) {
-            return "";
-        }
-        StringBuilder rows = new StringBuilder();
-        for (int r = 0; r < grid.height(); r++) {
-            rows.append(grid.row(r).stripTrailing()).append('\n');
-        }
-        return rows.toString();
     }
 
     private static void key(Control control, int keyCode, char character, int stateMask) {

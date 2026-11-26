@@ -12,8 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 
 import org.eclipse.swt.custom.StyledText;
@@ -27,7 +25,6 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 
 /**
  * A real fzf-lua in a real editor, at the commit pinned and vetted in
@@ -73,26 +70,6 @@ class FzfLuaEndToEndTest extends EndToEndTestBase {
             settle();
             return pluginFloats().isEmpty() && ((Number) SessionProbe.lua(session, PinnedPlugins.FZF_BUFFERS)).intValue() == 0;
         });
-    }
-
-    /** The canvases of plug-ins' floats over the text (not ui2's windows, the popup menu or a status line). */
-    private List<GridCanvas> pluginFloats() {
-        List<GridCanvas> floats = new ArrayList<>();
-        for (Control child : widget.getChildren()) {
-            if (child instanceof GridCanvas canvas && !canvas.isDisposed() && !StatusLineRow.isRow(canvas)
-                    && !isNeovimsOwnFloat(canvas)) {
-                floats.add(canvas);
-            }
-        }
-        return floats;
-    }
-
-    private static String rowsOf(GridSnapshot grid) {
-        StringBuilder rows = new StringBuilder();
-        for (int r = 0; grid != null && r < grid.height(); r++) {
-            rows.append(grid.row(r).stripTrailing()).append('\n');
-        }
-        return rows.toString();
     }
 
     /** The drawn floats' rows, one float after the other: for a failure's message. */
