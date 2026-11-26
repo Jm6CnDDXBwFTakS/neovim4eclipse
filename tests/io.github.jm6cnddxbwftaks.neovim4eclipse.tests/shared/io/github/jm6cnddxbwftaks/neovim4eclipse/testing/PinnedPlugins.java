@@ -474,6 +474,19 @@ public final class PinnedPlugins {
     }
 
     /**
+     * Lua that loads mini.nvim from {@code folder} and sets up two of its modules with their
+     * defaults, as a user's config would: mini.pairs (Insert-mode mappings that put in the closing
+     * bracket or quote and take a pair out with Backspace) and mini.ai (text objects such as
+     * {@code a(}, {@code i"}, {@code af} that reach the next object past the cursor and across
+     * lines). mini.nvim has no {@code plugin/} file: a module acts only once its {@code setup()}
+     * ran. Their mappings are the whole Neovim's: a test that shares its Neovim restarts it
+     * afterwards.
+     */
+    public static String loadMini(Path folder) {
+        return onRuntimePath(folder) + " require('mini.pairs').setup() require('mini.ai').setup()";
+    }
+
+    /**
      * Lua that puts {@code folder} first on Neovim's {@code 'runtimepath'}, so that
      * {@code require} finds the plug-in there. Example: {@code vim.opt.rtp:prepend([==[/home/you/
      * src/neovim4eclipse/.tool-cache/test-plugins/telescope]==])}.
