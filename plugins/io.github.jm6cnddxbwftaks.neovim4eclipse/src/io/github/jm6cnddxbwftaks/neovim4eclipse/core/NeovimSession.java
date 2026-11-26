@@ -50,6 +50,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.QuickfixEntries;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewportSize;
@@ -2724,8 +2725,8 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
         }
 
         @Override
-        public void onStatusLines(List<GridSnapshot> lines) {
-            lines.forEach(status::publishStatusLine);
+        public void onStatusLines(List<StatusLines.Stamped> lines) {
+            lines.forEach(each -> status.publishStatusLine(each.line(), each.stamp()));
         }
 
         @Override

@@ -791,6 +791,10 @@ Each code editor draws its Neovim window's status line in a row under its text
   sets `g:statusline_winid` around the call (Neovim's drawing sets it, the call does not), by which
   lualine and its like choose their inactive sections. One source for every editor also keeps
   them drawn alike.
+- **Which is newer:** each evaluation takes the next number of one counter, sent with the line, and
+  `core/StatusTracker` drops a window's line not newer than its last, whichever thread brings it
+  last; the row draws the window's newest line when it paints (`editor/StatusRows`). The comment
+  in `core/lua/statusline.lua` ("Which line is newer") says why.
 - **When:** the current window's line with each key's `STATE_SNAPSHOT` (its first argument `"1"`);
   every window's as `eclipse_status_lines` on `WinEnter` (the window left turns `StatusLineNC`),
   `BufEnter`, `BufModifiedSet`, `BufWritePost`, `BufFilePost`, `ColorScheme`, `VimResized`,

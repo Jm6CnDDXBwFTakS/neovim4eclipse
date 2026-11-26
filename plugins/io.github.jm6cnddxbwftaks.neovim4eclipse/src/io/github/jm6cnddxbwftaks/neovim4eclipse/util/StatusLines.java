@@ -28,6 +28,17 @@ import java.util.Map;
  */
 public final class StatusLines {
 
+    /** A line's number when Neovim gave none (an older answer, a test's fake): it orders nothing. */
+    public static final long NO_STAMP = -1;
+
+    /**
+     * A window's line and the number Neovim gave its evaluation ({@code LuaScripts.STATUS_LINE},
+     * "Which line is newer"): of two lines of one window, the one with the higher number is newer,
+     * whichever arrives last. {@link #NO_STAMP} when it had none.
+     */
+    public record Stamped(GridSnapshot line, long stamp) {
+    }
+
     private static final GridEvent.DefaultColors NO_DEFAULTS =
             new GridEvent.DefaultColors(GridEvent.NO_COLOR, GridEvent.NO_COLOR);
 
@@ -65,14 +76,17 @@ public final class StatusLines {
 
     /**
      * Every window's line from an {@code eclipse_status_lines} notification's argument,
-     * {@code {{win, line}, ...}}; entries that are not understood are left out.
+     * {@code {{win, line, stamp}, ...}}; entries that are not understood are left out, a missing or
+     * malformed stamp is {@link #NO_STAMP}.
      */
-    public static List<GridSnapshot> all(Object lines) {
-        List<GridSnapshot> result = new ArrayList<>();
+    public static List<Stamped> all(Object lines) {
+        List<Stamped> result = new ArrayList<>();
         if (lines instanceof List<?> list) {
             for (Object entry : list) {
                 if (entry instanceof List<?> pair && pair.size() >= 2 && pair.get(0) instanceof Number win) {
-                    result.add(of(win.intValue(), pair.get(1)));
+                    long stamp = pair.size() >= 3 && pair.get(2) instanceof Number n && n.longValue() >= 0
+                            ? n.longValue() : NO_STAMP;
+                    result.add(new Stamped(of(win.intValue(), pair.get(1)), stamp));
                 }
             }
         }

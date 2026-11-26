@@ -218,7 +218,9 @@ final class StatusRows {
             entry.row().show(StatusLines.none(NO_WINDOW));
             return;
         }
-        GridSnapshot line = source.statusLine(window);
+        // No Neovim: release(Source) drops every row before it forgets the source, so none is left
+        // here then; checked anyway, as a task queued before that may still run after it.
+        GridSnapshot line = source == null ? null : source.statusLine(window);
         if (line != null) {
             entry.row().show(line);
         }
@@ -246,7 +248,15 @@ final class StatusRows {
         }
         for (Entry entry : entries) {
             if (entry.window().getAsInt() == line.window()) {
-                ui.asyncExec(() -> entries.forEach(each -> each.row().show(line)));
+                // The window's line when the row is drawn, not this one: a newer one may have been
+                // passed on between this one's and this task (core/StatusTracker), and the tasks
+                // then run in that order; each draws the newest.
+                ui.asyncExec(() -> {
+                    Source from = source;
+                    GridSnapshot newest = from == null ? null : from.statusLine(line.window());
+                    GridSnapshot shown = newest != null ? newest : line;
+                    entries.forEach(each -> each.row().show(shown));
+                });
                 return;
             }
         }

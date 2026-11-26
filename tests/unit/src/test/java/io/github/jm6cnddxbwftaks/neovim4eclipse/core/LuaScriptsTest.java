@@ -294,7 +294,8 @@ class LuaScriptsTest {
         assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("vim.fn.mode()"));
         assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("block, vim.api.nvim_get_mode().mode, folds,\n"),
                 "the full mode, then the folds");
-        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("vim.api.nvim_get_current_win() }"), "the window last");
+        assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("vim.api.nvim_get_current_win(), stamp }"),
+                "the window, then the status line's number last");
         // A block's lines come from Neovim; no curswant or tabstop for Java to compute them from.
         assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("vim.fn.getregionpos(s, e, { type = mode, eol = true })"));
         assertTrue(code(LuaScripts.STATE_SNAPSHOT).contains("if mode == string.char(22) then"), "blocks only");

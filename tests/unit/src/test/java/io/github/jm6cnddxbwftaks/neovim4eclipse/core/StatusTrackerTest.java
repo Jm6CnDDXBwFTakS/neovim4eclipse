@@ -39,19 +39,61 @@ class StatusTrackerTest {
     /** Example: a key that does not move the cursor leaves the line as it was, and nothing is fired. */
     @Test
     void aWindowsLineIsPassedOnOnceEachTimeItChanges() {
-        tracker.publishStatusLine(line(1000, "main.c  12,4"));
-        tracker.publishStatusLine(line(1000, "main.c  12,4"));
-        tracker.publishStatusLine(line(1000, "main.c  13,1"));
+        tracker.publishStatusLine(line(1000, "main.c  12,4"), 1);
+        tracker.publishStatusLine(line(1000, "main.c  12,4"), 2);
+        tracker.publishStatusLine(line(1000, "main.c  13,1"), 3);
         assertEquals(List.of(line(1000, "main.c  12,4"), line(1000, "main.c  13,1")), seen);
         assertEquals(line(1000, "main.c  13,1"), tracker.statusLine(1000));
+    }
+
+    /**
+     * A line older by Neovim's number than the window's last one is dropped, whichever arrived
+     * last. Example: lualine's timer sets {@code INSERT} after {@code i} (number 8), sent and passed
+     * on before the key's snapshot, read just before with {@code NORMAL} (number 7), is handled.
+     */
+    @Test
+    void aLineOlderThanTheWindowsLastIsDroppedWhicheverArrivesLast() {
+        tracker.publishStatusLine(line(1000, " INSERT  a.c"), 8);
+        tracker.publishStatusLine(line(1000, " NORMAL  a.c"), 7);
+        assertEquals(List.of(line(1000, " INSERT  a.c")), seen);
+        assertEquals(line(1000, " INSERT  a.c"), tracker.statusLine(1000));
+    }
+
+    /**
+     * A line Neovim evaluated after one key, still on its way, arrives after the next key's
+     * snapshot, which Neovim evaluated later: the snapshot's line (the higher number) stands, and
+     * the late one is dropped.
+     */
+    @Test
+    void aLateLineFromBeforeTheNextKeyDoesNotReplaceThatKeysLine() {
+        tracker.publishStatusLine(line(1000, "a.c  1,2"), 12);
+        tracker.publishStatusLine(line(1000, "a.c  1,1"), 11);
+        assertEquals(List.of(line(1000, "a.c  1,2")), seen);
+    }
+
+    /** Numbers are compared per window: another window's higher number drops nothing here. */
+    @Test
+    void numbersArePerWindow() {
+        tracker.publishStatusLine(line(1001, " NORMAL  b.c"), 9);
+        tracker.publishStatusLine(line(1000, " INSERT  a.c"), 5);
+        assertEquals(List.of(line(1001, " NORMAL  b.c"), line(1000, " INSERT  a.c")), seen);
+    }
+
+    /** A line without a number (an older answer, a fake) orders nothing: compared by its text alone. */
+    @Test
+    void aLineWithoutANumberIsComparedByItsTextAlone() {
+        tracker.publishStatusLine(line(1000, "a.c"), 4);
+        tracker.publishStatusLine(line(1000, "b.c"), StatusLines.NO_STAMP);
+        tracker.publishStatusLine(line(1000, "c.c"), 5);
+        assertEquals(List.of(line(1000, "a.c"), line(1000, "b.c"), line(1000, "c.c")), seen);
     }
 
     /** Each window keeps its own last line: another window's same text is still news for it. */
     @Test
     void linesAreComparedPerWindow() {
-        tracker.publishStatusLine(line(1000, "a.c"));
-        tracker.publishStatusLine(line(1001, "a.c"));
-        tracker.publishStatusLine(StatusLines.none(1000));
+        tracker.publishStatusLine(line(1000, "a.c"), 1);
+        tracker.publishStatusLine(line(1001, "a.c"), 2);
+        tracker.publishStatusLine(StatusLines.none(1000), 3);
         assertEquals(List.of(line(1000, "a.c"), line(1001, "a.c"), StatusLines.none(1000)), seen);
         assertEquals(0, tracker.statusLine(1000).height());
         assertNull(tracker.statusLine(1002), "never published");

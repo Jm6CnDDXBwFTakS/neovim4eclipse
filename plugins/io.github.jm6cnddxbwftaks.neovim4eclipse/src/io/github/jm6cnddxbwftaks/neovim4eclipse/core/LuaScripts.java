@@ -47,7 +47,7 @@ final class LuaScripts {
     /**
      * Everything the UI needs after a key, in ONE round trip:
      * {@code {cursor_line, cursor_col, vstart_line, vstart_col, vend_line, vend_col, mode, recording,
-     * statusline, bufnr, block, full_mode, folds, winid}}. {@code bufnr} tells whether the cursor is still in the
+     * statusline, bufnr, block, full_mode, folds, winid, stamp}}. {@code bufnr} tells whether the cursor is still in the
      * buffer Eclipse shows (Neovim may just have jumped to another file), {@code winid} whether it is
      * still in the attached editor's window (docs/design/WINDOWS.md). {@code full_mode} is
      * {@code nvim_get_mode().mode} ({@code "n"}, {@code "no"}, {@code "c"}, ...), the mode the editor
@@ -66,8 +66,10 @@ final class LuaScripts {
      * {@code {1, 1, 2, 2, 1, 2}}. 5000 lines take about 3 ms (Neovim 0.12.6).
      *
      * <p>The first argument, {@code "1"}, adds the current window's status line, as
-     * {@link #STATUS_LINE}'s {@code line} answers it, for the row under the focused editor's text;
-     * with {@code "0"}, or before that module is loaded, it is {@code {false}} (no line). The second, {@code "1"} when folding is on ({@link #FOLDS}), adds {@code folds}:
+     * {@link #STATUS_LINE}'s {@code line} answers it, for the row under the focused editor's text,
+     * and {@code stamp}, that evaluation's number (which of two lines is newer; the module's
+     * comment, "Which line is newer"); with {@code "0"}, or before that module is loaded, the line
+     * is {@code {false}} (no line) and the stamp -1. The second, {@code "1"} when folding is on ({@link #FOLDS}), adds {@code folds}:
      * the indexes of the outermost closed folds, from the fold module's {@code poll} (the per-key
      * trigger); with {@code "0"} it is an empty list that nothing reads. Messages and the pending command ({@code showcmd}) are not read here: Neovim
      * sends them as UI events ({@code ext_messages}; see {@code StatusTracker}).
@@ -78,10 +80,10 @@ final class LuaScripts {
             local c = vim.api.nvim_win_get_cursor(0)
             local s = vim.fn.getpos('v')
             local e = vim.fn.getpos('.')
-            local statusline = { false }
+            local statusline, stamp = { false }, -1
             local lines = package.loaded['neovim4eclipse.statusline']
             if want_line and lines then
-              statusline = lines.line(vim.api.nvim_get_current_win())
+              statusline, stamp = lines.line(vim.api.nvim_get_current_win())
             end
             local mode = vim.fn.mode()
             local block = {}
@@ -98,7 +100,7 @@ final class LuaScripts {
             end
             return { c[1], c[2], s[2], s[3], e[2], e[3], mode, vim.fn.reg_recording(), statusline,
                      vim.api.nvim_get_current_buf(), block, vim.api.nvim_get_mode().mode, folds,
-                     vim.api.nvim_get_current_win() }
+                     vim.api.nvim_get_current_win(), stamp }
             """;
 
     /**

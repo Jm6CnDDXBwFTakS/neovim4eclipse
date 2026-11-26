@@ -49,6 +49,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- A status line a plug-in writes a moment after a key, such as lualine's mode, could stay at its old
+  text under the editor until the next key (`NORMAL` after `i`): the key's own reading of the line,
+  older, could be drawn after the new one. Neovim now numbers each line it evaluates, and an older
+  line never replaces a newer one, whichever arrives last.
 - The README no longer says that noice.nvim turns itself off inside Eclipse: it switches off only
   its command line and message views, and its notifications and completion menu keep working, as
   floating windows.

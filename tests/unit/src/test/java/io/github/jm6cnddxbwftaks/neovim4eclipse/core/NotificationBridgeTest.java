@@ -16,7 +16,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.JumpLabels;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NeovimHighlight;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.SearchMatch;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewText;
@@ -60,8 +60,9 @@ class NotificationBridgeTest {
             @Override public void onUi2Windows(List<Integer> wins, int cmd, int msg, boolean overlay) {
                 events.add("ui2:" + wins + (overlay ? " overlay" : "") + (cmd != wins.stream().findFirst().orElse(-1) ? " cmd " + cmd : ""));
             }
-            @Override public void onStatusLines(List<GridSnapshot> lines) {
-                events.add("statuslines:" + lines.stream().map(l -> l.window() + "=" + (l.height() == 0 ? "-" : l.row(0))).toList());
+            @Override public void onStatusLines(List<StatusLines.Stamped> lines) {
+                events.add("statuslines:" + lines.stream().map(s -> s.line().window() + "="
+                        + (s.line().height() == 0 ? "-" : s.line().row(0)) + "#" + s.stamp()).toList());
             }
             @Override public void onEcho(int bufnr, boolean starts) { events.add("echo@" + bufnr + ":" + starts); }
             @Override public void onBufferClosed(int bufnr) { events.add("closed:" + bufnr); }
@@ -329,9 +330,9 @@ class NotificationBridgeTest {
     @Test
     void statusLinesArePassedOnPerWindow() {
         List<Object> line = List.of(true, List.of("a", "b"), List.of(1, 1), List.of(List.of(-1, -1, false, false, false, false, false)));
-        notify("eclipse_status_lines", List.of(List.of(1000L, line), List.of(1001L, List.of(false))));
+        notify("eclipse_status_lines", List.of(List.of(1000L, line, 4L), List.of(1001L, List.of(false), 5L)));
         notify("eclipse_status_lines");
-        assertEquals(List.of("statuslines:[1000=ab, 1001=-]", "statuslines:[]"), events);
+        assertEquals(List.of("statuslines:[1000=ab#4, 1001=-#5]", "statuslines:[]"), events);
     }
 
     /** The two notifications around Eclipse's write of a buffer (LuaScripts.SET_DOCUMENT_LINES). */

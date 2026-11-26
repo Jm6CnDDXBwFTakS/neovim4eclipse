@@ -107,6 +107,24 @@ t.test('send_all notifies eclipse_status_lines with every window\'s line', funct
   t.eq(#vim.api.nvim_list_wins(), #all, 'one entry per window')
   t.eq(vim.api.nvim_get_current_win(), all[1][1])
   t.eq(true, all[1][2][1])
+  t.eq('number', type(all[1][3]), 'each line with its number')
+end)
+
+-- Which line is newer: each evaluation takes the next number, in Neovim's order, so Eclipse can
+-- drop a line older than one it drew already, whichever arrives last (core/StatusTracker).
+t.test('each evaluation takes the next number, and every entry sent carries its own', function()
+  local M = lines()
+  vim.o.laststatus = 2
+  vim.api.nvim_open_win(vim.api.nvim_create_buf(true, false), false, { split = 'right' })
+  local before = M.stamp
+  local _, stamp = M.line(vim.api.nvim_get_current_win())
+  t.eq(before + 1, M.stamp, 'one evaluation, one number')
+  t.eq(M.stamp, stamp, 'answered with the line')
+  local all = M.all()
+  t.eq(#all, M.stamp - before - 1, 'one number for each window\'s line')
+  for i, entry in ipairs(all) do
+    t.eq(before + 1 + i, entry[3], 'in the order Neovim evaluated them')
+  end
 end)
 
 -- An editor keeps its row while another has the keyboard (editor/StatusRows): when its window
@@ -119,7 +137,9 @@ t.test('a closed window\'s line is sent as none', function()
   vim.api.nvim_win_close(win, true)
   local sent = t.sent('eclipse_status_lines')
   t.eq(1, #sent, 'one notification, at once')
-  t.eq({ { win, { false } } }, sent[1][1])
+  local entry = sent[1][1][1]
+  t.eq({ win, { false } }, { entry[1], entry[2] })
+  t.eq(package.loaded['neovim4eclipse.statusline'].stamp, entry[3], 'with a number of its own, the newest')
 end)
 
 t.test('a closed float sends nothing: it has no line', function()

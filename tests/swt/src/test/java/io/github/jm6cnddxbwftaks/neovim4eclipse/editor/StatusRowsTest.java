@@ -114,6 +114,21 @@ class StatusRowsTest {
     }
 
     /** A row made for an editor shows its window's last line at once, before Neovim sends again. */
+    /**
+     * A row draws its window's newest line when it paints, not the line its task was made for:
+     * listeners run outside the tracker's lock (core/StatusTracker), so an older line's task can
+     * come after a newer line was kept. Example: the session keeps {@code INSERT}, then the
+     * listener hears the older {@code NORMAL}; the row shows {@code INSERT}.
+     */
+    @Test
+    void aRowDrawsItsWindowsNewestLineNotTheOneItHeard() {
+        FakeSource session = new FakeSource();
+        StatusLineRow row = rows.rowFor(first, new Object(), () -> 1000, session);
+        session.last.put(1000, line(1000, " INSERT  a.c"));
+        session.lineListeners.forEach(l -> l.accept(line(1000, " NORMAL  a.c")));
+        assertEquals("INSERT  a.c", shown(row));
+    }
+
     @Test
     void aNewRowShowsTheLastLineAtOnce() {
         FakeSource session = new FakeSource();

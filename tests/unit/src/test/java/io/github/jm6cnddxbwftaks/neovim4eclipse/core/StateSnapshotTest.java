@@ -160,6 +160,22 @@ class StateSnapshotTest {
         assertEquals("a ", line.row(0));
     }
 
+    /** The line's number, last: Neovim's, or NO_STAMP when missing, negative or not a number. */
+    @Test
+    void theStatusLinesNumberIsTheLastElement() {
+        List<Object> raw = new java.util.ArrayList<>(java.util.Collections.nCopies(StateSnapshot.STATUSLINE_STAMP + 1, (Object) ""));
+        raw.set(StateSnapshot.STATUSLINE_STAMP, 42L);
+        assertEquals(42L, StateSnapshot.statusLineStamp(raw));
+        raw.set(StateSnapshot.STATUSLINE_STAMP, -1);
+        assertEquals(io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines.NO_STAMP, StateSnapshot.statusLineStamp(raw),
+                "no line asked for");
+        raw.set(StateSnapshot.STATUSLINE_STAMP, "7");
+        assertEquals(io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines.NO_STAMP, StateSnapshot.statusLineStamp(raw));
+        assertEquals(io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines.NO_STAMP,
+                StateSnapshot.statusLineStamp(raw.subList(0, StateSnapshot.STATUSLINE_STAMP)), "an older, shorter answer");
+        assertEquals(io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines.NO_STAMP, StateSnapshot.statusLineStamp(null));
+    }
+
     @Test
     void theStatusLineHasNoRowsWhenMissingOrNotUnderstood() {
         assertEquals(0, StateSnapshot.statusLine(List.of(1, 0, 1, 1, 1, 1, "n", "")).height());

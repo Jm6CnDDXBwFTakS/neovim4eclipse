@@ -39,6 +39,8 @@ final class StateSnapshot {
     static final int FOLDS = 12;
     /** The current window's id, to tell the attached editor's window from another (docs/design/WINDOWS.md). */
     static final int WINID = 13;
+    /** The status line's number, which of two lines is newer; see {@link #statusLineStamp}. */
+    static final int STATUSLINE_STAMP = 14;
 
     private StateSnapshot() {
     }
@@ -51,6 +53,15 @@ final class StateSnapshot {
     static GridSnapshot statusLine(Object raw) {
         Object line = raw instanceof List<?> list && list.size() > STATUSLINE ? list.get(STATUSLINE) : null;
         return StatusLines.of(window(raw), line);
+    }
+
+    /**
+     * The number Neovim gave {@link #statusLine}'s evaluation ({@code LuaScripts.STATUS_LINE}, "Which
+     * line is newer"), or {@link StatusLines#NO_STAMP} if missing or malformed.
+     */
+    static long statusLineStamp(Object raw) {
+        Object stamp = raw instanceof List<?> list && list.size() > STATUSLINE_STAMP ? list.get(STATUSLINE_STAMP) : null;
+        return stamp instanceof Number n && n.longValue() >= 0 ? n.longValue() : StatusLines.NO_STAMP;
     }
 
     /**

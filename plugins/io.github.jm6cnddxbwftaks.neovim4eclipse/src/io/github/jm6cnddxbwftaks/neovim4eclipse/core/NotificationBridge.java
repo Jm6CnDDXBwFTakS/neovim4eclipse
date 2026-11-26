@@ -11,7 +11,6 @@ import java.util.logging.Logger;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Handle;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.rpc.Incoming;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines;
-import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridEvent;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageBuffer;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
@@ -130,7 +129,7 @@ final class NotificationBridge implements Incoming {
          * modified or written, the colorscheme or {@code 'laststatus'} changed. Each editor draws
          * its own window's ({@code editor/StatusLineRow}).
          */
-        void onStatusLines(List<GridSnapshot> lines);
+        void onStatusLines(List<StatusLines.Stamped> lines);
 
         /**
          * Neovim deleted document buffer {@code bufnr}, or is quitting its window, by itself

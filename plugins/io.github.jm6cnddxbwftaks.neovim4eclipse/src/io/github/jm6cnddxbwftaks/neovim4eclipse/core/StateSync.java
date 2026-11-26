@@ -359,7 +359,8 @@ final class StateSync {
                 }
             }
             status.updateRecording(StateSnapshot.recording(raw));
-            status.publishStatusLine(StateSnapshot.statusLine(raw));
+            // Its number says whether a line Neovim sent meanwhile is newer (StatusTracker).
+            status.publishStatusLine(StateSnapshot.statusLine(raw), StateSnapshot.statusLineStamp(raw));
         } catch (Exception e) {
             LOG.log(Level.FINE, "state snapshot failed", e);
         }

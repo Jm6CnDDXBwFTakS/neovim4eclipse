@@ -79,17 +79,23 @@ class StatusLinesTest {
         assertEquals(StatusLines.none(7), StatusLines.of(7, notShown));
     }
 
-    /** {@code eclipse_status_lines}' argument: {@code {{win, line}, ...}}; odd entries are left out. */
+    /**
+     * {@code eclipse_status_lines}' argument: {@code {{win, line, stamp}, ...}}; odd entries are left
+     * out, a missing or malformed stamp is {@code NO_STAMP}.
+     */
     @Test
-    void allReadsEveryWindowsLine() {
+    void allReadsEveryWindowsLineAndItsNumber() {
         List<Object> a = List.of(true, List.of("a"), List.of(1), List.of(WHITE_ON_GRAY_BOLD));
-        List<GridSnapshot> lines = StatusLines.all(List.of(List.of(1000, a), List.of(1001, List.of(false)),
-                "junk", List.of("1002", a), List.of(1003)));
-        assertEquals(2, lines.size());
-        assertEquals(1000, lines.get(0).window());
-        assertEquals("a", lines.get(0).row(0));
-        assertEquals(1001, lines.get(1).window());
-        assertEquals(0, lines.get(1).height());
+        List<StatusLines.Stamped> lines = StatusLines.all(List.of(List.of(1000, a, 7L), List.of(1001, List.of(false)),
+                "junk", List.of("1002", a), List.of(1003), List.of(1004, a, "x")));
+        assertEquals(3, lines.size());
+        assertEquals(1000, lines.get(0).line().window());
+        assertEquals("a", lines.get(0).line().row(0));
+        assertEquals(7L, lines.get(0).stamp());
+        assertEquals(1001, lines.get(1).line().window());
+        assertEquals(0, lines.get(1).line().height());
+        assertEquals(StatusLines.NO_STAMP, lines.get(1).stamp(), "none given");
+        assertEquals(StatusLines.NO_STAMP, lines.get(2).stamp(), "not a number");
         assertTrue(StatusLines.all(null).isEmpty());
         assertTrue(StatusLines.all("junk").isEmpty());
         assertFalse(StatusLines.all(List.of(List.of(5, a))).isEmpty());

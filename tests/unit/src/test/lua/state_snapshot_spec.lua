@@ -9,7 +9,7 @@
 local t = ...
 
 -- The answer's fields, by position (see the STATE_SNAPSHOT comment).
-local BUFNR, BLOCK, FULL_MODE, WINID = 10, 11, 12, 14
+local BUFNR, BLOCK, FULL_MODE, WINID, STAMP = 10, 11, 12, 14, 15
 
 local function snapshot_after(lines, keys)
   vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
@@ -42,11 +42,11 @@ t.test('outside blockwise visual mode there is no block', function()
   t.ok(snap[BLOCK] == nil or vim.tbl_isempty(snap[BLOCK]), vim.inspect(snap[BLOCK]))
 end)
 
-t.test('the answer ends with the current buffer and window, to tell the attached editor from another', function()
+t.test('the answer holds the current buffer and window, to tell the attached editor from another', function()
   local snap = snapshot_after({ 'abc' }, 'l')
   t.eq(vim.api.nvim_get_current_buf(), snap[BUFNR])
   t.eq(vim.api.nvim_get_current_win(), snap[WINID], 'docs/design/WINDOWS.md')
-  t.eq(WINID, #snap, 'the last field')
+  t.eq(STAMP, #snap, 'the status line\'s number is the last field')
 end)
 
 -- The first argument asks for the current window's status line (LuaScripts.STATUS_LINE, tested in
@@ -60,4 +60,16 @@ t.test('the current window\'s status line is added with "1", not with "0"', func
   t.eq(true, line[1], 'shown')
   t.eq(vim.api.nvim_win_get_width(0), #line[2], 'one cell per column of the window')
   t.eq({ false }, t.run('STATE_SNAPSHOT', '0')[STATUSLINE], 'not asked for: not evaluated')
+end)
+
+-- The line's number (status_line_spec.lua, "Which line is newer"): the evaluation's own, -1 when
+-- no line was asked for.
+t.test('the status line comes with its evaluation\'s number, -1 without a line', function()
+  t.run('STATUS_LINE')
+  local M = package.loaded['neovim4eclipse.statusline']
+  local snap = t.run('STATE_SNAPSHOT', '1')
+  t.eq(M.stamp, snap[STAMP], 'the number of the evaluation it holds')
+  local later = t.run('STATE_SNAPSHOT', '1')
+  t.ok(later[STAMP] > snap[STAMP], 'a later snapshot\'s line has a higher number')
+  t.eq(-1, t.run('STATE_SNAPSHOT', '0')[STAMP], 'no line, no number')
 end)

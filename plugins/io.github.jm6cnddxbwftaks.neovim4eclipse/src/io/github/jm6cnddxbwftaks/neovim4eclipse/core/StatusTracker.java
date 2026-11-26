@@ -12,6 +12,7 @@ import java.util.logging.Logger;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusItem;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.StatusLines;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
 
 /**
@@ -25,7 +26,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
  *   <li>A window's status line ({@code LuaScripts.STATUS_LINE}), which the editor of that window
  *       draws under its text ({@code editor/StatusLineRow}): the current window's with each key's
  *       state snapshot, every window's when Neovim sends them ({@code eclipse_status_lines});
- *       {@link #publishStatusLine}.</li>
+ *       {@link #publishStatusLine}, which passes on only a newer line than the last.</li>
  *   <li>The recording register comes with the same snapshot ({@link #updateRecording}).</li>
  *   <li>A page editor's content ({@code :messages}, {@code :checkhealth}, {@code :help}) comes from
  *       the bridge, on the RPC reader thread ({@link #onViewContent}).</li>
@@ -42,6 +43,13 @@ final class StatusTracker {
     private volatile Set<StatusItem> items = StatusItem.defaults();
     /** Each window's line last passed to the listeners, by window id; guarded by {@code this}. */
     private final Map<Integer, GridSnapshot> lastLines = new HashMap<>();
+    /**
+     * Each window's number of the line passed on last ({@link #publishStatusLine}); guarded by
+     * {@code this}. Kept after a window closes, as {@link #lastLines} is: a line evaluated before
+     * the close can still arrive after it and must not count as new, and Neovim never reuses a
+     * window id, so the map holds one number per window this Neovim had.
+     */
+    private final Map<Integer, Long> lastStamps = new HashMap<>();
     /** Register of the macro being recorded ({@code qa} ... {@code q}), or "" if none. */
     private volatile String recordingRegister = "";
     private final ListenerList<GridSnapshot> statusLineListeners = new ListenerList<>("status line", Level.FINE);
@@ -57,17 +65,35 @@ final class StatusTracker {
     }
 
     /**
-     * A window's status line as Neovim evaluated it ({@code util/StatusLines}), passed on when it
-     * differs from the one last passed for that window. Example: a key that moves the cursor
-     * changes the ruler part of the current window's line, and only that line is passed on.
+     * A window's status line as Neovim evaluated it ({@code util/StatusLines}), from a key's state
+     * snapshot or sent by Neovim itself ({@code eclipse_status_lines}), passed on when it is newer
+     * than the window's line passed on last and differs from it.
+     *
+     * <p>Newer by the number Neovim gave the evaluation ({@code stamp}; {@code LuaScripts.STATUS_LINE},
+     * "Which line is newer"), not by arrival: the snapshot's answer and a notification come on two
+     * threads, and either can be handled last. Example: after {@code i} the snapshot reads
+     * lualine's {@code NORMAL} (number 7), and lualine's timer sets {@code INSERT} a moment later,
+     * sent as number 8; if 8 is passed on first, 7 then comes and is dropped. A line without a
+     * number ({@link StatusLines#NO_STAMP}) is compared by its text alone.
+     *
+     * <p>Example of the text check: a key that moves the cursor changes the ruler part of the current
+     * window's line, and only that line is passed on.
      */
-    void publishStatusLine(GridSnapshot line) {
+    void publishStatusLine(GridSnapshot line, long stamp) {
         synchronized (this) {
+            if (stamp != StatusLines.NO_STAMP) {
+                if (stamp <= lastStamps.getOrDefault(line.window(), StatusLines.NO_STAMP)) {
+                    return;
+                }
+                lastStamps.put(line.window(), stamp);
+            }
             if (line.equals(lastLines.get(line.window()))) {
                 return;
             }
             lastLines.put(line.window(), line);
         }
+        // Outside the lock: a newer line can be passed on in between, so a listener that draws later
+        // reads the window's line then ({@link #statusLine}; editor/StatusRows), not this one.
         statusLineListeners.fire(line);
     }
 

@@ -30,15 +30,26 @@
 --
 -- When it is sent
 -- The focused editor's line comes with each key's state snapshot (LuaScripts.STATE_SNAPSHOT). Every
--- window's line comes as `eclipse_status_lines` (`{{win, line}, ...}`) when what a background line
+-- window's line comes as `eclipse_status_lines` (`{{win, line, stamp}, ...}`) when what a background line
 -- shows may have changed: the cursor entered another window (the left one turns `StatusLineNC`), a
 -- buffer's modified flag, name or file changed, the colorscheme, `'laststatus'` or `'statusline'`,
 -- a window's size. Several events in one moment send once (`vim.schedule`); so does the current
 -- directory, a filetype or the diagnostics changing, and an editor's width (`set_width`).
 --
+-- Which line is newer
+-- Every evaluation, and every line of a closed window, takes the next number of one counter
+-- (`M.stamp`), and the number goes with the line: in the state snapshot beside it, in each
+-- `eclipse_status_lines` entry as `{win, line, stamp}`. Eclipse draws a window's line only if its
+-- number is above the last it drew for that window (core/StatusTracker). Why: the snapshot's answer
+-- and a notification travel apart, and Eclipse handles them on two threads, so either can arrive
+-- last. Neovim evaluates one line at a time, so the number orders them as Neovim made them.
+-- Example: lualine sets 'statusline' to INSERT 16 ms after `i`, the notice carrying it is number
+-- 8, the snapshot read just before carries NORMAL as number 7: drawn last or not, 7 never replaces 8.
+--
 -- Sent as LuaScripts.STATUS_LINE (core/LuaModules runs this file as a chunk of its own).
 
 local M = {}
+M.stamp = 0
 local DEFAULT = '%<%f %h%m%r%=%-14.(%l,%c%V%) %P'
 -- Each editor's width in columns, sent by its row (set_width): every tabpage shares one
 -- screen, sized to the focused editor, so a background editor's window is that wide,
@@ -75,9 +86,13 @@ local function attr(group, fill)
            h.strikethrough == true }
 end
 
+-- Answers the line and its evaluation's number (see "Which line is newer"), taken as it starts:
+-- a 'statusline' expression that runs the event loop could evaluate another line inside this one.
 function M.line(win)
+  M.stamp = M.stamp + 1
+  local stamp = M.stamp
   if not vim.api.nvim_win_is_valid(win) or not shown(win) then
-    return { false }
+    return { false }, stamp
   end
   local current = win == vim.api.nvim_get_current_win()
   local width = M.widths[win] or vim.api.nvim_win_get_width(win)
@@ -135,14 +150,15 @@ function M.line(win)
     cells[#cells + 1] = ' '
     hl[#hl + 1] = id(group)
   end
-  return { true, cells, hl, attrs }
+  return { true, cells, hl, attrs }, stamp
 end
 
 function M.all()
   local lines = {}
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     if vim.api.nvim_win_get_config(win).relative == '' then
-      lines[#lines + 1] = { win, M.line(win) }
+      local line, stamp = M.line(win)
+      lines[#lines + 1] = { win, line, stamp }
     end
   end
   return lines
@@ -170,7 +186,8 @@ vim.api.nvim_create_autocmd('WinClosed', { group = group, callback = function(ev
   if not ok or config.relative ~= '' then return end -- a float (ui2's, a picker) has no line
   -- An editor keeps its row while another has the keyboard (editor/StatusRows): a
   -- closed window's line is a line of no rows, which takes its row away.
-  vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_status_lines', { { win, { false } } })
+  M.stamp = M.stamp + 1
+  vim.rpcnotify(vim.g.neovim4eclipse_channel or 0, 'eclipse_status_lines', { { win, { false }, M.stamp } })
 end })
 vim.api.nvim_create_autocmd('OptionSet', { group = group,
   pattern = { 'laststatus', 'statusline' }, callback = M.send_all })
