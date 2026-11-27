@@ -50,7 +50,7 @@ defaults:
 jobs:
   version:
     name: Tag on main, version from the tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read   # for the checkout
       actions: read    # to list the Build workflow's runs
@@ -161,7 +161,7 @@ jobs:
   sign:
     name: Sign with PGP
     needs: [version, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # The environment holds the secrets MAVEN_GPG_KEY and MAVEN_GPG_PASSPHRASE. Its rule
     # ("Deployment branches and tags": only tags v*) is what keeps them away from any other run,
     # such as a workflow edited on a branch.
@@ -221,7 +221,7 @@ jobs:
   publish:
     name: Publish the release
     needs: [version, sign]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write   # needed to create the release
     steps:

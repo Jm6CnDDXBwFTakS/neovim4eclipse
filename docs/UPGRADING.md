@@ -35,7 +35,8 @@ The safe loop for any upgrade:
 | Maven itself, and the Maven wrapper | `distributionUrl` and `distributionSha256Sum` (Maven), `wrapperVersion` (the scripts `mvnw` and `mvnw.cmd`) in `.mvn/wrapper/maven-wrapper.properties`; the line Maven stays on is `maven.line` in `releng/tools/maven/settings.properties` | none; `java releng/tools/maven/MavenUpgrade.java` moves both |
 | Neovim (what *Get Neovim* installs, the oldest supported, and the one CI tests) | `version=` in the plug-in's `util/neovim-downloads.properties` (written by `releng/UpdateNeovimDownloads.java`; *Get Neovim* and CI both install from it; `NeovimVersion.MINIMUM` reads it) | the copies `releng/version-copies.txt` lists, section `[neovim]` (README, CONTRIBUTING, LEARNING, PACKAGING, `feature.xml`, the update site's `category.xml`); `java releng/tools/neovim/NeovimUpgrade.java` rewrites them |
 | GitHub Actions | `uses: owner/repo@<commit SHA> # vX.Y.Z` lines in `.github/workflows/` | not checked by `VersionConsistencyTest`; `DependenciesTest` fails on a line that is not pinned this way |
-| CI operating systems | `runs-on: ubuntu-latest` in the workflows; the `windows` and `macos` jobs in `build.yml` add `windows-latest` and `macos-latest` | not checked |
+| CI's Ubuntu release (the Linux jobs' runner) | `<ci.ubuntu>` in the root `pom.xml` | every `ubuntu-<release>` label in `.github/workflows/` (a `runs-on` line, a list, a matrix), section `[ci.ubuntu]` of `releng/version-copies.txt`; `VersionConsistencyTest` also refuses any other Ubuntu label there, `ubuntu-latest` included. `java releng/tools/runner/UbuntuUpgrade.java <release>` moves them |
+| CI's Windows and macOS | `windows-latest` and `macos-latest` in the `windows` and `macos` jobs of `build.yml` | not pinned, not checked |
 
 The libraries, the Maven plug-ins (Tycho among them) and the GitHub Actions move with
 `java releng/tools/dependencies/Dependencies.java` (*Libraries, plug-ins and actions* below),
@@ -541,5 +542,25 @@ compares all six archives with the file before anything is published.
   key. `Dependencies.java` moves them, SHA and comment together (*Libraries, plug-ins and actions*
   above); read their release notes (for example `upload-artifact`'s `archive: false` needs v7). To
   pin a new action by hand: `gh api repos/actions/checkout/commits/v7.0.1 --jq .sha`.
-- `ubuntu-latest` moves to a new Ubuntu now and then (to Ubuntu 26 from October 19, 2026). If a run
-  breaks after such a move, pin `runs-on: ubuntu-24.04` until it is fixed.
+- **The Ubuntu release** the Linux jobs run on is pinned: `<ci.ubuntu>` in the root `pom.xml`,
+  copied into every `runs-on` (a workflow cannot read a Maven property). Not `ubuntu-latest`, which
+  GitHub moves to a new Ubuntu on a day of its own (to 26.04 between October 19 and November 19,
+  2026): a new Ubuntu brings other fonts, GTK and Pango, which the UI tests' measured text depends
+  on, so the move is a commit of its own, made and checked when it suits.
+
+  ```sh
+  java releng/tools/runner/UbuntuUpgrade.java          # the release in use, and the ones GitHub offers
+  java releng/tools/runner/UbuntuUpgrade.java 28.04    # move CI to Ubuntu 28.04, one commit after y/N
+  ```
+
+  It reads GitHub's list of runner images
+  ([actions/runner-images](https://github.com/actions/runner-images#available-images)) and moves
+  only to an x64 release listed there that is no longer a beta. A lower release is allowed: going
+  back is how a move that broke the Build is undone. It pushes nothing and starts no run. Then, by
+  hand: push the branch, run the Build there (ask first), and compare its step *Runner's text
+  stack* with the last Build on the old release; a font or a GTK, Pango or cairo version that
+  changed is the first suspect for a UI test that fails only on the new runner. Then move the
+  Ubuntu VM for local runs (CONTRIBUTING.md, *Like CI, on Ubuntu*).
+- **Windows and macOS** stay on `windows-latest` and `macos-latest`: their jobs run on demand (Run
+  workflow), not on every push, and no test there depends on the runner's fonts the way the Linux
+  UI tests do.

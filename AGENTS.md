@@ -69,6 +69,7 @@ Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (design), [docs/LEARNIN
 java releng/tools/ci/LikeCi.java                  # BEFORE A PUSH: the tests as the Build workflow runs them (pinned Neovim, xvfb-run)
 java releng/tools/ci/LikeCi.java --all            # the same with every test group (-Pall)
 java releng/tools/ci/LikeCi.java --all --clean    # the same from an empty build (not while a runtime Eclipse is open)
+java releng/tools/ci/LikeCi.java --text-stack     # this machine's fonts and text libraries, as the Build prints the runner's (Debian, Ubuntu)
 ./mvnw verify -Pall -Dnvim.path=/usr/bin/nvim     # every test of every group (integration, heavyJava, timeoutReliant; not screenshots); slow
 ./mvnw verify -Pui -Dnvim.path=/usr/bin/nvim      # as CI: plug-in, unit, text, SWT and UI tests, feature, ZIP (not integration: add the -Pintegration line)
 ./mvnw verify                                     # the same without the UI tests (no Eclipse window)
@@ -83,6 +84,7 @@ java releng/tools/checks/Proxy.java               # an HTTP proxy on 127.0.0.1:3
 java releng/tools/neovim/NeovimUpgrade.java 0.13.0  # move to a new Neovim release (data file, copies, checks, tests; docs/UPGRADING.md)
 java releng/tools/eclipse/EclipseUpgrade.java newest  # test with the newest Eclipse release; oldest <release> raises the floor; smoke installs into both (docs/UPGRADING.md)
 java releng/tools/maven/MavenUpgrade.java        # move to the newest Maven 3.9.x and Maven wrapper (checked downloads, tests, one commit each; docs/UPGRADING.md)
+java releng/tools/runner/UbuntuUpgrade.java       # the Ubuntu release CI's Linux jobs run on (<ci.ubuntu>), and the ones GitHub offers; <release> moves it (one commit, no push; docs/UPGRADING.md)
 java releng/tools/javarelease/JavaUpgrade.java 25 --java <JDK 25 home>  # raise the Java release and its copies (LTS only; smoke installs and every test on that JDK, one commit; docs/UPGRADING.md)
 java releng/tools/plugins/TestPlugins.java fetch  # the pinned Neovim plug-ins the tests and the gallery run, into .tool-cache/test-plugins (update <name> <commit>, then accept <name> <commit> <sha256>, moves a pin to a commit you chose; docs/UPGRADING.md)
 java releng/tools/dependencies/Dependencies.java  # move libraries, Maven plug-ins and GitHub Actions to their newest releases, by dependabot.yml's rules (docs/UPGRADING.md)

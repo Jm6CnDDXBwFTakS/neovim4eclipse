@@ -15,6 +15,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -356,6 +357,56 @@ class VersionConsistencyTest {
             }
         }
         assertTrue(wrong.isEmpty(), "copies of root POM properties differ: " + wrong);
+    }
+
+    /**
+     * Every Linux job runs on the Ubuntu release {@code <ci.ubuntu>} pins, and every workflow that
+     * has one is listed in {@code [ci.ubuntu]}, so the Ubuntu tool moves it. A copy check alone would
+     * miss a new job written with {@code runs-on: ubuntu-latest}, which the pattern does not match:
+     * that job would follow GitHub's label instead of the pin. So this allows a known set instead of
+     * reading every way YAML can name a runner (quoted, a list, a matrix, {@code labels:}): any
+     * {@code ubuntu-…} label anywhere in a workflow must be {@code ubuntu-<ci.ubuntu>}. Comments say
+     * "Ubuntu", not a label. A runner named by an expression ({@code runs-on: ${{ vars.LINUX }}}, a
+     * {@code labels:} line under {@code runs-on}, {@code ubuntu-${{ … }}}) is refused too: what it
+     * becomes is not in the file, so no check could prove it is the pin. Not read: {@code group:},
+     * which {@code concurrency} uses as well, and a block scalar spread over lines. Example: a job added to {@code update-site.yml} with
+     * {@code runs-on: [ubuntu-latest]} fails here, naming the file and the label.
+     */
+    @Test
+    void everyUbuntuRunnerIsThePinnedRelease() throws Exception {
+        String pinned = property("ci.ubuntu");
+        assertNotNull(pinned, "<ci.ubuntu> missing from the root pom.xml");
+        Set<String> listed = new HashSet<>();
+        for (VersionCopies.Copy copy : VersionCopies.parse(read(VersionCopies.FILE)).getOrDefault("ci.ubuntu", List.of())) {
+            listed.add(copy.file());
+        }
+        File workflows = new File(repoFile("pom.xml").getParentFile(), ".github/workflows");
+        File[] files = workflows.listFiles((d, n) -> n.endsWith(".yml") || n.endsWith(".yaml"));
+        assertNotNull(files, "no .github/workflows folder");
+        // Any case: GitHub matches runner labels without it. Ends on a letter or digit, so a sentence's
+        // full stop after a label is not part of it.
+        Pattern label = Pattern.compile("\\bubuntu-[A-Za-z0-9.-]*[A-Za-z0-9]", Pattern.CASE_INSENSITIVE);
+        List<String> wrong = new ArrayList<>();
+        for (File f : files) {
+            String file = ".github/workflows/" + f.getName();
+            String text = read(file);
+            Matcher expression = Pattern.compile("(?im)^\\s*(?:-\\s*)?(?:runs-on|labels):.*\\$\\{\\{|ubuntu-\\$\\{\\{").matcher(text);
+            while (expression.find()) {
+                wrong.add(file + ": a runner named by an expression (" + expression.group().strip() + "), which no check can read");
+            }
+            Matcher m = label.matcher(text);
+            boolean any = false;
+            while (m.find()) {
+                any = true;
+                if (!m.group().equals("ubuntu-" + pinned)) {
+                    wrong.add(file + ": " + m.group() + ", not ubuntu-" + pinned);
+                }
+            }
+            if (any && !listed.contains(file)) {
+                wrong.add(file + " runs on Ubuntu but is not listed in " + VersionCopies.FILE + " [ci.ubuntu]");
+            }
+        }
+        assertTrue(wrong.isEmpty(), "Linux jobs off the pinned Ubuntu: " + wrong);
     }
 
     @Test

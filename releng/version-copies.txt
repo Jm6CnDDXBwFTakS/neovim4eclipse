@@ -74,6 +74,17 @@ docs/PACKAGING.md  newest Eclipse release \((4\.\d+)\)
 [tycho.version]
 releng/sign/pom.xml  (?s)<artifactId>tycho-gpg-plugin</artifactId>\s*(?:<!--(?:(?!-->).)*-->\s*)*<version>([^<]+)</version>
 
+# The Ubuntu release CI's Linux jobs run on, <ci.ubuntu> in the root pom.xml: GitHub's runner
+# label in every workflow (a runs-on line cannot read a Maven property), wherever it stands: a
+# runs-on line, a list or a matrix, the same set VersionConsistencyTest reads, which also refuses
+# any other Ubuntu label there (ubuntu-latest included, any case), so a new job cannot escape the
+# pin. java releng/tools/runner/UbuntuUpgrade.java rewrites them.
+[ci.ubuntu]
+.github/workflows/build.yml  (?i)\bubuntu-(\d{2}\.\d{2})(?![A-Za-z0-9.-]*[A-Za-z0-9])
+.github/workflows/release.yml  (?i)\bubuntu-(\d{2}\.\d{2})(?![A-Za-z0-9.-]*[A-Za-z0-9])
+.github/workflows/rehearse-release.yml  (?i)\bubuntu-(\d{2}\.\d{2})(?![A-Za-z0-9.-]*[A-Za-z0-9])
+.github/workflows/update-site.yml  (?i)\bubuntu-(\d{2}\.\d{2})(?![A-Za-z0-9.-]*[A-Za-z0-9])
+
 # The Java release the plug-in needs, <java.release> in the root pom.xml, where Maven cannot fill it
 # in: the execution environment OSGi checks at install, the file GitHub's setup-java reads, and
 # the docs that state it. java releng/tools/javarelease/JavaUpgrade.java rewrites them. Notes that

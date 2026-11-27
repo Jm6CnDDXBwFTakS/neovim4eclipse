@@ -37,10 +37,23 @@ IDE is open, since `clean` deletes the `lib/*.jar` it uses.
 `LikeCiTest` keeps its commands equal to the workflow's. On Windows run it, as every
 tool, from Git Bash ("Developer tools: where they run").
 
+<a id="like-ci-on-ubuntu"></a>
+**Like CI, on Ubuntu.** The Linux jobs run on GitHub's Ubuntu runner of the release `<ci.ubuntu>`
+pins in the root `pom.xml`. The UI tests measure drawn text, so a test can pass on one machine and
+fail on the runner for a font alone. The closest copy of the runner is an Ubuntu **Server** VM of
+that release (Server, not Desktop, which installs many fonts the runner lacks), with `xvfb` and the
+fonts the runner has, running plain `LikeCi`. To compare a machine with the runner,
+`java releng/tools/ci/LikeCi.java --text-stack` prints the fonts and text libraries the Build's
+step *Runner's text stack* prints (Debian and Ubuntu only); put the two side by side. What stays
+different: the processor (the runner's is x86_64; the VM's may not be), the runner's speed, and
+package updates between GitHub's weekly image rebuild and the VM's own. When CI moves to another
+Ubuntu (docs/UPGRADING.md, *GitHub Actions and the runner*), the VM moves too.
+
 ```bash
 java releng/tools/ci/LikeCi.java                # what CI runs, on this machine (before a push)
 java releng/tools/ci/LikeCi.java --all          # every test group, as for a release
 java releng/tools/ci/LikeCi.java --all --clean  # the same from an empty build
+java releng/tools/ci/LikeCi.java --text-stack   # this machine's fonts and text libraries, as the Build prints the runner's
 ./mvnw verify                                   # plug-in, unit/text/SWT tests, update-site ZIP
 ./mvnw verify -Pui -Dnvim.path=...              # ... and the UI tests (opens an Eclipse window)
 ./mvnw verify -PuiHeavyJava -Dnvim.path=...     # only the UI tests that need Java tooling (slow)
@@ -574,7 +587,7 @@ then open `plugins/.../META-INF/MANIFEST.MF` and click *Launch an Eclipse applic
 | `releng/...updatesite` | the p2 update site and its ZIP |
 | `releng/eclipse-formatter.xml` | the Java formatter profile |
 | `releng/release-notes.sh` | prints a version's `CHANGELOG.md` section, the release notes |
-| `releng/tools/` | developer tools run with `java`: `release/Release.java` (a release, step by step), `neovim/NeovimUpgrade.java` (a move to a new Neovim release), `maven/MavenUpgrade.java` (a move to a new Maven or Maven wrapper), `javarelease/JavaUpgrade.java` (a raise of the Java release the plug-in needs), `dependencies/Dependencies.java` (a move of the libraries, Maven plug-ins and GitHub Actions to their newest releases), `eclipse/EclipseUpgrade.java` (a move of the oldest supported or the newest tested Eclipse; its `smoke` installs this checkout into both), `ci/LikeCi.java` (the tests as CI runs them), `checks/ManualChecks.java` (the manual checks), `checks/InstallCheck.java` (a release installed from the update site), `marketplace/Marketplace.java` (the Marketplace listing's page, pictures and logo PNGs); `common/` holds what they share. All but LikeCi need a JDK of release 22 or newer |
+| `releng/tools/` | developer tools run with `java`: `release/Release.java` (a release, step by step), `neovim/NeovimUpgrade.java` (a move to a new Neovim release), `maven/MavenUpgrade.java` (a move to a new Maven or Maven wrapper), `javarelease/JavaUpgrade.java` (a raise of the Java release the plug-in needs), `dependencies/Dependencies.java` (a move of the libraries, Maven plug-ins and GitHub Actions to their newest releases), `eclipse/EclipseUpgrade.java` (a move of the oldest supported or the newest tested Eclipse; its `smoke` installs this checkout into both), `runner/UbuntuUpgrade.java` (a move of the Ubuntu release CI's Linux jobs run on), `ci/LikeCi.java` (the tests as CI runs them), `checks/ManualChecks.java` (the manual checks), `checks/InstallCheck.java` (a release installed from the update site), `marketplace/Marketplace.java` (the Marketplace listing's page, pictures and logo PNGs); `common/` holds what they share. All but LikeCi need a JDK of release 22 or newer |
 | `releng/marketplace/` | the Eclipse Marketplace listing's fields and description, facts filled in by `tools/marketplace/Marketplace.java` |
 | `releng/update-site.sh` | builds the permanent update site (a composite p2 repository) from the release ZIPs |
 | `releng/smoke-install.sh` | installs the plug-in from an update site into an Eclipse with p2's director, and checks the version (CI's smoke job; `EclipseUpgrade.java smoke` does the same in Java, on every platform) |

@@ -25,7 +25,15 @@ import java.util.stream.Stream;
  *   java releng/tools/ci/LikeCi.java          what CI runs: -Pui, then the integration tests
  *   java releng/tools/ci/LikeCi.java --all    every test group (-Pall), what a release needs
  *   java releng/tools/ci/LikeCi.java --clean  first deletes the build output; goes with --all too
+ *   java releng/tools/ci/LikeCi.java --text-stack   only prints this machine's fonts and text libraries
  * </pre>
+ *
+ * <p>{@code --text-stack} runs {@link #TEXT_STACK}, the command the Linux build job runs in its
+ * step "Runner's text stack", and nothing else: the fonts {@code monospace} and
+ * {@code sans-serif} resolve to, every font family installed, and the GTK, Pango, fontconfig,
+ * FreeType and cairo versions. The UI tests measure drawn text, so a test that passes here and fails
+ * on GitHub (or the other way round) often differs in exactly these; put the two prints side by
+ * side. Not printed in a normal run: on a desktop the family list runs to hundreds of lines.
  *
  * <p>Without {@code --clean} a run builds on the {@code target/} folders already there, which is
  * faster but can test stale code: javac does not recompile a class whose source did not change,
@@ -83,6 +91,19 @@ public final class LikeCi {
 
     /** The Linux build job's virtual screen ({@code xvfb-run -s}), given rather than left to the script's default. */
     public static final String SCREEN = "-screen 0 1280x1024x24";
+
+    /**
+     * The Linux build job's step "Runner's text stack", word for word ({@code --text-stack}): which
+     * font {@code monospace} and {@code sans-serif} become, every font family, and the versions of
+     * the libraries that draw text. The whole list in braces with {@code || true}: a print for
+     * comparing must never fail the Build, whatever a new image lacks ({@code fc-match} missing, a
+     * package another Ubuntu names differently), and GitHub runs a step with {@code bash -e -o
+     * pipefail}, where one failing command would end it; {@code -e} does not act inside a list
+     * whose status {@code ||} tests. Debian and Ubuntu only ({@code dpkg-query}).
+     */
+    public static final String TEXT_STACK = "{ fc-match monospace; fc-match sans-serif; fc-list : family | sort -u;"
+            + " dpkg-query -W -f='${Package} ${Version}\\n' 'libgtk-3-0*' 'libpango-1.0-0*' 'libfontconfig1*'"
+            + " 'libfreetype6*' 'libcairo2*'; } || true";
 
     /** The build job's lint of the shell scripts (the glob as the shell expands it: every {@code releng/*.sh}). */
     public static final String SHELLCHECK = "shellcheck releng/*.sh mvnw";
@@ -149,9 +170,12 @@ public final class LikeCi {
 
     public static void main(String[] args) throws Exception {
         requireSupportedShell("LikeCi");
+        if (args.length == 1 && args[0].equals("--text-stack")) {
+            System.exit(printTextStack());
+        }
         Optional<Options> parsed = Options.parse(args);
         if (parsed.isEmpty()) {
-            System.err.println("Usage: java releng/tools/ci/LikeCi.java [--all] [--clean]");
+            System.err.println("Usage: java releng/tools/ci/LikeCi.java [--all] [--clean] | --text-stack");
             System.exit(2);
         }
         Options options = parsed.get();
@@ -181,6 +205,20 @@ public final class LikeCi {
             fail("failed: " + String.join("; ", failed));
         }
         System.out.println("LikeCi: everything passed, as CI would run it.");
+    }
+
+    /**
+     * Runs {@link #TEXT_STACK} with {@code bash}, as the build job's step does (its workflow's default
+     * shell); its exit status. Only where {@code fc-match} and {@code dpkg-query} are (Debian,
+     * Ubuntu): elsewhere the list would compare with nothing on the runner.
+     */
+    private static int printTextStack() throws Exception {
+        if (!onPath("fc-match") || !onPath("dpkg-query")) {
+            System.err.println("LikeCi: --text-stack needs fc-match and dpkg-query (Debian or Ubuntu, as CI's runner)");
+            return 2;
+        }
+        System.out.println("LikeCi: " + TEXT_STACK);
+        return new ProcessBuilder("bash", "-c", TEXT_STACK).inheritIO().start().waitFor();
     }
 
     /**

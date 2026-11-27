@@ -53,7 +53,7 @@ defaults:
 jobs:
   version:
     name: Version, changelog, Neovim archives
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read   # for the checkout
     outputs:
@@ -105,7 +105,7 @@ jobs:
   sign:
     name: Sign with a throwaway key
     needs: [version, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read   # for the checkout
     env:
@@ -161,7 +161,7 @@ jobs:
   site:
     name: Build both update sites
     needs: [version, sign]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read   # for the checkout and to download the releases
     steps:
@@ -206,7 +206,7 @@ jobs:
   smoke:
     name: Install the rehearsed release into Eclipse ${{ matrix.eclipse }}
     needs: [version, site]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read   # for the checkout
     strategy:

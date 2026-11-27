@@ -12,6 +12,14 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Changed
+
+- For contributors: CI's Linux jobs run on a pinned Ubuntu, `<ci.ubuntu>` in the root `pom.xml`,
+  instead of `ubuntu-latest`, so a new Ubuntu comes as a commit of its own:
+  `releng/tools/runner/UbuntuUpgrade.java` shows the releases GitHub offers and moves the pin. The
+  Build prints the runner's fonts and text libraries, and `LikeCi.java --text-stack` prints the same
+  on a Debian or Ubuntu machine, to compare.
+
 ## [0.3.3] - 2026-11-27
 
 ### Added

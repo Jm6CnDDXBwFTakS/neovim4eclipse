@@ -184,7 +184,7 @@ public final class EclipseFiles {
         };
     }
 
-    /** The download CI's smoke job installs into: Linux, x86_64 (GitHub's ubuntu-latest). */
+    /** The download CI's smoke job installs into: Linux, x86_64 (GitHub's Ubuntu runner, <ci.ubuntu>). */
     static String ciPlatformFile(EclipseRelease release) {
         return platformFile(release, "linux", "x86_64");
     }

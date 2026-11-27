@@ -216,7 +216,7 @@ class ShellDisplayTest {
         assertEquals(List.of("checks/InstallCheckTool.java", "checks/ManualChecksTool.java", "checks/Proxy.java", "ci/LikeCi.java",
                 "dependencies/DependenciesTool.java", "eclipse/EclipseUpgradeTool.java", "javarelease/JavaUpgradeTool.java",
                 "marketplace/MarketplaceTool.java", "maven/MavenUpgradeTool.java", "neovim/ArchiveCheck.java",
-                "neovim/NeovimUpgradeTool.java", "plugins/TestPluginsTool.java", "release/ReleaseTool.java"), checked,
+                "neovim/NeovimUpgradeTool.java", "plugins/TestPluginsTool.java", "release/ReleaseTool.java", "runner/UbuntuUpgradeTool.java"), checked,
                 "the programs found; a new one joins this list");
     }
 

@@ -41,6 +41,7 @@ class LikeCiTest {
         assertTrue(build.contains("./mvnw " + LikeCi.INTEGRATION), "build.yml no longer runs: ./mvnw " + LikeCi.INTEGRATION);
         assertTrue(build.contains("xvfb-run -a -s \"" + LikeCi.SCREEN + "\" ./mvnw " + LikeCi.UI),
                 "the Linux build job no longer runs under xvfb-run -a -s \"" + LikeCi.SCREEN + "\"");
+        assertTrue(build.contains(LikeCi.TEXT_STACK), "build.yml's step \"Runner's text stack\" no longer runs: " + LikeCi.TEXT_STACK);
     }
 
     @Test
