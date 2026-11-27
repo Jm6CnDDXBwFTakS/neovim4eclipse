@@ -80,9 +80,9 @@ class GridEventTest {
         List<?> redraw = List.of(List.of("win_float_pos",
                 List.of(5L, "win1002", "NW", 1L, 18.0, 0.0, false, 1000L, 1L, 18L, 0L),
                 List.of(6L, "win1003", "SW", 2L, 4.0, 4.0, true, 50L, 1L, 0L, 4L)));
-        assertEquals(List.of(new GridEvent.WinPos(5, 1002, true, 18, 0, 0, 0, 1000, false),
-                new GridEvent.WinPos(6, 1003, true, 0, 4, 0, 0, 50, true)), read(redraw),
-                "the panel lets no mouse in, the other does");
+        assertEquals(List.of(new GridEvent.WinPos(5, 1002, true, 18, 0, 0, 0, 1000, false, 1),
+                new GridEvent.WinPos(6, 1003, true, 0, 4, 0, 0, 50, true, 1)), read(redraw),
+                "the panel lets no mouse in, the other does; each has its place in Neovim's drawing order");
     }
 
     @Test

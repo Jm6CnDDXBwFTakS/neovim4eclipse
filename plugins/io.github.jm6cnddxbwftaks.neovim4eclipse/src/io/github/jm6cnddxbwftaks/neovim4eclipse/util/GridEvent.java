@@ -110,7 +110,7 @@ public sealed interface GridEvent {
      *   ["win_pos", [2, win 1000, 0, 0, 80, 23]]
      *       -> WinPos(2, 1000, false, 0, 0, 80, 23, 0)
      *   ["win_float_pos", [5, win 1002, "NW", 1, 18.0, 0.0, false, 1000, 1, 18, 0]]   which-key's panel
-     *       -> WinPos(5, 1002, true, 18, 0, 0, 0, 1000)
+     *       -> WinPos(5, 1002, true, 18, 0, 0, 0, 1000, false, 1)
      * </pre>
      *
      * @param row       the screen row of the top left cell, 0-based
@@ -120,9 +120,23 @@ public sealed interface GridEvent {
      * @param zindex    a floating window's place in the stack, the higher on top; 0 for a layout window
      * @param mouse     whether the mouse can enter it ({@code mouse_enabled}); {@code true} for a
      *                  layout window
+     * @param compindex where Neovim draws a floating window among the others ({@code compindex}):
+     *                  the exact order, a higher one over a lower one, also between windows of the
+     *                  same {@code zindex}; -1 for a layout window, or when Neovim does not say.
+     *                  Why it matters: a plug-in that draws a frame in a window of its own, at the
+     *                  same {@code zindex} as its content (Telescope, through plenary), opens the
+     *                  frame after the content; Neovim draws the content over it, and only
+     *                  {@code compindex} tells. Ordered by the windows' numbers, the frame's blank
+     *                  inside would cover the content.
      */
     record WinPos(int grid, int win, boolean floating, int row, int col, int width, int height, int zindex,
-            boolean mouse) implements GridEvent {
+            boolean mouse, int compindex) implements GridEvent {
+
+        /** A window whose place in Neovim's drawing order is not known (a layout window, a test's). */
+        public WinPos(int grid, int win, boolean floating, int row, int col, int width, int height, int zindex,
+                boolean mouse) {
+            this(grid, win, floating, row, col, width, height, zindex, mouse, -1);
+        }
 
         /** A window the mouse can enter. */
         public WinPos(int grid, int win, boolean floating, int row, int col, int width, int height, int zindex) {
@@ -241,7 +255,7 @@ public sealed interface GridEvent {
             case "win_float_pos" -> a.size() < 2 ? null
                     : new WinPos(number(a, 0), windowId.applyAsInt(a.get(1)), true, numberOr(a, 9, numberOr(a, 4, 0)),
                             numberOr(a, 10, numberOr(a, 5, 0)), 0, 0, numberOr(a, 7, 0),
-                            !(a.size() > 6 && Boolean.FALSE.equals(a.get(6))));
+                            !(a.size() > 6 && Boolean.FALSE.equals(a.get(6))), numberOr(a, 8, -1));
             case "win_hide", "win_close" -> a.isEmpty() ? null : new WinGone(number(a, 0));
             case "hl_attr_define" -> a.size() < 2 ? null : hlAttr(number(a, 0), a.get(1));
             case "default_colors_set" -> a.size() < 2 ? null : new DefaultColors(color(a.get(0)), color(a.get(1)));

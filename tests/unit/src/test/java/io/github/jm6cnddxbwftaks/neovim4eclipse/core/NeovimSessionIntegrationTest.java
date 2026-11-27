@@ -1667,6 +1667,45 @@ class NeovimSessionIntegrationTest {
     }
 
     /**
+     * Two floats of the same {@code zindex} reach the listeners in the order Neovim draws them, its
+     * {@code compindex}: Telescope's way, through plenary. Its content window is opened first and
+     * its frame (blank inside) after, in one redraw, and Neovim draws the content over the frame;
+     * moving the content ({@code nvim_win_set_config}) keeps it there. Ordered by the windows'
+     * numbers, the frame would lie on top and its blank inside would hide the list.
+     */
+    @Test
+    void floatsOfTheSameZindexAreReportedInNeovimsDrawingOrder() throws Exception {
+        try (NeovimSession s = start()) {
+            List<List<FloatWindow>> reports = new CopyOnWriteArrayList<>();
+            s.addFloatingWindowListener(reports::add);
+            s.lua("""
+                    local function open(lines, row, col, width, height)
+                      local b = vim.api.nvim_create_buf(false, true)
+                      vim.api.nvim_buf_set_lines(b, 0, -1, false, lines)
+                      return vim.api.nvim_open_win(b, false, { relative = 'editor', row = row, col = col,
+                        width = width, height = height, zindex = 50, focusable = false })
+                    end
+                    vim.g.content = open({ 'entry one' }, 3, 3, 12, 1)
+                    vim.g.frame = open({ '+------------+', '|            |', '+------------+' }, 2, 2, 14, 3)
+                    """);
+            long content = number(s, "return vim.g.content");
+            long frame = number(s, "return vim.g.frame");
+            waitFor(() -> !reports.isEmpty() && order(s, reports).equals(List.of(frame, content)),
+                    "the content over its frame, as Neovim draws it: " + reports);
+            int seen = reports.size();
+            s.lua("vim.api.nvim_win_set_config(vim.g.content, { relative = 'editor', row = 4, col = 3 })");
+            waitFor(() -> reports.size() > seen && order(s, reports).equals(List.of(frame, content))
+                    && reports.get(reports.size() - 1).stream().anyMatch(f -> f.grid().window() == content && f.row() == 4),
+                    "moved, still over its frame: " + reports);
+        }
+    }
+
+    /** The windows of the plug-ins' floats in the last report, lowest first. */
+    private static List<Long> order(NeovimSession s, List<List<FloatWindow>> reports) {
+        return plugInFloats(s, reports.get(reports.size() - 1)).stream().map(f -> (long) f.grid().window()).toList();
+    }
+
+    /**
      * A floating window a plug-in opens without entering it (key hints, hover text) reaches the
      * listeners with its cells and its place, moves when the text it hangs on scrolls, and is gone
      * when it closes. Example: a float at line 10 of a window showing lines 1 to 23 is on row 10

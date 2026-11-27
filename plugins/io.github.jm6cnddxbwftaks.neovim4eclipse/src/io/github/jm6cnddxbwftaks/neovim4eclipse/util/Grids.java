@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -484,6 +485,8 @@ public final class Grids {
         }
         floatsChanged = false;
         List<FloatWindow> floats = new ArrayList<>();
+        // Each float's compindex, for the order below. By identity: two windows' records can be equal.
+        Map<FloatWindow, Integer> compindexOf = new IdentityHashMap<>();
         GridEvent.WinPos host = host();
         int below = rowsBelow(host);
         boolean inCommandLine = cursorInUi2();
@@ -511,6 +514,7 @@ public final class Grids {
         candidates.sort(Comparator.<Map.Entry<Integer, GridEvent.WinPos>>comparingInt(e -> alwaysDrawn(e.getKey()) ? 1 : 0)
                 .thenComparingInt(e -> e.getKey() == cursorGrid ? 1 : 0)
                 .thenComparingInt(e -> e.getValue().zindex())
+                .thenComparingInt(e -> e.getValue().compindex()) // the stack's order, as drawn (below)
                 .thenComparingInt(e -> e.getValue().win()).reversed());
         long cells = 0;
         for (Map.Entry<Integer, GridEvent.WinPos> e : candidates) {
@@ -537,7 +541,7 @@ public final class Grids {
             boolean lifted = overlay && (place.win() == -1 ? inCommandLine
                     : ui2Windows.contains(place.win()) && place.win() != msgWindow);
             // With the cursor when it is on this grid: ui2's line being typed, a float entered.
-            floats.add(new FloatWindow(snapshot(place.win(), e.getKey(), grid),
+            FloatWindow drawn = new FloatWindow(snapshot(place.win(), e.getKey(), grid),
                     place.row() - (host == null ? 0 : host.row()) - (lifted ? 1 : 0),
                     place.col() - (host == null ? 0 : host.col()),
                     host == null ? 0 : host.height() + below - (overlay && below > 0 ? 1 : 0),
@@ -551,9 +555,16 @@ public final class Grids {
                     // focusable = false one, and in ui2's message window the keys would edit its buffer,
                     // with nothing in the editor showing it and no click in the text getting out.
                     place.mouse() && place.win() != -1
-                            && (!ui2Windows.contains(place.win()) || e.getKey() == cursorGrid) ? e.getKey() : -1));
+                            && (!ui2Windows.contains(place.win()) || e.getKey() == cursorGrid) ? e.getKey() : -1);
+            floats.add(drawn);
+            compindexOf.put(drawn, place.compindex());
         }
-        floats.sort(Comparator.comparingInt(FloatWindow::zindex).thenComparingInt(f -> f.grid().window()));
+        // In Neovim's drawing order: by zindex, then by compindex, which also orders windows of the
+        // same zindex as Neovim draws them (GridEvent.WinPos#compindex: Telescope's content over
+        // its frames); the window's number last, for windows Neovim gave no compindex.
+        floats.sort(Comparator.comparingInt(FloatWindow::zindex)
+                .thenComparingInt(f -> compindexOf.getOrDefault(f, -1))
+                .thenComparingInt(f -> f.grid().window()));
         if (floats.equals(lastFloats)) {
             return Optional.empty();
         }

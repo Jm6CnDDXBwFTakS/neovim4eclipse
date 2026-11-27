@@ -196,6 +196,32 @@ class GridsTest {
     }
 
     /**
+     * Floats of the same {@code zindex} come in Neovim's drawing order ({@code compindex}), not by
+     * their windows' numbers, and a change of that order alone is a change to draw. Telescope's
+     * case, through plenary: the content window (1002) is opened first, its frame (1003, every cell
+     * inside blank) after it at the same zindex, in one redraw; Neovim then numbers the content
+     * over the frame. Drawn by window number, the frame's blank inside would hide the list. The
+     * order is Neovim's to give, so a window it later puts lower comes lower here too.
+     */
+    @Test
+    void floatsOfTheSameZindexComeInNeovimsDrawingOrder() {
+        grids.drawFloats(true);
+        editorWindow();
+        floatAt(5, 1002, 3, 4, 50);
+        grids.apply(new GridEvent.WinPos(5, 1002, true, 3, 4, 0, 0, 50, true, 2));
+        floatAt(6, 1003, 2, 3, 50);
+        grids.apply(new GridEvent.WinPos(6, 1003, true, 2, 3, 0, 0, 50, true, 1));
+        assertEquals(List.of(1003, 1002), grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList(),
+                "the content over its frame, as Neovim draws them");
+        grids.apply(new GridEvent.WinPos(5, 1002, true, 3, 4, 0, 0, 50, true, 0)); // Neovim puts it lower
+        assertEquals(List.of(1002, 1003), grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList(),
+                "a change of the order alone is drawn");
+        floatAt(7, 1004, 0, 0, 40); // a lower zindex stays under both, whatever its compindex
+        grids.apply(new GridEvent.WinPos(7, 1004, true, 0, 0, 0, 0, 40, true, 4));
+        assertEquals(List.of(1004, 1002, 1003), grids.floatsIfChanged().orElseThrow().stream().map(f -> f.grid().window()).toList());
+    }
+
+    /**
      * A float there only to dim the text below (lazy.nvim's backdrop: every cell blank, blended) is
      * left out, as the editor cannot draw through it; one with a letter in it, or not blended, is
      * drawn. Its window above it is drawn either way.
@@ -456,6 +482,22 @@ class GridsTest {
         assertEquals(List.of(1002, 1004), drawnWindows());
         grids.apply(new GridEvent.WinGone(7)); // the top one closes: now the other two fit
         assertEquals(List.of(1002, 1003), drawnWindows());
+    }
+
+    /**
+     * Past the cell limit, of two windows of the same zindex the one Neovim draws on top stays
+     * ({@code compindex}), not the one with the higher window number: Telescope's list, not its
+     * frame. 150,000 + 125,000 cells is over {@link Grids#MAX_FLOAT_CELLS}.
+     */
+    @Test
+    void pastTheCellLimitTheWindowDrawnOnTopStaysAmongTheSameZindex() {
+        grids.drawFloats(true);
+        editorWindow();
+        grids.apply(new GridEvent.Resize(5, 1500, 100)); // 150,000 cells: the content, drawn on top
+        grids.apply(new GridEvent.WinPos(5, 1002, true, 0, 0, 0, 0, 50, true, 2));
+        grids.apply(new GridEvent.Resize(6, 1250, 100)); // 125,000: its frame, a higher window number
+        grids.apply(new GridEvent.WinPos(6, 1003, true, 0, 0, 0, 0, 50, true, 1));
+        assertEquals(List.of(1002), drawnWindows());
     }
 
     @Test

@@ -1118,9 +1118,9 @@ focus elsewhere ── closeCommandWindowAsync ── <C-\><C-N><C-\><C-N> ─�
 picker's prompt the cursor is in) take the same road, with a list of windows instead of one:
 
 ```
-Neovim  ── redraw: grid_line ..., win_float_pos(grid, win, ..., zindex, screen_row, screen_col) ──▶
+Neovim  ── redraw: grid_line ..., win_float_pos(grid, win, ..., zindex, compindex, screen_row, screen_col) ──▶
   NotificationBridge ── util/GridEvent.WinPos ──▶ NeovimSession.EventSink
-      util/Grids.floatsIfChanged   at flush: every float, the cursor's with the cursor, lowest zindex first
+      util/Grids.floatsIfChanged   at flush: every float, the cursor's with the cursor, lowest first (zindex, then compindex)
       ── List<util/FloatWindow> (immutable: cells, row and column over the editor's window) ──▶ listeners
 NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
                                           ├─ util/FloatPlacement   cells to pixels, edges
@@ -1145,7 +1145,7 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   whose grid it is, so past `GridCells.MAX_HELD_CELLS` a grid holds only its size.
 - **How many** (`Grids.MAX_FLOATS` floats and `MAX_FLOAT_CELLS` cells at most, in
   all; their numbers in docs/USER_GUIDE.md, "Floating windows", which `GridsTest` holds to them), taken Neovim's own first (ui2's, the popup menu), then the cursor's (the window the keys go
-  to), then highest `zindex` first, each one if it still fits; the rest are left out, and that
+  to), then highest in the stack first (`zindex`, then `compindex`, as they are drawn), each one if it still fits; the rest are left out, and that
   is logged once. Neovim does not shrink a float a plug-in asks for (200 by 60 on a screen of 80 by
   24 comes as 200 by 60), and each changed redraw copies a drawn float's cells for the UI thread.
   One budget for all of them bounds that work, its memory and the number of canvases with one
@@ -1213,8 +1213,12 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
   a second float from a prompt's insert stays there (`entered_float`). A click after the window closed names
   a grid no window has, and Neovim drops it, as for the command-line window. While the cursor is
   in such a float every Ctrl letter is Neovim's (`util/KeyContextRule.toNeovim`); the contexts are
-  applied again at each change of the floats (`showFloats`; a page editor: `floatKeys`). Among themselves in `zindex`
-  order; cleared in Eclipse mode and shown again in Neovim mode. `FloatingWindows.cursorCell` tells
+  applied again at each change of the floats (`showFloats`; a page editor: `floatKeys`). Among themselves in Neovim's
+  drawing order: by `zindex`, then by `compindex`, the exact order Neovim draws them in. Windows
+  of the same `zindex` need the second: Telescope (through plenary) draws each frame as a window
+  of its own, at its content's `zindex`, opened after the content, and Neovim draws the content
+  over it; ordered by the windows' numbers, the frames' blank insides hid the list, the prompt
+  and the preview. Cleared in Eclipse mode and shown again in Neovim mode. `FloatingWindows.cursorCell` tells
   the input method where Neovim's cursor is in ui2's line ("Command line").
 - **Placed again at each paint of the editor**, not only at a resize: `StyledText` moves its
   children along when the text scrolls, and a float that does not hang on text must stay put; a

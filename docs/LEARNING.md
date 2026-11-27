@@ -506,8 +506,9 @@ the plug-in asks for these (`NeovimConnection.TERMINAL_UI`):
   ["win_float_pos", 5, <window 1002>, "NW", 1, 18.0, 0.0, false, 1000, 1, 18, 0]
   ```
 
-  It hangs by its top left corner (`"NW"`) on grid 1, the screen, at row 18; it cannot take the
-  focus (`false`); its `zindex` is 1000; and the last two numbers are the screen cell Neovim worked
+  It hangs by its top left corner (`"NW"`) on grid 1, the screen, at row 18; the mouse cannot
+  enter it (`false`); its `zindex` is 1000; `1` is its `compindex`, its place in the exact order
+  Neovim draws the floats in (also among floats of the same `zindex`); and the last two numbers are the screen cell Neovim worked
   out, which is all a UI needs to place it (`util/FloatPlacement`). The plug-in draws such a window
   over the editor's text while the cursor is not in it (`util/Grids.floatsIfChanged`,
   `editor/FloatingWindows`).

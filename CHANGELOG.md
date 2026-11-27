@@ -30,6 +30,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   typed meanwhile go to it. An input method composes at such a window's cursor and no longer
   writes into the file. One the editor cannot draw (past the limits in
   the user guide's *Floating windows*), or that its plug-in hides, is closed with a message.
+  Floating windows at the same level are stacked as Neovim draws them, so a plug-in that frames
+  its window with a window of its own (Telescope) shows the list, prompt and preview inside.
 - Clicks and the wheel on a plug-in's floating window now go to Neovim, as in a terminal: a click
   on Telescope's results selects the row, a double click opens it, and the wheel scrolls the
   window under the pointer. Before, they did nothing. Neovim's `'mouse'` decides in which modes,
