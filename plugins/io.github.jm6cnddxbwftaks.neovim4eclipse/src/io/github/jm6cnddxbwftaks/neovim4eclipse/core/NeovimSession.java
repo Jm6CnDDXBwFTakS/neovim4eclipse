@@ -2389,7 +2389,7 @@ public final class NeovimSession implements AutoCloseable, KeyRouter.Neovim, Buf
      * and leaves the float open ({@code LuaScripts.WINDOWS}' {@code move_out_of_float}), as a click
      * outside a float does in a terminal: the user clicked the text or left for another part. The
      * plug-in decides whether its window survives it: Telescope closes on {@code BufLeave},
-     * {@code :Lazy} stays drawn. On the input thread, so that a key typed before goes into the
+     * fzf-lua's list stays drawn. On the input thread, so that a key typed before goes into the
      * float first and a click after lands in the editor's window.
      *
      * <p><b>Nothing while Neovim waits for the rest of a command</b>, for the reasons at

@@ -40,7 +40,7 @@ public record FloatWindow(GridSnapshot grid, int row, int col, int hostRows, int
 
     /**
      * Whether this is a plug-in's float with Neovim's cursor in it: a picker's prompt,
-     * {@code :Lazy}, hover documentation entered with a second {@code K}. The editor's caret is hidden meanwhile, so that one cursor shows where the keys go. Not one of ui2's windows, which also carry the cursor (a {@code :}
+     * hover documentation entered with a second {@code K}. The editor's caret is hidden meanwhile, so that one cursor shows where the keys go. Not one of ui2's windows, which also carry the cursor (a {@code :}
      * line being typed, the pager entered) but are Neovim's command line, with the editor's caret
      * shown as before; ui2's windows are the ones placed {@link #fromBottom}, and so is the
      * {@code :} line's list, which never has the cursor.

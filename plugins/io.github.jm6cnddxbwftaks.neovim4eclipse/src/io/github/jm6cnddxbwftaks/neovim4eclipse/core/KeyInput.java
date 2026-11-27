@@ -133,8 +133,8 @@ final class KeyInput {
      */
     private volatile boolean neovimOwnsInsert;
     /**
-     * Whether Neovim's current window was a plug-in's focused floating window (a picker's prompt,
-     * {@code :Lazy}) at its last mode report ({@link #onModeReport}, reader thread). An insert that
+     * Whether Neovim's current window was a plug-in's focused floating window (a picker's prompt)
+     * at its last mode report ({@link #onModeReport}, reader thread). An insert that
      * begins there is Neovim's to its end. Example: Telescope opens its prompt and starts insert
      * mode with {@code nvim_feedkeys("A")}, other pickers from a {@code vim.schedule} callback:
      * either way after the key that opened it was answered;

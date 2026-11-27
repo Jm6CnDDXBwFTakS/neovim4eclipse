@@ -43,7 +43,7 @@ class ModeTransitionTest {
     }
 
     /**
-     * A picker's prompt (Telescope) or {@code :Lazy}: the float is current when the insert begins.
+     * A picker's prompt (Telescope): the float is current when the insert begins.
      * Its buffer is no document, so Neovim types the whole insert, as after a block selection.
      */
     @Test

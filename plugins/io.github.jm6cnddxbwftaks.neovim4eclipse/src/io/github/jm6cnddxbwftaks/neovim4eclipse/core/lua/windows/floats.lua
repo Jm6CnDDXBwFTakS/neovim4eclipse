@@ -79,7 +79,7 @@ end
 S.leave_float_of = leave_float_of
 
 --- Whether win (0: the current one) is a floating window of a plug-in, not the
---- plug-in's own and not one of ui2's: a picker's prompt (Telescope), :Lazy, a hover
+--- plug-in's own and not one of ui2's: a picker's prompt (Telescope), a hover
 --- float the user entered. An insert that begins in one is Neovim's to its end
 --- (SETUP's ModeChanged report): its buffer is no document, so Eclipse must not type it.
 --- It does not ask whether win has the focus: LuaScripts.TERMINALS also calls it on a float
@@ -94,7 +94,7 @@ end
 --- plug-in's float (a picker's prompt, lazy.nvim's installer), the window of the
 --- plug-in's own under it, the editor's or page's of that tab page. They run in it with
 --- nvim_win_call, which fires no autocommands, so the float keeps the focus. Example: the
---- editor resized while :Lazy is open: Neovim's screen is measured on the editor's window.
+--- editor resized while a picker is open: Neovim's screen is measured on the editor's window.
 function M.editor_window()
   local current = vim.api.nvim_get_current_win()
   if not M.focused_float(current) then
@@ -109,7 +109,7 @@ function M.editor_window()
 end
 
 --- Whether Neovim entered win, a plug-in's float, to stay: one rule for every plug-in's
---- float with the cursor (a picker's prompt as it opens, :Lazy, a hover float entered
+--- float with the cursor (a picker's prompt as it opens, a hover float entered
 --- by a second K), current, entered outside an insert. SETUP's BufEnter report says so, and Eclipse leaves Neovim there
 --- (util/EnterDecision) instead of sending it back to the editor's window, where the
 --- insert a picker starts next would begin and Eclipse would type it. Not the buffer's
@@ -208,7 +208,7 @@ end
 --- Moves Neovim out of the plug-in's float it is in, to the editor's or page's window of that
 --- tab page, and leaves the float open: what a click outside a float does in a terminal.
 --- The plug-in decides whether its window survives that: Telescope closes its picker on
---- BufLeave, and :Lazy stays, drawn without the focus, until it is clicked or closed. For
+--- BufLeave, and fzf-lua's list stays, drawn without the focus, until it is clicked or closed. For
 --- the user clicking the text or leaving for another part of Eclipse
 --- (editor/LineOnFocusLoss, NeovimEditorController). An insert begun in the float ends, as
 --- in M.leave_float. win (optional): the float the cursor was in when the keyboard left a

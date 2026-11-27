@@ -472,10 +472,10 @@ public final class Grids {
      * <p>And a plug-in's float that is there only to dim the text below it ({@link #dimsOnly}):
      * every cell blank, in a highlight with {@code blend} ({@code 'winblend'}). Neovim draws the
      * text below through it, darker; the editor draws a window over the text, never through it,
-     * so drawn it would hide the editor behind a block of its color. Example: lazy.nvim's
-     * backdrop under {@code :Lazy} with a colorscheme that sets {@code Normal}'s background and
-     * {@code 'termguicolors'} on (LazyVim): left out, {@code :Lazy}'s own window drawn over the
-     * text. A blended float with text (a completion menu's {@code 'winblend'}) is drawn, without
+     * so drawn it would hide the editor behind a block of its color. Example: the
+     * backdrop lazy.nvim lays under its own window, with a colorscheme that sets {@code Normal}'s
+     * background and {@code 'termguicolors'} on (LazyVim): left out, the window above it drawn over
+     * the text. A blended float with text (a completion menu's {@code 'winblend'}) is drawn, without
      * the blend, and so is the float with the cursor, blank or not: the keys go to it, so it must
      * be drawn (left out, {@link #unseenCursor} would close it).
      */

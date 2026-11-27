@@ -86,7 +86,7 @@ class KeyContextRuleTest {
     @Test
     void everyLetterGoesToNeovimInAPluginsWindow() {
         assertTrue(KeyContextRule.toNeovim(false, Column.INSERT, false, true), "the prompt, in its insert");
-        assertTrue(KeyContextRule.toNeovim(false, Column.NORMAL, false, true), "the prompt after Esc, :Lazy");
+        assertTrue(KeyContextRule.toNeovim(false, Column.NORMAL, false, true), "a picker's prompt after Esc");
     }
 
     @Test

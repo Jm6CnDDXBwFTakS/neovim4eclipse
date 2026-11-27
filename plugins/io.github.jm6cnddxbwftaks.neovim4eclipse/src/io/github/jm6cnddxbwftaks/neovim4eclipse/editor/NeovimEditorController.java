@@ -1149,7 +1149,7 @@ public final class NeovimEditorController implements AutoCloseable {
      * Before each click {@link NeovimMouse} hands to Neovim: {@link #abandonLine}, and Neovim moved
      * out of the plug-in's float its cursor is in (a picker's prompt), its insert ended
      * ({@code NeovimSession.moveOutOfFloatAsync}), so that the click lands in the editor's window,
-     * as in a terminal. Telescope closes itself then; {@code :Lazy} stays, drawn without the focus.
+     * as in a terminal. Telescope closes itself then; fzf-lua's list stays, drawn without the focus.
      */
     private void abandonLineAndFloat() {
         // With a line open the cursor is on Neovim's command line, so the session cannot see a float

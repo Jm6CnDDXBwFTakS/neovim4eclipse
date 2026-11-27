@@ -74,7 +74,7 @@ public final class EnterDecision {
      * @param document     whether {@code buffer} is an open document's
      * @param projectFile  whether {@code buffer} is a file Eclipse can open that has no editor yet
      * @param floatEntered whether {@code window} is a plug-in's float Neovim stays in: a picker's
-     *                     prompt, {@code :Lazy}, a hover float entered by a second {@code K}
+     *                     prompt, a hover float entered by a second {@code K}
      *                     ({@code LuaScripts.WINDOWS}' {@code entered_float})
      */
     public record Enter(int window, int buffer, int attachedWin, int attachedBuf, int focusedPage, int pageBuffer,

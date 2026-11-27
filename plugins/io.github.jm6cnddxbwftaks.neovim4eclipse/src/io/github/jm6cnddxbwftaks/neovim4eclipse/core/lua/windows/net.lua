@@ -58,7 +58,7 @@ vim.api.nvim_create_autocmd('WinClosed', {
 -- message, when the quickfix module is there (QUICKFIX: the Problems or Tasks view, or
 -- the list's :clist, shown by Neovim), so :copen does what it is for.
 -- Floating windows are left alone here, the one that opened with the focus too (a
--- picker's prompt, :Lazy, a dashboard): drawn, it takes the keys, and leaving the editor
+-- picker's prompt, a dashboard): drawn, it takes the keys, and leaving the editor
 -- moves Neovim out of it (M.move_out_of_float); one the editor does not draw is closed by
 -- M.close_undrawn.
 -- A :checkhealth report opens in a window of its own however it is asked for (a new

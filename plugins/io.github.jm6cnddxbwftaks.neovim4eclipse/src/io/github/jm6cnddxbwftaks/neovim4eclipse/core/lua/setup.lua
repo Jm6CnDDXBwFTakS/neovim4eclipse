@@ -81,7 +81,7 @@ vim.opt.showmode = false
 -- re-typed into Neovim with nvim_feedkeys(text, 'n'), which applies none of them, so a
 -- `jk` -> <Esc> mapping cannot end that re-typing half way (docs/design/INSERT_CTRL_KEYS.md, section 3).
 -- The second value: whether the current window is a focused floating window of a
--- plug-in (a picker's prompt, :Lazy), as WINDOWS' focused_float says. Sent with every
+-- plug-in (a picker's prompt), as WINDOWS' focused_float says. Sent with every
 -- mode, not on its own at WinEnter: the plug-in switches windows quietly in places
 -- ('eventignore'), so only a value read at the mode change itself is sure to be current
 -- when Eclipse decides who types an insert that begins (KeyInput.onModeReport).

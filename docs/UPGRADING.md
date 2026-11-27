@@ -328,7 +328,7 @@ The tests of the jump labels run four real Neovim plug-ins (flash, leap, hop, mi
 gallery's pictures a fifth, which-key, and the tests of floating windows that take the keyboard
 five more: Telescope with its library plenary (a picker's prompt, its file and grep pickers),
 fzf-lua (a picker that runs fzf in a terminal float), snacks.nvim (a picker that draws itself in
-several floats) and lazy.nvim (`:Lazy`), and the tests of completion plug-ins three more:
+several floats) and lazy.nvim (a plug-in manager's window, best effort), and the tests of completion plug-ins three more:
 blink.cmp, and nvim-cmp with its source cmp-buffer (a `Ctrl-N` they map, their menu a float),
 and the tests of plug-ins that work on text three more: vim-surround and vim-repeat, through which
 `.` repeats it (`SurroundIntegrationTest`, `SurroundEndToEndTest`), and mini.nvim, for its
