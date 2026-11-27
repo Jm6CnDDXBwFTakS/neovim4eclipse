@@ -2118,6 +2118,17 @@ t.test('a page window opens quietly in a tab of its own, with a page\'s options'
   t.eq(-2, open_page(99999), 'a buffer that is gone')
 end)
 
+t.test('a page sets its options on its own window, not the global values a new editor starts from', function()
+  start()
+  vim.o.number, vim.o.list, vim.o.colorcolumn, vim.o.conceallevel = true, true, '80', 0
+  local win = open_page(buffer(3))
+  t.eq({ false, false, '' }, { vim.wo[win].number, vim.wo[win].list, vim.wo[win].colorcolumn }, "the page's own")
+  t.eq({ true, true, '80', 0 },
+    { vim.go.number, vim.go.list, vim.go.colorcolumn, vim.go.conceallevel }, 'the global values as init.lua set them')
+  vim.cmd('tabnew') -- a new editor's window starts from the global values
+  t.eq({ true, true, '80' }, { vim.wo.number, vim.wo.list, vim.wo.colorcolumn }, "a new editor keeps init.lua's")
+end)
+
 t.test('the WinNew net leaves a page window, and :q in it is no side window\'s', function()
   start()
   local win = open_page(buffer(3))
