@@ -39,8 +39,6 @@ import org.eclipse.ui.keys.IBindingService;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledOnOs;
-import org.junit.jupiter.api.condition.OS;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
@@ -846,11 +844,11 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
     /**
      * Ctrl+W pressed for real, through the operating system and Eclipse's key dispatcher, then
      * {@code p}: the editor has the keyboard back and is still open (Eclipse's Close did not take
-     * the key). Not on macOS: there Close is Cmd+W, and posting keys needs the Accessibility
-     * permission (docs/MANUAL_CHECKS.md, card pg-ctrlw-mac, does it by hand).
+     * the key). Control+W on macOS too, not Cmd+W (Close there): Control+W is Vim's, and it must
+     * reach the page through Eclipse's key bindings. On macOS only where the app running the tests
+     * has the Accessibility permission ({@link RealInput#requireFront}); skipped there otherwise.
      */
     @Test
-    @DisabledOnOs(OS.MAC)
     void aRealCtrlWPGoesBackToTheEditor() {
         SessionProbe.lua(session, "vim.cmd.echomsg(\"'before a real Ctrl-W'\") return 0");
         colon("messages");

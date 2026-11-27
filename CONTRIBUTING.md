@@ -476,6 +476,28 @@ replace the test's text before it is pasted, and such a test fails now and then.
 message then shows what the clipboard held instead. Turn clipboard sharing off while the tests run,
 or rerun the test.
 
+### Real keys and clicks on macOS
+
+A few UI tests send keys and clicks through the operating system, as a keyboard and a mouse do,
+instead of handing synthetic events to a widget (`RealInput`): `RealMouseEndToEndTest`, the real
+click in `PickersEndToEndTest` and the real Ctrl+W in `NeovimPagesEndToEndTest`. macOS takes such
+input only from an app it has granted the Accessibility permission, and the Java the tests run in
+counts as the app that started them. To run these tests, open *System Settings → Privacy & Security
+→ Accessibility* (*Device Control and Data Access* on newer macOS; not the top-level *Accessibility*
+settings), turn on the app you start the tests from (Terminal, iTerm2, your IDE), and restart that
+app if the tests still skip. The permission lets that app control the whole Mac: turn it off again
+when the run is done. Without it macOS drops the input without an error: the first of these tests
+sends one Shift that does nothing, waits for it as long as any test wait (`-Dtest.wait.seconds`, 15
+by default), and when it never comes these tests are skipped with the reason "Accessibility not
+granted to the app running the tests". Linux and Windows need no permission (a Wayland session takes
+no clicks from a program, and the click tests skip there).
+
+While they run, the real pointer moves and real keys are pressed, in whichever window is in front:
+leave the Mac alone until the run ends. Each test first checks that the test Eclipse's window is
+the active one, and fails without sending anything otherwise. For a release, card
+`rl-real-input-macos` in [docs/MANUAL_CHECKS.md](docs/MANUAL_CHECKS.md) runs them with the
+permission, when the files they cover changed.
+
 ### Code coverage
 
 Every test run also measures coverage with [JaCoCo](https://www.jacoco.org/jacoco/): a Java agent

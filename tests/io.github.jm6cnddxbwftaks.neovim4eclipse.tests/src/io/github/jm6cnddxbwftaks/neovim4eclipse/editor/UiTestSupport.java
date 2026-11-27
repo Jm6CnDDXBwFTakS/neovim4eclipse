@@ -190,8 +190,9 @@ final class UiTestSupport {
 
     /**
      * As {@link #waitUntil(String, long, BooleanSupplier)}, but returns {@code false} after
-     * {@code timeoutMs} instead of failing: for a cleanup step that should go on when the wait is not
-     * met (the Java tests' wait for Eclipse's background jobs). An error dialog still fails the test.
+     * {@code timeoutMs} instead of failing: for a step that goes on when the wait is not met (the
+     * Java tests' wait for Eclipse's background jobs as cleanup; {@link RealInput}'s probe and its
+     * wait for the pointer, which decide from the outcome). An error dialog still fails the test.
      */
     static boolean waitUntilOrGiveUp(long timeoutMs, BooleanSupplier condition) {
         Display display = Display.getCurrent();

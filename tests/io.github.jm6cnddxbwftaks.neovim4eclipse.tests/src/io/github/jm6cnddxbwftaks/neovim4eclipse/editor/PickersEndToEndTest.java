@@ -31,8 +31,6 @@ import org.eclipse.ui.contexts.IContextService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledOnOs;
-import org.junit.jupiter.api.condition.OS;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
@@ -231,11 +229,11 @@ class PickersEndToEndTest extends EndToEndTestBase {
      * The same through the operating system ({@link RealInput}): a real click on gamma's row of
      * the results selects it, the picker keeping the keyboard in its prompt; a real click in the
      * editor's text, on beta's line, moves Neovim out of the picker, which Telescope closes, and
-     * the click lands there (USER_GUIDE.md, "Floating windows"). Not on macOS (sending input needs
-     * the Accessibility permission); skipped where the system does not move the pointer (Wayland).
+     * the click lands there (USER_GUIDE.md, "Floating windows"). Skipped where the system does not
+     * move the pointer (Wayland), and on macOS unless the app running the tests has the
+     * Accessibility permission ({@link RealInput#requireFront}).
      */
     @Test
-    @DisabledOnOs(OS.MAC)
     void aRealClickOnTheResultsSelectsTheRowAndOneInTheTextLeavesThePicker() {
         String text = document.get();
         type(widget, "gp");

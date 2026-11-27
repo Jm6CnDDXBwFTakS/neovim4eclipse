@@ -15,8 +15,6 @@ import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Listener;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledOnOs;
-import org.junit.jupiter.api.condition.OS;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 
@@ -24,13 +22,12 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
  * Clicks in the editor's text through the operating system ({@link RealInput}), as a mouse makes
  * them: the synthetic events of the other tests reach the widget straight, past the system's
  * focus and activation handling. In Normal mode a left click is Neovim's and the editor keeps the
- * keyboard; Ctrl+click stays Eclipse's (USER_GUIDE.md, "Mouse"). Not on macOS, where sending
- * input needs the Accessibility permission and Ctrl+click is not the hyperlink gesture (Cmd+click
- * is): the card fl-real-plugins checks it there by hand. Skipped where the system does not move
- * the pointer (a Wayland session). On Windows and a real X11 desktop the pointer moves during the
- * test.
+ * keyboard; Ctrl+click stays Eclipse's (USER_GUIDE.md, "Mouse"), Cmd+click on macOS, where that
+ * is Eclipse's hyperlink gesture. Skipped where the system does not move the pointer (a Wayland
+ * session), and on macOS unless the app running the tests has the Accessibility permission
+ * ({@link RealInput#requireFront}). On Windows, a real X11 desktop and macOS the real pointer
+ * moves during the test.
  */
-@DisabledOnOs(OS.MAC)
 class RealMouseEndToEndTest extends EndToEndTestBase {
 
     @AfterEach
@@ -72,7 +69,8 @@ class RealMouseEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * A real Ctrl+click in the text goes to Eclipse (its hyperlinks), not to Neovim: mappings of
+     * A real Ctrl+click in the text (Cmd+click on macOS, Eclipse's M1) goes to Eclipse (its
+     * hyperlinks), not to Neovim: mappings of
      * the test's own on {@code <C-LeftMouse>} and on {@code <LeftMouse>} never run (the plug-in
      * sends Neovim a click without Ctrl, so a Ctrl+click that reached Neovim would come as a plain
      * {@code <LeftMouse>}, and the first mapping alone could not see it). The check waits until the
@@ -89,11 +87,11 @@ class RealMouseEndToEndTest extends EndToEndTestBase {
         RealInput.requireFront(widget, TIMEOUT_MS);
         Point at = cell(2, 2);
         boolean[] released = new boolean[1];
-        Listener seen = e -> released[0] |= e.widget == widget && (e.stateMask & SWT.CTRL) != 0;
+        Listener seen = e -> released[0] |= e.widget == widget && (e.stateMask & SWT.MOD1) != 0;
         widget.getDisplay().addFilter(SWT.MouseUp, seen);
         try {
             assumeTrue(RealInput.leftClick(widget, at.x, at.y, true), "the system did not move the pointer (a Wayland session)");
-            waitUntil("the Ctrl+click's release reached the editor", TIMEOUT_MS, () -> {
+            waitUntil("the M1+click's release reached the editor", TIMEOUT_MS, () -> {
                 settle();
                 return released[0];
             });

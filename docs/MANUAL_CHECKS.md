@@ -337,30 +337,6 @@ too.
 
 ## Page editors (`:help`, `:messages`, `:checkhealth`)
 
-### `pg-ctrlw-mac` A real Ctrl-W in a page editor on macOS
-
-- **On:** macos
-- **Launch:** checks
-- **Areas:** editor/NeovimPage*.java, editor/WindowPane.java, editor/PageCommandsRun.java, editor/SendKeyHandler.java, editor/GridMouse.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/plugin.xml
-
-Everything else about the page editors is tested (`NeovimPagesEndToEndTest`: where they open, the
-error color, the cursor, the background, search, yank and paste, the wheel and a click,
-`:checkhealth neovim4eclipse`, `:help` and `:messages` side by side, `Ctrl-W` both ways,
-`Ctrl-O` passing over them, `q`; on Linux and Windows a real Ctrl+W posted through the system;
-`NeovimPageEditorEndToEndTest`; the messages page as a window of the editing Neovim, with `/`
-over it, `:split`, `:q`, `:e`, typing in the code after it, the focus back from a view, the code
-closed under it, its window closed by Neovim, the command-line window over it:
-`MessagesPageEndToEndTest`), and their look in both themes is in the gallery (card
-`sh-colors`). On macOS posting keys needs the Accessibility permission, so the real key is checked
-by hand.
-
-1. Open `n4e-alpha`'s `notes.txt`, type `:checkhealth neovim4eclipse` and Enter.
-   ⇒ The editor *Neovim: checkhealth* opens below `notes.txt`, with the keyboard.
-2. Press Control and W together (not Command), then `k`.
-   ⇒ `notes.txt` above has the keyboard back; the checkhealth editor is still open.
-
-**Expect:** each step's result, after its ⇒.
-
 ### `pg-restart` No page editor after a restart
 
 - **On:** any
@@ -396,8 +372,9 @@ commits (`PickersEndToEndTest`, `SnacksPickerEndToEndTest`, `SnacksPickerIntegra
 binds fzf-lua's split action itself): typing narrows the list, Enter jumps to the line or opens
 the file in an Eclipse editor, the document you came from is unchanged. fzf-lua's only where fzf
 is on `PATH`, `live_grep` and snacks' `files` only where `rg` is. Real clicks through the system,
-on a picker's list and in the text, Ctrl+click included, are tested on Linux and Windows
-(`RealMouseEndToEndTest`, `PickersEndToEndTest`), not on macOS, where step 5 does them by hand.
+on a picker's list and in the text, Ctrl+click (Cmd+click on macOS) included, are tested
+(`RealMouseEndToEndTest`, `PickersEndToEndTest`; on macOS where the app running the tests has the
+Accessibility permission, CONTRIBUTING.md, "Real keys and clicks on macOS").
 The menus of blink.cmp and nvim-cmp after their `Ctrl-N` are tested too
 (`CompletionPluginsEndToEndTest`), so no step here checks them.
 Your own config, with its pickers, previews, borders and colorscheme, and an input method in a
@@ -409,21 +386,17 @@ snacks.picker) and which-key; skip a step whose plug-in it lacks.
    ⇒ The picker is drawn over the editor where Neovim put it, with its border and colors; the
    prompt has Neovim's cursor and the editor's caret is hidden; a preview shows the selected
    file.
-2. Open the picker again and switch to another application, then back to Eclipse. On macOS, click
-   a row of its list. Turn the mouse wheel over the list, press `Ctrl+F` and `Ctrl+A`, then
-   double-click a row.
-   ⇒ The picker is still open after the switch, with the cursor in its prompt; on macOS the
-   click selects the row and the picker stays; the wheel moves the list; no Find/Replace dialog
-   opens and the file behind is not selected; the double click opens that row.
+2. Open the picker again and switch to another application, then back to Eclipse. Turn the mouse
+   wheel over the list, press `Ctrl+F` and `Ctrl+A`, then double-click a row.
+   ⇒ The picker is still open after the switch, with the cursor in its prompt; the wheel moves
+   the list; no Find/Replace dialog opens and the file behind is not selected; the double click
+   opens that row.
 3. With an input method on (Japanese: IBus or fcitx on Linux, the system's on macOS and Windows),
    open the picker and type a word.
    ⇒ The composing text and the candidates appear at the prompt's cursor, nothing of it reaches
    the file, and the committed word reaches the prompt once.
 4. Press your leader key and wait.
    ⇒ which-key's panel is drawn at the bottom of the editor, and the next key goes on as usual.
-5. On macOS only, in Normal mode: click into the text on another line, then Cmd+click a word.
-   ⇒ The click moves the caret there and the editor keeps the keyboard; the Cmd+click is
-   Eclipse's (its hyperlinks), and Neovim does not jump.
 
 **Expect:** each step's result, after its ⇒.
 
@@ -652,7 +625,40 @@ runs `LikeCi.java --all` and records the commit for `promote`).
 java releng/tools/ci/LikeCi.java --all
 ```
 
-**Expect:** every module passes, on the commit `check` printed.
+**Expect:** every module passes, on the commit `check` printed. Without the Accessibility
+permission the tests that send real keys and clicks are skipped; card `rl-real-input-macos` runs
+them.
+
+### `rl-real-input-macos` Real keys and clicks on macOS
+
+- **On:** macos
+- **Launch:** none
+- **Areas:** editor/NeovimPage*.java, editor/WindowPane.java, editor/PageCommandsRun.java, editor/SendKeyHandler.java, editor/GridMouse.java, editor/NeovimMouse.java, editor/FloatingWindows.java, /plugins/io.github.jm6cnddxbwftaks.neovim4eclipse/plugin.xml, /tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/src/io/github/jm6cnddxbwftaks/neovim4eclipse/editor/RealInput.java
+
+The tests that send keys and clicks through the system (a real Ctrl+W in a page editor, a real
+click on a picker's list and in the text, Cmd+click) run on macOS only where the app running them
+has the Accessibility permission, which lets that app control the whole Mac; so they are run with
+it for a release, and it is turned off again (CONTRIBUTING.md, "Real keys and clicks on macOS").
+After `rl-pall-macos`, which installs the pinned Neovim these use.
+
+1. In *System Settings → Privacy & Security → Accessibility* (*Device Control and Data Access* on
+   newer macOS), turn on the app you run the tests from (Terminal, iTerm2, your IDE).
+   ⇒ The app is listed, switched on.
+2. In that app, from the repository's root, run the commands below; leave the Mac alone while
+   they run (about a minute).
+   ⇒ `BUILD SUCCESS`, and the `grep` prints nothing: no test was skipped for the permission. If it
+   prints a file, restart the app and run them again.
+3. Turn the app's permission off again.
+   ⇒ The switch is off.
+
+```sh macos
+./mvnw verify -Pui -Dnvim.path="$(ls -d "$PWD"/.tool-cache/like-ci/nvim-macos-*/bin/nvim)" \
+  -Dtest='RealMouseEndToEndTest,PickersEndToEndTest,NeovimPagesEndToEndTest' \
+  -Dsurefire.failIfNoSpecifiedTests=false -DfailIfNoTests=false
+grep -l "Accessibility not granted" tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests/target/surefire-reports/*.xml
+```
+
+**Expect:** each step's result, after its ⇒.
 
 ### `rl-pall-windows` Every test on Windows
 
