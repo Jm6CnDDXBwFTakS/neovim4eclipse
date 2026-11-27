@@ -7,8 +7,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.e4.ui.model.application.ui.MUIElement;
+import org.eclipse.e4.ui.model.application.ui.advanced.MPerspective;
+import org.eclipse.e4.ui.model.application.ui.advanced.MPerspectiveStack;
+import org.eclipse.e4.ui.model.application.ui.advanced.MPlaceholder;
+import org.eclipse.e4.ui.model.application.ui.basic.MPartSashContainer;
+import org.eclipse.e4.ui.model.application.ui.basic.MPartStack;
+import org.eclipse.e4.ui.model.application.ui.basic.MWindow;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.DisposeListener;
+import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.Shell;
@@ -19,8 +28,8 @@ import org.eclipse.ui.PlatformUI;
 
 /**
  * Gives the keyboard back to the part Eclipse brought to the front after a page editor closed
- * ({@link NeovimPageEditor}), whenever it ends up with no control at all, until the user's next
- * mouse click in Eclipse.
+ * ({@link NeovimPageEditor}), whenever it ends up in no control or only in one of Eclipse's layout
+ * controls, until the user's next mouse click in Eclipse.
  *
  * <p>Why: the keyboard was in the page editor's screen, which the close disposes. Eclipse brings
  * the part the user came from to the front, but does not always leave the keyboard there, and a
@@ -31,11 +40,21 @@ import org.eclipse.ui.PlatformUI;
  * FocusOut and nothing after it. Example: {@code :help} typed in test.txt, then {@code q} in the
  * help editor; test.txt is the active editor again, but the next key goes nowhere until a click.
  *
+ * <p>Where the keyboard ends up after such a move depends on the desktop. On a bare X server no
+ * control has it. Under a window manager GTK hands it down the window to the next control that
+ * takes it: after {@code :help} and <em>Restart Neovim</em>, the editor area's toolbar, its tab
+ * folder, then the area's placeholder composite, where it stays and the keys go nowhere (seen on
+ * Linux with a window manager; the active part stays the code's editor all along). The tab folder
+ * and the toolbar take keys of their own (arrows switch tabs; Tab reaches them from a view), so
+ * only the last, a plain composite, counts as nowhere; the FocusOut of each step on the way runs a
+ * check, and the one after the last step finds the composite.
+ *
  * <p>So it does not act once at a guessed moment: it checks right after the close, and again after
- * each FocusOut, from the state then. It acts only when no control has the keyboard while this
- * workbench window is the active one, and then gives it to the active part, the one Eclipse chose;
- * it never picks or opens an editor, and never takes the keyboard from a part, a view or a dialog
- * that has it, nor from another program.
+ * each FocusOut, from the state then. It acts only while this workbench window is the active one,
+ * and only when no control has the keyboard or the one that has it is a layout control
+ * ({@link #isLayoutControl}); then it gives the keyboard to the active part, the one Eclipse
+ * chose. It never picks or opens an editor, and never takes the keyboard from a part's control (a
+ * view's, an editor's), a toolbar field such as Quick Access, a dialog, or another program.
  *
  * <p>How long: until the next mouse button pressed in Eclipse (from then on, where the keyboard
  * goes is the user's choice), or until the window closes. A press is seen by a display filter,
@@ -101,7 +120,10 @@ final class KeyboardHandBack {
         shell.addDisposeListener(onWindowClosed);
     }
 
-    /** Gives the keyboard to the active part if no control has it while this window is active. */
+    /**
+     * Gives the keyboard to the active part if, while this window is active, no control has it or
+     * only a layout control does ({@link #isLayoutControl}).
+     */
     private void check() {
         if (stopped) {
             return;
@@ -110,14 +132,49 @@ final class KeyboardHandBack {
             stop();
             return;
         }
-        if (display.getFocusControl() != null || display.getActiveShell() != shell) {
-            return; // a control has it, or another window or program does: not ours to move
+        Control focus = display.getFocusControl();
+        if (display.getActiveShell() != shell || focus != null && !isLayoutControl(focus)) {
+            return; // another window or program has it, or a control that takes keys: not ours to move
         }
         IWorkbenchPage page = window.getActivePage(); // read now, not kept from the close
         IWorkbenchPart front = page == null ? null : page.getActivePart();
         if (front != null) {
             front.setFocus();
         }
+    }
+
+    /**
+     * Whether {@code control} is one of the workbench window's layout controls, which hold parts but
+     * take no keys themselves: the workbench window's {@link Shell} (its own element an
+     * {@link MWindow}), or a plain {@link Composite} (that class itself, no subclass) in it, whose
+     * nearest owner, looked up no further than its own shell, in Eclipse's model is a layout element (a part
+     * stack, a sash container or the editor area, a placeholder, a perspective or its stack, or the
+     * window), not a part or a trim element. Eclipse's renderers mark each element's widget with
+     * that element under the key {@code "modelElement"} ({@code AbstractPartRenderer.OWNING_ME}).
+     *
+     * <p>Example: the editor area's placeholder composite (owner: {@code MPlaceholder}
+     * {@code org.eclipse.ui.editorss}) is one; test.txt's text (owner: its {@code MPart}), a Text
+     * in a view, and the Quick Access field (owner: an {@code MToolControl}) are not; nor is a
+     * stack's tab folder or toolbar, which take keys (arrows switch tabs, Return enters the part).
+     */
+    static boolean isLayoutControl(Control control) {
+        if (control instanceof Shell) {
+            // Only the workbench window itself: a dialog's shell has no element of its own.
+            return control.getData("modelElement") instanceof MWindow;
+        }
+        if (control.getClass() != Composite.class) {
+            return false;
+        }
+        // Up to the control's own window, not past it: a composite in a dialog, whose shell has no
+        // element, would otherwise find the workbench window above that dialog.
+        for (Control c = control; c != null; c = c instanceof Shell ? null : c.getParent()) {
+            if (c.getData("modelElement") instanceof MUIElement owner) {
+                return owner instanceof MPartStack || owner instanceof MPartSashContainer
+                        || owner instanceof MPlaceholder || owner instanceof MPerspective
+                        || owner instanceof MPerspectiveStack || owner instanceof MWindow;
+            }
+        }
+        return false;
     }
 
     /**

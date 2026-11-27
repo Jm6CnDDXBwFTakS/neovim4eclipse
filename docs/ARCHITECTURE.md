@@ -570,9 +570,14 @@ the page editor ── keys, mouse, size ──▶ NeovimSession (the editing Ne
   (not the next key: keys typed fast after `:q` come before that move; a left click `NeovimMouse`
   swallows for Neovim, which no later display filter sees, its controller reports through
   `KeyboardHandBack.userClicked`), one watch per window:
-  after the close and after each FocusOut, if no control has the keyboard while the window is
-  active, it gives it to the active part (it never picks one itself, and never takes the keyboard
-  from a part that has it).
+  after the close and after each FocusOut, if the window is active and the keyboard is in no
+  control, or in one of Eclipse's layout controls, it gives it to the active part. A layout
+  control (`KeyboardHandBack.isLayoutControl`) takes no keys: the workbench window's shell, or a
+  plain composite in it owned by a stack, a sash, the editor area, a placeholder, a perspective or
+  the window (its client composite). Under a window manager GTK hands the keyboard to the editor
+  area's composite after the move, as seen after Restart Neovim from the help editor. A stack's tab
+  folder and toolbar take keys and do not count. It never picks a part itself, and never takes the
+  keyboard from a part's control, a toolbar field such as Quick Access, or a dialog.
 - **The pane** (`editor/WindowPane`): it draws the page window's grid (`NeovimSession.drawPageWindow`);
   when it gets the keyboard the page takes the focus (`focusPageAsync`, Neovim's screen sized to
   the page with `setEditorSizeAsync`), and the focus events come to it (`core/FocusTarget`). Below

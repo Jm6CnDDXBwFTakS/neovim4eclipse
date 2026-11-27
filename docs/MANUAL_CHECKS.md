@@ -365,7 +365,7 @@ by hand.
 
 - **On:** any
 - **Launch:** checks
-- **Areas:** editor/NeovimPageEditor.java, editor/NeovimPageInput.java, editor/EditorAttachManager.java
+- **Areas:** editor/NeovimPageEditor.java, editor/NeovimPageInput.java, editor/EditorAttachManager.java, editor/KeyboardHandBack.java
 
 A page editor is never brought back: its window was in the Neovim that ended with Eclipse. Eclipse still keeps its
 tab in the saved layout, which the plug-in closes at the start (`NeovimPageEditor.closeLeftovers`).

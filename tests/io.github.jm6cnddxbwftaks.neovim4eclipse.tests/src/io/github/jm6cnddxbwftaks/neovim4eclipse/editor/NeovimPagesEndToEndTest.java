@@ -8,6 +8,7 @@ import static io.github.jm6cnddxbwftaks.neovim4eclipse.editor.UiTestSupport.wait
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
+import io.github.jm6cnddxbwftaks.neovim4eclipse.core.NeovimSession;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.GridSnapshot;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
@@ -276,6 +278,40 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
     }
 
     /**
+     * Under a window manager, the move of the code's stack after a close leaves the keyboard on one
+     * of Eclipse's layout controls, not on none: GTK hands it down the window to the editor area's
+     * placeholder composite, and the keys typed then go nowhere. The test display has no window
+     * manager, so the test puts the keyboard where GTK does while the watch runs: it comes back to
+     * test.txt's text. Controls that only look like layout are not: a stack's tab folder (it takes
+     * arrows), a plain composite inside test.txt's part, test.txt's text.
+     */
+    @Test
+    void theKeyboardOnALayoutControlComesBack() {
+        closeTheHelpEditorWithQ();
+        org.eclipse.ui.IWorkbenchWindow window = editor.getSite().getWorkbenchWindow();
+        org.eclipse.e4.ui.model.application.ui.basic.MWindow model =
+                window.getService(org.eclipse.e4.ui.model.application.ui.basic.MWindow.class);
+        org.eclipse.e4.ui.workbench.modeling.EModelService models =
+                window.getService(org.eclipse.e4.ui.workbench.modeling.EModelService.class);
+        Control area = (Control) models.find("org.eclipse.ui.editorss", model).getWidget();
+        assertTrue(KeyboardHandBack.isLayoutControl(area), "the editor area's placeholder composite is a layout control");
+        Control tabs = (Control) EditorSplits.stackOf(editor.getSite().getService(MPart.class)).getWidget();
+        assertFalse(KeyboardHandBack.isLayoutControl(tabs), "a stack's tab folder is not");
+        org.eclipse.swt.widgets.Composite inPart = new org.eclipse.swt.widgets.Composite(widget.getParent(), SWT.NONE);
+        try {
+            assertFalse(KeyboardHandBack.isLayoutControl(inPart), "a plain composite inside test.txt's part is not");
+        } finally {
+            inPart.dispose();
+        }
+        assertFalse(KeyboardHandBack.isLayoutControl(widget), "test.txt's text is not");
+        assertTrue(area.forceFocus(), "the editor area's composite took the keyboard");
+        waitUntil("the keyboard back in test.txt from the editor area", TIMEOUT_MS, () -> {
+            settle();
+            return widget.isFocusControl();
+        }, () -> "; focus: " + widget.getDisplay().getFocusControl());
+    }
+
+    /**
      * While the watch runs, a control that takes the keyboard keeps it, even one outside the active
      * part: a text field put in the workbench window takes it from test.txt (the active editor), and
      * the check after that FocusOut, finding a control with the keyboard, leaves it there. Without
@@ -299,6 +335,102 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
         } finally {
             field.dispose();
         }
+    }
+
+    /**
+     * <em>Restart Neovim</em> from the menu while the help editor has the keyboard: its question
+     * dialog takes the keyboard, and once it is gone, before the workbench window is the active one
+     * again, Restart closes the help editor (its window belongs to the Neovim that ends); when the
+     * workbench window is active again the keyboard is back in test.txt, the next key reaching the
+     * new Neovim. A regression test of that route: on this display, without a window manager,
+     * Eclipse's own handling of the window's activation also gives test.txt the keyboard.
+     */
+    @Test
+    void restartNeovimFromTheHelpEditorGivesTheFocusBack() throws Exception {
+        String before = document.get();
+        colon("help help-context");
+        NeovimPageEditor help = pageShowing("help-context");
+        UiTestSupport.requireKeyboardFocus(help.canvasForTests(), TIMEOUT_MS);
+        // The question is no error dialog, so the run's error-dialog watch leaves it alone.
+        boolean[] pressed = { false };
+        Runnable stopLooking = pressInTheNextDialog(widget.getShell(), "&Restart", pressed);
+        try {
+            runCommand("io.github.jm6cnddxbwftaks.neovim4eclipse.commands.restart");
+        } finally {
+            stopLooking.run();
+        }
+        assertTrue(pressed[0], "Restart pressed in the question");
+        // The dialog is gone; a window manager now makes the workbench window the active one again,
+        // and SWT hands its keyboard to the control that last had it, the help editor's screen,
+        // gone. The test display has no window manager, so the test does what one does.
+        widget.getShell().forceActive();
+        NeovimSession fresh = io.github.jm6cnddxbwftaks.neovim4eclipse.Activator.getDefault().currentSession();
+        assertNotSame(session, fresh, "a new Neovim");
+        waitUntil("the keyboard back in test.txt after Restart Neovim", TIMEOUT_MS, () -> {
+            UiTestSupport.settle(fresh, TIMEOUT_MS);
+            NeovimEditorController c = EditorAttachManager.getInstance().getActiveController();
+            return pages().isEmpty() && c != null && c.getEditor() == editor && widget.isFocusControl();
+        }, () -> "; pages open: " + pages().size()
+                + ", active part: " + (page().getActivePart() == null ? null : page().getActivePart().getTitle())
+                + ", focus: " + widget.getDisplay().getFocusControl());
+        type(widget, "x");
+        waitUntil("x deleting a character of test.txt", TIMEOUT_MS, () -> {
+            UiTestSupport.settle(fresh, TIMEOUT_MS);
+            return document.get().length() == before.length() - 1;
+        }, () -> "; test.txt holds \"" + document.get() + "\"");
+    }
+
+    /**
+     * Presses the button labeled {@code label} in the next modal dialog that opens over
+     * {@code owner}, from inside that dialog's own event loop (a timer keeps running there), and
+     * sets {@code pressed}. Gives up after the test's wait ({@code TestWait}), closing any such
+     * dialog so that the command that opened it returns; the returned runnable stops the looking.
+     */
+    private static Runnable pressInTheNextDialog(Shell owner, String label, boolean[] pressed) {
+        org.eclipse.swt.widgets.Display display = owner.getDisplay();
+        long deadline = System.currentTimeMillis() + TIMEOUT_MS;
+        boolean[] stopped = { false };
+        Runnable look = new Runnable() {
+            @Override
+            public void run() {
+                if (stopped[0]) {
+                    return;
+                }
+                for (Shell shell : display.getShells()) {
+                    if (shell != owner && shell.isVisible() && UiTestSupport.isModal(shell)) {
+                        org.eclipse.swt.widgets.Button button = buttonLabeled(shell, label);
+                        if (button != null) {
+                            pressed[0] = true;
+                            button.notifyListeners(SWT.Selection, new Event());
+                            return;
+                        }
+                        if (System.currentTimeMillis() > deadline) {
+                            shell.close();
+                        }
+                    }
+                }
+                if (System.currentTimeMillis() <= deadline) {
+                    display.timerExec(50, this);
+                }
+            }
+        };
+        display.timerExec(50, look);
+        return () -> stopped[0] = true;
+    }
+
+    private static org.eclipse.swt.widgets.Button buttonLabeled(org.eclipse.swt.widgets.Composite parent, String label) {
+        for (Control child : parent.getChildren()) {
+            if (child instanceof org.eclipse.swt.widgets.Button b && label.equals(b.getText())) {
+                return b;
+            }
+            if (child instanceof org.eclipse.swt.widgets.Composite c) {
+                org.eclipse.swt.widgets.Button found = buttonLabeled(c, label);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     /** {@code :q} typed in the messages editor gives the keyboard back to the code's editor. */

@@ -1002,8 +1002,9 @@ The user has had a few errors and types `:messages` and Enter in an attached edi
    Eclipse brings the code's editor to the front, but the keyboard was in the pane, now gone, and
    on GTK the move of the code's stack that follows (Eclipse's `CleanupAddon` removing the empty
    stack, `Control.setParent`) takes it from the text once more. `editor/KeyboardHandBack` watches
-   until the next click and gives the keyboard to the active part whenever no control has
-   it, so the next key reaches the code without a click.
+   until the next click and gives the keyboard to the active part whenever no control has it, or
+   only a layout control does (under a window manager GTK hands it to the editor area's own
+   composite), so the next key reaches the code without a click.
 
 `:checkhealth` and `:help` take another road to their editors: Neovim opens a window Eclipse
 cannot show, for the report or the help page, and once the command is over the `WinNew` net
