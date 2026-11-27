@@ -6,8 +6,6 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.function.BooleanSupplier;
-
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Color;
@@ -19,7 +17,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OverlayColors;
 
 /** The border and tint of the command line and output popup, on real SWT widgets. */
@@ -51,20 +48,6 @@ class OverlayFrameTest {
         assertEquals(OverlayColors.border(0x1E1E1E, 0xD4D4D4), rgb(frame.control().getBackground()));
         assertEquals(OverlayColors.background(0x1E1E1E), rgb(frame.content().getBackground()));
         assertEquals(host.getFont(), frame.content().getFont());
-    }
-    /**
-     * Runs the event loop (paints, posted work) until {@code condition} holds, waiting for the
-     * outcome rather than a fixed time (CONTRIBUTING.md, "Tests on a loaded machine").
-     */
-    private static void runUntil(String what, BooleanSupplier condition) throws InterruptedException {
-        Display display = Display.getDefault();
-        long deadline = System.currentTimeMillis() + TestWait.millis();
-        while (!condition.getAsBoolean()) {
-            assertTrue(System.currentTimeMillis() < deadline, "timed out waiting for " + what);
-            if (!display.readAndDispatch()) {
-                Thread.sleep(5);
-            }
-        }
     }
 
     @Test

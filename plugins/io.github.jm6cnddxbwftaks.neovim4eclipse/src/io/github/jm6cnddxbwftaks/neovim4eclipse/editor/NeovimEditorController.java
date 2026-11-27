@@ -134,8 +134,6 @@ public final class NeovimEditorController implements AutoCloseable {
     private static final StatusRows STATUS_ROWS = new StatusRows(SwtUiExecutor.INSTANCE);
     /** Neovim's status line of this editor's window, under the text: {@link #STATUS_ROWS}'s, not closed with this. */
     private final StatusLineRow statusLineRow;
-    /** This editor's Neovim window, whose status line {@link #statusLineRow} shows. */
-    private final EditorWindow window;
     private final CursorStyleController cursorStyle;
     /** Paints Neovim's search matches; {@code null} when search highlighting is off or the viewer cannot. */
     private final SearchHighlighter searchHighlighter;
@@ -269,7 +267,6 @@ public final class NeovimEditorController implements AutoCloseable {
         this.synchronizer.setRepairReporting(new RepairNotice(editor, session));
         this.insertTracker = new InsertTracker(documentOf(editor), this::isTrackableInsertChange);
         this.modeStatus = new ModeStatusContribution();
-        this.window = window;
         this.cursorStyle = new CursorStyleController(styledText);
         ITextViewer textViewer = viewerOf(editor);
         if (session.searchEnabled() && textViewer != null && SearchHighlighter.supports(textViewer)) {

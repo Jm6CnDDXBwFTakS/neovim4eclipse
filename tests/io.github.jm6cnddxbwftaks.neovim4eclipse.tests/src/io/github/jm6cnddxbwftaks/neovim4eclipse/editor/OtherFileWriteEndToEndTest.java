@@ -495,7 +495,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
             // v:errmsg is the last error Neovim reported; cleared first, so an older one does not count.
             SessionProbe.lua(session, "vim.v.errmsg = ''; return 0");
             runCommandLine(widget, "enew!");
-            ITextEditor untitled = expectUntitledEditor();
+            expectUntitledEditor();
             settle(); // an error would be reported after the new editor shows
             assertEquals("", SessionProbe.lua(session, "return vim.v.errmsg"), "no error; Neovim shows " + shownText());
             // getEditorReferences, not the deprecated getEditors; getEditor(false) does not restore one.

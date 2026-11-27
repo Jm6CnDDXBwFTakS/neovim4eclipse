@@ -183,10 +183,6 @@ final class StateSnapshot {
                 endLine, Math.max(0, endCol - 1));
     }
 
-    private static String text(Object o) {
-        return o == null ? "" : String.valueOf(o);
-    }
-
     /** A msgpack integer arrives as some {@link Number} type; strings are tolerated too. */
     static int toInt(Object o, int fallback) {
         if (o instanceof Number n) {
