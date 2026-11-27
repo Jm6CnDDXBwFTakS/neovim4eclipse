@@ -19,10 +19,18 @@ own commands.
 
 **Plug-ins that draw on the screen** are shown only in part, since Eclipse draws the editor:
 
-- Shown: Neovim's own popup menu (`Ctrl-N`, Tab on the `:` line), the labels of jump plug-ins (flash, leap, hop,
-  mini.jump2d) and floating windows that do not take the keyboard (which-key's key hints).
-- Not shown: windows that take the keyboard (pickers such as Telescope, file trees, dashboards,
-  `:Lazy`) and the menus of completion plug-ins (nvim-cmp, blink.cmp).
+- Shown: floating windows, such as which-key's key hints, and those that take the keyboard
+  (pickers such as Telescope, fzf-lua and snacks.nvim, oil.nvim's float), Neovim's own
+  popup menu (`Ctrl-N`, Tab on the `:` line) and the labels of jump plug-ins (flash, leap, hop,
+  mini.jump2d).
+- Opened in Eclipse: a plug-in's split or tab page on a file (a picker's `Ctrl+V` or `Ctrl+T`,
+  vim-fugitive's commit message) becomes an Eclipse split or editor tab.
+- Not shown: splits on anything but a file (file trees, vim-fugitive's status window and
+  `:Gdiffsplit`), and a plug-in's buffer that is not a file, opened in the editor's own window
+  (`:Oil` without `--float`: the editor stays on its file).
+- Open only at a key: windows that follow typing in insert mode, such as the menus of completion
+  plug-ins (nvim-cmp, blink.cmp), open at the plug-in's own `Ctrl-N` and follow the typing from
+  then on.
 
 **Requires:**
 
