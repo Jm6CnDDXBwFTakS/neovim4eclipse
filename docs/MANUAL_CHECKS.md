@@ -383,27 +383,26 @@ it: closing the page editors at Eclipse's exit as well would avoid it.
 
 ## Floating windows that take the keyboard
 
-### `fl-real-plugins` Your own pickers, `:Lazy` and which-key
+### `fl-real-plugins` Your own pickers and which-key
 
 - **On:** linux, macos, windows
 - **Launch:** normal
 - **Areas:** core/LuaScripts.java, core/lua/**, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridMouse.java, editor/LineInputMethod.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
 
 Telescope's `current_buffer_fuzzy_find`, `find_files` and `live_grep`, snacks.nvim's `lines`
-and `files`, fzf-lua's `blines` and its `Ctrl-V` on a file, and `:Lazy` are tested at pinned
+and `files`, and fzf-lua's `blines` and its `Ctrl-V` on a file are tested at pinned
 commits (`PickersEndToEndTest`, `SnacksPickerEndToEndTest`, `SnacksPickerIntegrationTest`,
-`FloatInsertIntegrationTest`, `FzfLuaEndToEndTest`, `FzfLuaIntegrationTest`,
-`NeovimWindowsIntegrationTest`), with the plug-ins' defaults (but for the `Ctrl-V` test, which
+`FloatInsertIntegrationTest`, `FzfLuaEndToEndTest`, `FzfLuaIntegrationTest`), with the plug-ins' defaults (but for the `Ctrl-V` test, which
 binds fzf-lua's split action itself): typing narrows the list, Enter jumps to the line or opens
 the file in an Eclipse editor, the document you came from is unchanged. fzf-lua's only where fzf
 is on `PATH`, `live_grep` and snacks' `files` only where `rg` is. Real clicks through the system,
 on a picker's list and in the text, Ctrl+click included, are tested on Linux and Windows
-(`RealMouseEndToEndTest`, `PickersEndToEndTest`), not on macOS, where step 6 does them by hand.
+(`RealMouseEndToEndTest`, `PickersEndToEndTest`), not on macOS, where step 5 does them by hand.
 The menus of blink.cmp and nvim-cmp after their `Ctrl-N` are tested too
 (`CompletionPluginsEndToEndTest`), so no step here checks them.
 Your own config, with its pickers, previews, borders and colorscheme, and an input method in a
 prompt, are only seen on screen. Use a config that has Telescope (or another picker, fzf-lua,
-snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
+snacks.picker) and which-key; skip a step whose plug-in it lacks.
 
 1. In a project of your own with several files, open a file of it, open a file picker with your
    mapping (`<leader>ff`), and type part of another file's name.
@@ -416,17 +415,13 @@ snacks.picker), lazy.nvim and which-key; skip a step whose plug-in it lacks.
    ⇒ The picker is still open after the switch, with the cursor in its prompt; on macOS the
    click selects the row and the picker stays; the wheel moves the list; no Find/Replace dialog
    opens and the file behind is not selected; the double click opens that row.
-3. Run `:Lazy`, move with `j` and `k`, and close it with `q`.
-   ⇒ The window is drawn with the cursor on its lines, the editor's text visible around it (no
-   dark block over the editor, with a colorscheme that sets a background too); `q` closes it,
-   and the caret is back.
-4. With an input method on (Japanese: IBus or fcitx on Linux, the system's on macOS and Windows),
+3. With an input method on (Japanese: IBus or fcitx on Linux, the system's on macOS and Windows),
    open the picker and type a word.
    ⇒ The composing text and the candidates appear at the prompt's cursor, nothing of it reaches
    the file, and the committed word reaches the prompt once.
-5. Press your leader key and wait.
+4. Press your leader key and wait.
    ⇒ which-key's panel is drawn at the bottom of the editor, and the next key goes on as usual.
-6. On macOS only, in Normal mode: click into the text on another line, then Cmd+click a word.
+5. On macOS only, in Normal mode: click into the text on another line, then Cmd+click a word.
    ⇒ The click moves the caret there and the editor keeps the keyboard; the Cmd+click is
    Eclipse's (its hyperlinks), and Neovim does not jump.
 
