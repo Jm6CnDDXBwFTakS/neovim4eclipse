@@ -718,7 +718,7 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   Cmd+click and the wheel with either held do nothing on a floating window, the `q:` window or a
   page editor, the right button neither (Neovim's answer to it is a menu that waits for a key),
   and during an insert Eclipse types the mouse is not sent.
-- **A window that takes the keyboard** (a picker's prompt, `:Lazy`, hover documentation entered
+- **A window that takes the keyboard** (a picker's prompt, hover documentation entered
   with a second `K`, with Neovim's own `K`: `vim.g.neovim4eclipse_ide_keys = 0`) is drawn with Neovim's cursor in it, a bar in Insert mode, and the editor's
   caret is hidden meanwhile: your keys go to that window, as in Neovim, Esc and Enter included. A
   window running a program in a terminal (fzf-lua's list, which runs fzf) has the keys in Terminal
@@ -726,7 +726,7 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   **Clicking away moves Neovim out of it**, as in a terminal, its insert or Terminal mode ended: another editor or
   view, or a click in the editor's text (a left click then lands there; a right click or Ctrl+click
   goes on to Eclipse). The plug-in decides whether its window survives that: Telescope closes
-  itself, `:Lazy` stays, drawn without the cursor, until you click it or close it. **Eclipse mode
+  itself, fzf-lua's list stays, drawn without the cursor, until you click it or close it. **Eclipse mode
   and closing the editor close it**, since its keys are gone. While Neovim waits for the rest of a command (`Ctrl-W`, `f`), a click or leaving the editor changes nothing, as losing focus changes nothing in a terminal, and your next key finishes the command. Switching to another application keeps it. A
   window on a file with unsaved changes closes and the changes stay, in a hidden buffer (`:ls`);
   if closing would unload or wipe that buffer (`'bufhidden'`, `'nohidden'`), the window stays,
@@ -765,7 +765,7 @@ It draws them all, one that takes the keyboard (a picker's prompt) with Neovim's
   ([README](../README.md#known-limitations), "Neovim plug-ins that draw"), and a hidden floating
   window; one that has the keyboard, hidden as it opens or later by its plug-in, is closed, with
   a message. Nor one that is there only to dim the text below it, every cell blank and
-  see-through (`'winblend'`), such as lazy.nvim's backdrop under `:Lazy`: the editor draws a
+  see-through (`'winblend'`), such as the backdrop a plug-in lays under its own window: the editor draws a
   window over the text, never through it, so it would hide the text behind a block of its color.
   Unless your keys go to it (it has Neovim's cursor): then it is drawn, as a solid block.
 - **`'winblend'` is not honored:** a see-through floating window with text in it (a completion

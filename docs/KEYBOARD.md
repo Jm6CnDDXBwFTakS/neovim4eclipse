@@ -52,7 +52,7 @@ way).
 
 Tick any of them to send it to Neovim instead.
 
-**In a plug-in's floating window** that has Neovim's cursor (a picker's prompt, `:Lazy`), every
+**In a plug-in's floating window** that has Neovim's cursor (a picker's prompt), every
 letter is Neovim's, whatever these boxes say, as while Neovim completes (`util/KeyContextRule`).
 Why: the window has the keys, and an Eclipse command would act on the document behind it. Example:
 `Ctrl+F` in Telescope's prompt is Telescope's, where it would open Find/Replace. The contexts are

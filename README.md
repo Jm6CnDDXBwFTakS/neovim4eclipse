@@ -204,6 +204,9 @@ With a separate config for Eclipse (below), run that one: `NVIM_APPNAME=eclipse-
 PowerShell, `$env:NVIM_APPNAME = 'eclipse-nvim'; nvim`). Both Neovims then use the same plug-ins,
 installed once.
 
+A plug-in manager's own window (lazy.nvim's `:Lazy` and the like) is best effort in Eclipse: it
+may work, but it is not supported. Manage your plug-ins in a terminal.
+
 **Errors in your config.** If `init.lua` reports an error while Neovim starts (a typo, or a
 Vimscript line such as `nnoremap ; :` in a Lua file: write `vim.keymap.set('n', ';', ':')`, or wrap
 it in `vim.cmd[[...]]`), Neovim starts anyway, with what your config set up before the error (after
@@ -379,8 +382,8 @@ gets in your way:
 7. **Neovim plug-ins that draw are shown only in part.** Eclipse draws the editor, not Neovim, so
    only some of what plug-ins draw appears:
    - **Shown:** floating windows (a panel of key hints such as which-key's, a note or progress
-     window opened in the background, and one that takes the keyboard, such as a picker's prompt
-     or `:Lazy`, drawn with Neovim's cursor; see
+     window opened in the background, and one that takes the keyboard, such as a picker's prompt,
+     drawn with Neovim's cursor; see
      [Floating windows](docs/USER_GUIDE.md#floating-windows)), Neovim's own popup menu for `Ctrl-N`
      and for Tab on the `:` line ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and the labels of
      jump plug-ins (flash, leap, hop, mini.jump2d; see [Jump labels](docs/USER_GUIDE.md#jump-labels)).

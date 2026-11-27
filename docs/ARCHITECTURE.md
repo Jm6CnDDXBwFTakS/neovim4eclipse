@@ -312,7 +312,7 @@ net turns a plug-in's window on a file into an Eclipse split or editor tab (a pi
 plug-in's, floating or special, and the quickfix,
 location list and preview windows, which Eclipse cannot show (the quickfix and location list
 windows are then shown the Eclipse way, section 8); floating windows are left alone, one that
-opens with the focus (a picker's prompt, `:Lazy`) too: drawn with the cursor, or, where the editor
+opens with the focus (a picker's prompt) too: drawn with the cursor, or, where the editor
 does not draw it (hidden, past the limits), closed by the one check above (`close_undrawn`), since
 its keys would go to a window nobody sees. One the
 user's config leaves the focus in at start (lazy.nvim's installer) is left before the home buffer
@@ -1154,7 +1154,7 @@ NeovimEditorController ── UI thread ──▶ editor/FloatingWindows
 - **Not see-through** (`Grids.dimsOnly`): a canvas covers the text, so `'winblend'` (the
   `blend` of `hl_attr_define`, in `GridEvent.HlAttr`) cannot be drawn. A blended float with text
   is drawn solid; one with every cell blank and blended is there only to dim the text below
-  (lazy.nvim's backdrop under `:Lazy`) and is left out, since drawn it would hide the editor
+  (a backdrop a plug-in lays under its own window) and is left out, since drawn it would hide the editor
   behind a block of its color, unless it has the cursor: the keys go to it, so it is drawn (left
   out, `unseenCursor` would close it). Neovim's own (ui2's, the popup menu) are always drawn.
 - **Where** (`util/FloatPlacement`): one rule. Neovim sends the screen cell it worked out for the

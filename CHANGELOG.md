@@ -19,11 +19,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
-- A plug-in's floating window that takes the keyboard (a picker's prompt, `:Lazy`, hover
+- A plug-in's floating window that takes the keyboard (a picker's prompt, hover
   documentation entered with a second `K`, with Neovim's own `K`) stays open and is drawn with Neovim's cursor in it, a
   bar in Insert mode; your keys go to it, and the editor's caret is hidden meanwhile. Clicking
   away (another editor or view, its text) moves Neovim out of it, as in a terminal: Telescope
-  closes itself, `:Lazy` stays drawn. Eclipse mode closes it. Before, such a
+  closes itself, fzf-lua's list stays drawn. Eclipse mode closes it. Before, such a
   window was closed at once with a message. A window that has the keyboard while Neovim is still
   starting (lazy.nvim's installer, while it installs missing plug-ins) is drawn over the editor,
   with its progress, and keeps the keyboard when the start is over, as in a terminal, so the keys
@@ -104,9 +104,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   five seconds and leaves the new editor's text unsent. As in Neovim, the next key finishes the
   command in the editor it was typed in, and the keys after it go to the new editor.
 - A floating window that is there only to dim the text below it (every cell blank and
-  see-through, `'winblend'`), such as lazy.nvim's backdrop under `:Lazy` with LazyVim's colors,
-  was drawn as a solid block over the whole editor. It is now left out, and `:Lazy`'s own window
-  is drawn over the text.
+  see-through, `'winblend'`), such as the backdrop lazy.nvim lays under its own window with
+  LazyVim's colors, was drawn as a solid block over the whole editor. It is now left out, and the
+  window above it is drawn over the text.
 - Eclipse could stay in Insert mode while Neovim had gone back to Normal mode, when Neovim's answer
   about its mode arrived just after its report that the mode had changed.
 - A plug-in's floating window of a huge size (5000 by 5000 cells) no longer takes hundreds of

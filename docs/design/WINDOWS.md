@@ -46,7 +46,7 @@ The Neovim side:
   so `H` and `L` no longer matched the editor. A window `:noautocmd` opened, with no `WinNew`, is
   found the same way as Neovim is about to wait for a key (`SafeState`). One on a file is opened as an Eclipse editor first
   ([SPLITS.md](SPLITS.md), "Refused"), so that a picker's `Ctrl-V` works. A floating window that opens with the focus (a
-  picker's prompt, `:Lazy`) is left alone by the net: drawn with Neovim's cursor while the
+  picker's prompt) is left alone by the net: drawn with Neovim's cursor while the
   editor's caret is hidden, and leaving the editor moves Neovim out of it, the float staying unless
   its plug-in closes it (`move_out_of_float`). One the editor does
   not draw (hidden by its plug-in, past the limits) is closed in one place,
