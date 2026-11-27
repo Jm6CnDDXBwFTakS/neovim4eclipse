@@ -55,7 +55,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
  * <ol>
  *   <li>{@code 01-picker.png}: Telescope's {@code find_files} over {@code Order.java}, drawn by
  *       the editor as Neovim lays it out, {@code inv} typed and {@code Invoice.java} chosen, its
- *       preview beside the list. Enter then opens it in an Eclipse editor, where the story goes on.
+ *       preview beside the list. Enter then opens it in an Eclipse editor, where the story goes on;
+ *       {@code Order.java}'s editor is closed, so that its problem in the third picture has no
+ *       column (an open file's has one), which would make {@code :clist}'s first line wrap.
  *       Telescope and its library plenary come at the commits pinned and vetted in
  *       {@code releng/test-plugins.properties} ({@code java releng/tools/plugins/TestPlugins.java
  *       fetch}, which the pictures tool runs first); without them the run fails, since the listing
@@ -208,6 +210,11 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
             StyledText text = widgetOf(java);
             waitUntil("the picker gone, Normal mode", TIMEOUT_MS,
                     () -> telescopeWindows(null) == 0 && "n".equals(session.getMode()));
+            // Order.java's editor closed: the story goes on in Invoice.java alone. Left open, its
+            // problem in picture 3 would have a column (an open file's has: util/QuickfixEntries),
+            // and ":13 col 36" makes :clist's first line too long for one row.
+            page.closeEditor(order, false);
+            waitUntil("Order.java's editor closed", TIMEOUT_MS, () -> page.getEditorReferences().length == 1);
 
             // 2. The : command line, with a substitution typed but not yet run.
             openCommandLine(text, "%s/total/sum/g");
