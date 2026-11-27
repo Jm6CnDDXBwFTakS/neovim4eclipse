@@ -54,6 +54,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- A plug-in that loads a file no editor shows and then puts it in the window (harpoon's jump:
+  `bufload()`, then `nvim_set_current_buf()`) left the editor where it was: Neovim loads the file in
+  a hidden window of its own, and Eclipse, told of that window, sent Neovim back after the jump.
+  Neovim's hidden window is no longer reported, and the file's editor opens.
 - vim-fugitive's `:Git commit` without `-m` made no commit: its message editor opened, but git had
   already ended, so the message typed and saved there was lost. A plug-in's split on a file that
   opens as an Eclipse editor now keeps its buffer, which the editor takes over, so a plug-in that

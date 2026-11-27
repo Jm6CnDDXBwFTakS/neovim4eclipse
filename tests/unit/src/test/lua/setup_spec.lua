@@ -277,6 +277,25 @@ t.test('BufEnter says whether the move is in the jump history', function()
   t.eq(true, a > 0)
 end)
 
+-- harpoon's jump: bufload() on a file no window shows, then nvim_set_current_buf(). Neovim loads
+-- the buffer in its hidden autocommand window, whose BufEnter Eclipse would answer by sending
+-- Neovim back, after the jump. Only the jump's own BufEnter, in the editor's window, is reported.
+t.test('a BufEnter in Neovim\'s autocommand window (bufload, nvim_buf_call) is not reported', function()
+  t.setup()
+  local file = vim.fn.tempname()
+  vim.fn.writefile({ 'one' }, file)
+  local win = vim.api.nvim_get_current_win()
+  t.forget()
+  local buf = vim.fn.bufadd(file)
+  vim.fn.bufload(buf)
+  vim.api.nvim_buf_call(vim.api.nvim_create_buf(true, false), function() vim.cmd('doautocmd BufEnter') end)
+  t.eq({}, t.sent('eclipse_buf_enter'), 'nothing from the autocommand window')
+  vim.api.nvim_set_current_buf(buf)
+  local reported = t.sent('eclipse_buf_enter')
+  t.eq(1, #reported, 'one BufEnter: the jump\'s')
+  t.eq({ buf, win }, { reported[1][1], reported[1][2] }, 'the jump, in the editor\'s window')
+end)
+
 -- File-by-file security review of 0.2.1: Neovim 0.12.6's R Markdown syntax ran a crafted chunk
 -- header's backticks in a shell (Vim advisory GHSA-x2w5-pj55-7hpc). SETUP turns the chunk language
 -- guessing off, unless the user's config set it.

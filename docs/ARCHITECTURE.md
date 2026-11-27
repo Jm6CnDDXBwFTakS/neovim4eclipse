@@ -359,6 +359,11 @@ that sets a buffer into a window it does not enter (`nvim_win_set_buf` on a prev
 snacks.nvim's picker does with the open file) fires `BufEnter` there only for the moment of the
 call, while Neovim stays in the picker's input, and taking it from there would close the picker.
 Anywhere else (the window named, a plain window of another tab page) Neovim goes back as before.
+Neovim's autocommand window (`win_gettype()` `autocmd`), which it opens hidden only while it runs
+something on a buffer no window of the current tab page shows (`bufload()`, `nvim_buf_call()`,
+autocommands for a hidden buffer), is never reported: the return Eclipse sent for it would arrive
+after the move that followed and undo it (harpoon's jump, `bufload()` then
+`nvim_set_current_buf()`, stayed in the editor jumped from).
 A host command carries the window it ran in (`HostCommand.origin`, the fourth value of
 `eclipse_command`), and `util/CommandOrigin` is the one rule for whose it is: a page with the
 focus takes only its own window's commands, a text editor every command not from a page's window,

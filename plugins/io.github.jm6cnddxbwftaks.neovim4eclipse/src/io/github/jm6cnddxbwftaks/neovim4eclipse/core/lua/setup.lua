@@ -125,6 +125,17 @@ vim.api.nvim_create_autocmd('BufEnter', {
     if vim.fn.getcmdwintype() ~= '' then
       return
     end
+    -- Neovim's autocommand window (win_gettype() 'autocmd'): a hidden window it opens only
+    -- while it runs something on a buffer no window of the tab page shows (bufload(),
+    -- nvim_buf_call(), autocommands for a hidden buffer), and closes when that is done.
+    -- Nobody sees it and nothing was entered, so Eclipse is not told:
+    -- it would send Neovim back from that window, and its reply, arriving later, would undo
+    -- the move that followed. Example: harpoon's jump loads the file with bufload(), then puts
+    -- it in the window with nvim_set_current_buf(); Eclipse's answer to the first BufEnter
+    -- took the window back before it opened the file's editor.
+    if vim.fn.win_gettype() == 'autocmd' then
+      return
+    end
     -- One of ui2's own buffers (UI2): its pager or prompt, entered for a moment. The
     -- editor draws it where it is; Eclipse is not told, or it would send Neovim back.
     -- The buffer, not the window: a file opened in the pager (gf, :e) is announced,
