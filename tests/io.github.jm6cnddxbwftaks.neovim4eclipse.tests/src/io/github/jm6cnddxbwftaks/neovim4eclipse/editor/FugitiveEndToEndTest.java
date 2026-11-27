@@ -13,14 +13,17 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.ui.texteditor.ITextEditor;
@@ -120,20 +123,52 @@ class FugitiveEndToEndTest extends EndToEndTestBase {
 
     @AfterEach
     void restartNeovim() {
-        if (!loaded) {
-            return; // skipped, or the editor never opened: nothing was loaded
-        }
-        closeEditorsButTestTxt(); // a message editor left unsaved by a failed test asks nothing
-        Path workspace = folder().getParent();
         try {
-            Files.deleteIfExists(workspace.resolve(GLOBAL_CONFIG));
-            Files.deleteIfExists(workspace.resolve(GIT_OUTPUT));
-        } catch (IOException e) {
-            throw new AssertionError("the test's own files in " + workspace, e);
+            if (!loaded) {
+                return; // skipped, or the editor never opened: nothing was loaded
+            }
+            closeEditorsButTestTxt(); // a message editor left unsaved by a failed test asks nothing
+            Path workspace = folder().getParent();
+            try {
+                Files.deleteIfExists(workspace.resolve(GLOBAL_CONFIG));
+                Files.deleteIfExists(workspace.resolve(GIT_OUTPUT));
+            } catch (IOException e) {
+                throw new AssertionError("the test's own files in " + workspace, e);
+            }
+            NeovimSession fresh = restartNeovimAfterThisTest();
+            assertEquals(true, SessionProbe.lua(fresh, "return vim.g.loaded_fugitive == nil"),
+                    "the next test's Neovim never loaded fugitive");
+        } finally {
+            // Last, once the Neovim that ran fugitive's git is gone; also when the restart failed,
+            // or makeRepository left a repository half made (loaded is then still false).
+            deleteRepository();
         }
-        NeovimSession fresh = restartNeovimAfterThisTest();
-        assertEquals(true, SessionProbe.lua(fresh, "return vim.g.loaded_fugitive == nil"),
-                "the next test's Neovim never loaded fugitive");
+    }
+
+    /**
+     * Deletes the project's {@code .git}, deepest first, before the base class deletes the project.
+     * Git writes its objects read-only ({@code .git/objects/44/3cb2475d6f...}), and on Windows a
+     * read-only file cannot be deleted: Eclipse's project delete then fails on each one, leaves the
+     * folder behind, and every later test's project delete fails on it too. So each file is made
+     * writable first; on Linux and macOS, where a folder's permissions decide instead, that changes
+     * nothing.
+     */
+    private void deleteRepository() {
+        if (project == null) {
+            return;
+        }
+        Path git = folder().resolve(".git");
+        if (!Files.exists(git, LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(git)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                path.toFile().setWritable(true);
+                Files.delete(path);
+            }
+        } catch (IOException e) {
+            throw new AssertionError("the test's repository " + git, e);
+        }
     }
 
     /**
