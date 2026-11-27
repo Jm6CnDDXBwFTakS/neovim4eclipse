@@ -61,6 +61,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- Closing the help, messages or checkhealth editor with `q` or `:q` left no control with the
+  keyboard: the editor you came from was in front again, but the next key went nowhere until a
+  click. The keyboard now goes back to the part Eclipse brings to the front, usually that editor.
 - A plug-in that loads a file no editor shows and then puts it in the window (harpoon's jump:
   `bufload()`, then `nvim_set_current_buf()`) left the editor where it was: Neovim loads the file in
   a hidden window of its own, and Eclipse, told of that window, sent Neovim back after the jump.

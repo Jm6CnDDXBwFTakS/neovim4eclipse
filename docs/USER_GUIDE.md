@@ -864,10 +864,12 @@ window is an Eclipse editor, and it is a window of your own Neovim, the one behi
   Vim's jumps never go into a help window. Inside the help editor they go back and forth through the
   help pages you followed.
 - **Closing it:** `q` or `:q` (`q` unless you mapped it for that buffer), or its tab's close
-  button. The next command opens it again. **Restart Neovim** closes every page editor, as their
-  windows belong to the Neovim that ended; so does Neovim closing a page's window by itself. After a
-  Neovim crash, a page editor stays until the next command of its kind, which replaces it with one
-  on the new Neovim. Page editors are not brought back when Eclipse starts again.
+  button. The keyboard goes back to the part Eclipse brings to the front, usually the editor you
+  typed the command in, so you type on without a click. The next command opens it again.
+  **Restart Neovim** closes every page editor, as their windows belong to the Neovim that ended; so
+  does Neovim closing a page's window by itself. After a Neovim crash, a page editor stays until the
+  next command of its kind, which replaces it with one on the new Neovim. Page editors are not
+  brought back when Eclipse starts again.
 - **In the background**, behind another editor, it keeps what it showed: Neovim draws a window only
   while it is in front, and it is drawn anew when you come back to it.
 

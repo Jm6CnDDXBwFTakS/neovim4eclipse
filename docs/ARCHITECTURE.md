@@ -563,7 +563,16 @@ the page editor ── keys, mouse, size ──▶ NeovimSession (the editing Ne
   `WINDOWS` for the others): `BufWriteCmd`, `FileWriteCmd` and `FileAppendCmd` answer Vim's E382
   and write nothing. Two deliberate commands still work, as they skip those hooks by design:
   `:noautocmd w x` and `:w !cmd`. `q` closes the page editor (`:Eclipse quit`), unless the user
-  mapped `q` for the buffer.
+  mapped `q` for the buffer. The keyboard was in the pane, which the close disposes, and Eclipse
+  brings an editor to the front without always moving the keyboard there; a later step of the close
+  takes it away again (on GTK, Eclipse's `CleanupAddon` moving the code's stack when the page's
+  empty stack goes). So `editor/KeyboardHandBack` watches from the close until the user's next click
+  (not the next key: keys typed fast after `:q` come before that move; a left click `NeovimMouse`
+  swallows for Neovim, which no later display filter sees, its controller reports through
+  `KeyboardHandBack.userClicked`), one watch per window:
+  after the close and after each FocusOut, if no control has the keyboard while the window is
+  active, it gives it to the active part (it never picks one itself, and never takes the keyboard
+  from a part that has it).
 - **The pane** (`editor/WindowPane`): it draws the page window's grid (`NeovimSession.drawPageWindow`);
   when it gets the keyboard the page takes the focus (`focusPageAsync`, Neovim's screen sized to
   the page with `setEditorSizeAsync`), and the focus events come to it (`core/FocusTarget`). Below

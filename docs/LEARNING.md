@@ -999,6 +999,11 @@ The user has had a few errors and types `:messages` and Enter in an attached edi
    `editor/PageCommandsRun` runs it with the page as the current editor: Eclipse goes to the code
    above. The code, activated, takes the focus back (`NeovimEditorController.takeFocusBack`). `q`
    runs `:Eclipse quit` from the page's window, which closes the page editor and its window.
+   Eclipse brings the code's editor to the front, but the keyboard was in the pane, now gone, and
+   on GTK the move of the code's stack that follows (Eclipse's `CleanupAddon` removing the empty
+   stack, `Control.setParent`) takes it from the text once more. `editor/KeyboardHandBack` watches
+   until the next click and gives the keyboard to the active part whenever no control has
+   it, so the next key reaches the code without a click.
 
 `:checkhealth` and `:help` take another road to their editors: Neovim opens a window Eclipse
 cannot show, for the report or the help page, and once the command is over the `WinNew` net

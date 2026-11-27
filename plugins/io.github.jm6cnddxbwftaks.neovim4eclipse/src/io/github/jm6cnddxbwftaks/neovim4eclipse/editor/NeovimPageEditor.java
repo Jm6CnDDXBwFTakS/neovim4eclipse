@@ -56,7 +56,8 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.ViewContent;
  *       binds; Ctrl+W is Neovim's through a key context of the page editors' own
  *       ({@link #KEY_CONTEXT_ID}), turned on while the screen has the keyboard.</li>
  *   <li>{@code q} and {@code :q} are commands from its window ({@link PageCommandsRun}), which close
- *       it; so does Neovim closing the window, or Restart Neovim ({@link #closeEditingPages}).</li>
+ *       it; so does Neovim closing the window, or Restart Neovim ({@link #closeEditingPages}). The
+ *       keyboard then goes to the part Eclipse brings to the front ({@link KeyboardHandBack}).</li>
  *   <li>Opened on anything but a {@link NeovimPageInput} (a file through Open With), it refuses.</li>
  * </ul>
  *
@@ -340,6 +341,10 @@ public final class NeovimPageEditor extends EditorPart implements INavigationLoc
         }
         if (pane != null) {
             pane.dispose();
+            // The keyboard may have been in the pane: see that it reaches the part Eclipse brings
+            // to the front. Without a pane (refused at init, or closed for want of a Neovim) it
+            // never had the keyboard, and the site may not even be set.
+            KeyboardHandBack.afterClose(getSite().getPage());
         }
         super.dispose();
     }

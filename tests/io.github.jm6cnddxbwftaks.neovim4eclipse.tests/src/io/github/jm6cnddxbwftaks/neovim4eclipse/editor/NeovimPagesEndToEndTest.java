@@ -70,6 +70,9 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
             }
         }
         settle();
+        // The keyboard watch a close started lasts until a click, which no test makes: none is
+        // left running to hide a later test's lost keyboard.
+        KeyboardHandBack.stopAllForTests();
     }
 
     /** The open page editors, of any kind. */
@@ -164,6 +167,190 @@ class NeovimPagesEndToEndTest extends EndToEndTestBase {
             settle();
             return pages().isEmpty();
         });
+    }
+
+    /*
+     * Giving the focus back: closing a page editor with the keyboard (q, :q) leaves the keyboard in
+     * the editor the user came from, as Vim's :q on a help window goes back to the window :help was
+     * typed in. Not only that editor in front: its text has the keyboard, so the next key reaches
+     * Neovim without a click. Eclipse picks what comes to the front after a close from its own
+     * activation history, which also holds views; these tests pin down the cases a user meets.
+     */
+
+    /** Waits until test.txt's editor is in front and its text has the keyboard. */
+    private void focusBackInTheEditor(String after) {
+        waitUntil("the keyboard back in test.txt after " + after, TIMEOUT_MS, () -> {
+            settle();
+            return pages().isEmpty() && page().getActiveEditor() == editor && widget.isFocusControl();
+        }, () -> "; pages open: " + pages().size()
+                + ", active part: " + (page().getActivePart() == null ? null : page().getActivePart().getTitle())
+                + ", focus in test.txt: " + widget.isFocusControl());
+    }
+
+    /**
+     * {@code q} in the help editor gives the keyboard back to the code's editor, and Neovim with
+     * it: the next key, {@code x}, deletes a character of test.txt, not of the help page.
+     */
+    @Test
+    void qInTheHelpEditorGivesTheFocusBack() {
+        String before = document.get();
+        colon("help help-context");
+        NeovimPageEditor help = pageShowing("help-context");
+        UiTestSupport.requireKeyboardFocus(help.canvasForTests(), TIMEOUT_MS);
+        key(help.canvasForTests(), 'q', 'q', 0);
+        focusBackInTheEditor("q in the help editor");
+        type(widget, "x");
+        waitUntil("x deleting a character of test.txt", TIMEOUT_MS, () -> {
+            settle();
+            return document.get().length() == before.length() - 1;
+        }, () -> "; test.txt holds \"" + document.get() + "\"");
+    }
+
+    /**
+     * The help editor closed by its tab (as the close button does) while the Tasks view has the
+     * keyboard leaves it there: Eclipse keeps the view active, and the watch finds a control with
+     * the keyboard. This proves the outcome a user sees; that the watch never takes the keyboard
+     * from a control that has it is its one check, {@code getFocusControl() != null}, in
+     * {@link KeyboardHandBack}.
+     */
+    @Test
+    void aViewThatHasTheKeyboardKeepsIt() throws Exception {
+        colon("help help-context");
+        NeovimPageEditor help = pageShowing("help-context");
+        UiTestSupport.requireKeyboardFocus(help.canvasForTests(), TIMEOUT_MS);
+        org.eclipse.ui.IViewPart tasks = page().showView(org.eclipse.ui.IPageLayout.ID_TASK_LIST);
+        waitUntil("the Tasks view active", TIMEOUT_MS, () -> {
+            settle();
+            return page().getActivePart() == tasks;
+        });
+        page().closeEditor(help, false);
+        waitUntil("the help editor closed", TIMEOUT_MS, () -> {
+            settle();
+            return pages().isEmpty();
+        });
+        settle();
+        assertSame(tasks, page().getActivePart(), "the Tasks view stays the active part");
+        assertFalse(widget.isFocusControl(), "test.txt did not take the keyboard from the Tasks view");
+    }
+
+    /**
+     * The watch ends at the user's next click, by either route: a left click in test.txt's text,
+     * which {@link NeovimMouse} swallows for Neovim and its controller reports
+     * ({@code KeyboardHandBack.userClicked}),
+     * and a press anywhere else (here on the workbench window), which the watch's own filter sees.
+     */
+    @Test
+    void aClickEndsTheWatch() {
+        Shell shell = widget.getShell();
+        closeTheHelpEditorWithQ();
+        assertTrue(KeyboardHandBack.watchingForTests(shell), "the watch runs after the close");
+        press(widget);
+        assertFalse(KeyboardHandBack.watchingForTests(shell), "a click in test.txt ended the watch");
+
+        closeTheHelpEditorWithQ();
+        assertTrue(KeyboardHandBack.watchingForTests(shell), "a new watch runs after the second close");
+        press(shell);
+        assertFalse(KeyboardHandBack.watchingForTests(shell), "a press on the window ended the watch");
+    }
+
+    /** {@code :help} from test.txt, then {@code q} in the help editor, and the keyboard back in test.txt. */
+    private void closeTheHelpEditorWithQ() {
+        UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+        colon("help help-context");
+        NeovimPageEditor help = pageShowing("help-context");
+        UiTestSupport.requireKeyboardFocus(help.canvasForTests(), TIMEOUT_MS);
+        key(help.canvasForTests(), 'q', 'q', 0);
+        focusBackInTheEditor("q in the help editor");
+    }
+
+    /** The left button pressed and released on {@code control}, near its top left corner. */
+    private void press(Control control) {
+        for (int type : new int[] { SWT.MouseDown, SWT.MouseUp }) {
+            Event event = new Event();
+            event.button = 1;
+            event.x = 1;
+            event.y = 1;
+            control.notifyListeners(type, event);
+        }
+        settle();
+    }
+
+    /**
+     * While the watch runs, a control that takes the keyboard keeps it, even one outside the active
+     * part: a text field put in the workbench window takes it from test.txt (the active editor), and
+     * the check after that FocusOut, finding a control with the keyboard, leaves it there. Without
+     * that check the keyboard would go back to test.txt.
+     */
+    @Test
+    void theWatchLeavesAControlThatHasTheKeyboardAlone() {
+        Shell shell = widget.getShell();
+        closeTheHelpEditorWithQ();
+        assertTrue(KeyboardHandBack.watchingForTests(shell), "the watch runs after the close");
+        org.eclipse.swt.widgets.Text field = new org.eclipse.swt.widgets.Text(shell, SWT.SINGLE | SWT.BORDER);
+        try {
+            field.setBounds(0, 0, 200, 30);
+            field.moveAbove(null);
+            UiTestSupport.requireKeyboardFocus(field, TIMEOUT_MS);
+            settle();
+            assertSame(editor, page().getActivePart(), "test.txt stays the active part");
+            assertTrue(field.isFocusControl(), "the text field keeps the keyboard");
+            assertFalse(widget.isFocusControl(), "test.txt did not take it back");
+            assertTrue(KeyboardHandBack.watchingForTests(shell), "the watch still runs: no click ended it");
+        } finally {
+            field.dispose();
+        }
+    }
+
+    /** {@code :q} typed in the messages editor gives the keyboard back to the code's editor. */
+    @Test
+    void colonQInTheMessagesEditorGivesTheFocusBack() {
+        SessionProbe.lua(session, "vim.cmd.echomsg(\"'before :q'\") return 0");
+        colon("messages");
+        NeovimPageEditor view = pageShowing("before :q");
+        UiTestSupport.requireKeyboardFocus(view.canvasForTests(), TIMEOUT_MS);
+        for (char c : ":q".toCharArray()) {
+            key(view.canvasForTests(), c, c, 0);
+        }
+        key(view.canvasForTests(), SWT.CR, SWT.CR, 0);
+        focusBackInTheEditor(":q in the messages editor");
+    }
+
+    /**
+     * A view visited while the help editor was open (the Tasks view, then a click back into the
+     * help editor) does not get the keyboard when it closes: the code's editor does.
+     */
+    @Test
+    void aViewVisitedMeanwhileDoesNotGetTheFocus() throws Exception {
+        colon("help help-context");
+        NeovimPageEditor help = pageShowing("help-context");
+        UiTestSupport.requireKeyboardFocus(help.canvasForTests(), TIMEOUT_MS);
+        page().showView(org.eclipse.ui.IPageLayout.ID_TASK_LIST);
+        settle();
+        page().activate(help);
+        UiTestSupport.requireKeyboardFocus(help.canvasForTests(), TIMEOUT_MS);
+        key(help.canvasForTests(), 'q', 'q', 0);
+        focusBackInTheEditor("q in the help editor, the Tasks view visited meanwhile");
+    }
+
+    /**
+     * With a second file in a tab beside the code (other.txt, behind test.txt), the keyboard goes
+     * back to test.txt, the editor {@code :help} was typed in, not to the tab beside it.
+     */
+    @Test
+    void theFocusGoesBackToTheEditorNotTheTabBesideIt() throws Exception {
+        ITextEditor other = openOtherFile();
+        try {
+            page().activate(editor);
+            waitForAttach(editor, "test.txt");
+            UiTestSupport.requireKeyboardFocus(widget, TIMEOUT_MS);
+            colon("help help-context");
+            NeovimPageEditor help = pageShowing("help-context");
+            UiTestSupport.requireKeyboardFocus(help.canvasForTests(), TIMEOUT_MS);
+            key(help.canvasForTests(), 'q', 'q', 0);
+            focusBackInTheEditor("q in the help editor, other.txt in a tab beside test.txt");
+        } finally {
+            page().closeEditor(other, false);
+        }
     }
 
     /** The row of {@code grid} holding {@code text}, or -1. */
