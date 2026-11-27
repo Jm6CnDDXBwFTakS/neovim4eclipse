@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.PicturesFolder;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.PinnedPlugins;
 
 /**
  * Takes the screenshots for the Eclipse Marketplace listing and the README, so they can be taken
@@ -52,8 +53,13 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.gallery.PicturesFolder;
  * it (the UI tests' own {@code e2e} project and {@code test.txt} are put away first, and every view
  * but the Project Explorer and the Outline is closed):
  * <ol>
- *   <li>{@code 01-visual-mode.png}: visual line mode over a loop; Eclipse shows Neovim's selection
- *       and the mode in the status bar.</li>
+ *   <li>{@code 01-picker.png}: Telescope's {@code find_files} over {@code Order.java}, drawn by
+ *       the editor as Neovim lays it out, {@code inv} typed and {@code Invoice.java} chosen, its
+ *       preview beside the list. Enter then opens it in an Eclipse editor, where the story goes on.
+ *       Telescope and its library plenary come at the commits pinned and vetted in
+ *       {@code releng/test-plugins.properties} ({@code java releng/tools/plugins/TestPlugins.java
+ *       fetch}, which the pictures tool runs first); without them the run fails, since the listing
+ *       needs this picture.</li>
  *   <li>{@code 02-command-line.png}: Neovim's command line with {@code :%s/total/sum/g} typed, its
  *       matches highlighted.</li>
  *   <li>{@code 03-problems.png}: the substitution run and saved ({@code :w}); Eclipse's compiler
@@ -86,6 +92,9 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
             "org.eclipse.ui.views.ContentOutline");
 
     private static final String PROJECT = "shop";
+
+    /** The keys that open the picker: a user's {@code <Leader>ff}, with Neovim's default leader. */
+    private static final String FIND_FILES = "\\ff";
 
     /** The code shown: short, realistic, with a word ({@code total}) that {@code :%s} can replace. */
     private static final String INVOICE = """
@@ -171,21 +180,34 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
             shop = JavaProjects.create(PROJECT, PROJECT, PicturesFolder.root().resolve(PROJECT));
             JavaProjects.addClass(shop, PROJECT, "Order.java", ORDER);
             JavaProjects.addClass(shop, PROJECT, "Receipt.java", RECEIPT);
-            IFile invoice = JavaProjects.addClass(shop, PROJECT, "Invoice.java", INVOICE);
+            JavaProjects.addClass(shop, PROJECT, "Invoice.java", INVOICE);
             waitUntil("the workspace build", TIMEOUT_MS, JavaProjects::buildDone);
-            ITextEditor java = openJava(invoice);
-            StyledText text = widgetOf(java);
+            ITextEditor order = openJava(shop.getFile("src/shop/Order.java"));
+            StyledText orderText = widgetOf(order);
             // No search left from an earlier run: the pictures' Neovim keeps its history under pictures.home.
             // Through the API, not typed: a typed line would stay on Neovim's ':' row in the picture.
             SessionProbe.lua(session, "vim.fn.setreg('/', '') vim.cmd.nohlsearch() return 0");
+            mapFindFiles(shop);
             settle();
 
-            // 1. Visual line mode over the loop: Neovim's selection shown by Eclipse, the mode in the status bar.
-            typeSlowly(text, "16G");
-            typeSlowly(text, "V2j");
-            waitUntil("visual line mode", TIMEOUT_MS, () -> "V".equals(session.getMode()));
-            capture(window, "01-visual-mode.png");
-            typeSlowly(text, "\u001b"); // Esc
+            // 1. A picker: Telescope's file list over Order.java, Invoice.java found by three letters
+            // and shown in the preview. Enter opens it in an Eclipse editor, the Java editor.
+            typeSlowly(orderText, FIND_FILES);
+            waitUntil("Telescope's list, with Invoice.java", TIMEOUT_MS,
+                    () -> telescopeWindows("Invoice.java") >= 1 && !pluginFloats(orderText).isEmpty());
+            typeSlowly(orderText, "inv");
+            waitUntil("Invoice.java chosen and in the preview", TIMEOUT_MS,
+                    () -> selectedEntry().endsWith("Invoice.java") && previewShows("Adds up the prices"),
+                    () -> "; selected " + selectedEntry());
+            capture(window, "01-picker.png");
+            UiTestSupport.type(orderText, "\r");
+            waitUntil("Invoice.java in the Java editor", TIMEOUT_MS,
+                    () -> page.getActiveEditor() instanceof ITextEditor e && e != order && "Invoice.java".equals(e.getTitle()));
+            ITextEditor java = (ITextEditor) page.getActiveEditor();
+            waitForAttach(java, "Invoice.java");
+            StyledText text = widgetOf(java);
+            waitUntil("the picker gone, Normal mode", TIMEOUT_MS,
+                    () -> telescopeWindows(null) == 0 && "n".equals(session.getMode()));
 
             // 2. The : command line, with a substitution typed but not yet run.
             openCommandLine(text, "%s/total/sum/g");
@@ -239,14 +261,89 @@ class ScreenshotCaptureTest extends EndToEndTestBase {
         } finally {
             // Also after a failed step: the base class's cleanup and any later test in this Eclipse
             // get the workbench as it was. The views and the font first, which cannot fail; the
-            // project's delete can.
+            // project's delete and the call to Neovim can.
             page.closeAllEditors(false);
             page.resetPerspective();
             PictureFont.restore(fontsBefore);
-            if (shop != null) {
-                shop.delete(true, true, null);
+            try {
+                if (session != null) { // the mapping and any picker window go, for DemoRecordingTest after this
+                    // gp: loadTelescope's own mapping (PinnedPlugins#loadTelescope).
+                    SessionProbe.lua(session, PinnedPlugins.CLOSE_TELESCOPE + " pcall(vim.keymap.del, 'n', "
+                            + luaText(FIND_FILES) + ") pcall(vim.keymap.del, 'n', 'gp') return 0");
+                    waitUntil("no picker drawn", TIMEOUT_MS, () -> telescopeWindows(null) == 0);
+                }
+            } finally {
+                if (shop != null) {
+                    shop.delete(true, true, null);
+                }
             }
         }
+    }
+
+    /**
+     * Loads the pinned Telescope and plenary into the pictures' Neovim and maps {@link #FIND_FILES}
+     * to its {@code find_files} in {@code shop}'s source folder, as a user's {@code <Leader>ff}
+     * would: the list shows the three classes, not the project's metadata or the compiler's
+     * {@code bin/}. Telescope picks the lister ({@code rg}, {@code fd} or {@code find}), from the
+     * absolute folders of {@code PATH} only ({@link PinnedPlugins#FOR_PROGRAMS}). The preview is
+     * kept at any width ({@code preview_cutoff}): Telescope hides it below 120 columns, and the
+     * editor beside the two views has fewer; it gets a little more than half, for the code's lines.
+     */
+    private void mapFindFiles(IProject shop) {
+        java.nio.file.Path telescope = PinnedPlugins.find("telescope").orElseThrow(() -> missing("telescope"));
+        java.nio.file.Path plenary = PinnedPlugins.find("plenary").orElseThrow(() -> missing("plenary"));
+        String src = PinnedPlugins.longString(shop.getFolder("src").getLocation().toFile().toPath());
+        SessionProbe.lua(session, PinnedPlugins.loadTelescope(plenary, telescope) + " " + PinnedPlugins.FOR_PROGRAMS
+                + " vim.keymap.set('n', " + luaText(FIND_FILES) + ", function()"
+                + " require('telescope.builtin').find_files({ cwd = " + src + ","
+                + " layout_config = { preview_cutoff = 1, preview_width = 0.55 } }) end) return 0");
+    }
+
+    /** Why the run stops without a plug-in: the listing needs the picker's picture, so it is not skipped. */
+    private static AssertionError missing(String plugin) {
+        return new AssertionError(plugin + " is not fetched at its pinned commit, and the first picture needs it: "
+                + PinnedPlugins.HOW);
+    }
+
+    /** {@link PinnedPlugins#TELESCOPE_WINDOWS}' answer, with {@code word} or none ({@code null}). */
+    private long telescopeWindows(String word) {
+        Object n = SessionProbe.lua(session, "return (function(...)\n" + PinnedPlugins.TELESCOPE_WINDOWS + "\nend)("
+                + (word == null ? "" : luaText(word)) + ")");
+        return ((Number) n).longValue();
+    }
+
+    /** The open picker's selected entry (a path from the source folder, {@code shop/Invoice.java}), or {@code ""}. */
+    private String selectedEntry() {
+        Object value = SessionProbe.lua(session, """
+                local ok, entry = pcall(function() return require('telescope.actions.state').get_selected_entry() end)
+                return ok and entry and tostring(entry.value) or ''""");
+        return String.valueOf(value);
+    }
+
+    /**
+     * Whether a floating window shows {@code line}: Telescope's preview, since the file it previews
+     * is in no editor yet. (Its buffer is the file's text with Java's highlighting, not one of
+     * Telescope's own filetypes, so {@link PinnedPlugins#TELESCOPE_WINDOWS} does not count it.)
+     */
+    private boolean previewShows(String line) {
+        return Boolean.TRUE.equals(SessionProbe.lua(session, "local text = " + luaText(line) + """
+
+                for _, w in ipairs(vim.api.nvim_list_wins()) do
+                  if vim.api.nvim_win_get_config(w).relative ~= '' then
+                    for _, l in ipairs(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(w), 0, -1, false)) do
+                      if l:find(text, 1, true) then return true end
+                    end
+                  end
+                end
+                return false"""));
+    }
+
+    /**
+     * {@code text}, a constant of this class's own, as a Lua long string: {@code [==[\ff]==]}.
+     * Not in quotes, where Lua would read {@code \f} in {@link #FIND_FILES} as a form feed.
+     */
+    private static String luaText(String text) {
+        return "[==[" + text + "]==]";
     }
 
     /** Whether Eclipse has an error marker on {@code file} (the Java builder's, here). */
