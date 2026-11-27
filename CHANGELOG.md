@@ -15,7 +15,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 ### Added
 
 - The user guide says how some IDE-like plug-ins behave in Eclipse, as best effort: oil.nvim's
-  float (*Floating windows*).
+  float (*Floating windows*) and vim-fugitive (*Splits*).
 
 ### Changed
 
@@ -54,6 +54,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- vim-fugitive's `:Git commit` without `-m` made no commit: its message editor opened, but git had
+  already ended, so the message typed and saved there was lost. A plug-in's split on a file that
+  opens as an Eclipse editor now keeps its buffer, which the editor takes over, so a plug-in that
+  waits for that buffer to end hears of it only when the editor closes: after `:wq`, git commits
+  the message.
 - A status line a plug-in writes a moment after a key, such as lualine's mode, could stay at its old
   text under the editor until the next key (`NORMAL` after `i`): the key's own reading of the line,
   older, could be drawn after the new one. Neovim now numbers each line it evaluates, and an older

@@ -336,9 +336,12 @@ Refused, with a message: `:tabonly!`, which would discard every other tab's chan
 keeps their buffers hidden; `:tabonly` asks about them), and the splits that jump first (`:stag`,
 `Ctrl-W ]`, `Ctrl-W F`). A window a plug-in opens in Neovim beside an editor's
 (its own `vim.cmd.split()`, a picker's `Ctrl+V`) opens as an Eclipse split or editor tab when it
-shows a file. On anything else it is closed again, with a message: Eclipse would not show it. So
-is a file window left behind a plug-in's floating window that has the keyboard, so that your keys
-stay in the float. An Insert begun in a float ends when its file opens as an editor. On
+shows a file. Its buffer becomes that editor's, whatever its `'bufhidden'`: Neovim's window
+closes, the buffer does not end, so a plug-in that waits for the buffer to end (vim-fugitive's
+`:Git commit`, below) finishes when the editor closes. On anything else it is closed again, with
+a message: Eclipse would not show it. So is a file window left behind a plug-in's floating window
+that has the keyboard, so that your keys stay in the float. An Insert begun in a float ends when
+its file opens as an editor. On
 Linux and macOS, no editor opens on a device, whether from `:e`, `:split`, a jump or a plug-in:
 Eclipse would try to read all of it, and `/dev/zero` would stall it until its memory ran out. On
 Linux that includes files under `/proc` and `/sys`, since some have no end (`/proc/self/pagemap`), so
@@ -348,6 +351,20 @@ does in a terminal. On Windows, `:e` and `:split` refuse its device names (`NUL`
 the like, in any folder and with any extension) and a link to one, since what you saved there would
 go to the device. An existing file with such a name and an extension, like `NUL.txt` on Windows 11,
 still opens.
+
+**vim-fugitive** works with git through these editors. `:Gwrite` saves the editor (through
+Eclipse, as `:w` does) and stages the file; `:Gread` puts the staged text in the editor, unsaved;
+`:Git commit -m "..."` commits. `:Git commit` alone opens git's message file
+(`.git/COMMIT_EDITMSG`) as an editor beside this one: type the message, then `:wq`, and git
+commits once the editor closes; `:q!`, or closing it without saving, commits nothing, since git
+finds no message, as in Vim; should Eclipse not open the message file, git waits until its buffer
+is deleted (`:bd`). `:Git blame` and `:Git log` open their output in an editor of its own, on a
+temporary file of fugitive's; blame is not scroll-bound to the file, since Eclipse scrolls each
+editor on its own. fugitive's status window (`:Git` alone) and its diff splits
+(`:Gdiffsplit`) are no file, so they are closed with a message, as above. fugitive finds the
+repository from the folder an editor's Neovim window works in, its project's root, so a
+repository that holds the project (at its root or above) is found; one in a folder inside the
+project is not.
 
 After a restart, Eclipse brings the stacks back as it does any layout you dragged.
 

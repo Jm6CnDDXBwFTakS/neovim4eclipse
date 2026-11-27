@@ -385,8 +385,10 @@ gets in your way:
      and for Tab on the `:` line ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and the labels of
      jump plug-ins (flash, leap, hop, mini.jump2d; see [Jump labels](docs/USER_GUIDE.md#jump-labels)).
    - **Opened in Eclipse:** a plug-in's own split or tab page on a file, such as a picker's
-     `Ctrl+V`, `Ctrl+X` or `Ctrl+T`: an Eclipse split or editor tab.
-   - **Not shown:** split windows plug-ins open on anything but a file (file trees), and a
+     `Ctrl+V`, `Ctrl+X` or `Ctrl+T`, or vim-fugitive's commit message: an Eclipse split or editor
+     tab ([Splits](docs/USER_GUIDE.md#splits-split-vsplit-ctrl-w)).
+   - **Not shown:** split windows plug-ins open on anything but a file (file trees,
+     vim-fugitive's status window and `:Gdiffsplit`), and a
      plug-in's buffer that is no file in the editor's own window: `:Oil` leaves the editor on its
      file, while oil.nvim's float (`:Oil --float`) is drawn and works
      ([Floating windows](docs/USER_GUIDE.md#floating-windows)).

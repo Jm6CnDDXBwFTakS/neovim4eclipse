@@ -965,6 +965,47 @@ t.test("a changed buffer outlives the net's close, whatever its 'bufhidden'", fu
   end
 end)
 
+-- A plug-in may wait for the end of the buffer it split on: vim-fugitive's :Git commit opens
+-- .git/COMMIT_EDITMSG with 'bufhidden' wipe and commits once that buffer is deleted. The net's
+-- close must not end it: the new editor's attach takes the buffer over by its name.
+t.test("a file window handed to Eclipse keeps its buffer, whatever its 'bufhidden'", function()
+  commands()
+  for _, bufhidden in ipairs({ 'wipe', 'delete', 'unload' }) do
+    local path = file_on_disk()
+    local deleted = false
+    t.forget()
+    vim.cmd('split ' .. vim.fn.fnameescape(path))
+    local buf = vim.api.nvim_get_current_buf()
+    vim.bo[buf].bufhidden = bufhidden
+    vim.api.nvim_create_autocmd('BufDelete', { buffer = buf, once = true, callback = function()
+      deleted = true
+    end })
+    handed_over(1)
+    t.eq(1, windows_in_tab(), 'its window closed')
+    t.ok(vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf), bufhidden)
+    t.eq(false, deleted, 'no BufDelete for ' .. bufhidden)
+    t.eq('one', vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1], bufhidden)
+    t.eq(buf, vim.fn.bufnr(path), 'the buffer the editor will reuse, by its name')
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end
+end)
+
+t.test("a plug-in's split on a document leaves the document's 'bufhidden' as it was", function()
+  commands()
+  local path = file_on_disk()
+  local doc = unpack(t.run('CREATE_DOCUMENT_BUFFER', path))
+  t.run('DOCUMENT_BUFFER', tostring(doc))
+  vim.api.nvim_buf_set_lines(doc, 0, -1, false, { 'one', 'two', 'three' }) -- Eclipse's text
+  vim.bo[doc].modified = false
+  -- Not CREATE_DOCUMENT_BUFFER's hide: a value the hand-over's own would show up against.
+  vim.bo[doc].bufhidden = 'unload'
+  t.forget()
+  vim.cmd('belowright sbuffer ' .. doc) -- not the command line: the net sees it
+  local words = handed_over(1)[1]
+  t.eq({ 'window', 'split', 'below', 'file' }, vim.list_slice(words, 1, 4), 'handed to Eclipse')
+  t.eq('unload', vim.bo[doc].bufhidden)
+end)
+
 t.test("a plug-in's split of the editor's own file is a clone of it", function()
   commands()
   local path = file_on_disk()

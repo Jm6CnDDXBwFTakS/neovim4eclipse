@@ -36,6 +36,7 @@ import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.INewWizard;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PlatformUI;
@@ -423,6 +424,36 @@ abstract class EndToEndTestBase {
     /** The active workbench page. */
     static IWorkbenchPage page() {
         return PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
+    }
+
+    /** The open editor whose input is named {@code name}, or {@code null}. */
+    static ITextEditor editorNamed(String name) {
+        for (IEditorReference reference : page().getEditorReferences()) {
+            if (reference.getEditor(false) instanceof ITextEditor text && name.equals(text.getEditorInput().getName())) {
+                return text;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Closes every editor but test.txt's, unsaved, for a test that opened others. test.txt's editor
+     * comes to the front first, then the others close in one call: closing the editor in front
+     * would bring another forward, and one with unsaved changes whose file is gone (a test that
+     * failed before Eclipse asked) would ask now, a question no watch answers, and hold the run.
+     * Closing editors that are not in front brings none forward.
+     */
+    void closeEditorsButTestTxt() {
+        IWorkbenchPage page = page();
+        page.activate(editor);
+        List<IEditorReference> others = new ArrayList<>();
+        for (IEditorReference reference : page.getEditorReferences()) {
+            if (reference.getEditor(false) != editor) {
+                others.add(reference);
+            }
+        }
+        page.closeEditors(others.toArray(IEditorReference[]::new), false);
+        settle();
     }
 
     /**

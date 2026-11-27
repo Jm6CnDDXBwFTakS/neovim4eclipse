@@ -581,6 +581,23 @@ public final class PinnedPlugins {
             return table.concat(actions, '\\n')""";
 
     /**
+     * Lua that loads vim-fugitive from {@code folder} as a plug-in manager would at start-up: on
+     * the runtimepath, then its {@code plugin/fugitive.vim} sourced ({@code :Git}, {@code :Gwrite}
+     * and the rest; a Vim plug-in has no {@code setup()}), the pinned file itself, not every
+     * {@code plugin/fugitive.vim} on the runtimepath. Nothing more: fugitive finds the repository by
+     * itself, from the folder the editor's Neovim window works in (its project's root), since it
+     * treats a document's buffer ({@code 'buftype'} acwrite) as one without a file of its own
+     * ({@code FugitiveGitDir} looks from {@code getcwd()}). It runs
+     * git for every command; {@link #REFUSE_PROGRAMS} is not used, as fugitive starts git from Vim
+     * script ({@code system()}, {@code jobstart()}), which that Lua does not see. Its commands and
+     * autocommands are the whole Neovim's: a test that shares its Neovim restarts it afterwards.
+     */
+    public static String loadFugitive(Path folder) {
+        return onRuntimePath(folder) + "\nvim.cmd.source(vim.fn.fnameescape(" + longString(folder.resolve("plugin/fugitive.vim"))
+                + "))";
+    }
+
+    /**
      * Lua that puts {@code folder} first on Neovim's {@code 'runtimepath'}, so that
      * {@code require} finds the plug-in there. Example: {@code vim.opt.rtp:prepend([==[/home/you/
      * src/neovim4eclipse/.tool-cache/test-plugins/telescope]==])}.

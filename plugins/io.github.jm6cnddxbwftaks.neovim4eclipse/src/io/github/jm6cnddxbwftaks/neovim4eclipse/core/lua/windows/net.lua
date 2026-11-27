@@ -230,8 +230,24 @@ local function take_file_window(win)
       where = new[1] < old[1] and 'above' or 'below'
     end
   end
-  keep_changes(win)
+  -- The buffer goes on, hidden, whatever its 'bufhidden' says: the new editor's attach takes
+  -- it over by its name (LuaScripts.CREATE_DOCUMENT_BUFFER reuses a buffer of that name), so
+  -- the window closes but the buffer does not end. A plug-in may wait for that buffer's end.
+  -- Example: vim-fugitive's :Git commit splits on .git/COMMIT_EDITMSG with 'bufhidden' wipe
+  -- and commits when the buffer is deleted; wiped here, the commit ended before the message
+  -- was typed. Kept, it ends when the editor closes: CLOSE_DOCUMENT_BUFFER unloads it, and
+  -- taking it off the buffer list then fires BufDelete, after :wq saved the message. Should
+  -- Eclipse not open the file after all, the buffer stays hidden in Neovim (:ls lists it). A
+  -- document's buffer is its editor's already. Should the close fail, nothing is handed over,
+  -- and the plug-in's own 'bufhidden' is put back.
+  local bufhidden = vim.bo[buf].bufhidden
+  if not M.is_document(buf) then
+    vim.bo[buf].bufhidden = 'hide'
+  end
   if not pcall(vim.api.nvim_win_close, win, true) then
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.bo[buf].bufhidden = bufhidden
+    end
     return false
   end
   commands.open_beside(where, file, at[1], at[2] + 1)

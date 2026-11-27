@@ -91,21 +91,7 @@ class OilEndToEndTest extends EndToEndTestBase {
         if (!loaded) {
             return; // skipped, or the editor never opened: nothing was loaded
         }
-        // test.txt's editor to the front first, then the others closed at once, unsaved: closing
-        // the editor in front would bring another forward, and one whose file oil took away, with
-        // unsaved changes (a test that failed before Eclipse asked), would ask now (File Not
-        // Accessible, a question no watch answers here) and hold the run. Closing editors that
-        // are not in front brings none forward.
-        IWorkbenchPage page = page();
-        page.activate(editor);
-        List<IEditorReference> others = new ArrayList<>();
-        for (IEditorReference reference : page.getEditorReferences()) {
-            if (reference.getEditor(false) != editor) {
-                others.add(reference);
-            }
-        }
-        page.closeEditors(others.toArray(IEditorReference[]::new), false);
-        settle();
+        closeEditorsButTestTxt();
         NeovimSession fresh = restartNeovimAfterThisTest();
         assertEquals(true, SessionProbe.lua(fresh, "return package.loaded['oil'] == nil"),
                 "the next test's Neovim never loaded oil");
@@ -350,16 +336,6 @@ class OilEndToEndTest extends EndToEndTestBase {
         ITextEditor opened = (ITextEditor) IDE.openEditor(page(), project.getFile(name), TEXT_EDITOR, true);
         waitForAttach(opened, name);
         return opened;
-    }
-
-    /** The open editor whose input is named {@code name}, or {@code null}. */
-    private static ITextEditor editorNamed(String name) {
-        for (IEditorReference reference : page().getEditorReferences()) {
-            if (reference.getEditor(false) instanceof ITextEditor text && name.equals(text.getEditorInput().getName())) {
-                return text;
-            }
-        }
-        return null;
     }
 
     private Path folder() {

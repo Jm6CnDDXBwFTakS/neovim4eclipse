@@ -338,6 +338,21 @@ t.test('closing a document keeps its buffer as :bd does: number, marks and last 
   t.eq(buf, again, 'the next editor gets the same buffer')
 end)
 
+-- vim-fugitive's :Git commit waits for its message buffer's BufDelete; that buffer becomes the
+-- editor's (CREATE_DOCUMENT_BUFFER reuses it by name), so the close must fire BufDelete, once:
+-- the unload fires only BufUnload, taking the buffer off the list fires BufDelete.
+t.test('closing a document fires BufDelete once, for a plug-in that waits for its buffer', function()
+  t.setup()
+  local buf = t.document('Waited.txt', { 'x' })
+  local deleted = 0
+  vim.api.nvim_create_autocmd('BufDelete', { buffer = buf, callback = function()
+    deleted = deleted + 1
+  end })
+  vim.cmd('enew') -- the plug-in leaves the buffer first (RELEASE_BUFFER)
+  t.run('CLOSE_DOCUMENT_BUFFER', tostring(buf))
+  t.eq(1, deleted)
+end)
+
 t.test('a reused buffer gets the plug-in\'s autocommands once', function()
   t.setup()
   local buf = t.document('Twice.txt', { 'x' })
