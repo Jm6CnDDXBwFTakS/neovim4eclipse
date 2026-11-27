@@ -86,8 +86,7 @@ import plugins.Pins.Pin;
  */
 public final class TestPluginsTool {
 
-    /** This tool's launcher, from the repository's root: also run by the Marketplace tool's pictures step. */
-    public static final String TOOL = "releng/tools/plugins/TestPlugins.java";
+    static final String TOOL = "releng/tools/plugins/TestPlugins.java";
     /** The pins, relative to the repository's root. */
     public static final String PINS_FILE = "releng/test-plugins.properties";
     /** Where the plug-ins are unpacked, relative to the repository's root; the tests look here. */

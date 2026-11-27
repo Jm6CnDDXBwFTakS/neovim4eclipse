@@ -217,13 +217,11 @@ a checklist, to fill in the form from. Why the values are what they are:
   (the diagonal and the border vanish).
 - **Screenshots and the demo**, taken by the UI tests of the `screenshots` group rather than by
   hand, so they show the current UI each time: `java releng/tools/marketplace/Marketplace.java
-  pictures` (Linux) fetches the pinned test plug-ins (`TestPlugins.java fetch`, as `LikeCi` does),
-  runs them with the pinned Neovim under `xvfb-run`, at a screen of a known size,
+  pictures` (Linux) runs them with the pinned Neovim under `xvfb-run`, at a screen of a known size,
   and copies the results to `.tool-cache/marketplace/`. `ScreenshotCaptureTest` tells one story in a
   small Java project, `shop`, with only the Project Explorer and the Outline beside the editor:
-  Telescope's `find_files` drawn over `Order.java`, `Invoice.java` chosen with three letters and
-  shown in its preview (a Neovim plug-in at work, drawn by the editor; Enter then opens the file
-  in an Eclipse editor), Neovim's `:` line with
+  a Vim split of `Invoice.java` (`Ctrl-W s`: a second Eclipse editor on the same buffer, above
+  the first) with visual line mode in it (the mode in the status bar), Neovim's `:` line with
   `:%s/total/sum/g` typed, and, once it has run and `:w` saved it, `:clist` in Neovim's output: the
   errors Eclipse's compiler then finds in `Order.java` and `Receipt.java`, which `:Eproblems` made
   Neovim's quickfix list; and, at the first of them, `ciw` on the broken call and Ctrl+Space:

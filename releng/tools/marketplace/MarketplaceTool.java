@@ -22,7 +22,6 @@ import common.Shell;
 import common.ToolCache;
 import common.ToolFailure;
 import common.Version;
-import plugins.TestPluginsTool;
 
 /**
  * The Marketplace tool: keeps the Eclipse Marketplace listing's material current, so a submission
@@ -44,8 +43,7 @@ import plugins.TestPluginsTool;
  * {@code releng/marketplace/submitted/}, the fields to change on the website.
  *
  * <h2>pictures</h2>
- * Fetches the pinned test plug-ins ({@code TestPlugins fetch}: the first screenshot is Telescope's
- * picker), then runs the {@code screenshots} test group ({@code ScreenshotCaptureTest} and
+ * Runs the {@code screenshots} test group ({@code ScreenshotCaptureTest} and
  * {@code DemoRecordingTest}) with the pinned Neovim under {@code xvfb-run}, so every run draws the
  * same Linux/GTK window at the same size, then joins the demo's pictures into
  * {@code .tool-cache/marketplace/demo-new.gif} ({@link Gif}). The listing page shows it beside the
@@ -87,7 +85,7 @@ public final class MarketplaceTool {
      * The screenshots, in the order the listing shows them. Four, the form's limit, and no demo
      * among them: the listing shows only a GIF's first frame (docs/design/MARKETPLACE.md).
      */
-    static final List<String> SCREENSHOTS = List.of("01-picker.png", "02-command-line.png", "03-problems.png",
+    static final List<String> SCREENSHOTS = List.of("01-split.png", "02-command-line.png", "03-problems.png",
             "04-content-assist.png");
     private static final String TEST_FRAGMENT = "tests/io.github.jm6cnddxbwftaks.neovim4eclipse.tests";
     /** As {@code ScreenshotCaptureTest} wants it: room for its window, in full color (Xvfb's default is 640x480 at 8 bits). */
@@ -218,19 +216,12 @@ public final class MarketplaceTool {
         git.checkWorkBranch("record the demo", Version.inPom(Facts.text(root, "pom.xml")));
         Path shots = root.resolve(TEST_FRAGMENT).resolve("target/screenshots");
         if (ask.mode() == Ask.Mode.DRY_RUN) {
-            System.out.println("[dry run] would install the pinned Neovim into " + ToolCache.LIKE_CI + "/ (as LikeCi does),"
-                    + " fetch the pinned test plug-ins (" + Shell.display(Shell.java(TestPluginsTool.TOOL, "fetch"))
-                    + "), then run: "
+            System.out.println("[dry run] would install the pinned Neovim into " + ToolCache.LIKE_CI + "/ (as LikeCi does), then run: "
                     + Shell.display(mavenUnderXvfb("<pinned nvim>")));
             System.out.println("[dry run] then join " + shots.resolve("demo") + " into " + OUT + "/" + NEW_DEMO + " and offer to commit it as " + DEMO);
             return;
         }
         String nvim = pinnedNeovim();
-        // The first screenshot is a picker, Telescope: the pinned plug-ins, each checked against
-        // its sha256 in releng/test-plugins.properties, as LikeCi fetches them.
-        if (shell.show(Shell.java(TestPluginsTool.TOOL, "fetch")) != 0) {
-            throw new ToolFailure("the pinned test plug-ins could not be fetched (see above); the first screenshot needs Telescope");
-        }
         Folders.deleteTree(shots);
         List<String> maven = mavenUnderXvfb(nvim);
         System.out.println(Shell.display(maven));
