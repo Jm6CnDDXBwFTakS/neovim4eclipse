@@ -17,20 +17,15 @@ own commands.
 - Folding with `zo`, `zc` and `zM` on Eclipse's own folds (methods, imports, comments).
 - `:terminal` opens Eclipse's Terminal view, with a shell in the file's folder.
 
-**Plug-ins that draw on the screen** are shown only in part, since Eclipse draws the editor:
+**Neovim plug-ins** are best effort, with extra care for those that add what Eclipse lacks:
 
-- Shown: floating windows, such as which-key's key hints, and those that take the keyboard
-  (pickers such as Telescope, fzf-lua and snacks.nvim, oil.nvim's float), Neovim's own
-  popup menu (`Ctrl-N`, Tab on the `:` line) and the labels of jump plug-ins (flash, leap, hop,
-  mini.jump2d).
-- Opened in Eclipse: a plug-in's split or tab page on a file (a picker's `Ctrl+V` or `Ctrl+T`,
-  vim-fugitive's commit message) becomes an Eclipse split or editor tab.
-- Not shown: splits on anything but a file (file trees, vim-fugitive's status window and
-  `:Gdiffsplit`), and a plug-in's buffer that is not a file, opened in the editor's own window
-  (`:Oil` without `--float`: the editor stays on its file).
-- Open only at a key: windows that follow typing in insert mode, such as the menus of completion
-  plug-ins (nvim-cmp, blink.cmp), open at the plug-in's own `Ctrl-N` and follow the typing from
-  then on.
+- Plug-ins that work on text (surround, text objects, motions, your own mappings) work as in a
+  terminal.
+- Floating windows are drawn over the editor: key hints (which-key), hover text, notifications,
+  and the labels of jump plug-ins (flash, leap, hop).
+- Plug-ins that bring an IDE of their own (pickers, file managers, git interfaces, completion
+  menus) may not work. Some are tested behind the scenes, but Eclipse already does their job, and
+  replacing it is not a goal.
 
 **Requires:**
 

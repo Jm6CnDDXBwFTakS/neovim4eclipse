@@ -19,6 +19,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Changed
 
+- The README says which Neovim plug-ins work and which are best effort (*Known limitations*,
+  item 7): plug-ins that work on text, floating windows such as key hints and notifications,
+  Neovim's popup menu and jump labels work; plug-ins that bring an IDE of their own (pickers, file
+  managers, git interfaces, completion menus) may work, and some are tested, but they are not
+  supported, since Eclipse already does their job.
 - A plug-in's floating window that takes the keyboard (a picker's prompt, hover
   documentation entered with a second `K`, with Neovim's own `K`) stays open and is drawn with Neovim's cursor in it, a
   bar in Insert mode; your keys go to it, and the editor's caret is hidden meanwhile. Clicking

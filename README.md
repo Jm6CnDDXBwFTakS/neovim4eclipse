@@ -379,30 +379,35 @@ gets in your way:
    `nnoremap` to `zE` still reach Neovim's own `zE`, and so does a key that `'langmap'` turns into
    one of the five when it is typed slowly after `z`. Other buffers are not affected, and
    `vim.g.neovim4eclipse_folds = 0` leaves these keys alone everywhere.
-7. **Neovim plug-ins that draw are shown only in part.** Eclipse draws the editor, not Neovim, so
-   only some of what plug-ins draw appears:
-   - **Shown:** floating windows (a panel of key hints such as which-key's, a note or progress
-     window opened in the background, and one that takes the keyboard, such as a picker's prompt,
-     drawn with Neovim's cursor; see
-     [Floating windows](docs/USER_GUIDE.md#floating-windows)), Neovim's own popup menu for `Ctrl-N`
-     and for Tab on the `:` line ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and the labels of
-     jump plug-ins (flash, leap, hop, mini.jump2d; see [Jump labels](docs/USER_GUIDE.md#jump-labels)).
-   - **Opened in Eclipse:** a plug-in's own split or tab page on a file, such as a picker's
-     `Ctrl+V`, `Ctrl+X` or `Ctrl+T`, or vim-fugitive's commit message: an Eclipse split or editor
-     tab ([Splits](docs/USER_GUIDE.md#splits-split-vsplit-ctrl-w)).
-   - **Not shown:** split windows plug-ins open on anything but a file (file trees,
-     vim-fugitive's status window and `:Gdiffsplit`), and a
-     plug-in's buffer that is no file in the editor's own window: `:Oil` leaves the editor on its
-     file, while oil.nvim's float (`:Oil --float`) is drawn and works
-     ([Floating windows](docs/USER_GUIDE.md#floating-windows)).
-   - **Open only at a key:** the menus of completion plug-ins (nvim-cmp, blink.cmp) and windows
-     that follow typing in insert mode. Eclipse types the insert, so Neovim has no typing to
-     follow until `Esc`, or until the plug-in's own `Ctrl-N`: from that key on Neovim types the
-     rest of the insert, and the menu follows your typing ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)).
+7. **Neovim plug-ins that draw: floating windows work, IDE-like plug-ins are best effort.**
+   Eclipse draws the editor, not Neovim, so it shows only some of what plug-ins draw.
+   - **Works:** plug-ins that work on text (surround, commentary, text objects, mappings of your
+     own), as in a terminal. Floating windows: a panel of key hints such as which-key's, hover
+     text, a note or progress window opened in the background
+     ([Floating windows](docs/USER_GUIDE.md#floating-windows)); they take clicks and the wheel.
+     Neovim's own popup menu for `Ctrl-N` and for Tab on the `:` line
+     ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)), and the labels of jump plug-ins
+     (flash, leap, hop, mini.jump2d; see [Jump labels](docs/USER_GUIDE.md#jump-labels)).
+   - **Best effort:** plug-ins that bring an IDE of their own (pickers, file managers, git
+     interfaces, completion menus) may work, and some are tested at pinned versions, but they are
+     not supported: Eclipse already does their job. What to expect from them:
+     - A window that takes the keyboard, such as a picker's prompt, is drawn with Neovim's cursor
+       and gets every `Ctrl` letter; clicking away moves Neovim out of it, and its plug-in decides
+       whether it closes.
+     - A plug-in's own split or tab page on a file, such as a picker's `Ctrl+V`, `Ctrl+X` or
+       `Ctrl+T`, or vim-fugitive's commit message, opens as an Eclipse split or editor tab
+       ([Splits](docs/USER_GUIDE.md#splits-split-vsplit-ctrl-w)).
+     - Not shown: split windows plug-ins open on anything but a file (file trees,
+       vim-fugitive's status window and `:Gdiffsplit`), and a plug-in's buffer that is no file in
+       the editor's own window: `:Oil` leaves the editor on its file, while oil.nvim's float
+       (`:Oil --float`) is drawn.
+     - Open only at a key: the menus of completion plug-ins (nvim-cmp, blink.cmp) and windows
+       that follow typing in insert mode. Eclipse types the insert, so Neovim has no typing to
+       follow until `Esc`, or until the plug-in's own `Ctrl-N`: from that key on Neovim types the
+       rest of the insert, and the menu follows your typing
+       ([Completion](docs/USER_GUIDE.md#completion-ctrl-n-ctrl-p)).
 
-   Plug-ins that work on text (surround, commentary, text objects, mappings of your own) work as in
-   a terminal. A floating window takes clicks and the wheel, and one that takes the keyboard gets
-   every `Ctrl` letter; clicking away moves Neovim out of it, and its plug-in decides whether it closes. If keys seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave plug-ins that do not work out
+   If keys seem to do nothing, *Neovim → Restart Neovim...* starts a fresh Neovim. Leave plug-ins that do not work out
    in Eclipse (`cond = not vim.g.neovim4eclipse` with lazy.nvim, or the guard in
    [Your `init.lua` in Eclipse](#your-initlua-in-eclipse)).
 8. **Neovim's command line and messages are always drawn.** Neovim draws them itself, with its
