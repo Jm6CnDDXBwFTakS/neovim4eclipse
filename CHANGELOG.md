@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-27
+
 ### Added
 
 - The user guide says how some IDE-like plug-ins behave in Eclipse, as best effort: oil.nvim's
