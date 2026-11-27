@@ -36,6 +36,7 @@ The headers this plug-in uses:
 | `Bundle-Activator` | Class whose `start`/`stop` OSGi calls (`Activator`). |
 | `Bundle-ActivationPolicy: lazy` | The bundle starts only when one of its classes is first loaded. |
 | `Require-Bundle` | Other bundles whose exported packages this one uses (`org.eclipse.ui`, `org.eclipse.jface.text`, ...). |
+| `Import-Package: org.osgi.service.event` | One package taken from whichever bundle provides it: the `EventHandler` that Eclipse's `IEventBroker.subscribe` takes (`editor/KeyboardHandBack` listens to model changes). A package import, not a `Require-Bundle`, because it is an OSGi standard API whose providing bundle has changed over the years (`org.eclipse.osgi.services`, now `org.osgi.service.event`), and none of the required bundles passes it on. |
 | `Bundle-ClassPath: ., lib/msgpack-core.jar` | Jars *inside* the bundle that join its class path. This is how the plug-in embeds msgpack-core, the one library under its RPC client. |
 | `Bundle-RequiredExecutionEnvironment: JavaSE-21` | The minimum Java version. |
 

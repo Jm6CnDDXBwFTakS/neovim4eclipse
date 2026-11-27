@@ -26,6 +26,7 @@ Require-Bundle: org.eclipse.ui,
  org.eclipse.e4.ui.css.swt.theme;resolution:=optional
 Bundle-RequiredExecutionEnvironment: JavaSE-21
 Bundle-ActivationPolicy: lazy
+Import-Package: org.osgi.service.event
 Automatic-Module-Name: io.github.jm6cnddxbwftaks.neovim4eclipse
 Export-Package: io.github.jm6cnddxbwftaks.neovim4eclipse;x-friends:="io.github.jm6cnddxbwftaks.neovim4eclipse.tests",
  io.github.jm6cnddxbwftaks.neovim4eclipse.core;x-friends:="io.github.jm6cnddxbwftaks.neovim4eclipse.tests",

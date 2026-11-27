@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.e4.core.services.events.IEventBroker;
 import org.eclipse.e4.ui.model.application.ui.MUIElement;
 import org.eclipse.e4.ui.model.application.ui.advanced.MPerspective;
 import org.eclipse.e4.ui.model.application.ui.advanced.MPerspectiveStack;
@@ -14,6 +15,7 @@ import org.eclipse.e4.ui.model.application.ui.advanced.MPlaceholder;
 import org.eclipse.e4.ui.model.application.ui.basic.MPartSashContainer;
 import org.eclipse.e4.ui.model.application.ui.basic.MPartStack;
 import org.eclipse.e4.ui.model.application.ui.basic.MWindow;
+import org.eclipse.e4.ui.workbench.UIEvents;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.DisposeListener;
 import org.eclipse.swt.widgets.Composite;
@@ -25,6 +27,7 @@ import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
+import org.osgi.service.event.EventHandler;
 
 /**
  * Gives the keyboard back to the part Eclipse brought to the front after a page editor closed
@@ -37,7 +40,9 @@ import org.eclipse.ui.PlatformUI;
  * below the code, and once it is gone Eclipse's {@code CleanupAddon} removes the empty stack, in
  * an {@code asyncExec} of its own, moving the code's stack to the parent that is left
  * ({@code Control.setParent}). On GTK that move takes the keyboard from the text it holds, with a
- * FocusOut and nothing after it. Example: {@code :help} typed in test.txt, then {@code q} in the
+ * FocusOut and nothing after it; on macOS (Cocoa), with no event at all: there the first check gives
+ * test.txt the keyboard, and the editor area's move a moment later (also {@code CleanupAddon}'s)
+ * takes it with nothing to say so. Example: {@code :help} typed in test.txt, then {@code q} in the
  * help editor; test.txt is the active editor again, but the next key goes nowhere until a click.
  *
  * <p>Where the keyboard ends up after such a move depends on the desktop. On a bare X server no
@@ -49,8 +54,13 @@ import org.eclipse.ui.PlatformUI;
  * only the last, a plain composite, counts as nowhere; the FocusOut of each step on the way runs a
  * check, and the one after the last step finds the composite.
  *
- * <p>So it does not act once at a guessed moment: it checks right after the close, and again after
- * each FocusOut, from the state then. It acts only while this workbench window is the active one,
+ * <p>So it does not act once at a guessed moment: it checks right after the close, again after each
+ * FocusOut, and again after each change to the children of an element of Eclipse's model
+ * ({@link UIEvents.ElementContainer#TOPIC_CHILDREN}), from the state then. The last catches the
+ * move on every system: {@code CleanupAddon}'s removal of an empty stack, and its unwrapping of a
+ * sash left with one child, which moves the stack or the editor area, are such changes, and the
+ * check, in an {@code asyncExec} after the event, runs after the renderer has moved the
+ * controls. It acts only while this workbench window is the active one,
  * and only when no control has the keyboard or the one that has it is a layout control
  * ({@link #isLayoutControl}); then it gives the keyboard to the active part, the one Eclipse
  * chose. It never picks or opens an editor, and never takes the keyboard from a part's control (a
@@ -80,6 +90,13 @@ final class KeyboardHandBack {
     private final Display display;
     /** After each FocusOut, the check, once that event and what caused it are done. */
     private final Listener onFocusOut;
+    /** After each change to a model element's children, the check, after the renderer's work. */
+    private final EventHandler onModelChildren;
+    /**
+     * The window's event broker, which reports model changes (of every window); {@code null} if it
+     * has none. The window's, so that its subscriptions also go when the window's context does.
+     */
+    private final IEventBroker events;
     /** The user's next mouse button ends the watch. */
     private final Listener onClick;
     private final DisposeListener onWindowClosed;
@@ -90,6 +107,8 @@ final class KeyboardHandBack {
         this.shell = shell;
         this.display = shell.getDisplay();
         this.onFocusOut = event -> display.asyncExec(this::check);
+        this.onModelChildren = event -> display.asyncExec(this::check);
+        this.events = window.getService(IEventBroker.class);
         this.onClick = event -> stop();
         this.onWindowClosed = event -> stop();
     }
@@ -118,6 +137,11 @@ final class KeyboardHandBack {
         display.addFilter(SWT.FocusOut, onFocusOut);
         display.addFilter(SWT.MouseDown, onClick);
         shell.addDisposeListener(onWindowClosed);
+        if (events != null) {
+            // Every window's changes, not only this one's: check() decides from the state, and acts
+            // only while this window is the active one.
+            events.subscribe(UIEvents.ElementContainer.TOPIC_CHILDREN, onModelChildren);
+        }
     }
 
     /**
@@ -208,6 +232,9 @@ final class KeyboardHandBack {
         WATCHES.remove(shell, this);
         display.removeFilter(SWT.FocusOut, onFocusOut);
         display.removeFilter(SWT.MouseDown, onClick);
+        if (events != null) {
+            events.unsubscribe(onModelChildren);
+        }
         if (!shell.isDisposed()) {
             shell.removeDisposeListener(onWindowClosed);
         }

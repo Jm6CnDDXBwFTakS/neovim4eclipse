@@ -225,8 +225,8 @@ come after it), and stops if Eclipse's cycle ever changes. The Release tool's `c
 release newer than the smoke job's.
 
 The smoke entries are pinned rather than looked up at run time, so a release of the plug-in never
-fails just because Eclipse shipped that day. `Require-Bundle` in `MANIFEST.MF` has no version
-ranges, so nothing but the feature's `org.eclipse.platform` import (`version="4.34.0"
+fails just because Eclipse shipped that day. `Require-Bundle` and `Import-Package` in `MANIFEST.MF`
+have no version ranges, so nothing but the feature's `org.eclipse.platform` import (`version="4.34.0"
 match="greaterOrEqual"`) stops an install on an Eclipse older than the target; the target release
 is the promise.
 
