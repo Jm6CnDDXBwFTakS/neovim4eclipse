@@ -17,12 +17,15 @@ own commands.
 - Folding with `zo`, `zc` and `zM` on Eclipse's own folds (methods, imports, comments).
 - `:terminal` opens Eclipse's Terminal view, with a shell in the file's folder.
 
-**Plug-ins that draw on the screen** are shown only in part, since Eclipse draws the editor:
+**Neovim plug-ins** are best effort, with extra care for those that add what Eclipse lacks:
 
-- Shown: Neovim's own completion list (`Ctrl-N`), the labels of jump plug-ins (flash, leap, hop,
-  mini.jump2d) and floating windows that do not take the keyboard (which-key's key hints).
-- Not shown: windows that take the keyboard (pickers such as Telescope, file trees, dashboards,
-  `:Lazy`) and the menus of completion plug-ins (nvim-cmp, blink.cmp).
+- Plug-ins that work on text (surround, text objects, motions, your own mappings) work as in a
+  terminal.
+- Floating windows are drawn over the editor: key hints (which-key), hover text, notifications,
+  and the labels of jump plug-ins (flash, leap, hop).
+- Plug-ins that bring an IDE of their own (pickers, file managers, git interfaces, completion
+  menus) may not work. Some are tested behind the scenes, but Eclipse already does their job, and
+  replacing it is not a goal.
 
 **Requires:**
 
