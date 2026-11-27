@@ -352,6 +352,8 @@ the like, in any folder and with any extension) and a link to one, since what yo
 go to the device. An existing file with such a name and an extension, like `NUL.txt` on Windows 11,
 still opens.
 
+After a restart, Eclipse brings the stacks back as it does any layout you dragged.
+
 **vim-fugitive** works with git through these editors. `:Gwrite` saves the editor (through
 Eclipse, as `:w` does) and stages the file; `:Gread` puts the staged text in the editor, unsaved;
 `:Git commit -m "..."` commits. `:Git commit` alone opens git's message file
@@ -366,7 +368,23 @@ repository from the folder an editor's Neovim window works in, its project's roo
 repository that holds the project (at its root or above) is found; one in a folder inside the
 project is not.
 
-After a restart, Eclipse brings the stacks back as it does any layout you dragged.
+**harpoon** (its harpoon2 branch) jumps between the files of its list through these editors. A
+file added (`require('harpoon'):list():add()`, or your key for it) is kept by its path from the
+project's root: harpoon keeps a list for each working folder, and an editor's Neovim window works
+in its project's root, so each project has a list of its own. A jump to a file of the list
+(`list():select(1)`, `next()`, `prev()`) brings its editor to the front, or opens one, with the
+caret on the line harpoon kept for the file when Neovim has no buffer for it yet. Its menu
+(`harpoon.ui:toggle_quick_menu(list)`) is drawn over the editor with the keyboard: Enter opens the
+line's file, `q` or `Esc` closes it, and lines deleted or moved there and written (`:w`) change
+the list. A jump with `{ vsplit = true }` or `{ split = true }` opens the file beside this one, as
+a plug-in's split on a file does. The lists last only as long as Neovim runs: harpoon reads its
+saved lists once, at its `setup()`, for the folder Neovim works in then, and in Eclipse Neovim
+starts in Eclipse's own folder, not a project's. So after Eclipse or *Restart Neovim* starts it
+again, each project's list is empty (with harpoon set up in your `init.lua`; one loaded at its
+first key reads the list of the project you press it in), and once harpoon writes that project's
+list again (a file added or removed, the menu written, or Neovim ending after the list was read
+there, by a jump or the menu), the list saved before is replaced. In a terminal you start Neovim
+in the project, and its list comes back.
 
 A command half typed when you switch editors (after `r` or `f`) stays in the editor you typed it in,
 as in Neovim: your next key finishes it there, and the keys after it go to the new editor.

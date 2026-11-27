@@ -15,7 +15,7 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 ### Added
 
 - The user guide says how some IDE-like plug-ins behave in Eclipse, as best effort: oil.nvim's
-  float (*Floating windows*) and vim-fugitive (*Splits*).
+  float (*Floating windows*), vim-fugitive and harpoon (*Splits*).
 
 ### Changed
 

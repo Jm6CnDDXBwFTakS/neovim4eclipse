@@ -337,7 +337,8 @@ does in Eclipse two more: noice and its library nui.nvim (`NoiceIntegrationTest`
 of a status line one more: lualine (`LualineIntegrationTest`, `LualineEndToEndTest`), and the
 tests of a file manager one more: oil.nvim (`OilIntegrationTest`, `OilEndToEndTest`), and the
 tests of git through a plug-in one more: vim-fugitive (`FugitiveEndToEndTest`, which also needs git
-on the `PATH`). flash's help
+on the `PATH`), and the tests of a list of files to jump between one more: harpoon, which uses the
+plenary pinned for Telescope (`HarpoonEndToEndTest`). flash's help
 page also stands for a user's plug-in in the help editor's test (`windows_spec.lua`). They are
 third-party
 code that runs in the test Neovim, on your machine and wherever `LikeCi`

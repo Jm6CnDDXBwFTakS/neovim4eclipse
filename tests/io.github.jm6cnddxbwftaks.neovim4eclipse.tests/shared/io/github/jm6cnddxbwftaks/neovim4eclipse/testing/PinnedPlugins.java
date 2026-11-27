@@ -598,6 +598,32 @@ public final class PinnedPlugins {
     }
 
     /**
+     * Lua that loads harpoon (its harpoon2 branch) and its library plenary from their folders, after
+     * {@link #REFUSE_PROGRAMS}, and sets it up as its README does: {@code setup()} with the
+     * defaults, and keys of a user's config that call it. {@code \a} adds the current buffer's file
+     * to the list, {@code \e} opens and closes the list's menu (a float, one line a file), and
+     * {@code \1}, {@code \2} jump to the list's first and second file; {@code \v} opens the second
+     * in a {@code :vsplit}. ({@code \} is Neovim's default {@code <Leader>}; no key is the start of
+     * another, so Neovim never waits for more.) harpoon keeps one list per working folder
+     * ({@code vim.loop.cwd()}, an editor's project root) in a JSON file under
+     * {@code stdpath('data')/harpoon/}: {@code setup()} reads the file of the folder Neovim works in
+     * then (here the attached editor's project root), and every change writes the file of the
+     * folder it works in at that moment. Its
+     * autocommands are the whole Neovim's: a test that shares its Neovim restarts it afterwards.
+     */
+    public static String loadHarpoon(Path plenary, Path harpoon) {
+        return onRuntimePath(plenary) + "\n" + onRuntimePath(harpoon) + "\n" + REFUSE_PROGRAMS + """
+                local harpoon = require('harpoon')
+                harpoon:setup()
+                vim.keymap.set('n', '<Leader>a', function() harpoon:list():add() end)
+                vim.keymap.set('n', '<Leader>e', function() harpoon.ui:toggle_quick_menu(harpoon:list()) end)
+                vim.keymap.set('n', '<Leader>1', function() harpoon:list():select(1) end)
+                vim.keymap.set('n', '<Leader>2', function() harpoon:list():select(2) end)
+                vim.keymap.set('n', '<Leader>v', function() harpoon:list():select(2, { vsplit = true }) end)
+                """;
+    }
+
+    /**
      * Lua that puts {@code folder} first on Neovim's {@code 'runtimepath'}, so that
      * {@code require} finds the plug-in there. Example: {@code vim.opt.rtp:prepend([==[/home/you/
      * src/neovim4eclipse/.tool-cache/test-plugins/telescope]==])}.
