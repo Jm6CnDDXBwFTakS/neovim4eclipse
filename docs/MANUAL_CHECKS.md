@@ -452,8 +452,9 @@ one: they hold all of its steps. Add a Japanese input method first, as for `ime-
    ⇒ The candidate list opens at the prompt's cursor, the prompt shows `> 今日` once, and the
    message line `float prompt: 今日`; `notes.txt` is unchanged.
 4. `:source blink.lua` and <kbd>Enter</kbd> (see `ime-compose` step 5); `:` `echo "`, Japanese,
-   `kyou`, <kbd>Space</kbd>, and watch for a few seconds; <kbd>Esc</kbd> twice, direct input,
-   `:source blink.lua` again.
+   `kyou`, <kbd>Space</kbd>, and watch for a few seconds; <kbd>Esc</kbd> until the line closes
+   (the input method may take the first ones: on Linux one undoes the conversion and the next
+   drops the text, so three in all), direct input, `:source blink.lua` again.
    ⇒ While the words blink, the list stays at the line's cursor (on Linux and Windows it may flick
    to the text and straight back), and the second `:source blink.lua` stops the blinking.
 
@@ -491,7 +492,9 @@ region*.
    `n4e-alpha`; it highlights the words `alp...` every half second and redraws, so that the text
    is redrawn while you compose, as a timer that redraws would). Then `:` `echo "`, switch to
    Japanese, type `kyou` and press <kbd>Space</kbd>, and watch the list for a few seconds; then
-   <kbd>Esc</kbd> twice, switch to direct input, and `:source blink.lua` again.
+   <kbd>Esc</kbd> until the line closes (the input method may take the first ones: on Linux one
+   undoes the conversion and the next drops the text, so three in all), switch to direct input,
+   and `:source blink.lua` again.
    ⇒ While the words blink, the candidate list stays at the line's cursor (on Linux and Windows it
    may flick to the text and straight back at a blink), and does not stay over the text. The
    second `:source blink.lua` stops the blinking, with no highlight left.
