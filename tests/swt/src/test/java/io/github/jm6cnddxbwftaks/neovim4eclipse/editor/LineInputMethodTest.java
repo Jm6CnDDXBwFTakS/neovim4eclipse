@@ -29,6 +29,8 @@ import org.eclipse.swt.widgets.Shell;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 /**
  * {@link LineInputMethod} on a real {@code StyledText}: while Neovim's command line is open, an
@@ -127,6 +129,21 @@ class LineInputMethodTest {
         widget.notifyListeners(SWT.MouseDown, click);
         assertEquals(List.of(), pasted);
         assertFalse(line.boxForTests().getVisible());
+    }
+
+    /**
+     * Windows: the calls that cancel the input method's composition, SWT's internal Win32
+     * {@code ImmGetContext}, {@code ImmNotifyIME} and {@code ImmReleaseContext}, are found by
+     * reflection on this SWT, and run without throwing (this window has no composition, so they
+     * cancel nothing). A later SWT without them makes this fail, not the plug-in: there it only
+     * leaves the composition open, as before. Whether a click closes the Microsoft IME's candidate
+     * list needs a real input method (docs/MANUAL_CHECKS.md, {@code ime-keys} step 2).
+     */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void onWindowsSwtsWin32CallsToCancelACompositionAreFound() {
+        assertTrue(LineInputMethod.cancelComposition(widget), "ImmGetContext, ImmNotifyIME and ImmReleaseContext found");
+        assertEquals("the document", widget.getText());
     }
 
     /**

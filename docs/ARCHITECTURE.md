@@ -1004,10 +1004,15 @@ abbreviations all apply, and nothing in Eclipse edits a text of its own.
   key 'x'                              kept: an ordinary key
   ```
 
-  A click or the focus leaving ends a composition, unsent. On Linux and Windows the input method
-  ends it itself; on macOS it does not, and SWT has no call for it, so Cocoa's `discardMarkedText`
-  is called through SWT's internal classes, by reflection, guarded: a later SWT without them only
-  leaves the composition open. macOS's press-and-hold accent menu needs a text field and does not
+  A click or the focus leaving ends a composition, unsent (except on Windows when the focus
+  leaves, below). On Linux the input method ends it itself. On Windows SWT commits it when the
+  focus leaves (its `IME.WM_KILLFOCUS`, before
+  `FocusOut`: the commit reaches the line), but hands a click in the text to the input method,
+  which kept its candidate list open; so the plug-in cancels the composition there with Win32's
+  `ImmNotifyIME(..., CPS_CANCEL, ...)` (cancel, never complete: nothing composed reaches the line).
+  On macOS the input method never ends it, so Cocoa's `discardMarkedText` is called. SWT has a call
+  for neither: both go through SWT's internal classes, by reflection, guarded: a later SWT without
+  them only leaves the composition open. macOS's press-and-hold accent menu needs a text field and does not
   open on the drawn line; dead keys (Option+E, E) are ordinary key presses and work. A real input
   method cannot be driven by a test: SWT's side is checked with synthetic events
   (`LineInputMethodTest`), and a person checks each system (docs/MANUAL_CHECKS.md, `ime-compose`,

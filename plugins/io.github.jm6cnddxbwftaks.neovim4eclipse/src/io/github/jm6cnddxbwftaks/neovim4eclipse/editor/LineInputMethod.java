@@ -59,11 +59,21 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
  * </ul>
  *
  * <h2>Ending a composition</h2>
- * The line closing, a click or the focus leaving end it, and nothing is sent. On Linux and Windows
- * the input method ends it itself. On macOS it would not (measured: a click or the focus leaving
- * never ends a composition), and SWT has no call for it: Cocoa's {@code discardMarkedText} is called
- * through SWT's internal classes, by reflection, so a later SWT without them only leaves the
- * composition open, as before. Until SWT has a public call for it.
+ * The line closing, a click or the focus leaving end it, and nothing is sent (except on Windows when
+ * the focus leaves, below). On Linux the input
+ * method ends it itself. On Windows SWT ends it when the focus leaves, by committing it
+ * ({@code CPS_COMPLETE} in SWT 3.128's Win32 {@code IME.WM_KILLFOCUS}, before the widget's
+ * {@code FocusOut}, so the commit reaches the line as any commit does and nothing is left to end
+ * here); but not for a click in the text: SWT asks {@code COMPOSITION_OFFSET} where the click is, the answer
+ * ({@code index} 0, at the line's cursor) puts it inside the composition, and SWT hands the click
+ * to the input method instead of ending the composition (SWT 3.128's Win32
+ * {@code IME.WM_LBUTTONDOWN}): the Microsoft IME's candidate list stayed open until a second click.
+ * On macOS it would not end it at all (measured: a click or the focus leaving never ends a
+ * composition). SWT has a call for neither: Cocoa's {@code discardMarkedText}, and Win32's
+ * {@code ImmNotifyIME} with {@code CPS_CANCEL} (which throws the composition away, where
+ * {@code CPS_COMPLETE} would commit it), are called through SWT's internal classes, by reflection,
+ * so a later SWT without them only leaves the composition open, as before. Until SWT has a public
+ * call for it.
  *
  * <p>UI thread only.
  */
@@ -246,6 +256,8 @@ final class LineInputMethod {
         composingCaret.accept(false);
         if (was && PlatformUtil.isMac()) {
             discardMarkedText(widget);
+        } else if (was && PlatformUtil.isWindows()) {
+            cancelComposition(widget);
         }
     }
 
@@ -346,6 +358,42 @@ final class LineInputMethod {
             }
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             LOG.log(Level.FINE, "the input method's composition could not be ended (Cocoa's discardMarkedText)", e);
+        }
+    }
+
+    /**
+     * Win32's {@code CPS_CANCEL}, which SWT's {@code OS} does not define: {@code ImmNotifyIME} with
+     * it throws the composition away, where {@code CPS_COMPLETE} would commit it.
+     */
+    private static final int CPS_CANCEL = 0x4;
+
+    /**
+     * Windows: throws away the input method's composition on {@code control}, through
+     * {@code ImmNotifyIME(ImmGetContext(hwnd), NI_COMPOSITIONSTR, CPS_CANCEL, 0)}, by reflection on
+     * SWT's internal {@code org.eclipse.swt.internal.win32.OS} (see the class comment). Cancel, not
+     * complete: nothing composed may reach the line or the document. Answers whether SWT's calls
+     * were found ({@code true} also when the window has no input context, and nothing was
+     * cancelled); does nothing, logs at FINE and answers {@code false} when they are not there.
+     */
+    static boolean cancelComposition(Control control) {
+        try {
+            long hwnd = Control.class.getField("handle").getLong(control);
+            Class<?> os = Class.forName("org.eclipse.swt.internal.win32.OS");
+            int compositionString = os.getField("NI_COMPOSITIONSTR").getInt(null);
+            java.lang.reflect.Method notify = os.getMethod("ImmNotifyIME", long.class, int.class, int.class, int.class);
+            java.lang.reflect.Method release = os.getMethod("ImmReleaseContext", long.class, long.class);
+            long context = (long) os.getMethod("ImmGetContext", long.class).invoke(null, hwnd);
+            if (context != 0) {
+                try {
+                    notify.invoke(null, context, compositionString, CPS_CANCEL, 0);
+                } finally {
+                    release.invoke(null, hwnd, context);
+                }
+            }
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            LOG.log(Level.FINE, "the input method's composition could not be cancelled (Win32's ImmNotifyIME)", e);
+            return false;
         }
     }
 }

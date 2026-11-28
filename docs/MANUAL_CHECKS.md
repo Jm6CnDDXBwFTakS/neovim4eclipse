@@ -505,7 +505,9 @@ region*.
    ⇒ The click abandons the line, as any click in the text does: the line closes with its `:abc`
    and the composing `か`, and the cursor lands at the click. `か` reaches neither the line nor
    `notes.txt`; switch to direct input and type `:`: the new line is empty, no `か` comes back.
-   (On macOS ending the composition is the plug-in's call to Cocoa's `discardMarkedText`.)
+   The input method's candidate list, if one opened, closes with the first click. (On macOS
+   ending the composition is the plug-in's call to Cocoa's `discardMarkedText`, on Windows its
+   call to `ImmNotifyIME` with `CPS_CANCEL`.)
 3. `:` `abc`, Japanese, type `ka`, switch to another application and back to Eclipse.
    ⇒ The line stays open and has not run (another application taking the keyboard keeps it). On
    Linux and macOS the composition ended unsent: in

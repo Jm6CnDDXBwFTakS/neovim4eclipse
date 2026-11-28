@@ -1044,10 +1044,11 @@ The user types `:e ` in a text editor, switches the keyboard to Japanese, types 
 4. The second Enter is an ordinary key: Neovim runs `:e 可`, `CmdlineLeave` sends
    `eclipse_cmdline("")`, and the filters and handlers go off.
 
-A click while composing ends the composition, unsent: the input method does so itself on Linux and
-Windows; on macOS the plug-in calls Cocoa's `discardMarkedText` through SWT's internal classes,
-guarded. Tests: `LineCompositionTest` (the decisions), `LineInputMethodTest` (`tests/swt`,
-synthetic events); a real input method is a manual check (docs/MANUAL_CHECKS.md, `ime-compose`).
+A click while composing ends the composition, unsent: the input method does so itself on Linux; on
+Windows the plug-in cancels it with Win32's `ImmNotifyIME` (`CPS_CANCEL`), and on macOS it calls
+Cocoa's `discardMarkedText`, both through SWT's internal classes, guarded. Tests:
+`LineCompositionTest` (the decisions), `LineInputMethodTest` (`tests/swt`, synthetic events); a
+real input method is a manual check (docs/MANUAL_CHECKS.md, `ime-compose`).
 
 ### 3.3 Insert mode
 

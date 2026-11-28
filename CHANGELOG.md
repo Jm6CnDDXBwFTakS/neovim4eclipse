@@ -43,6 +43,10 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ### Fixed
 
+- Windows: a click in the text while composing on the `:` line (or in a plug-in's floating window)
+  now closes the Microsoft IME's list of candidates along with the line. Before, the list stayed
+  open until a second click. What was being composed is still dropped, as before: it reaches
+  neither the line nor the file.
 - An input method's list of candidates opens at the cursor in a plug-in's floating window (a
   picker's prompt), as on the `:` line. Before, it opened where the editor's caret had been, or
   elsewhere on the screen: the systems place the list at the editor's caret, which is hidden while
