@@ -230,7 +230,9 @@
                profile swaps the two properties (see the comment at the top). -->
           <groups>${ui.groups}</groups>
           <excludedGroups>${ui.excludedGroups}</excludedGroups>
-          <!-- Each run gets a fresh workspace under target/. -->
+          <!-- Each run gets a fresh workspace: under target/, or for the pictures' runs under
+               pictures.home (tests.workspace). -->
+          <osgiDataDirectory>${tests.workspace}</osgiDataDirectory>
           <deleteOsgiDataDirectory>true</deleteOsgiDataDirectory>
         </configuration>
       </plugin>
@@ -261,6 +263,11 @@
          pictures-home-windows profile below picks C:\Users\Public, since the temp folder there is
          under the account's own folder. -Dpictures.home=... sets another. -->
     <pictures.home>/tmp/neovim4eclipse-pictures</pictures.home>
+    <!-- The test Eclipse's workspace (Tycho's default place). The pictures' runs move it under
+         pictures.home too: a picture shows a project file's full path wherever Neovim's status
+         line has room for it (the floats picture: .../target/work/data/e2e/src/p/Foxes.java), and
+         under target/ that path would begin with the account's home folder. -->
+    <tests.workspace>${project.build.directory}/work/data</tests.workspace>
   </properties>
 
   <profiles>
@@ -370,8 +377,9 @@
     <profile>
       <id>screenshots</id>
       <properties>
-        <!-- Data and files outside the home folder: see pictures.home above. -->
+        <!-- Data, files and the workspace outside the home folder: see pictures.home above. -->
         <tests.isolated.root>${pictures.home}</tests.isolated.root>
+        <tests.workspace>${pictures.home}/workspace</tests.workspace>
         <ui.skip>${skipTests}</ui.skip>
         <nvim.optional>${skipTests}</nvim.optional>
         <ui.groups>screenshots</ui.groups>
@@ -408,8 +416,9 @@
     <profile>
       <id>gallery</id>
       <properties>
-        <!-- Data and files outside the home folder: see pictures.home above. -->
+        <!-- Data, files and the workspace outside the home folder: see pictures.home above. -->
         <tests.isolated.root>${pictures.home}</tests.isolated.root>
+        <tests.workspace>${pictures.home}/workspace</tests.workspace>
         <ui.skip>${skipTests}</ui.skip>
         <!-- SearchGalleryTest starts Neovim: -Dnvim.path is required, as for -Pui. -->
         <nvim.optional>${skipTests}</nvim.optional>
