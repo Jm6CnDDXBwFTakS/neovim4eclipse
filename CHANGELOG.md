@@ -12,6 +12,8 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-28
+
 ### Added
 
 - `:file name` renames the editor's file, or moves it to another folder of its project
