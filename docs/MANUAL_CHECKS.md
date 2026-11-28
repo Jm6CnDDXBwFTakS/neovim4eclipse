@@ -433,11 +433,9 @@ editor and watch it.
 - **Launch:** normal
 - **Areas:** editor/FloatingWindows.java, editor/StatusLineRow.java, util/FloatPlacement.java, editor/CursorStyleController.java
 
-For a change around the input method rather than in it: Neovim's windows drawn over the text, the
-rows under the editor, the caret. The input method's own code (`LineInputMethod`,
-`LineComposition`) and an SWT upgrade (`/pom.xml`) bring `ime-compose` and `ime-keys` instead,
-which go through every case; this card takes one of each kind. When those are due too, skip this
-one: they hold all of its steps. Add a Japanese input method first, as for `ime-compose`.
+One case of each kind, for a change around the input method (floats, the rows under the editor,
+the caret). Skip it when `ime-compose` and `ime-keys` are due: they hold all of its steps. Add a
+Japanese input method first, as for `ime-compose`.
 
 1. In `n4e-alpha`'s `notes.txt`, `:` `echo "`, switch to Japanese, type `kyou`, press
    <kbd>Space</kbd> (choose 今日 if another candidate is offered) and <kbd>Enter</kbd>; switch to
