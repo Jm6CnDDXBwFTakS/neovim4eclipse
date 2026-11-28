@@ -987,7 +987,9 @@ abbreviations all apply, and nothing in Eclipse edits a text of its own.
   (every system opens the candidate list at the widget's caret, whatever `COMPOSITION_OFFSET`
   answers; in a plug-in's float, where Eclipse's caret is hidden and the widget has none,
   `CursorStyleController.composing` gives it a thin stand-in for the composition, under the
-  composing text's box), macOS's selection request is answered (SWT 3.128's Cocoa side throws without one), and
+  composing text's box; and put back there at each repaint while composing, since StyledText
+  moves its caret to the text whenever the text is redrawn meanwhile: new highlights, a scroll;
+  not a move of the caret offset alone on Windows, which repaints nothing), macOS's selection request is answered (SWT 3.128's Cocoa side throws without one), and
   at the commit the committed text goes to Neovim's line as a paste. The filter clears the event's
   type but leaves `doit` true: on macOS a refused commit tells Cocoa no key input happened, and
   Cocoa then sends the Enter that ended the composition, which would run the line. Every system also delivers a commit as key presses (on macOS with

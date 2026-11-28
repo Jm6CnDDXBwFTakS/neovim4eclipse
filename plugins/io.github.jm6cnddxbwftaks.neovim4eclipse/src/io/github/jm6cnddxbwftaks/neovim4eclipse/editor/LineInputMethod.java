@@ -51,7 +51,9 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
  *       {@code COMPOSITION_OFFSET}. So while a composition goes on, the widget's caret is moved to
  *       the line's cursor, and put back when the line closes: on the command line Eclipse's caret,
  *       in a float the stand-in {@code CursorStyleController} puts there while the composition
- *       goes on (a float has no caret otherwise, and the list opened elsewhere).</li>
+ *       goes on (a float has no caret otherwise, and the list opened elsewhere); and back there at
+ *       each repaint while composing, since StyledText moves its caret to the text whenever Neovim
+ *       redraws it meanwhile ({@link #onPaint}).</li>
  *   <li>{@code COMPOSITION_SELECTION}: no selection. macOS asks for it, and SWT 3.128's Cocoa side
  *       throws without an answer.</li>
  * </ul>
@@ -77,6 +79,7 @@ final class LineInputMethod {
     private final Listener imeFilter = this::onIme;
     private final Listener keyFilter = this::onKey;
     private final Listener endFilter = this::onEnd;
+    private final Listener paintListener = this::onPaint;
     /** The composing text, drawn over the line; {@code null} until the first composition. */
     private Canvas box;
     private boolean attached;
@@ -84,6 +87,8 @@ final class LineInputMethod {
     private Point caretBefore;
     /** The caret {@link #caretBefore} belongs to: only that one is put back there. */
     private Caret caretMoved;
+    /** Where {@link #placeCaret} last put {@link #caretMoved}: a caret elsewhere was placed by StyledText since. */
+    private Point caretPlaced;
 
     /**
      * @param widget     the editor's text widget, which keeps the keyboard meanwhile
@@ -120,6 +125,7 @@ final class LineInputMethod {
             display.addFilter(SWT.KeyDown, keyFilter);
             display.addFilter(SWT.MouseDown, endFilter);
             widget.addListener(SWT.FocusOut, endFilter);
+            widget.addListener(SWT.Paint, paintListener);
         } else {
             end();
             restoreCaret();
@@ -127,6 +133,7 @@ final class LineInputMethod {
             display.removeFilter(SWT.KeyDown, keyFilter);
             display.removeFilter(SWT.MouseDown, endFilter);
             widget.removeListener(SWT.FocusOut, endFilter);
+            widget.removeListener(SWT.Paint, paintListener);
         }
         attached = open;
     }
@@ -206,6 +213,25 @@ final class LineInputMethod {
         }
     }
 
+    /**
+     * The widget repainted while a composition goes on: its caret back at the line's cursor, if
+     * StyledText moved it. StyledText puts its caret at the text's caret offset whenever the text
+     * is redrawn meanwhile (new highlights, {@code setStyleRanges}; a scroll; a resize), and the
+     * systems would move the candidate list there; those end with a repaint, so one place catches
+     * them. Example: on the {@code :} line, a timer of your config highlights words in the window
+     * while Japanese is composed; the list comes back to the line's cursor. Not caught: a move of
+     * the caret offset alone on Windows, whose caret moves without a repaint (GTK's queues one).
+     * A caret already there is not moved (SWT ignores a move to the same place), so a real move
+     * costs at most one more repaint, which finds the caret in place. The systems take StyledText's
+     * move at once (GTK, Windows), so the list may hop to the text and back; macOS asks for the
+     * place only when it shows the list.
+     */
+    private void onPaint(Event e) {
+        if (!composition.composing().isEmpty()) {
+            placeCaret();
+        }
+    }
+
     /** A click anywhere, or the widget losing the focus: a composition still going on ends, unsent. */
     private void onEnd(Event e) {
         if (!composition.composing().isEmpty()) {
@@ -230,23 +256,34 @@ final class LineInputMethod {
         if (caret == null || cell == null) {
             return;
         }
-        if (caretBefore == null || caretMoved != caret) {
+        // Where StyledText last put it, whenever it is not where this method put it last: StyledText
+        // may move it during the line (a scroll, an incremental search moving the cursor), and the
+        // place to go back to is its latest. A caret still at the last cell (a second composition,
+        // the cursor moved on along the line) was not placed by StyledText: its place stays.
+        if (caretMoved != caret || !caret.getLocation().equals(caretPlaced)) {
             caretBefore = caret.getLocation();
             caretMoved = caret;
         }
-        caret.setLocation(cell.x, cell.y);
+        caretPlaced = new Point(cell.x, cell.y);
+        caret.setLocation(caretPlaced);
     }
 
-    /** Puts the editor's caret back where it was before a composition moved it. */
+    /**
+     * Puts the editor's caret back where StyledText last placed it, decided from where the caret is
+     * now: only the caret moved, and only while it is still where {@link #placeCaret} put it (if
+     * StyledText placed it since, a scroll after the commit, its place is the current one). After a
+     * composition in a float, the stand-in has made way for Eclipse's caret, which StyledText
+     * places itself.
+     */
     private void restoreCaret() {
         Caret caret = widget.getCaret();
-        // Only the caret moved: after a composition in a float, the stand-in has made way for
-        // Eclipse's caret, which StyledText places itself.
-        if (caretBefore != null && caret != null && caret == caretMoved && !caret.isDisposed()) {
+        if (caretBefore != null && caret != null && caret == caretMoved && !caret.isDisposed()
+                && caret.getLocation().equals(caretPlaced)) {
             caret.setLocation(caretBefore);
         }
         caretBefore = null;
         caretMoved = null;
+        caretPlaced = null;
     }
 
     /** Draws the composing text in a box over the line's cursor, or hides the box when there is none. */

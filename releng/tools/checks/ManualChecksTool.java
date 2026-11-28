@@ -640,7 +640,8 @@ public final class ManualChecksTool {
     /**
      * The folders and the one project the cards use, under {@code root}. Leaves what is there, and
      * adds only what is missing, so {@code launch} runs it every time: a root made before a card
-     * needed a new file (such as {@code float-prompt.lua}) gets that file.
+     * needed a new file gets that file. {@code float-prompt.lua} and {@code blink.lua} are written
+     * every time: they are the tool's own, so a change to them reaches a root made before.
      */
     static void setup(Path root) throws IOException {
         Path alpha = root.resolve("projects/n4e-alpha");
@@ -667,10 +668,13 @@ public final class ManualChecksTool {
         // A floating prompt like a picker's (Telescope's prompt is a prompt buffer in a float too),
         // without any plug-in: the card fl-prompt opens it with `:source float-prompt.lua`, so a
         // config with no picker can check what only a person sees (an app switch, an input method).
-        write(alpha.resolve("float-prompt.lua"), """
+        // Written every time, unlike the files above: it is the tool's own, never edited by hand,
+        // so a root made before a change to it gets the new one.
+        Files.writeString(alpha.resolve("float-prompt.lua"), """
                 -- A floating prompt like a picker's, for the manual check fl-prompt
                 -- (docs/MANUAL_CHECKS.md). In an editor of this project: :source float-prompt.lua
                 -- Enter closes it and shows what you typed; Esc closes it.
+                -- (ManualChecks.java setup writes this file; edits are overwritten.)
                 local buf = vim.api.nvim_create_buf(false, true)
                 vim.bo[buf].buftype = 'prompt'
                 vim.bo[buf].bufhidden = 'wipe'
@@ -691,6 +695,63 @@ public final class ManualChecksTool {
                 end)
                 vim.keymap.set('i', '<Esc>', close, { buffer = buf })
                 vim.cmd.startinsert()
+                """);
+        // Highlights in the window that come and go while you compose on the `:` line, with a
+        // redraw each time (Neovim redraws no window by itself while its command line is open), so
+        // that the text is redrawn meanwhile, as a timer that redraws would: the card ime-compose
+        // checks that the input method's list stays at the line's cursor. Written every time, as
+        // float-prompt.lua.
+        Files.writeString(alpha.resolve("blink.lua"), """
+                -- Highlights the words "alp..." in this window every half second, for the manual
+                -- check ime-compose (docs/MANUAL_CHECKS.md): :source blink.lua starts it, sourcing
+                -- it again stops it, and it stops by itself after five minutes (with a message) or
+                -- when the window goes. Each change is redrawn at once: while the command line is
+                -- open, Neovim redraws no window by itself.
+                -- (ManualChecks.java setup writes this file; edits are overwritten.)
+                local state = _G.n4e_blink
+                if state then
+                  state.stop()
+                  return
+                end
+                local win = vim.api.nvim_get_current_win()
+                local timer = vim.uv.new_timer()
+                local match
+                local ticks = 0
+                state = {}
+                function state.stop()
+                  if not timer:is_closing() then
+                    timer:stop()
+                    timer:close()
+                  end
+                  if match and vim.api.nvim_win_is_valid(win) then
+                    pcall(vim.fn.matchdelete, match, win)
+                  end
+                  match = nil
+                  if _G.n4e_blink == state then
+                    _G.n4e_blink = nil -- not a newer run's, started after this one was stopped
+                  end
+                end
+                _G.n4e_blink = state
+                timer:start(500, 500, vim.schedule_wrap(function()
+                  ticks = ticks + 1
+                  -- One check every tick passes: stopped meanwhile, the window gone, or five minutes up.
+                  if _G.n4e_blink ~= state or not vim.api.nvim_win_is_valid(win) then
+                    state.stop()
+                    return
+                  end
+                  if ticks > 600 then
+                    state.stop()
+                    vim.notify('blink.lua: stopped after five minutes')
+                    return
+                  end
+                  if match then
+                    pcall(vim.fn.matchdelete, match, win)
+                    match = nil
+                  else
+                    match = vim.fn.matchadd('Search', [[\\<alp\\w*]], 10, -1, { window = win })
+                  end
+                  vim.cmd.redraw()
+                end))
                 """);
     }
 

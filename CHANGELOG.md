@@ -41,7 +41,9 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 - An input method's list of candidates opens at the cursor in a plug-in's floating window (a
   picker's prompt), as on the `:` line. Before, it opened where the editor's caret had been, or
   elsewhere on the screen: the systems place the list at the editor's caret, which is hidden while
-  a float has the keys.
+  a float has the keys. The list also comes back to the cursor, there and on the `:` line, when
+  the text is redrawn while you compose (highlights changing, a scroll); before, it stayed at the
+  text's caret.
 - `:Eclipse edit a b.txt` typed by hand or in a mapping (and `:Eclipse wq`, `:Eclipse xit`,
   `:Eclipse exit` with a name) reads the name as `:e` does: one name, spaces as typed, and a `+cmd`
   only before the name (`:Eclipse edit a.txt +10` is the file `a.txt +10`). Before, each word was a

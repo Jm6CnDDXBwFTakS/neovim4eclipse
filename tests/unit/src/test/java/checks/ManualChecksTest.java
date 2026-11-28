@@ -208,26 +208,61 @@ class ManualChecksTest {
     @Test
     @Tag("integration")
     void theFloatPromptOpensAFloatingPromptThatEnterCloses(@TempDir Path root) throws Exception {
-        TestNeovim.require();
-        ManualChecksTool.setup(root);
-        Path prompt = root.resolve("projects/n4e-alpha/float-prompt.lua");
-        String check = """
+        String out = sourcedInAlpha(root, "float-prompt.lua", """
                 local win = vim.api.nvim_get_current_win()
                 local opened = vim.api.nvim_win_get_config(win).relative ~= '' and vim.bo.buftype == 'prompt'
                 vim.api.nvim_feedkeys('iabc' .. vim.keycode('<CR>'), 'tx', false)
                 io.stdout:write(tostring(opened), ' ', tostring(vim.api.nvim_win_is_valid(win)), ' ', vim.fn.execute('messages'):match('float prompt: %w+') or 'none', '\\n')
-                """;
-        // Run in the project, by relative names, as the card does (`:source float-prompt.lua`): no
-        // path to escape, whatever the temp folder's name holds (a space in a Windows user name).
-        Path alpha = prompt.getParent();
+                """);
+        assertTrue(out.contains("true false float prompt: abc"), "a float with a prompt, closed by Enter, the text shown: " + out);
+    }
+
+    /**
+     * The card ime-compose's blink.lua highlights words in the window and takes the highlight away
+     * again, over and over, so that the text is redrawn while a person composes on the {@code :}
+     * line; sourced a second time it stops, leaving no highlight and no timer running.
+     */
+    @Test
+    @Tag("integration")
+    void blinkHighlightsUntilSourcedAgain(@TempDir Path root) throws Exception {
+        String out = sourcedInAlpha(root, "blink.lua", """
+                local function timers()
+                  local n = 0
+                  vim.uv.walk(function(h)
+                    if h:get_type() == 'timer' and h:is_active() then n = n + 1 end
+                  end)
+                  return n
+                end
+                local limit = tonumber(os.getenv('TEST_WAIT_MS'))
+                local on = vim.wait(limit, function() return #vim.fn.getmatches() > 0 end)
+                local off = vim.wait(limit, function() return #vim.fn.getmatches() == 0 end)
+                local running = timers()
+                vim.cmd.source('blink.lua') -- stops it
+                io.stdout:write('on ', tostring(on), ' off ', tostring(off), ' ran ', running, ' then ', timers(), ' ', #vim.fn.getmatches(), '\\n')
+                """);
+        assertTrue(out.contains("on true off true ran 1 then 0 0"), "blinking, then stopped with nothing left: " + out);
+    }
+
+    /**
+     * Sources {@code file} (one {@code setup} writes) in a headless Neovim started in n4e-alpha,
+     * then runs {@code check}, and gives what it printed. Run in the project, by relative names, as
+     * the cards do ({@code :source float-prompt.lua}): no path to escape, whatever the temp folder's
+     * name holds (a space in a Windows user name).
+     */
+    private static String sourcedInAlpha(Path root, String file, String check) throws Exception {
+        TestNeovim.require();
+        ManualChecksTool.setup(root);
+        Path alpha = root.resolve("projects/n4e-alpha");
         Files.writeString(alpha.resolve("check.lua"), check);
-        ProcessBuilder builder = new ProcessBuilder(TestNeovim.PATH, "--clean", "--headless", "-c", "source float-prompt.lua",
+        ProcessBuilder builder = new ProcessBuilder(TestNeovim.PATH, "--clean", "--headless", "notes.txt", "-c", "source " + file,
                 "-c", "luafile check.lua", "-c", "qa!").directory(alpha.toFile()).redirectErrorStream(true);
         NvimExecutable.prepareEnvironment(builder.environment(), PlatformUtil.isWindows());
+        builder.environment().put("TEST_WAIT_MS", Long.toString(TestWait.millis()));
         Process nvim = builder.start();
         nvim.getOutputStream().close(); // no input: a script that waited for a key would hang
         // Read on another thread, and wait with TestWait's limit: a Neovim that hangs fails the
-        // test instead of hanging the build (as LuaScriptsInNeovimTest runs its specs).
+        // test instead of hanging the build (as LuaScriptsInNeovimTest runs its specs). Three
+        // limits: the check itself may wait two.
         CompletableFuture<byte[]> read = CompletableFuture.supplyAsync(() -> {
             try {
                 return nvim.getInputStream().readAllBytes();
@@ -235,13 +270,13 @@ class ManualChecksTest {
                 throw new UncheckedIOException(e);
             }
         });
-        if (!nvim.waitFor(TestWait.millis(), TimeUnit.MILLISECONDS)) {
+        if (!nvim.waitFor(3 * TestWait.millis(), TimeUnit.MILLISECONDS)) {
             nvim.destroyForcibly();
-            fail("Neovim did not finish sourcing float-prompt.lua");
+            fail("Neovim did not finish sourcing " + file);
         }
         String out = new String(read.get(TestWait.millis(), TimeUnit.MILLISECONDS), StandardCharsets.UTF_8);
         assertEquals(0, nvim.exitValue(), out);
-        assertTrue(out.contains("true false float prompt: abc"), "a float with a prompt, closed by Enter, the text shown: " + out);
+        return out;
     }
 
     // ---- The checks' own Eclipse ----

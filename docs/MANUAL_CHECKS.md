@@ -51,7 +51,8 @@ itself (see below).
   project `n4e-alpha` to import into Eclipse (with `notes.txt`, and `float-prompt.lua` for
   `fl-prompt`), the workspaces `ws1` and `ws2`, and `xdg`, a plug-in folder of the checks' own. It
   leaves what is there and adds only what is missing; `launch` runs it too, so a folder made before
-  a card needed a new file gets it.
+  a card needed a new file gets it. `float-prompt.lua` and `blink.lua` are the tool's own and are
+  written every time.
 - **`launch <card>`** starts *the checks' Eclipse* with the plug-in just built (see below), in
   the state the card's **Launch** line names:
   - `fresh`: `XDG_DATA_HOME` pointing to an *empty* `xdg` folder, so the plug-in sees no dedicated
@@ -454,6 +455,14 @@ region*.
    ⇒ After <kbd>Space</kbd> the candidate list opens at the line's cursor, not elsewhere on the
    screen. The <kbd>Enter</kbd> that keeps 今日 does not run the line; the last one does, and
    Neovim's line shows `今日`.
+5. Type `:source blink.lua` and <kbd>Enter</kbd> (a file `ManualChecks.java setup` puts in
+   `n4e-alpha`; it highlights the words `alp...` every half second and redraws, so that the text
+   is redrawn while you compose, as a timer that redraws would). Then `:` `echo "`, switch to
+   Japanese, type `kyou` and press <kbd>Space</kbd>, and watch the list for a few seconds; then
+   <kbd>Esc</kbd> twice, switch to direct input, and `:source blink.lua` again.
+   ⇒ While the words blink, the candidate list stays at the line's cursor (on Linux and Windows it
+   may flick to the text and straight back at a blink), and does not stay over the text. The
+   second `:source blink.lua` stops the blinking, with no highlight left.
 
 **Expect:** each step's result, after its ⇒.
 

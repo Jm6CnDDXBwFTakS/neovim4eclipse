@@ -5,6 +5,7 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -13,9 +14,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Caret;
@@ -138,6 +142,70 @@ class LineInputMethodTest {
         line.composed("可", 1);
         line.lineOpen(false);
         assertEquals(before, widget.getCaret().getLocation(), "back after the line closed");
+    }
+
+    /**
+     * Neovim redraws the text while a composition goes on (new highlights, a scroll, the caret
+     * offset set): StyledText puts its caret back at the text, and the repaint that follows puts it
+     * at the line's cursor again, where the systems keep the candidate list.
+     */
+    @Test
+    void theCaretStaysAtTheLineWhenTheTextIsRedrawnWhileComposing() {
+        widget.setText("the document\n".repeat(40));
+        line.lineOpen(true);
+        line.composed("か", 0);
+        Point atCursor = new Point(CURSOR.x, CURSOR.y);
+        assertEquals(atCursor, widget.getCaret().getLocation());
+
+        widget.setCaretOffset(5); // CaretSync, say
+        widget.setStyleRange(new StyleRange(0, 3, widget.getDisplay().getSystemColor(SWT.COLOR_RED), null));
+        widget.setTopIndex(3); // a scroll
+        assertNotEquals(atCursor, widget.getCaret().getLocation(), "StyledText moved it to the text");
+        repaint();
+        assertEquals(atCursor, widget.getCaret().getLocation(), "back at the line's cursor after the repaint");
+
+        line.composed("可", 1); // committed: nothing composed, the caret is StyledText's again
+        widget.setTopIndex(5);
+        repaint();
+        Point placedByStyledText = widget.getCaret().getLocation();
+        assertNotEquals(atCursor, placedByStyledText, "not held there once the composition is over");
+        line.lineOpen(false);
+        assertEquals(placedByStyledText, widget.getCaret().getLocation(),
+                "the line closed: StyledText's latest place stays, not the one from before the scroll");
+    }
+
+    /**
+     * The repaint those changes queue, sent by hand: this shell is never shown, and a real paint
+     * comes when the system's frame clock says (GTK), or not at all on a locked screen (macOS).
+     */
+    private void repaint() {
+        Event paint = new Event();
+        paint.gc = new GC(widget);
+        try {
+            widget.notifyListeners(SWT.Paint, paint);
+        } finally {
+            paint.gc.dispose();
+        }
+    }
+
+    /**
+     * Two compositions on one line, Neovim's cursor moved on between them: the caret goes back to
+     * where StyledText had put it before the first, not to the first composition's cell.
+     */
+    @Test
+    void aSecondCompositionKeepsThePlaceToGoBackTo() {
+        AtomicReference<Rectangle> cell = new AtomicReference<>(CURSOR);
+        LineInputMethod moving = new LineInputMethod(widget, cell::get, pasted::add);
+        Point before = widget.getCaret().getLocation();
+        moving.lineOpen(true);
+        moving.composed("か", 0);
+        moving.composed("可", 1); // committed: Neovim's cursor moves on along the line
+        cell.set(new Rectangle(CURSOR.x + 16, CURSOR.y, CURSOR.width, CURSOR.height));
+        moving.composed("き", 0);
+        assertEquals(new Point(CURSOR.x + 16, CURSOR.y), widget.getCaret().getLocation());
+        moving.lineOpen(false);
+        assertEquals(before, widget.getCaret().getLocation(), "back where StyledText had it, not at the first cell");
+        moving.dispose();
     }
 
     /**
