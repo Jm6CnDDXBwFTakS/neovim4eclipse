@@ -368,26 +368,18 @@ it: closing the page editors at Eclipse's exit as well would avoid it.
 - **Launch:** checks
 - **Areas:** core/LuaScripts.java, core/lua/**, core/NeovimSession.java, editor/FloatingWindows.java, editor/LineInputMethod.java, util/LineComposition.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
 
-Pickers are tested at pinned commits, with their defaults (but for fzf-lua's `Ctrl-V` test, which
-binds its split action itself): Telescope's `current_buffer_fuzzy_find`,
-`find_files` and `live_grep`, snacks.nvim's `lines` and `files`, and fzf-lua's `blines` and its
-`Ctrl-V` on a file (`PickersEndToEndTest`, `SnacksPickerEndToEndTest`, `SnacksPickerIntegrationTest`,
-`FloatInsertIntegrationTest`, `FzfLuaEndToEndTest`, `FzfLuaIntegrationTest`; fzf-lua's only where fzf
-is on `PATH`, `live_grep` and snacks' `files` only where `rg` is): typing narrows the
-list, Enter jumps to the line or opens the file in an Eclipse editor, every Ctrl letter in the
-prompt goes to Neovim (no Find/Replace for `Ctrl+F`), the wheel scrolls the float under it
-(`FloatingWindowsEndToEndTest`), a click selects a row and a double click opens it, real clicks through the system included (`RealMouseEndToEndTest`;
-on macOS where the app running the tests has the Accessibility permission, CONTRIBUTING.md, "Real
-keys and clicks on macOS"). The menus of blink.cmp and nvim-cmp are tested
-(`CompletionPluginsEndToEndTest`), and which-key's panel is in the pictures of `sh-colors`.
+Pickers are tested at pinned commits: Telescope, snacks.nvim and fzf-lua (`PickersEndToEndTest`,
+`SnacksPicker*Test`, `FzfLua*Test`; fzf-lua only where `fzf` is on `PATH`, `live_grep` and snacks'
+`files` only where `rg` is), with typing, Enter, every Ctrl letter in the prompt, the wheel, clicks
+and real clicks (`RealMouseEndToEndTest`; on macOS only with the Accessibility permission). The
+completion menus are tested (`CompletionPluginsEndToEndTest`), and which-key is in `sh-colors`'
+pictures.
 
-Two things only a person sees: a prompt that stays open when you switch to another application and
-back, and an input method composing in it. They need no picker: `float-prompt.lua`, which
-`ManualChecks.java setup` puts in `n4e-alpha`, opens a floating prompt the way a picker's prompt is
-made (a prompt buffer in a float with a border; `ManualChecksTest` checks that it opens and that
-Enter closes it). For the input method, add a Japanese one first, as for `ime-compose`. The
-`checks` launch reads your own Neovim config: an insert-mode mapping of yours on `<CR>` or `<Esc>`
-changes steps 3 and 4.
+Left for a person: a prompt that stays open across a switch to another application, and an input
+method composing in it. `float-prompt.lua`, which `ManualChecks.java setup` puts in `n4e-alpha`,
+opens a floating prompt as a picker does, with no plug-in. Add a Japanese input method first, as
+for `ime-compose`. The `checks` launch reads your own Neovim config, so a mapping of yours on
+insert-mode `<CR>` or `<Esc>` changes steps 3 and 4.
 
 1. In `n4e-alpha`'s `notes.txt`, type `:source float-prompt.lua` and <kbd>Enter</kbd>.
    ⇒ A box with a rounded border and the title *Float prompt* is drawn over the top of the
