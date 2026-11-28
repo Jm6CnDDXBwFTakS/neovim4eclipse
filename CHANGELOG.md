@@ -31,6 +31,13 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   Build prints the runner's fonts and text libraries, and `LikeCi.java --text-stack` prints the same
   on a Debian or Ubuntu machine, to compare.
 
+### Fixed
+
+- `:Eclipse edit a b.txt` typed by hand or in a mapping (and `:Eclipse wq`, `:Eclipse xit`,
+  `:Eclipse exit` with a name) reads the name as `:e` does: one name, spaces as typed, and a `+cmd`
+  only before the name (`:Eclipse edit a.txt +10` is the file `a.txt +10`). Before, each word was a
+  file of its own, and the name Eclipse got was wrong.
+
 ## [0.3.3] - 2026-11-27
 
 ### Added

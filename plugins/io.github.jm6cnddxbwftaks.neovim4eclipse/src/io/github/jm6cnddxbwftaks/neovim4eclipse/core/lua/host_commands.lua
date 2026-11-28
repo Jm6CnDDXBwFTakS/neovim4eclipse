@@ -192,7 +192,8 @@ local function show_typed(line)
   end)
 end
 
--- Defined below; :Eclipse file typed by hand reads its name with it, as :file's is read.
+-- Defined below; :Eclipse edit, wq, xit, exit and file typed by hand read their name with it,
+-- as a : line's is read.
 local file_words
 
 vim.api.nvim_create_user_command('Eclipse', function(o)
@@ -224,30 +225,18 @@ vim.api.nvim_create_user_command('Eclipse', function(o)
       -- it was no longer escaped, and expandcmd() ran what followed in a shell (a cloned
       -- repository's file named with a backslash and a backtick, completed into :x).
       table.remove(args, 1)
-    elseif name == 'file' then
-      -- :Eclipse file name typed by hand: read as :file name is (file_words), so that both
-      -- rename the same file: the words are one name (`:Eclipse file a b` is "a b", as
-      -- `:file a b`), and a name without a folder goes beside the file.
-      local words, why = file_words(table.concat(args, ' '), name)
+    else
+      -- :Eclipse edit, wq, xit, exit or file typed by hand: the rest of the line as typed
+      -- (o.args keeps the escapes, as nvim_parse_cmd's args do; fargs would split the name
+      -- at spaces and take a backslash away), read as a : line's name is (file_words), so
+      -- that :Eclipse edit a  b opens the file "a  b", as :e a  b does. The hand-typed form
+      -- has no completion, so only what you typed is expanded, once.
+      local words, why = file_words((o.args:gsub('^%S+%s*', '')), name)
       if not words then
         vim.api.nvim_echo({ { name .. ': ' .. why } }, true, { err = true })
         return
       end
       args = words
-    else
-      -- :Eclipse edit, wq, xit or exit name typed by hand: the name is expanded here, as
-      -- :edit or :write would.
-      for i, word in ipairs(args) do
-        local plus = cmd_commands[name] and '+' or '++' -- a word left as it is
-        if word:sub(1, #plus) ~= plus then
-          local ok, expanded = pcall(vim.fn.expandcmd, word, { errmsg = true })
-          if not ok then
-            vim.api.nvim_echo({ { (tostring(expanded):gsub('^Vim:', '')) } }, true, { err = true })
-            return
-          end
-          args[i] = vim.fs.normalize(vim.fn.fnamemodify(expanded, ':p'), { expand_env = false })
-        end
-      end
     end
     for i = #args, 1, -1 do
       if cmd_commands[name] and (args[i]:match('^%+[^+]') or args[i] == '+') then

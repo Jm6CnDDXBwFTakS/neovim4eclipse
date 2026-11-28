@@ -402,11 +402,11 @@ t.test(':file ++p x is the name "++p x"; :Eclipse file by hand reads its name as
   vim.b.neovim4eclipse_file = vim.api.nvim_buf_get_name(0)
   t.type(':file ++p docs/x<CR>')
   t.type(':Eclipse file Util.java<CR>')
-  t.type(':Eclipse file a b<CR>')
+  t.type(':Eclipse file a  b<CR>')
   t.eq({
     { 'file', false, { sent_path(app .. '/++p docs/x') } },
     { 'file', false, { sent_path(app .. '/src/Util.java') } },
-    { 'file', false, { sent_path(app .. '/src/a b') } },
+    { 'file', false, { sent_path(app .. '/src/a  b') } }, -- both spaces, as :file a  b
   }, t.commands())
   -- In a buffer that is no editor's document (a picker's preview of lib/x.txt), a name without a
   -- folder is not put beside that buffer's name: it is read against the window's folder.
@@ -463,6 +463,20 @@ t.test(':wq name and :x name get the same full path as :w name; ++p stays', func
   t.eq({
     { 'wq', false, { sent_path(app .. '/copy.txt') } },
     { 'xit', false, { '++p', sent_path(app .. '/out/copy.txt') } },
+  }, t.commands())
+end)
+
+-- :Eclipse edit typed by hand reads the rest of the line as :e does: one name, spaces as typed,
+-- an escaped space a space, its ++opt and +cmd words before it.
+t.test(':Eclipse edit by hand reads its name as :e does', function()
+  local app = editing_main_in_a_project()
+  t.type(':Eclipse edit a  b.txt<CR>')
+  t.type(':Eclipse edit ++ff=unix c\\ d.txt<CR>')
+  t.type(':Eclipse wq out/e  f.txt<CR>')
+  t.eq({
+    { 'edit', false, { sent_path(app .. '/a  b.txt') } },
+    { 'edit', false, { '++ff=unix', sent_path(app .. '/c d.txt') } },
+    { 'wq', false, { sent_path(app .. '/out/e  f.txt') } },
   }, t.commands())
 end)
 

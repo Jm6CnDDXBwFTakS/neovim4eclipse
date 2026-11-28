@@ -517,8 +517,9 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 Neovim reads these commands, so they are written as in Neovim (`:wa`, `:wal`, `:wall`), and they
 work wherever a `:` line runs: typed on the line, from a mapping in your `init.lua` (`<leader>q` →
 `:q<CR>`), from a macro, with `:normal`, and repeated with `@:`. Neovim hands each one to Eclipse as
-`:Eclipse quit`, `:Eclipse! edit file` ..., a command you can also use in your own mappings; the
-history keeps what you typed. Each command of a `|` chain is handed over the same way: `:w | q`
+`:Eclipse quit`, `:Eclipse! edit file` ..., a command you can also use in your own mappings (a
+file name in it is read as `:e` reads one, so a mapping built in Lua spells it with
+`vim.fn.fnameescape()`, as for `:e`); the history keeps what you typed. Each command of a `|` chain is handed over the same way: `:w | q`
 writes, then closes the editor (asking first if the save failed), and `:w | echo "saved"` runs the
 `echo` after the write. Not handed over, so Neovim's: a line run by `<Cmd>` or Lua
 (`vim.cmd.quit()`), the commands `:bufdo` runs, the rest of a line whose command takes `|` as part of
