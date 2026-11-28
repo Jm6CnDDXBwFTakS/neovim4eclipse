@@ -48,8 +48,10 @@ itself (see below).
   not touch its code. A POM, manifest or feature whose only change is the version number (each
   release branch starts by setting it) counts for no card. `--since <ref>` compares with another commit; `--all` lists every card.
 - **`setup`** creates the folders under `~/var/n4e-checks` (`--root <folder>` for another place): a
-  project `n4e-alpha` to import into Eclipse, the workspaces `ws1` and `ws2`, and `xdg`, a plug-in
-  folder of the checks' own.
+  project `n4e-alpha` to import into Eclipse (with `notes.txt`, and `float-prompt.lua` for
+  `fl-prompt`), the workspaces `ws1` and `ws2`, and `xdg`, a plug-in folder of the checks' own. It
+  leaves what is there and adds only what is missing; `launch` runs it too, so a folder made before
+  a card needed a new file gets it.
 - **`launch <card>`** starts *the checks' Eclipse* with the plug-in just built (see below), in
   the state the card's **Launch** line names:
   - `fresh`: `XDG_DATA_HOME` pointing to an *empty* `xdg` folder, so the plug-in sees no dedicated
@@ -359,44 +361,46 @@ it: closing the page editors at Eclipse's exit as well would avoid it.
 
 ## Floating windows that take the keyboard
 
-### `fl-real-plugins` Your own pickers and which-key
+### `fl-prompt` A floating prompt across an app switch and with an input method
 
 - **On:** linux, macos, windows
-- **Launch:** normal
-- **Areas:** core/LuaScripts.java, core/lua/**, core/NeovimSession.java, editor/FloatingWindows.java, editor/GridMouse.java, editor/LineInputMethod.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
+- **Launch:** checks
+- **Areas:** core/LuaScripts.java, core/lua/**, core/NeovimSession.java, editor/FloatingWindows.java, editor/LineInputMethod.java, util/LineComposition.java, editor/EditorKeyContext.java, util/KeyContextRule.java, editor/GridCanvas.java, editor/CursorStyleController.java, editor/LineOnFocusLoss.java, util/Grids.java, util/FloatWindow.java, util/FloatPlacement.java, util/EnterDecision.java
 
-Telescope's `current_buffer_fuzzy_find`, `find_files` and `live_grep`, snacks.nvim's `lines`
-and `files`, and fzf-lua's `blines` and its `Ctrl-V` on a file are tested at pinned
-commits (`PickersEndToEndTest`, `SnacksPickerEndToEndTest`, `SnacksPickerIntegrationTest`,
-`FloatInsertIntegrationTest`, `FzfLuaEndToEndTest`, `FzfLuaIntegrationTest`), with the plug-ins' defaults (but for the `Ctrl-V` test, which
-binds fzf-lua's split action itself): typing narrows the list, Enter jumps to the line or opens
-the file in an Eclipse editor, the document you came from is unchanged. fzf-lua's only where fzf
-is on `PATH`, `live_grep` and snacks' `files` only where `rg` is. Real clicks through the system,
-on a picker's list and in the text, Ctrl+click (Cmd+click on macOS) included, are tested
-(`RealMouseEndToEndTest`, `PickersEndToEndTest`; on macOS where the app running the tests has the
-Accessibility permission, CONTRIBUTING.md, "Real keys and clicks on macOS").
-The menus of blink.cmp and nvim-cmp after their `Ctrl-N` are tested too
-(`CompletionPluginsEndToEndTest`), so no step here checks them.
-Your own config, with its pickers, previews, borders and colorscheme, and an input method in a
-prompt, are only seen on screen. Use a config that has Telescope (or another picker, fzf-lua,
-snacks.picker) and which-key; skip a step whose plug-in it lacks.
+Pickers are tested at pinned commits, with their defaults (but for fzf-lua's `Ctrl-V` test, which
+binds its split action itself): Telescope's `current_buffer_fuzzy_find`,
+`find_files` and `live_grep`, snacks.nvim's `lines` and `files`, and fzf-lua's `blines` and its
+`Ctrl-V` on a file (`PickersEndToEndTest`, `SnacksPickerEndToEndTest`, `SnacksPickerIntegrationTest`,
+`FloatInsertIntegrationTest`, `FzfLuaEndToEndTest`, `FzfLuaIntegrationTest`; fzf-lua's only where fzf
+is on `PATH`, `live_grep` and snacks' `files` only where `rg` is): typing narrows the
+list, Enter jumps to the line or opens the file in an Eclipse editor, every Ctrl letter in the
+prompt goes to Neovim (no Find/Replace for `Ctrl+F`), the wheel scrolls the float under it
+(`FloatingWindowsEndToEndTest`), a click selects a row and a double click opens it, real clicks through the system included (`RealMouseEndToEndTest`;
+on macOS where the app running the tests has the Accessibility permission, CONTRIBUTING.md, "Real
+keys and clicks on macOS"). The menus of blink.cmp and nvim-cmp are tested
+(`CompletionPluginsEndToEndTest`), and which-key's panel is in the pictures of `sh-colors`.
 
-1. In a project of your own with several files, open a file of it, open a file picker with your
-   mapping (`<leader>ff`), and type part of another file's name.
-   ⇒ The picker is drawn over the editor where Neovim put it, with its border and colors; the
-   prompt has Neovim's cursor and the editor's caret is hidden; a preview shows the selected
-   file.
-2. Open the picker again and switch to another application, then back to Eclipse. Turn the mouse
-   wheel over the list, press `Ctrl+F` and `Ctrl+A`, then double-click a row.
-   ⇒ The picker is still open after the switch, with the cursor in its prompt; the wheel moves
-   the list; no Find/Replace dialog opens and the file behind is not selected; the double click
-   opens that row.
-3. With an input method on (Japanese: IBus or fcitx on Linux, the system's on macOS and Windows),
-   open the picker and type a word.
-   ⇒ The composing text and the candidates appear at the prompt's cursor, nothing of it reaches
-   the file, and the committed word reaches the prompt once.
-4. Press your leader key and wait.
-   ⇒ which-key's panel is drawn at the bottom of the editor, and the next key goes on as usual.
+Two things only a person sees: a prompt that stays open when you switch to another application and
+back, and an input method composing in it. They need no picker: `float-prompt.lua`, which
+`ManualChecks.java setup` puts in `n4e-alpha`, opens a floating prompt the way a picker's prompt is
+made (a prompt buffer in a float with a border; `ManualChecksTest` checks that it opens and that
+Enter closes it). For the input method, add a Japanese one first, as for `ime-compose`. The
+`checks` launch reads your own Neovim config: an insert-mode mapping of yours on `<CR>` or `<Esc>`
+changes steps 3 and 4.
+
+1. In `n4e-alpha`'s `notes.txt`, type `:source float-prompt.lua` and <kbd>Enter</kbd>.
+   ⇒ A box with a rounded border and the title *Float prompt* is drawn over the top of the
+   editor; its `> ` prompt has Neovim's cursor, in insert mode, and the editor's caret is hidden.
+2. Type `abc`, switch to another application, then click back on Eclipse's title bar (not in the
+   editor).
+   ⇒ The prompt is still open with `> abc` and the cursor after it, and typing `d` adds to it.
+3. Switch to Japanese input and type `kyou`, press <kbd>Space</kbd> to convert (choose 今日 if
+   another candidate is offered) and <kbd>Enter</kbd> to keep it.
+   ⇒ The composing text and the candidate list appear at the prompt's cursor, not elsewhere on
+   the screen; nothing reaches `notes.txt`, and the prompt shows `> abcd今日` once, still open.
+4. Switch back to direct (ABC) input and press <kbd>Enter</kbd>.
+   ⇒ The prompt closes, the message line shows `float prompt: abcd今日`, and `notes.txt` is as it
+   was.
 
 **Expect:** each step's result, after its ⇒.
 

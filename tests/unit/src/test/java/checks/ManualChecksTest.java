@@ -7,22 +7,32 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import checks.ManualChecksTool.Card;
 import common.EclipseCopy;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.RepositoryFiles;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.NvimExecutable;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
+import io.github.jm6cnddxbwftaks.neovim4eclipse.util.TestNeovim;
 
 /**
  * {@link ManualChecksTool}: the checklist in {@code docs/MANUAL_CHECKS.md} follows its format, names
@@ -183,6 +193,55 @@ class ManualChecksTest {
         Files.writeString(notes, "changed");
         ManualChecksTool.setup(root);
         assertEquals("changed", Files.readString(notes), "a second setup leaves the files alone");
+        Path prompt = root.resolve("projects/n4e-alpha/float-prompt.lua");
+        Files.delete(prompt); // a root made before the card fl-prompt needed it
+        ManualChecksTool.setup(root);
+        assertTrue(Files.readString(prompt).contains("nvim_open_win"), "a missing file is added");
+    }
+
+    /**
+     * The card fl-prompt's float-prompt.lua, sourced in a headless Neovim, opens a focused floating
+     * prompt buffer; Enter closes it and shows the text typed. Example: typing {@code abc} and
+     * Enter shows {@code float prompt: abc}. The person checks only what no test sees (an app
+     * switch, an input method).
+     */
+    @Test
+    @Tag("integration")
+    void theFloatPromptOpensAFloatingPromptThatEnterCloses(@TempDir Path root) throws Exception {
+        TestNeovim.require();
+        ManualChecksTool.setup(root);
+        Path prompt = root.resolve("projects/n4e-alpha/float-prompt.lua");
+        String check = """
+                local win = vim.api.nvim_get_current_win()
+                local opened = vim.api.nvim_win_get_config(win).relative ~= '' and vim.bo.buftype == 'prompt'
+                vim.api.nvim_feedkeys('iabc' .. vim.keycode('<CR>'), 'tx', false)
+                io.stdout:write(tostring(opened), ' ', tostring(vim.api.nvim_win_is_valid(win)), ' ', vim.fn.execute('messages'):match('float prompt: %w+') or 'none', '\\n')
+                """;
+        // Run in the project, by relative names, as the card does (`:source float-prompt.lua`): no
+        // path to escape, whatever the temp folder's name holds (a space in a Windows user name).
+        Path alpha = prompt.getParent();
+        Files.writeString(alpha.resolve("check.lua"), check);
+        ProcessBuilder builder = new ProcessBuilder(TestNeovim.PATH, "--clean", "--headless", "-c", "source float-prompt.lua",
+                "-c", "luafile check.lua", "-c", "qa!").directory(alpha.toFile()).redirectErrorStream(true);
+        NvimExecutable.prepareEnvironment(builder.environment(), PlatformUtil.isWindows());
+        Process nvim = builder.start();
+        nvim.getOutputStream().close(); // no input: a script that waited for a key would hang
+        // Read on another thread, and wait with TestWait's limit: a Neovim that hangs fails the
+        // test instead of hanging the build (as LuaScriptsInNeovimTest runs its specs).
+        CompletableFuture<byte[]> read = CompletableFuture.supplyAsync(() -> {
+            try {
+                return nvim.getInputStream().readAllBytes();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+        if (!nvim.waitFor(TestWait.millis(), TimeUnit.MILLISECONDS)) {
+            nvim.destroyForcibly();
+            fail("Neovim did not finish sourcing float-prompt.lua");
+        }
+        String out = new String(read.get(TestWait.millis(), TimeUnit.MILLISECONDS), StandardCharsets.UTF_8);
+        assertEquals(0, nvim.exitValue(), out);
+        assertTrue(out.contains("true false float prompt: abc"), "a float with a prompt, closed by Enter, the text shown: " + out);
     }
 
     // ---- The checks' own Eclipse ----

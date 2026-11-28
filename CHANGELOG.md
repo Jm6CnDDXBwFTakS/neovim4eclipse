@@ -30,6 +30,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `releng/tools/runner/UbuntuUpgrade.java` shows the releases GitHub offers and moves the pin. The
   Build prints the runner's fonts and text libraries, and `LikeCi.java --text-stack` prints the same
   on a Debian or Ubuntu machine, to compare.
+- For contributors: the manual check `fl-real-plugins`, which needed pickers and which-key in your
+  own Neovim config, is now `fl-prompt`: a floating prompt that `ManualChecks.java setup` puts in
+  `n4e-alpha` (`float-prompt.lua`) stands in for a picker's, for the two things only a person
+  sees, an app switch and an input method in it. The rest is covered by tests and the `sh-colors`
+  pictures.
 
 ### Fixed
 

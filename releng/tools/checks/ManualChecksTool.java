@@ -637,7 +637,11 @@ public final class ManualChecksTool {
         return output;
     }
 
-    /** The folders and the one project the cards use, under {@code root}. Leaves what is there. */
+    /**
+     * The folders and the one project the cards use, under {@code root}. Leaves what is there, and
+     * adds only what is missing, so {@code launch} runs it every time: a root made before a card
+     * needed a new file (such as {@code float-prompt.lua}) gets that file.
+     */
     static void setup(Path root) throws IOException {
         Path alpha = root.resolve("projects/n4e-alpha");
         for (Path folder : List.of(root.resolve("xdg"), root.resolve("ws1"), root.resolve("ws2"), alpha.resolve("src"))) {
@@ -660,6 +664,34 @@ public final class ManualChecksTool {
                 indent me with Ctrl+T, unindent with Ctrl+D
                 """);
         write(alpha.resolve("src/.keep"), "");
+        // A floating prompt like a picker's (Telescope's prompt is a prompt buffer in a float too),
+        // without any plug-in: the card fl-prompt opens it with `:source float-prompt.lua`, so a
+        // config with no picker can check what only a person sees (an app switch, an input method).
+        write(alpha.resolve("float-prompt.lua"), """
+                -- A floating prompt like a picker's, for the manual check fl-prompt
+                -- (docs/MANUAL_CHECKS.md). In an editor of this project: :source float-prompt.lua
+                -- Enter closes it and shows what you typed; Esc closes it.
+                local buf = vim.api.nvim_create_buf(false, true)
+                vim.bo[buf].buftype = 'prompt'
+                vim.bo[buf].bufhidden = 'wipe'
+                vim.fn.prompt_setprompt(buf, '> ')
+                local width = math.max(20, math.floor(vim.o.columns * 0.6))
+                local win = vim.api.nvim_open_win(buf, true, {
+                  relative = 'editor', row = 2, col = math.floor((vim.o.columns - width) / 2),
+                  width = width, height = 1, border = 'rounded', title = ' Float prompt ', title_pos = 'center',
+                })
+                local function close()
+                  if vim.api.nvim_win_is_valid(win) then
+                    vim.api.nvim_win_close(win, true)
+                  end
+                end
+                vim.fn.prompt_setcallback(buf, function(text)
+                  close()
+                  vim.notify('float prompt: ' .. text)
+                end)
+                vim.keymap.set('i', '<Esc>', close, { buffer = buf })
+                vim.cmd.startinsert()
+                """);
     }
 
     private static void write(Path file, String text) throws IOException {
@@ -683,9 +715,8 @@ public final class ManualChecksTool {
             fail(card.id() + " is a check for " + String.join(", ", card.on()) + ", not " + here);
         }
         Path root = options.root();
-        if (!Files.isDirectory(root.resolve("projects/n4e-alpha"))) {
-            setup(root);
-        }
+        setup(root); // every time: it only adds what is missing, such as a file a newer card needs
+
         Path xdg = root.resolve("xdg");
         Path workspace = root.resolve(options.workspace());
         String eclipse = null;
