@@ -355,25 +355,46 @@ t.test(':e +cmd that fails says so, one that moves windows keeps its move, and f
 end)
 
 -- Wildcards, as Neovim's :edit takes them (expandcmd(), the same expansion): one match opens it,
--- several are E77 and nothing is sent, none edits the name as typed (a new file), and an escaped
--- wildcard is a literal character. 'wildignore' leaves out what it names, as in Vim.
+-- several are E77 and nothing is sent, none edits the name as typed (a new file; E480 on Windows),
+-- and an escaped wildcard is a literal character (not on Windows). 'wildignore' leaves out what it
+-- names, as in Vim.
 t.test(':e with wildcards opens the one match, refuses several with E77, and takes no match as the name', function()
   local app = editing_main_in_a_project()
-  for _, f in ipairs({ 'a1.txt', 'a2.txt', 'b.txt', 'c*d.txt', 'skip.log' }) do
+  -- Two cases differ on Windows, in Neovim's own :e as here. A pattern with no match is E480
+  -- there, nothing opened, where elsewhere it is taken as the name as typed. And an escaped *
+  -- (:e c\*d.txt) names the file c*d.txt only elsewhere: on Windows no file name holds a *, and \ is
+  -- a separator.
+  local unix = vim.fn.has('win32') == 0
+  local escaped = unix
+  local files = { 'a1.txt', 'a2.txt', 'b.txt', 'skip.log' }
+  if escaped then
+    table.insert(files, 'c*d.txt')
+  end
+  for _, f in ipairs(files) do
     vim.fn.writefile({}, app .. '/' .. f)
   end
   t.type(':e b*.txt<CR>')
   t.type(':e a*.txt<CR>')
   t.type(':e z*.txt<CR>')
-  t.type(':e c\\*d.txt<CR>')
+  if escaped then
+    t.type(':e c\\*d.txt<CR>')
+  end
   vim.o.wildignore = '*.log'
   t.type(':e skip*<CR>')
-  t.eq({
-    { 'edit', false, { sent_path(app .. '/b.txt') } },
-    { 'edit', false, { sent_path(app .. '/z*.txt') } }, -- no match: the name as typed, as Vim's :e
-    { 'edit', false, { sent_path(app .. '/c*d.txt') } },
-    { 'edit', false, { sent_path(app .. '/skip*') } }, -- 'wildignore' hides skip.log: no match
-  }, t.commands(), 'nothing is sent for a*.txt')
+  local expected = { { 'edit', false, { sent_path(app .. '/b.txt') } } }
+  if unix then
+    table.insert(expected, { 'edit', false, { sent_path(app .. '/z*.txt') } }) -- no match: the name as typed, as Vim's :e
+  end
+  if escaped then
+    table.insert(expected, { 'edit', false, { sent_path(app .. '/c*d.txt') } })
+  end
+  if unix then
+    table.insert(expected, { 'edit', false, { sent_path(app .. '/skip*') } }) -- 'wildignore' hides skip.log: no match
+  end
+  t.eq(expected, t.commands(), 'nothing is sent for a*.txt')
+  if not unix then
+    t.ok(vim.fn.execute('messages'):find('E480', 1, true), 'no match on Windows: E480 is shown, as Neovim\'s :e')
+  end
   t.ok(vim.fn.execute('messages'):find('E77', 1, true), 'several matches: E77 is shown')
 end)
 
