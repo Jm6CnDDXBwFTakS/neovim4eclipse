@@ -12,8 +12,19 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
 
 ## [Unreleased]
 
+### Added
+
+- `:file name` renames the editor's file, or moves it to another folder of its project
+  (`:file docs/notes.txt`), with Eclipse's Rename or Move; the editor follows, keeping Neovim's undo
+  history and marks, and *Edit › Undo* in the Project Explorer takes it back. Vim only renames the
+  buffer; before, the plug-in undid it. A Java file is left to Eclipse's Java Rename (`grn` on the
+  class name), which renames its class and references too.
+
 ### Changed
 
+- The README no longer says `:e` does not expand wildcards: it has expanded them as Vim does
+  (`:e *.txt` opens the one match, several are E77) since the plug-in reads `:e` names as Neovim
+  does.
 - For contributors: CI's Linux jobs run on a pinned Ubuntu, `<ci.ubuntu>` in the root `pom.xml`,
   instead of `ubuntu-latest`, so a new Ubuntu comes as a commit of its own:
   `releng/tools/runner/UbuntuUpgrade.java` shows the releases GitHub offers and moves the pin. The

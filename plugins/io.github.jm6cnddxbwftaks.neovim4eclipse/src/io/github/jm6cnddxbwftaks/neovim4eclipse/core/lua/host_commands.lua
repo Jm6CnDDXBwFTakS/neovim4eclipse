@@ -47,11 +47,13 @@
 -- is not "the last command line", so `@:` would fail with E30, while the replaced one is, and `@:`
 -- repeats it. Only `:reg :` shows the replacement. (Checked on Neovim 0.12.6.)
 --
--- A file name arrives as a full path (`:e name`, `:wq name`, `:x name`). The rewrite expands it
+-- A file name arrives as a full path (`:e name`, `:wq name`, `:x name`, `:file name`). The rewrite expands it
 -- once, from the parsed line, as Neovim's own command would (`expandcmd()`: `%:h/x`, `#`, `~`,
 -- escapes taken out) and makes it absolute against the window's folder (`fnamemodify(':p')`, then
 -- `vim.fs.normalize`), so Eclipse uses the file Neovim would, and `:e x`, `:w x` and `:wq x` mean
--- the same file. `./x` is that folder too, as in Neovim; the file's own folder is `%:h/x`.
+-- the same file. `./x` is that folder too, as in Neovim; the file's own folder is `%:h/x`. One
+-- exception: `:file x`, a name with no folder in it, is put beside the file (a rename in place),
+-- its folder joined as a path, not expanded.
 -- `:Eclipse` does not expand the name a second time (that ran a shell for a completed name with a
 -- backslash and a backtick), and a name with a line break is refused. `:e +cmd name`: Eclipse opens
 -- the file, and Neovim runs the `+cmd` once it shows it (LuaScripts.GO_TO_LAST_POSITION).
@@ -112,6 +114,14 @@ local function refused(name, p)
   return refusals[name] and refusals[name](p) or nil
 end
 local function left_to_neovim(name)
+  -- :file renames the attached editor's file (editor/FileRenames), so it is Eclipse's only in an
+  -- editor's own document buffer, decided from Neovim's state now: elsewhere (a picker's preview, a
+  -- scratch buffer, a page) :file renames that buffer, Neovim's own way, and no file on disk.
+  -- LuaScripts.WINDOW_COMMANDS also leaves it to Neovim in any float or side window, whatever
+  -- buffer it shows.
+  if name == 'file' and vim.b.neovim4eclipse_file == nil then
+    return true
+  end
   for _, fn in ipairs(leaves) do
     if fn(name) then
       return true
@@ -119,7 +129,7 @@ local function left_to_neovim(name)
   end
   return false
 end
-local file_commands = { edit = true, wq = true, xit = true, exit = true } -- take a file name
+local file_commands = { edit = true, wq = true, xit = true, exit = true, file = true } -- take a file name
 -- Of those, the ones that take a +cmd before it: :e[dit] [++opt] [+cmd] {file}, while
 -- :wq, :x and :exit take [++opt] [file] only (:help :wq, :help :x). So :x +foo writes
 -- the file "+foo" and runs no :foo, as in Vim.
@@ -182,6 +192,9 @@ local function show_typed(line)
   end)
 end
 
+-- Defined below; :Eclipse file typed by hand reads its name with it, as :file's is read.
+local file_words
+
 vim.api.nvim_create_user_command('Eclipse', function(o)
   if typed then
     vim.fn.histdel(':', -1) -- the replacement
@@ -211,8 +224,19 @@ vim.api.nvim_create_user_command('Eclipse', function(o)
       -- it was no longer escaped, and expandcmd() ran what followed in a shell (a cloned
       -- repository's file named with a backslash and a backtick, completed into :x).
       table.remove(args, 1)
+    elseif name == 'file' then
+      -- :Eclipse file name typed by hand: read as :file name is (file_words), so that both
+      -- rename the same file: the words are one name (`:Eclipse file a b` is "a b", as
+      -- `:file a b`), and a name without a folder goes beside the file.
+      local words, why = file_words(table.concat(args, ' '), name)
+      if not words then
+        vim.api.nvim_echo({ { name .. ': ' .. why } }, true, { err = true })
+        return
+      end
+      args = words
     else
-      -- :Eclipse edit name typed by hand: the name is expanded here, as :edit would.
+      -- :Eclipse edit, wq, xit or exit name typed by hand: the name is expanded here, as
+      -- :edit or :write would.
       for i, word in ipairs(args) do
         local plus = cmd_commands[name] and '+' or '++' -- a word left as it is
         if word:sub(1, #plus) ~= plus then
@@ -294,11 +318,15 @@ local function word_end(s, i)
   return #s + 1
 end
 
--- The words :Eclipse sends for the argument of :e, :wq or :x, as nvim_parse_cmd gives it
--- (one string, escapes as typed): its ++opt words, its +cmd when the command takes one
--- (with_cmd: :e only; backslashes taken out, as Vim does), and the file as the full path Neovim's own :edit or :write would use (the
--- rest is one name, spaces and all, as for :edit: :e a b is the file "a b"). Returns nil
--- and why when it is refused.
+-- The words :Eclipse sends for the argument of command `cmd` (:e, :wq, :x, :file), as
+-- nvim_parse_cmd gives it (one string, escapes as typed): its ++opt words, its +cmd when the
+-- command takes one (:e only; backslashes taken out, as Vim does), and the file as the full path
+-- Neovim's own :edit or :write would use (the rest is one name, spaces and all, as for :edit:
+-- :e a b is the file "a b"). Returns nil and why when it is refused.
+--
+-- :file takes no ++opt and no +cmd, in Vim as here: `:file ++p x` names the file "++p x"
+-- (Neovim's own :file names the buffer so), and a name without a folder goes beside the file
+-- (below).
 --
 -- The name is expanded here, once, from the parsed form, where a completed name's
 -- escapes are as Neovim wrote them: expandcmd() expands what :edit expands (%, #, ~,
@@ -315,9 +343,16 @@ end
 -- A name with a line break is refused: Eclipse cannot show it, and the :Eclipse line
 -- would end at it, running the rest of the name as a command (a cloned repository's file
 -- named notes, a line break, then lua=os.execute(...)).
-local function file_words(raw, with_cmd)
+function file_words(raw, cmd) -- the local declared above the :Eclipse command
+  local with_cmd = cmd_commands[cmd]
+  -- :file name without a folder renames the file where it is (beside), as a rename in a file
+  -- manager or Eclipse's own does: `:file todo.txt` in src/notes.txt is src/todo.txt.
+  -- The folder of the editor's file (its document buffer's name), and none in another buffer: a
+  -- picker's preview of lib/x.txt does not put the name in lib/.
+  local document = vim.b.neovim4eclipse_file
+  local beside = cmd == 'file' and document and vim.fs.dirname(document) or nil
   local words, rest = {}, raw
-  while rest:match('^%+%+') do -- ++opt words
+  while cmd ~= 'file' and rest:match('^%+%+') do -- ++opt words
     local e = word_end(rest, 1)
     words[#words + 1] = rest:sub(1, e - 1)
     rest = (rest:sub(e):gsub('^%s+', ''))
@@ -340,6 +375,14 @@ local function file_words(raw, with_cmd)
   if expanded:find(LINE_BREAK) then
     return nil, 'a file name with a line break is not supported'
   end
+  if beside and not rest:match('^[~%%#$<`]') and vim.fn.fnamemodify(expanded, ':t') == expanded then
+    -- A name with no folder in it, put beside the file: the folder is joined as a path, never
+    -- expanded as text. Not `%:h/` in front of the typed name: expandcmd() would then read the
+    -- file's folder as typed text, and a folder named with a backtick (a cloned repository's) ran
+    -- its command in a shell when the name had a wildcard character (`:file don't.txt`).
+    words[#words + 1] = vim.fs.normalize(vim.fs.joinpath(beside, expanded), { expand_env = false })
+    return words
+  end
   words[#words + 1] = vim.fs.normalize(vim.fn.fnamemodify(expanded, ':p'), { expand_env = false })
   return words
 end
@@ -348,7 +391,7 @@ end
 -- as :e's name is read (file_words): the full path, or nil when it names none, or nil
 -- and why. A +cmd is refused: Eclipse would have to run it in the new editor only.
 package.loaded['neovim4eclipse.host_commands'].file_name = function(args)
-  local words, why = file_words(table.concat(args, ' '), true)
+  local words, why = file_words(table.concat(args, ' '), 'edit') -- [++opt] [+cmd] {file}, as :e
   if not words then
     return nil, why
   end
@@ -434,12 +477,15 @@ local function eclipse_form(p)
   if rule == 'none' and #args > 0 then
     return nil
   end
+  if rule == 'name' and #args == 0 then
+    return nil -- :file alone shows the file's info, Neovim's
+  end
   if rule == 'count' and (#args > 1 or (#args == 1 and not args[1]:match('^%d+$'))) then
     return nil
   end
   local cmd = 'Eclipse' .. (p.bang and '!' or '') .. ' ' .. p.cmd
   if file_commands[p.cmd] and #args > 0 then
-    local words, why = file_words(table.concat(args, ' '), cmd_commands[p.cmd])
+    local words, why = file_words(table.concat(args, ' '), p.cmd)
     if not words then
       refusing[p.cmd] = why
       return 'Eclipse ' .. p.cmd -- without the name: none of it runs

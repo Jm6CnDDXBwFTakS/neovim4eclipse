@@ -36,6 +36,8 @@ import java.util.TreeMap;
  *   <tr><td>{@code wqall}, {@code xall}</td><td>{@link Kind#WRITE_QUIT_ALL}</td><td>save all, close all</td></tr>
  *   <tr><td>{@code edit file}, {@code edit!}</td><td>{@link Kind#EDIT}</td><td>open a file; revert</td></tr>
  *   <tr><td>{@code enew}, {@code enew!}</td><td>{@link Kind#NEW_UNTITLED}</td><td>File &gt; New &gt; Untitled Text File</td></tr>
+ *   <tr><td>{@code file name}</td><td>{@link Kind#RENAME}</td><td>rename or move the editor's file within its project
+ *       (Eclipse's Rename or Move); {@code :file} alone stays Neovim's</td></tr>
  *   <tr><td>{@code tabnext}, {@code tabprevious}, ...</td><td>{@code TAB_*}</td><td>switch editor tabs</td></tr>
  *   <tr><td>{@code terminal [cmd]}</td><td>{@link Kind#TERMINAL}</td><td>open Eclipse's Terminal view with a shell ({@link EclipseTerminal})</td></tr>
  *   <tr><td>{@code window ...} (from {@code :split}, {@code :only}, {@code Ctrl-W l}, ...)</td><td>{@link Kind#WINDOW}</td><td>split, move between and size the editors ({@link WindowCommand})</td></tr>
@@ -102,6 +104,13 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         /** {@code :e [file]}, {@code :e!}: open a file, or reload/revert the current one. */
         EDIT,
         /**
+         * {@code :file name}: renames the editor's file, or moves it to another folder of its project,
+         * with Eclipse's refactoring (Edit &gt; Undo takes it back), and the editor follows. Not Vim's
+         * meaning, which only renames the buffer and leaves the file: in an IDE a file is renamed in
+         * place. {@code :file} alone (the file's info) stays Neovim's ({@link Arguments#NAME}).
+         */
+        RENAME,
+        /**
          * {@code :enew}, {@code :enew!}: a new untitled editor (<i>File &gt; New &gt; Untitled Text
          * File</i>). Vim's {@code :enew} puts an empty buffer in the window; here an editor is the
          * window, so a new editor opens and the old one stays, which is why {@code !} (discard the
@@ -150,7 +159,9 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         /** At most one number: {@code :tabn 3}; a count in front ({@code :3tabn}) is turned into it. */
         COUNT,
         /** Buffer numbers or names; a range ({@code :3,5bd}, {@code :%bd}) is turned into the buffers it covers. */
-        BUFFERS;
+        BUFFERS,
+        /** A name, at least one word ({@code :file a b} is the one name "a b", as Vim reads it); none stays Neovim's. */
+        NAME;
 
         /** The name the Lua side compares with ({@code "none"}, {@code "count"}, ...). */
         public String luaName() {
@@ -260,6 +271,7 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         return switch (rule) {
             case NONE -> args.isEmpty();
             case ANY, BUFFERS -> true;
+            case NAME -> !args.isEmpty();
             case COUNT -> args.isEmpty() || (args.size() == 1 && args.get(0).matches("\\d{1,6}"));
         };
     }
@@ -284,6 +296,7 @@ public record HostCommand(Kind kind, boolean force, List<String> args, boolean w
         table.put("xall", new Entry(Kind.WRITE_QUIT_ALL, Arguments.NONE, false));
         table.put("edit", new Entry(Kind.EDIT, Arguments.ANY, false));
         table.put("enew", new Entry(Kind.NEW_UNTITLED, Arguments.NONE, false));
+        table.put("file", new Entry(Kind.RENAME, Arguments.NAME, false));
         table.put("tabnext", new Entry(Kind.TAB_NEXT, Arguments.COUNT, false));
         table.put("tabprevious", new Entry(Kind.TAB_PREVIOUS, Arguments.COUNT, false));
         table.put("tabNext", new Entry(Kind.TAB_PREVIOUS, Arguments.COUNT, false));

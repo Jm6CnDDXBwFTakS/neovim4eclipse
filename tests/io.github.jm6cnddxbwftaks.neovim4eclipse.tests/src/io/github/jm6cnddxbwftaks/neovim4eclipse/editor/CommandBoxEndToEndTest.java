@@ -267,8 +267,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * An absolute path outside the workspace opens as an outside file (no project). (A temporary
-     * folder made by hand: JUnit's {@code @TempDir} is in a package the fragment does not import.)
+     * An absolute path outside the workspace opens as an outside file (no project).
      */
     @Test
     void editOpensAnAbsolutePathOutsideTheWorkspace() throws Exception {

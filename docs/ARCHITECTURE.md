@@ -149,7 +149,15 @@ cut by `util/TextLines`); both are refused for the editor's own file, saved only
 renames the buffer, then writes it under the new name: kind `"saveas"`, which `OtherFileWrites.saveAs`
 carries out as Eclipse's Save As without the dialog (the document provider saves to the new input,
 then `replaceInputKeepingBuffer` moves the editor, keeping the Neovim buffer). A `BufFilePost` check
-puts the old name back after `:file new.txt` or a refused `:saveas`. Writes and renames under another
+puts the old name back after a rename Neovim made by itself (a script's `:file`, a plug-in's
+`nvim_buf_set_name()`) or a refused `:saveas`. A `:file new.txt` on a `:` line in an editor's own
+document buffer (typed, a `:` mapping, a macro) never renames the buffer: `LuaScripts.HOST_COMMANDS`
+hands it to Eclipse (elsewhere, in a float or a plug-in's buffer, it stays Neovim's) (`util/HostCommand` kind
+`RENAME`), and `editor/FileRenames` runs Eclipse's resource Rename or Move refactoring on the file
+(what is allowed: `util/FileRename`); Eclipse moves the editor along, and
+`EditorAttachManager.onInputChanged` keeps its buffer under the new name. The resource refactoring
+changes nothing inside a file, so a Java file is refused (its class would keep the old name) and
+left to JDT's Rename (`grn`). Writes and renames under another
 name also leave an empty, unloaded buffer of that name (Vim's alternate file); the hook wipes it once
 the command is over, or an editor opened on that file later could not give its buffer that name.
 `:wq`, `:x` and `:wa` stay Eclipse's commands (`util/HostCommand`): they close editors or save editors

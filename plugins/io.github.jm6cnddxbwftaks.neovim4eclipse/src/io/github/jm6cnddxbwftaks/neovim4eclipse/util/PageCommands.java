@@ -72,6 +72,8 @@ public final class PageCommands {
     static final String CANNOT_WRITE = "E382: Cannot write, 'buftype' option is set";
     /** Vim's error for {@code :e} with no file in a buffer that has none ({@code :h E32}). */
     static final String NO_FILE_NAME = "E32: No file name";
+    /** Why {@code :file name} does nothing in a page: a page is no file to rename. */
+    static final String NO_FILE_TO_RENAME = "file: a page has no file to rename";
 
     private PageCommands() {
     }
@@ -87,6 +89,7 @@ public final class PageCommands {
             case EDIT -> command.args().isEmpty() ? new Decision(Action.REFUSE, NO_FILE_NAME)
                     : Decision.of(Action.IN_CODE_GROUP);
             case NEW_UNTITLED -> Decision.of(Action.IN_CODE_GROUP);
+            case RENAME -> new Decision(Action.REFUSE, NO_FILE_TO_RENAME);
             case WRITE_ALL, QUIT_ALL, WRITE_QUIT_ALL, BUFFER_DELETE, TERMINAL -> Decision.of(Action.AS_FROM_CODE);
             case TAB_NEXT, TAB_PREVIOUS, TAB_FIRST, TAB_LAST -> Decision.of(Action.FROM_PAGE);
             case WINDOW -> window(command.window());

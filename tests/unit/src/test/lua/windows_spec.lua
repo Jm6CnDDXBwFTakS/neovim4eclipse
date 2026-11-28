@@ -2055,6 +2055,19 @@ t.test(':q, :close, Ctrl-W q and Ctrl-W c in a floating window close it, not the
   t.eq({ { 'quit', false, {} } }, t.commands())
 end)
 
+-- :file in a float renames no file, even when the float shows an editor's document buffer (a
+-- plug-in's preview of the real buffer): it would rename the attached editor's file, which is not the
+-- one shown. Neovim's :file there renames the buffer, which the document buffer's check puts back.
+t.test(':file in a floating window stays Neovim\'s, even on a document buffer', function()
+  local win = commands()
+  local doc = vim.api.nvim_win_get_buf(win)
+  vim.b[doc].neovim4eclipse_file = vim.api.nvim_buf_get_name(doc) -- the editor's document buffer
+  local float = enter_float()
+  vim.api.nvim_win_set_buf(float, doc)
+  t.type(':file other.txt<CR>')
+  t.eq({}, t.commands(), 'nothing sent to Eclipse')
+end)
+
 -- A count in front reaches Eclipse already turned into one of Neovim's hidden tab pages, which says
 -- nothing about the editor tabs; the tab written after the command does.
 t.test(':tabclose 2 names an editor tab; a count in front is refused; :tabclose alone closes the editor', function()

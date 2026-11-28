@@ -59,7 +59,7 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OldNeovimProgram;
  */
 class StartNoticesEndToEndTest extends EndToEndTestBase {
 
-    /** A folder of the test's own (the fragment cannot use JUnit's {@code @TempDir}: its package is not imported). */
+    /** A folder of the test's own. */
     private Path tmp;
 
     /** The startup option as the test Eclipse got it, put back after a test that changes it. */

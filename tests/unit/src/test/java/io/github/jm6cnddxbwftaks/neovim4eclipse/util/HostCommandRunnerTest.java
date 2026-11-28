@@ -65,6 +65,11 @@ class HostCommandRunnerTest {
         }
 
         @Override
+        public void rename(String file) {
+            calls.add("rename [" + file + "]");
+        }
+
+        @Override
         public void newUntitled() {
             calls.add("newUntitled");
         }
@@ -239,6 +244,16 @@ class HostCommandRunnerTest {
         run("xit");
         run("exit");
         assertEquals(List.of("save", "close!", "update", "close!", "update", "close!"), ide.calls);
+    }
+
+    // ---- :file ----
+
+    /** {@code :file name} renames the editor's file; {@code :file} alone is no Eclipse command (it stays Neovim's). */
+    @Test
+    void fileWithANameRenamesTheEditorsFile() {
+        run("file todo.txt");
+        assertEquals(List.of("rename [todo.txt]", "rename [a b.txt]"), run("file a b.txt"), "one name, as Vim reads :file a b");
+        assertEquals(null, HostCommand.of("file", false, List.of()), ":file alone is left to Neovim");
     }
 
     // ---- :e ----

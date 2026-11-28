@@ -354,6 +354,96 @@ t.test(':e +cmd that fails says so, one that moves windows keeps its move, and f
   t.eq({ 'one', 'two', 'three' }, vim.api.nvim_buf_get_lines(a, 0, -1, false))
 end)
 
+-- Wildcards, as Neovim's :edit takes them (expandcmd(), the same expansion): one match opens it,
+-- several are E77 and nothing is sent, none edits the name as typed (a new file), and an escaped
+-- wildcard is a literal character. 'wildignore' leaves out what it names, as in Vim.
+t.test(':e with wildcards opens the one match, refuses several with E77, and takes no match as the name', function()
+  local app = editing_main_in_a_project()
+  for _, f in ipairs({ 'a1.txt', 'a2.txt', 'b.txt', 'c*d.txt', 'skip.log' }) do
+    vim.fn.writefile({}, app .. '/' .. f)
+  end
+  t.type(':e b*.txt<CR>')
+  t.type(':e a*.txt<CR>')
+  t.type(':e z*.txt<CR>')
+  t.type(':e c\\*d.txt<CR>')
+  vim.o.wildignore = '*.log'
+  t.type(':e skip*<CR>')
+  t.eq({
+    { 'edit', false, { sent_path(app .. '/b.txt') } },
+    { 'edit', false, { sent_path(app .. '/z*.txt') } }, -- no match: the name as typed, as Vim's :e
+    { 'edit', false, { sent_path(app .. '/c*d.txt') } },
+    { 'edit', false, { sent_path(app .. '/skip*') } }, -- 'wildignore' hides skip.log: no match
+  }, t.commands(), 'nothing is sent for a*.txt')
+  t.ok(vim.fn.execute('messages'):find('E77', 1, true), 'several matches: E77 is shown')
+end)
+
+-- :file name typed renames the file in Eclipse (editor/FileRenames): a name with a folder is read as
+-- :e reads it (a full path), one without is put beside the file, and Neovim's buffer is never renamed. :file alone shows the file's info, and
+-- :0file (which takes the name away) is Neovim's, whose rename the document buffer puts back.
+t.test(':file name goes to Eclipse as a full path; :file alone and :0file stay Neovim\'s', function()
+  local app = editing_main_in_a_project()
+  vim.b.neovim4eclipse_file = vim.api.nvim_buf_get_name(0) -- an editor's document buffer
+  local before = vim.api.nvim_buf_get_name(0)
+  t.type(':file docs/Notes.txt<CR>')
+  t.type(':file<CR>')
+  t.type(':file Util.java<CR>')
+  t.eq({
+    { 'file', false, { sent_path(app .. '/docs/Notes.txt') } }, -- with a folder: as :e reads it
+    { 'file', false, { sent_path(app .. '/src/Util.java') } }, -- without: beside the file, a rename in place
+  }, t.commands(), 'nothing for :file alone')
+  t.eq(before, vim.api.nvim_buf_get_name(0), "Neovim's buffer keeps its name: Eclipse renames, the buffer follows")
+end)
+
+-- :file takes no ++opt, in Vim as here: `:file ++p docs/x` names "++p docs/x" (Neovim's own
+-- :file names the buffer so), not docs/x with ++p. :Eclipse file typed by hand is read as :file
+-- is: one name, beside the file when it has no folder.
+t.test(':file ++p x is the name "++p x"; :Eclipse file by hand reads its name as :file does', function()
+  local app = editing_main_in_a_project()
+  vim.b.neovim4eclipse_file = vim.api.nvim_buf_get_name(0)
+  t.type(':file ++p docs/x<CR>')
+  t.type(':Eclipse file Util.java<CR>')
+  t.type(':Eclipse file a b<CR>')
+  t.eq({
+    { 'file', false, { sent_path(app .. '/++p docs/x') } },
+    { 'file', false, { sent_path(app .. '/src/Util.java') } },
+    { 'file', false, { sent_path(app .. '/src/a b') } },
+  }, t.commands())
+  -- In a buffer that is no editor's document (a picker's preview of lib/x.txt), a name without a
+  -- folder is not put beside that buffer's name: it is read against the window's folder.
+  local preview = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_name(preview, app .. '/lib/x.txt')
+  vim.api.nvim_set_current_buf(preview)
+  t.forget()
+  t.type(':Eclipse file y.txt<CR>')
+  t.eq({ { 'file', false, { sent_path(app .. '/y.txt') } } }, t.commands())
+end)
+
+-- The file's folder is joined as a path, never expanded as text: in a folder whose name holds a
+-- backtick (a cloned repository's), a name with a wildcard character runs no shell.
+t.test(':file name beside a file in a folder named with a backtick runs nothing', function()
+  local app = editing_main_in_a_project()
+  local odd = app .. '/d`touch RAN`x'
+  vim.fn.mkdir(odd, 'p')
+  vim.cmd.file(vim.fn.fnameescape(odd .. '/a.txt'))
+  vim.b.neovim4eclipse_file = vim.api.nvim_buf_get_name(0)
+  vim.cmd.lcd(vim.fn.fnameescape(odd))
+  t.type(":file don't.txt<CR>")
+  t.eq({ { 'file', false, { sent_path(odd .. "/don't.txt") } } }, t.commands())
+  t.eq(0, vim.fn.filereadable(odd .. '/RAN'), 'no shell ran the folder name')
+end)
+
+-- Decided from the buffer that is current: in a picker's preview or a scratch buffer (no
+-- editor's document), :file is Neovim's and renames that buffer, not the editor's file (a
+-- floating window: windows_spec).
+t.test(':file name in a buffer that is no editor\'s document stays Neovim\'s', function()
+  editing_main_in_a_project()
+  local scratch = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(scratch)
+  t.type(':file notes.md<CR>')
+  t.eq({}, t.commands(), 'nothing sent to Eclipse')
+  t.ok(vim.api.nvim_buf_get_name(scratch):find('notes.md', 1, true), 'Neovim named the scratch buffer')
+end)
+
 t.test('%, ~ and $HOME are expanded as Neovim\'s :edit expands them; # without one is E194', function()
   local app = editing_main_in_a_project()
   t.type(':e %:h/Util.java<CR>')

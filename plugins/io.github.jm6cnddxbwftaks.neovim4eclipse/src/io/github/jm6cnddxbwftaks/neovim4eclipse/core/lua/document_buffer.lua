@@ -43,8 +43,12 @@
 --   `b:neovim4eclipse_file` is the new file. (Without it, Eclipse would save the editor's old file
 --   while Neovim called the buffer by the new name.)
 -- The buffer must keep its editor's name, so `BufFilePost` checks it once the command is over
--- (`vim.schedule`) and puts the old name back after `:file new.txt` (with a message saying why) or
--- a `:saveas` Eclipse refused (whose error is already shown). The rename back is `:keepalt
+-- (`vim.schedule`) and puts the old name back after a rename Neovim made itself (a script's or a
+-- plug-in's `nvim_buf_set_name`, `:file` run from Lua or a `<Cmd>` mapping; with a message saying
+-- why) or a `:saveas` Eclipse refused (whose error is already shown). A `:file new.txt` on a `:`
+-- line in this buffer (typed, a `:` mapping, a macro) never renames the buffer:
+-- LuaScripts.HOST_COMMANDS hands it to Eclipse, which renames the file (`editor/FileRenames`), and
+-- the buffer follows the editor. The rename back is `:keepalt
 -- noautocmd file`, which leaves the buffer `[Not edited]` until its next write, as any `:file`
 -- does; the plug-in's own buffers avoid that mark by being named with `bufadd()`
 -- (LuaScripts.CREATE_DOCUMENT_BUFFER), which cannot rename.
@@ -324,7 +328,7 @@ local function after_rename(ev)
         end
       end)
       if not quiet then
-        fail('file: Eclipse names this buffer after its file; use :saveas or File > Save As')
+        fail('file: Eclipse names this buffer after its file; :file name typed renames the file, :saveas writes a copy')
       end
     end
     wipe_left_over(b, names)

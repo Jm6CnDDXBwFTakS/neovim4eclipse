@@ -89,6 +89,11 @@ public final class HostCommands {
         }
 
         @Override
+        public void rename(String file) {
+            FileRenames.rename(editor, file);
+        }
+
+        @Override
         public void newUntitled() {
             EclipseFileCommands.newUntitled(editor);
         }

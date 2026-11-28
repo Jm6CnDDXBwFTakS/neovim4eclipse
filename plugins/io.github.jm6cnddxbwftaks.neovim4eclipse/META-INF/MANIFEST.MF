@@ -23,6 +23,7 @@ Require-Bundle: org.eclipse.ui,
  org.eclipse.e4.core.commands,
  org.eclipse.e4.core.contexts,
  org.eclipse.core.net,
+ org.eclipse.ltk.core.refactoring,
  org.eclipse.e4.ui.css.swt.theme;resolution:=optional
 Bundle-RequiredExecutionEnvironment: JavaSE-21
 Bundle-ActivationPolicy: lazy

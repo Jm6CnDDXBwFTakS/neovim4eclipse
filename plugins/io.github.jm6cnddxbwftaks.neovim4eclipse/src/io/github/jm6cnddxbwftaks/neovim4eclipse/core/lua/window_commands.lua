@@ -78,7 +78,9 @@ for _, name in ipairs({ 'stag', 'stjump', 'stselect' }) do
   host.refuse(name, function() return JUMP_FIRST end)
 end
 host.leave_to_neovim(function(name)
-  return (name == 'quit' or name == 'close') and windows.is_side_window(0)
+  -- :file too: in a float or side window it would rename the attached editor's file, not the
+  -- buffer shown there (a plug-in's float may show another editor's document buffer).
+  return (name == 'quit' or name == 'close' or name == 'file') and windows.is_side_window(0)
 end)
 
 --- The side a split goes to: Vim's 'splitbelow' and 'splitright', unless a modifier of

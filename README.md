@@ -352,8 +352,9 @@ gets in your way:
    one kind of insert. Plain `i`, `a`, `o` ... are unaffected.
 3. **Eclipse's commands are a fixed set** (the table in
    [Command line](docs/USER_GUIDE.md#command-line---)). `:w other.txt`, `:5,10w part.txt` and
-   `:saveas new.txt` work as in Vim, but `:file name` is undone; `:e` does not expand wildcards
-   (`:e *.txt`); a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after `:let ... |` or inside
+   `:saveas new.txt` work as in Vim, and `:e` expands wildcards as Vim does (`:e *.txt`: one match
+   opens, several are E77); `:file name` renames the file in its project, Eclipse's way, where Vim
+   only renames the buffer, and leaves a Java file to `grn`; a `:q` that Neovim runs itself (from `<Cmd>`, Lua, after `:let ... |` or inside
    `:bufdo`) is Neovim's, and on Neovim's last window it ends Neovim; tab commands only move within
    the current editor stack (one half of a split editor area). A new file's editor (`:e newfile`) saved with `Ctrl+S` or
    *File › Save* gets Eclipse's Save As dialog, since Eclipse treats a missing file as deleted; `:w`

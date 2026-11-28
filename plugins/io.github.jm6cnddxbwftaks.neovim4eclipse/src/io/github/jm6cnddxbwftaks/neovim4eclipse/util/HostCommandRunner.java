@@ -82,6 +82,12 @@ public final class HostCommandRunner {
         void edit(String file, boolean force);
 
         /**
+         * {@code :file name}: renames the editor's file to {@code file} (a full path), or moves it to
+         * another folder of its project, or says why not; see {@code editor/FileRenames}.
+         */
+        void rename(String file);
+
+        /**
          * {@code :enew}: opens a new untitled editor, which works in the current editor's folder (as a
          * Vim window keeps its folder), so {@code :w notes.txt} there writes next to the project's
          * other files.
@@ -152,6 +158,7 @@ public final class HostCommandRunner {
                 }
             });
             case EDIT -> onUi.accept(() -> ide.edit(cmd.file(), force));
+            case RENAME -> onUi.accept(() -> ide.rename(cmd.file()));
             case NEW_UNTITLED -> onUi.accept(ide::newUntitled);
             case TAB_NEXT -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.NEXT, cmd.count()));
             case TAB_PREVIOUS -> onUi.accept(() -> ide.goToTab(TabNavigation.Action.PREVIOUS, cmd.count()));

@@ -504,6 +504,7 @@ File and tab commands are carried out by Eclipse, everything else by Neovim.
 | `:e[dit] file` | open `file`, as Neovim's `:e` names it: relative to the editor's project folder (the window's folder, `:lcd`), `./file` too; `%:h/file` is beside the current file, `#` the alternate file, and `~` and absolute paths work. A file that does not exist opens as a new, empty editor (`"file" [New]`); nothing is written until `:w` |
 | `:w ++p` | as `:w`, and for a new file also create its missing folders (`:wq ++p`, `:x ++p` too) |
 | `:e!` | revert the editor to the saved file; `:e` alone reloads it, refused while there are changes |
+| `:f[ile] name` | rename the editor's file, or move it to another folder of its project (`:file docs/notes.txt`), with Eclipse's Rename or Move; the editor and its Neovim buffer (undo history, marks) follow. See [Renaming a file](#renaming-a-file-file-name). `:file` alone shows the file's info, as in Vim |
 | `:ene[w]` | open a new untitled editor (*File → New → Untitled Text File*), working in this editor's folder (its `:lcd` too), so `:w notes.txt` saves it there. Unlike Vim's `:enew`, which empties the window, this editor stays open (so `:enew!` is the same). `Ctrl-^` goes back |
 | `:te[rminal] [cmd]` | open Eclipse's *Terminal* view with a shell in the file's folder, instead of a Neovim terminal (which Eclipse cannot show). A command after it (`:terminal make`) is not run, and a message says so: type it in the shell. In an Eclipse without the Terminal nothing opens, and a message says how to get it. A terminal started another way (a `<Cmd>` mapping, a plug-in) still starts in Neovim, out of sight, with a message naming it; one in a plug-in's floating window (fzf-lua's list) is drawn over the editor instead |
 | `:tabn[ext] [N]`, `:tabp[revious] [N]`, `:tabN[ext] [N]` | next / previous editor tab, or tab N / N tabs back |
@@ -559,9 +560,36 @@ a copy there.
 `:saveas new.txt` is Eclipse's *File → Save As* without the dialog: the document is saved as `new.txt`
 and the editor moves there, keeping Neovim's undo history and marks; the old file stays as it was.
 Eclipse's save actions do not run in that save (a `:w` afterwards runs them).
-It is refused when another Eclipse editor has `new.txt` open (E139). `:file new.txt`, which renames a
-buffer without a file, is undone at once (the editor's file stays the same); `:file` alone shows the
-file info as usual, which says `[Not edited]` until the next write after such an attempt.
+It is refused when another Eclipse editor has `new.txt` open (E139).
+
+<a id="renaming-a-file-file-name"></a>
+**Renaming a file (`:file name`).** In Vim, `:file new.txt` only renames the buffer: the file stays,
+and the next `:w` writes `new.txt`. Here it renames the file itself, as an IDE does, with Eclipse's
+Rename (or Move, for a name in another folder: `:file docs/notes.txt`), and the editor follows,
+keeping Neovim's undo history and marks. A name without a folder renames the file where it is
+(`:file todo.txt` in `src/notes.txt` gives `src/todo.txt`); a name with a folder is read as `:e`
+reads it, relative to the window's folder, the project's (`:file docs/notes.txt` moves it to the
+project's `docs`, `:file %:h/sub/notes.txt` below its own folder). As in Vim, `%`, `#`, `~` and
+`$NAME` are expanded (`:file ~/notes.txt` names a file in your home folder, so it is refused: the
+file would leave its project), and `:file` takes no `++opt`: `:file ++p docs/x` is the name
+`++p docs/x`. Eclipse's refactoring undo (*Edit › Undo* in the Project Explorer) puts the file
+back; in the editor, `u` and `Ctrl+Z` undo text as before.
+
+It is refused, with a message, and nothing changes:
+- for a file in no project (an untitled editor, a file outside the workspace): `:saveas` or
+  `:w name` writes the text under another name; for a file linked into the project, or in a linked
+  folder (Eclipse would rename the link, or work where it points);
+- for a Java file: its class and every reference to it would keep the old name, so rename it with
+  `grn` on the class name, Eclipse's Java Rename, which renames the file too;
+- while the editor has unsaved changes (`:w` first);
+- for a name whose folder, links resolved, is not in the file's project (another project, outside
+  the workspace, a folder that is a link to somewhere else, a linked folder), a name where anything
+  exists already (a link too), or a folder that does not exist (no folder is created).
+
+It renames only from a `:` line in an editor's own buffer: typed, from a `:` mapping or a macro
+(and `:Eclipse file name`). In a floating window, a plug-in's buffer or a page editor (help,
+messages), `:file` is Neovim's and renames that buffer, not a file. A rename Neovim makes by itself (a plug-in's `nvim_buf_set_name()`, `:file`
+run from Lua or a `<Cmd>` mapping) is undone at once, as before.
 
 Every other command is typed into Neovim as you wrote it, so it is in the history, `@:` repeats it and a
 macro being recorded contains it. Its output is Neovim's to show, as in a terminal with
