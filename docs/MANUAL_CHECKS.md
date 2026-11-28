@@ -427,11 +427,43 @@ editor and watch it.
 
 ## Input method on Neovim's `:` line
 
+### `ime-quick` The input method, a quick once-over
+
+- **On:** linux, macos, windows
+- **Launch:** normal
+- **Areas:** editor/FloatingWindows.java, editor/StatusLineRow.java, util/FloatPlacement.java, editor/CursorStyleController.java
+
+For a change around the input method rather than in it: Neovim's windows drawn over the text, the
+rows under the editor, the caret. The input method's own code (`LineInputMethod`,
+`LineComposition`) and an SWT upgrade (`/pom.xml`) bring `ime-compose` and `ime-keys` instead,
+which go through every case; this card takes one of each kind. When those are due too, skip this
+one: they hold all of its steps. Add a Japanese input method first, as for `ime-compose`.
+
+1. In `n4e-alpha`'s `notes.txt`, `:` `echo "`, switch to Japanese, type `kyou`, press
+   <kbd>Space</kbd> (choose 今日 if another candidate is offered) and <kbd>Enter</kbd>; switch to
+   direct input, type `"` and <kbd>Enter</kbd>.
+   ⇒ The candidate list opens at the line's cursor; the <kbd>Enter</kbd> that keeps 今日 does not
+   run the line, the last one does, and the line shows `今日` once.
+2. `:` `abc`, Japanese, type `ka`, press <kbd>Esc</kbd> (twice if the input method needs it).
+   ⇒ The composition is gone and the line stays open on `:abc`. In direct input, one more
+   <kbd>Esc</kbd> closes it.
+3. `:source float-prompt.lua` and <kbd>Enter</kbd> (see `fl-prompt`); Japanese, `kyou`,
+   <kbd>Space</kbd>, <kbd>Enter</kbd>; direct input, <kbd>Enter</kbd>.
+   ⇒ The candidate list opens at the prompt's cursor, the prompt shows `> 今日` once, and the
+   message line `float prompt: 今日`; `notes.txt` is unchanged.
+4. `:source blink.lua` and <kbd>Enter</kbd> (see `ime-compose` step 5); `:` `echo "`, Japanese,
+   `kyou`, <kbd>Space</kbd>, and watch for a few seconds; <kbd>Esc</kbd> twice, direct input,
+   `:source blink.lua` again.
+   ⇒ While the words blink, the list stays at the line's cursor (on Linux and Windows it may flick
+   to the text and straight back), and the second `:source blink.lua` stops the blinking.
+
+**Expect:** each step's result, after its ⇒.
+
 ### `ime-compose` Japanese typed on the `:` line reaches Neovim once
 
 - **On:** linux, macos, windows
 - **Launch:** normal
-- **Areas:** editor/LineInputMethod.java, util/LineComposition.java, editor/FloatingWindows.java, editor/StatusLineRow.java, util/FloatPlacement.java, /pom.xml
+- **Areas:** editor/LineInputMethod.java, util/LineComposition.java, /pom.xml
 
 The input method's events come from the system itself, so no test can send them; the decisions
 behind them are tested (`LineCompositionTest`), and the SWT side with synthetic events

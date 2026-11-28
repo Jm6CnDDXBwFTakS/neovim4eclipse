@@ -35,6 +35,11 @@ stops if the section is missing (see CONTRIBUTING.md, "Releasing").
   `n4e-alpha` (`float-prompt.lua`) stands in for a picker's, for the two things only a person
   sees, an app switch and an input method in it. The rest is covered by tests and the `sh-colors`
   pictures.
+- For contributors: a short manual check, `ime-quick`, takes one case of each kind from the input
+  method cards (a conversion on the `:` line, Esc while composing, a floating prompt, a redraw
+  while composing). It comes up for a change around the input method (floats, the rows under the
+  editor, the caret); `ime-compose` and `ime-keys` come up for the input method's own code and an
+  SWT upgrade.
 
 ### Fixed
 
