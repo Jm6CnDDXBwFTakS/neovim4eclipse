@@ -5,12 +5,16 @@ package io.github.jm6cnddxbwftaks.neovim4eclipse.editor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.graphics.Font;
+import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.widgets.Caret;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
@@ -104,6 +108,65 @@ class CursorStyleControllerTest {
         style.setHidden(false);
         assertSame(fresh, text.getCaret(), "the newest caret back, Eclipse's current one");
         style.dispose();
+    }
+
+    /**
+     * While an input method composes in a float, the widget has the stand-in, for the systems to
+     * place the candidate list at; it goes when the composition ends, and is never kept as
+     * Eclipse's caret. On the command line (not hidden), nothing changes: Eclipse's caret is moved.
+     */
+    @Test
+    void whileComposingInAFloatTheWidgetHasTheStandIn() {
+        CursorStyleController style = new CursorStyleController(text);
+        Caret caret = text.getCaret();
+        style.composing(true);
+        assertSame(caret, text.getCaret(), "not hidden: Eclipse's caret stays, for the command line");
+        style.composing(false);
+        assertSame(caret, text.getCaret());
+
+        style.setHidden(true);
+        style.composing(true);
+        Caret standIn = text.getCaret();
+        assertNotNull(standIn, "a caret for the candidate list");
+        assertNotSame(caret, standIn, "not Eclipse's, which stays hidden");
+        assertTrue(standIn.getSize().x <= CursorStyleController.ECLIPSE_THIN_WIDTH + 1, "thin, under the composing text's box");
+        style.setHidden(true); // the float redrawn while composing
+        assertSame(standIn, text.getCaret(), "the stand-in is not taken for Eclipse's caret");
+        style.composing(false);
+        assertNull(text.getCaret(), "the composition ended: no caret, as before it");
+
+        style.composing(true);
+        style.setHidden(false); // the float closes while composing
+        assertSame(caret, text.getCaret(), "Eclipse's caret back, not the stand-in");
+        style.composing(false);
+        assertSame(caret, text.getCaret(), "the end of the composition leaves it");
+        style.dispose();
+        assertTrue(standIn.isDisposed(), "the stand-in goes with the controller");
+        assertSame(eclipses, text.getCaret());
+    }
+
+    /**
+     * A second composition after the font changed (the editor zoomed) resizes the stand-in: on the
+     * widget first, since GTK's Caret.setSize tells the input method where the widget's caret is,
+     * and threw while the widget had none.
+     */
+    @Test
+    void aCompositionAfterTheFontChangedSizesTheStandInOnTheWidget() {
+        CursorStyleController style = new CursorStyleController(text);
+        style.setHidden(true);
+        style.composing(true);
+        style.composing(false);
+        FontData data = text.getFont().getFontData()[0];
+        Font larger = new Font(text.getDisplay(), data.getName(), data.getHeight() * 2, data.getStyle());
+        try {
+            text.setFont(larger);
+            style.composing(true);
+            assertEquals(text.getLineHeight(), text.getCaret().getSize().y, "the new line's height");
+            style.composing(false);
+        } finally {
+            style.dispose();
+            larger.dispose();
+        }
     }
 
     /** Eclipse sets a new caret while hidden (the Insert key): that one stays, in the mode's shape. */

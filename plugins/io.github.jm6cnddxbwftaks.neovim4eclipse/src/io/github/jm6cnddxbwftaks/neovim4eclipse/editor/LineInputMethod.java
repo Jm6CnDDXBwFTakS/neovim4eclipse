@@ -47,9 +47,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PlatformUtil;
  *       {@code Composite.keyDown}).</li>
  *   <li>The candidate list: every system places it at the widget's {@link Caret} (Cocoa's
  *       {@code firstRectForCharacterRange}, GTK's {@code gtk_im_context_set_cursor_location},
- *       Windows' {@code ImmSetCompositionWindow}), not where the plug-in answers
- *       {@code COMPOSITION_OFFSET}. So while a composition goes on, the editor's caret is moved to
- *       the line's cursor, and put back when the line closes.</li>
+ *       Windows' {@code ImmSetCandidateWindow}), not where the plug-in answers
+ *       {@code COMPOSITION_OFFSET}. So while a composition goes on, the widget's caret is moved to
+ *       the line's cursor, and put back when the line closes: on the command line Eclipse's caret,
+ *       in a float the stand-in {@code CursorStyleController} puts there while the composition
+ *       goes on (a float has no caret otherwise, and the list opened elsewhere).</li>
  *   <li>{@code COMPOSITION_SELECTION}: no selection. macOS asks for it, and SWT 3.128's Cocoa side
  *       throws without an answer.</li>
  * </ul>
@@ -70,6 +72,7 @@ final class LineInputMethod {
     private final StyledText widget;
     private final Supplier<Rectangle> cursorCell;
     private final Consumer<String> commit;
+    private final Consumer<Boolean> composingCaret;
     private final LineComposition composition = new LineComposition();
     private final Listener imeFilter = this::onIme;
     private final Listener keyFilter = this::onKey;
@@ -79,17 +82,28 @@ final class LineInputMethod {
     private boolean attached;
     /** Where the editor's caret was before a composition moved it to the line, or {@code null}. */
     private Point caretBefore;
+    /** The caret {@link #caretBefore} belongs to: only that one is put back there. */
+    private Caret caretMoved;
 
     /**
      * @param widget     the editor's text widget, which keeps the keyboard meanwhile
      * @param cursorCell where Neovim's cursor is in the drawn window, in the widget's coordinates, or
      *                   {@code null} while not known ({@link FloatingWindows#cursorCell})
      * @param commit     hands committed text to Neovim
+     * @param composingCaret told when a composition begins ({@code true}) and ends, before the caret
+     *                   is placed: while a float has the keys the widget has no caret, and
+     *                   {@code CursorStyleController.composing} gives it one meanwhile
      */
-    LineInputMethod(StyledText widget, Supplier<Rectangle> cursorCell, Consumer<String> commit) {
+    LineInputMethod(StyledText widget, Supplier<Rectangle> cursorCell, Consumer<String> commit, Consumer<Boolean> composingCaret) {
         this.widget = widget;
         this.cursorCell = cursorCell;
         this.commit = commit;
+        this.composingCaret = composingCaret;
+    }
+
+    /** Without a caret of its own for a float (the widget always has one): for tests of the command line. */
+    LineInputMethod(StyledText widget, Supplier<Rectangle> cursorCell, Consumer<String> commit) {
+        this(widget, cursorCell, commit, on -> { });
     }
 
     /**
@@ -164,12 +178,20 @@ final class LineInputMethod {
 
     /** The composition is now {@code text}, its first {@code committed} characters committed. Also for tests. */
     void composed(String text, int committed) {
+        if (!text.isEmpty() && cursorCell.get() != null) {
+            // A caret to place, also in a float; only with a cell to put it at, or the stand-in
+            // would stay where StyledText put it, in the text, with no box over it.
+            composingCaret.accept(true);
+        }
         placeCaret();
         String sent = composition.changed(text, committed);
         if (!sent.isEmpty()) {
             commit.accept(sent);
         }
         showComposing();
+        if (composition.composing().isEmpty()) {
+            composingCaret.accept(false); // committed or cleared: nothing for a list to stand at
+        }
     }
 
     /** The composing text's box, for tests; {@code null} before the first composition. */
@@ -195,6 +217,7 @@ final class LineInputMethod {
         boolean was = !composition.composing().isEmpty();
         composition.end();
         showComposing();
+        composingCaret.accept(false);
         if (was && PlatformUtil.isMac()) {
             discardMarkedText(widget);
         }
@@ -207,8 +230,9 @@ final class LineInputMethod {
         if (caret == null || cell == null) {
             return;
         }
-        if (caretBefore == null) {
+        if (caretBefore == null || caretMoved != caret) {
             caretBefore = caret.getLocation();
+            caretMoved = caret;
         }
         caret.setLocation(cell.x, cell.y);
     }
@@ -216,10 +240,13 @@ final class LineInputMethod {
     /** Puts the editor's caret back where it was before a composition moved it. */
     private void restoreCaret() {
         Caret caret = widget.getCaret();
-        if (caretBefore != null && caret != null && !caret.isDisposed()) {
+        // Only the caret moved: after a composition in a float, the stand-in has made way for
+        // Eclipse's caret, which StyledText places itself.
+        if (caretBefore != null && caret != null && caret == caretMoved && !caret.isDisposed()) {
             caret.setLocation(caretBefore);
         }
         caretBefore = null;
+        caretMoved = null;
     }
 
     /** Draws the composing text in a box over the line's cursor, or hides the box when there is none. */

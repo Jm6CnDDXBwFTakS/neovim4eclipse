@@ -311,7 +311,8 @@ public final class NeovimEditorController implements AutoCloseable {
                 () -> !closed && neovimModeActive ? session.pluginFloat() : -1, session::moveOutOfFloatAsync);
         this.statusLineRow = STATUS_ROWS.rowFor(styledText, window, window::winid, new SessionStatusLines(session));
         floatingWindows.keepUnder(statusLineRow.control());
-        this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, this::commitComposition);
+        this.lineInput = new LineInputMethod(styledText, floatingWindows::cursorCell, this::commitComposition,
+                cursorStyle::composing);
         // A press NeovimMouse takes for Neovim no other display filter sees: it also ends the
         // keyboard watch a closed page editor started (KeyboardHandBack, whose own filter misses it).
         this.mouse = new NeovimMouse(styledText, offsets::toModel, () -> documentOf(editor),
