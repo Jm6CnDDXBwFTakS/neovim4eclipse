@@ -21,8 +21,8 @@ class FailureEvidenceTest {
 
     @Test
     void aReportNamesTheWaitAndHoldsTheWindowsTheThreadsAndEclipsesLog() throws Exception {
-        // A folder of this test's own under target/ (test.isolated.root): JUnit's @TempDir is not
-        // among the packages the fragment imports.
+        // A folder of this test's own under target/ (test.isolated.root, the run's own root, as
+        // the other files the UI tests write), emptied before and deleted after.
         Path folder = Path.of(System.getProperty("test.isolated.root", "target"), "failure-evidence-test");
         deleteFolder(folder);
         String before = System.getProperty(FailureEvidence.DIR_PROPERTY);

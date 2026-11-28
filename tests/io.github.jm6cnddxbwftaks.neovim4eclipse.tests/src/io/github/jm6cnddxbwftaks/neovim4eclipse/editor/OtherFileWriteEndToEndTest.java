@@ -37,6 +37,7 @@ import org.eclipse.ui.part.ISetSelectionTarget;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
@@ -169,9 +170,13 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertTrue(editor.isDirty());
     }
 
+    /**
+     * {@code :w} to a file outside the workspace writes it there and leaves the editor as it was.
+     * The folder is a JUnit {@code @TempDir}, deleted after the test. A copy does not move Neovim's
+     * working folder, so nothing works there when JUnit deletes it.
+     */
     @Test
-    void aCopyOutsideTheWorkspaceGoesToDisk() throws Exception {
-        Path folder = Files.createTempDirectory("neovim4eclipse-copy");
+    void aCopyOutsideTheWorkspaceGoesToDisk(@TempDir Path folder) throws Exception {
         Path out = folder.resolve("out.txt");
         change();
         runCommandLine(widget, "w " + out);
@@ -288,15 +293,25 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
         assertEquals(List.of(), dialogs);
     }
 
+    /**
+     * {@code :saveas} to a file outside the workspace moves the editor there. The folder is a JUnit
+     * {@code @TempDir}, deleted after the test; Neovim's window may work in it (the editor, now on
+     * {@code out.txt}, can {@code :lcd} there), and Windows deletes no folder a process works in, so
+     * the test moves Neovim out first ({@link #leave}).
+     */
     @Test
-    void saveasOutsideTheWorkspace() throws Exception {
-        Path out = Files.createTempDirectory("neovim4eclipse-saveas").resolve("out.txt");
-        change();
-        runCommandLine(widget, "saveas " + out);
+    void saveasOutsideTheWorkspace(@TempDir Path folder) throws Exception {
+        Path out = folder.resolve("out.txt");
+        try {
+            change();
+            runCommandLine(widget, "saveas " + out);
 
-        waitUntil("the editor on out.txt", TIMEOUT_MS, () -> "out.txt".equals(editor.getTitle()));
-        assertEquals(CHANGED, Files.readString(out));
-        assertFalse(editor.isDirty());
+            waitUntil("the editor on out.txt", TIMEOUT_MS, () -> "out.txt".equals(editor.getTitle()));
+            assertEquals(CHANGED, Files.readString(out));
+            assertFalse(editor.isDirty());
+        } finally {
+            leave(folder);
+        }
     }
 
     @Test
@@ -457,7 +472,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
             // Windows deletes no folder a process works in, and Neovim's window still has
             // enew-lcd as its :lcd until the closes reach Neovim (on one core, not yet). Eclipse
             // sends no event before a folder delete, only before a project's (ProjectFolderExit),
-            // so the test moves Neovim out itself, as leaveAndDelete does for folders outside.
+            // so the test moves Neovim out itself, as leave does for folders outside.
             settle();
             session.leaveFolder(sub.getLocation().toOSString(), TestWait.duration());
             sub.delete(true, null);
@@ -619,11 +634,13 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
      * Neovim's own {@code :w other} (a copy) onto a symbolic link to a missing file: Neovim's E13
      * check follows the link and lets it pass as a missing file, so Eclipse refuses the write
      * without {@code !} ({@link DanglingLinks}); {@code :w!} writes through it. Skipped where links
-     * cannot be made.
+     * cannot be made. The link's target is in a JUnit {@code @TempDir} (its real path: on macOS
+     * {@code /var} is a link to {@code /private/var}); the link itself is in the project, so JUnit's
+     * delete of that folder meets no link, and the test removes the link itself.
      */
     @Test
-    void aCopyThroughALinkToAMissingFileNeedsBang() throws Exception {
-        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+    void aCopyThroughALinkToAMissingFileNeedsBang(@TempDir Path temp) throws Exception {
+        Path dir = temp.toRealPath();
         Path gone = dir.resolve("gone.txt");
         Path link = Path.of(project.getLocation().toOSString()).resolve("copy.local");
         try {
@@ -642,7 +659,7 @@ class OtherFileWriteEndToEndTest extends EndToEndTestBase {
             assertEquals("alpha\nbeta\ngamma\n", Files.readString(gone, StandardCharsets.UTF_8));
         } finally {
             Files.deleteIfExists(link);
-            leaveAndDelete(dir, gone);
+            leave(dir);
         }
     }
 }

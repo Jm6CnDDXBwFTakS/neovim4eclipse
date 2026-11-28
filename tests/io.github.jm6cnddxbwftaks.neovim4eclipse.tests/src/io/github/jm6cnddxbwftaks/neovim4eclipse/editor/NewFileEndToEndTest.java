@@ -29,6 +29,7 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * {@code :e newfile} opens an empty editor, and {@code :w} creates the file (docs/design/NEW_FILE.md).
@@ -37,6 +38,12 @@ import org.junit.jupiter.api.Test;
  * file opens Save As, which would otherwise block the test instead of failing it. No test may let
  * Eclipse save a missing file <em>outside</em> the workspace: its Save As is the system's native
  * dialog, which the watcher cannot close.
+ *
+ * <p>A test's folder outside the workspace is a JUnit {@code @TempDir}, which JUnit deletes after the
+ * test, whatever the test left in it; the test uses its real path, since on macOS the temporary
+ * folder's {@code /var} is a link to {@code /private/var}. The test only moves Neovim out of it
+ * ({@link #leave}), which Windows needs before the delete. A symbolic link a test makes is in the
+ * project, pointing into that folder, and the test removes it itself: JUnit's delete meets no link.
  */
 class NewFileEndToEndTest extends EndToEndTestBase {
 
@@ -307,8 +314,8 @@ class NewFileEndToEndTest extends EndToEndTestBase {
      * made it point ({@link DanglingLinks}). {@code :w!} does. Skipped where links cannot be made.
      */
     @Test
-    void aWriteThroughALinkToAMissingFileNeedsBang() throws Exception {
-        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+    void aWriteThroughALinkToAMissingFileNeedsBang(@TempDir Path temp) throws Exception {
+        Path dir = temp.toRealPath();
         Path gone = dir.resolve("gone.txt");
         Path link = Path.of(project.getLocation().toOSString()).resolve("notes.local");
         try {
@@ -339,7 +346,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             // above) makes Eclipse ask about the missing file in a dialog that blocks every later test.
             closeAll();
             Files.deleteIfExists(link);
-            leaveAndDelete(dir, gone);
+            leave(dir);
         }
     }
 
@@ -355,8 +362,8 @@ class NewFileEndToEndTest extends EndToEndTestBase {
      * replaced by the link behind Eclipse's back, with no refresh. Skipped where links cannot be made.
      */
     @Test
-    void aLinkToAMissingFileThatTheWorkspaceListsStillOpensAsANewFile() throws Exception {
-        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+    void aLinkToAMissingFileThatTheWorkspaceListsStillOpensAsANewFile(@TempDir Path temp) throws Exception {
+        Path dir = temp.toRealPath();
         Path gone = dir.resolve("gone.txt");
         IFile listed = project.getFile("listed.local");
         Path link = Path.of(listed.getLocation().toOSString());
@@ -393,7 +400,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             closeAll(); // first, unsaved: see aWriteThroughALinkToAMissingFileNeedsBang
             Files.deleteIfExists(link);
             listed.refreshLocal(IResource.DEPTH_ZERO, null);
-            leaveAndDelete(dir, gone);
+            leave(dir);
         }
     }
 
@@ -403,8 +410,8 @@ class NewFileEndToEndTest extends EndToEndTestBase {
      * {@code :w!} does. Skipped where links cannot be made.
      */
     @Test
-    void writeAllThroughALinkToAMissingFileNeedsBang() throws Exception {
-        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+    void writeAllThroughALinkToAMissingFileNeedsBang(@TempDir Path temp) throws Exception {
+        Path dir = temp.toRealPath();
         Path gone = dir.resolve("gone.txt");
         Path link = Path.of(project.getLocation().toOSString()).resolve("all.local");
         try {
@@ -434,7 +441,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             // above) makes Eclipse ask about the missing file in a dialog that blocks every later test.
             closeAll();
             Files.deleteIfExists(link);
-            leaveAndDelete(dir, gone);
+            leave(dir);
         }
     }
 
@@ -444,8 +451,8 @@ class NewFileEndToEndTest extends EndToEndTestBase {
      * (util/HostCommandRunner), writes through the link and closes. Skipped where links cannot be made.
      */
     @Test
-    void wqThroughALinkToAMissingFileNeedsBangAndOtherwiseKeepsTheEditor() throws Exception {
-        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+    void wqThroughALinkToAMissingFileNeedsBangAndOtherwiseKeepsTheEditor(@TempDir Path temp) throws Exception {
+        Path dir = temp.toRealPath();
         Path gone = dir.resolve("gone.txt");
         Path link = Path.of(project.getLocation().toOSString()).resolve("wq.local");
         try {
@@ -474,13 +481,13 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             // above) makes Eclipse ask about the missing file in a dialog that blocks every later test.
             closeAll();
             Files.deleteIfExists(link);
-            leaveAndDelete(dir, gone);
+            leave(dir);
         }
     }
 
     @Test
-    void aNewFileOutsideTheWorkspaceIsCreatedByWrite() throws Exception {
-        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+    void aNewFileOutsideTheWorkspaceIsCreatedByWrite(@TempDir Path temp) throws Exception {
+        Path dir = temp.toRealPath();
         Path outside = dir.resolve("outside-new.txt");
         try {
             runCommandLine(widget, "e " + outside);
@@ -495,7 +502,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             assertFalse(opened.isDirty());
             closeAll();
         } finally {
-            leaveAndDelete(dir, outside);
+            leave(dir);
         }
     }
 
@@ -505,8 +512,8 @@ class NewFileEndToEndTest extends EndToEndTestBase {
      * test would hang on the native Save As dialog instead of failing.)
      */
     @Test
-    void aMissingFolderOutsideTheWorkspaceNeedsPlusPlusP() throws Exception {
-        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+    void aMissingFolderOutsideTheWorkspaceNeedsPlusPlusP(@TempDir Path temp) throws Exception {
+        Path dir = temp.toRealPath();
         Path sub = dir.resolve("sub");
         Path outside = sub.resolve("new.txt");
         try {
@@ -526,7 +533,7 @@ class NewFileEndToEndTest extends EndToEndTestBase {
             assertFalse(opened.isDirty());
             closeAll();
         } finally {
-            leaveAndDelete(dir, outside, sub);
+            leave(dir);
         }
     }
 

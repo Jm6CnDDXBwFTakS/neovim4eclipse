@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Method;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,6 +48,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.osgi.framework.Bundle;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
@@ -718,13 +718,14 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
      * enabled for Java does not attach, and no indent script is set (Eclipse indents). That is why
      * the plug-in reads project files for Neovim: a user's jdtls would otherwise start a second Java
      * server inside Eclipse. The control: the same server attaches to a Java file outside the
-     * projects, which Neovim reads itself. The manual test "gf between Java files, with a language
-     * server in your config".
+     * projects, which Neovim reads itself, in a JUnit {@code @TempDir} (deleted after the test; the
+     * file is never written, and Neovim only loads it as a buffer, which leaves its working folder
+     * where it was). The manual test "gf between Java files, with a language server in your config".
      */
     @Test
-    void gfOntoAJavaFileOpensTheJavaEditorWithNoLanguageServer() throws Exception {
+    void gfOntoAJavaFileOpensTheJavaEditorWithNoLanguageServer(@TempDir Path folder) throws Exception {
         createFile("src/p/Bar.java", "package p;\nclass Bar {}\n");
-        Path outside = Files.createTempDirectory("n4e-java").resolve("Control.java");
+        Path outside = folder.resolve("Control.java");
         ITextEditor bar = null;
         SessionProbe.lua(session, TINY_SERVER);
         try {
@@ -756,8 +757,6 @@ class JavaEditorEndToEndTest extends EndToEndTestBase {
                 page().closeEditor(bar, false);
             }
             SessionProbe.lua(session, NO_TINY_SERVER);
-            Files.deleteIfExists(outside);
-            Files.deleteIfExists(outside.getParent());
         }
     }
 

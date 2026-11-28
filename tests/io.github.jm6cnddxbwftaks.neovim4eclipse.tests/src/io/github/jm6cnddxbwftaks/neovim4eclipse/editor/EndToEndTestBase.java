@@ -407,18 +407,20 @@ abstract class EndToEndTestBase {
     }
 
     /**
-     * Deletes a folder outside the workspace that an editor of the test opened a file in: first
-     * {@code contents}, in order, then {@code dir}. Neovim's window may still work there ({@code :lcd}
-     * to the file's folder, until another editor attaches), and Windows does not delete a folder a
-     * process works in; so Neovim leaves it first, as {@code ProjectFolderExit} has it leave a project
-     * before Eclipse deletes one.
+     * Moves Neovim out of {@code tempDir}, a JUnit {@code @TempDir} outside the workspace that an
+     * editor of the test opened a file in, so that JUnit can delete it after the test. Neovim's
+     * window may still work there ({@code :lcd} to the file's folder, until another editor attaches),
+     * and Windows does not delete a folder a process works in: JUnit would fail the test. So Neovim
+     * leaves it first, as {@code ProjectFolderExit} has it leave a project before Eclipse deletes one.
+     *
+     * <p>Call it from the test's {@code finally}: JUnit deletes a {@code @TempDir} only after every
+     * {@code @AfterEach}, so the folder is still there. Pass the {@code @TempDir} itself, not a folder
+     * inside it: Neovim moves to the parent of the folder it leaves, and from a subfolder that parent
+     * is the {@code @TempDir}, which Neovim would then hold. Example: a test with
+     * {@code @TempDir Path dir} that ran {@code :e <dir>/a.txt} ends with {@code leave(dir)}.
      */
-    void leaveAndDelete(java.nio.file.Path dir, java.nio.file.Path... contents) throws java.io.IOException {
-        session.leaveFolder(dir.toString(), TestWait.duration());
-        for (java.nio.file.Path path : contents) {
-            java.nio.file.Files.deleteIfExists(path);
-        }
-        java.nio.file.Files.deleteIfExists(dir);
+    void leave(Path tempDir) {
+        session.leaveFolder(tempDir.toString(), TestWait.duration());
     }
 
     /** The active workbench page. */

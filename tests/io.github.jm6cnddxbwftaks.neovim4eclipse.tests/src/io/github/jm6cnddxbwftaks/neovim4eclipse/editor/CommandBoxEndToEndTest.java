@@ -29,6 +29,7 @@ import org.eclipse.ui.IURIEditorInput;
 import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.VimCtrlKeys;
@@ -267,11 +268,13 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
     }
 
     /**
-     * An absolute path outside the workspace opens as an outside file (no project).
+     * An absolute path outside the workspace opens as an outside file (no project). The folder is a
+     * JUnit {@code @TempDir}, deleted after the test; its real path, since on macOS the temporary
+     * folder's {@code /var} is a link to {@code /private/var}.
      */
     @Test
-    void editOpensAnAbsolutePathOutsideTheWorkspace() throws Exception {
-        Path dir = Files.createTempDirectory("neovim4eclipse-e2e").toRealPath();
+    void editOpensAnAbsolutePathOutsideTheWorkspace(@TempDir Path temp) throws Exception {
+        Path dir = temp.toRealPath();
         Path outside = dir.resolve("outside.txt");
         try {
             Files.writeString(outside, "outside\n", StandardCharsets.UTF_8);
@@ -284,7 +287,7 @@ class CommandBoxEndToEndTest extends EndToEndTestBase {
             assertNull(opened.getEditorInput().getAdapter(IFile.class), "not a workspace file");
             page().closeEditor(opened, false);
         } finally {
-            leaveAndDelete(dir, outside);
+            leave(dir);
         }
     }
 

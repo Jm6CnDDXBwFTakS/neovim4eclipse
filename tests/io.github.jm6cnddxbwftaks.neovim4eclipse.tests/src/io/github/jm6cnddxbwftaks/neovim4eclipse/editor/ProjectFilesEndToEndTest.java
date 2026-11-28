@@ -38,6 +38,7 @@ import org.eclipse.ui.texteditor.ITextEditor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.PageKind;
@@ -151,11 +152,11 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
      * {@code gf} onto a file in no open project ({@code /usr/include/stdio.h}, a config file) opens
      * it by its location, as <i>File › Open File...</i> does, the same way as a project's file:
      * Neovim never reads it (no filetype, so no language server), the window travels along, and
-     * {@code Ctrl-O} goes back. Example: {@code a.txt} names {@code /tmp/outside-x/o.txt}.
+     * {@code Ctrl-O} goes back. Example: {@code a.txt} names {@code /tmp/junit123/o.txt}, in a JUnit
+     * {@code @TempDir} (deleted after the test, once the editors are closed).
      */
     @Test
-    void gfOntoAFileOutsideTheProjectsOpensItByItsLocation() throws Exception {
-        Path outside = Files.createTempDirectory("outside");
+    void gfOntoAFileOutsideTheProjectsOpensItByItsLocation(@TempDir Path outside) throws Exception {
         Path o = outside.resolve("o.txt");
         Files.writeString(o, "first\nsecond\n", StandardCharsets.UTF_8);
         ITextEditor a = open(createFile("a.txt", o + "\n"));
@@ -175,8 +176,6 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
         } finally {
             closeAllBut(null);
             wipeBuffersUnder(outside);
-            Files.deleteIfExists(o);
-            Files.deleteIfExists(outside);
         }
     }
 
@@ -520,10 +519,12 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
     /**
      * The same for a file outside every project (<i>File, Open File...</i>), which Neovim's project
      * folders do not cover: its buffer has the reload hook all the same (LuaScripts.DOCUMENT_BUFFER_MODULE).
+     * The file is in a JUnit {@code @TempDir}, deleted after the test; Neovim's window for the
+     * editor may still work in it ({@code :lcd} to the file's folder), and Windows deletes no folder
+     * a process works in, so the test moves Neovim out first ({@link #leave}).
      */
     @Test
-    void aScriptsEditBangOnAFileOutsideTheWorkspaceReloadsEclipsesText() throws Exception {
-        Path dir = Files.createTempDirectory("outside");
+    void aScriptsEditBangOnAFileOutsideTheWorkspaceReloadsEclipsesText(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("outside.txt");
         Files.writeString(file, "disk\n", StandardCharsets.UTF_8);
         ITextEditor outside = (ITextEditor) IDE.openEditorOnFileStore(page(), EFS.getLocalFileSystem().getStore(file.toUri()));
@@ -540,6 +541,7 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             expectText(outside, "Zunsaved\n");
         } finally {
             page().closeEditor(outside, false);
+            leave(dir);
         }
     }
 
@@ -571,10 +573,11 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
      * editor as the workspace file and Neovim never reads it. Once the link is removed, the file is
      * outside every project again: {@code gf} opens it by its location, still without Neovim
      * reading it. The manual test "A linked folder, added while running" does the same by hand.
+     * The linked folder's target is a JUnit {@code @TempDir}, deleted after the test (an Eclipse link
+     * is a note in the project, not a link on disk, so nothing outside is reached from it).
      */
     @Test
-    void aLinkedFolderMadeAndRemovedWhileRunningIsSeenByNeovim() throws Exception {
-        Path outside = Files.createTempDirectory("linked");
+    void aLinkedFolderMadeAndRemovedWhileRunningIsSeenByNeovim(@TempDir Path outside) throws Exception {
         Path ext = outside.resolve("ext.txt");
         Files.writeString(ext, "outside text\n", StandardCharsets.UTF_8);
         String inside = "return package.loaded['neovim4eclipse.project_files'].inside(" + lua(ext.toString()) + ")";
@@ -612,8 +615,6 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             // ext.txt's buffer is kept after its editor closes, listed: once the file is deleted
             // it would be modified (E211), stopping a later test's :bufdo in it.
             wipeBuffersUnder(outside);
-            Files.deleteIfExists(ext);
-            Files.deleteIfExists(outside);
         }
     }
 
@@ -676,12 +677,11 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
      * {@code gf} onto a file of the last opens its editor. One walk, or a few, sends them all
      * ({@code ProjectFolders}, "Bursts"). The manual test "Closing, opening and importing projects";
      * closing and opening are {@link #aProjectOpenedOrClosedLaterIsSeenByNeovim}.
-     * Example: {@code e2e-imp1} to {@code e2e-imp3} at {@code /tmp/n4e-importsN/imp1} and so on;
-     * {@code gf} onto {@code /tmp/n4e-importsN/imp3/i.txt}.
+     * Example: {@code e2e-imp1} to {@code e2e-imp3} at {@code /tmp/junit123/imp1} and so on (a JUnit
+     * {@code @TempDir}, deleted after the test); {@code gf} onto {@code /tmp/junit123/imp3/i.txt}.
      */
     @Test
-    void severalProjectsImportedAtOnceAreAllSeenByNeovim() throws Exception {
-        Path root = Files.createTempDirectory("n4e-imports");
+    void severalProjectsImportedAtOnceAreAllSeenByNeovim(@TempDir Path root) throws Exception {
         List<String> names = List.of("imp1", "imp2", "imp3");
         List<IProject> imported = new ArrayList<>();
         Path target = root.resolve("imp3").resolve("i.txt");
@@ -717,12 +717,9 @@ class ProjectFilesEndToEndTest extends EndToEndTestBase {
             closeAllBut(null);
             wipeBuffersUnder(root);
             for (IProject made : imported) {
-                made.delete(false, true, null); // keeps the files; deleted below
+                made.delete(false, true, null); // keeps the files: JUnit deletes them with root
             }
-            for (String name : names) {
-                leaveAndDelete(root.resolve(name), root.resolve(name).resolve("i.txt"), root.resolve(name).resolve(".project"));
-            }
-            leaveAndDelete(root);
+            leave(root); // root, not each project's folder: Neovim moves to the parent of what it leaves
         }
     }
 

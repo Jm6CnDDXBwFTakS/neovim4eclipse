@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +21,7 @@ import org.eclipse.core.runtime.IPath;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The folders Neovim is told about ({@link ProjectFolders}), walked again only for the projects a
@@ -35,6 +35,19 @@ class ProjectFoldersTest {
 
     private final List<IProject> projects = new ArrayList<>();
     private ProjectFolders listener;
+
+    /**
+     * The folder outside the workspace that the tests link to: a JUnit {@code @TempDir}, made before
+     * and deleted after each test. An Eclipse linked folder is a note in {@code .project}, not a link
+     * on disk, so JUnit's delete reaches nothing outside it.
+     */
+    @TempDir
+    Path outsideFolder;
+
+    /**
+     * {@link #outsideFolder}'s real path, as Eclipse and {@link ProjectFolders} give it back: on macOS
+     * the temporary folder's {@code /var} is a link to {@code /private/var}.
+     */
     private Path outside;
 
     @BeforeEach
@@ -48,7 +61,7 @@ class ProjectFoldersTest {
             project.getFolder("deep").create(true, true, null);
             projects.add(project);
         }
-        outside = Files.createTempDirectory("project-folders-link").toRealPath();
+        outside = outsideFolder.toRealPath();
         ProjectFolders.currentAfterFullWalk();
     }
 
@@ -58,7 +71,6 @@ class ProjectFoldersTest {
         for (IProject project : projects) {
             project.delete(true, true, null);
         }
-        Files.deleteIfExists(outside);
         ProjectFolders.currentAfterFullWalk(); // the next test starts from the workspace as it is
     }
 
@@ -96,21 +108,17 @@ class ProjectFoldersTest {
 
     /** A link given another target in place (Properties > Resource > Edit) changes only .project. */
     @Test
-    void aLinkMovedToAnotherTargetIsSeenWalkingOnlyItsProject() throws Exception {
-        Path other = Files.createTempDirectory("project-folders-other").toRealPath();
-        try {
-            IFolder link = projects.get(0).getFolder("ext");
-            link.createLink(IPath.fromOSString(outside.toString()), IResource.NONE, null);
-            assertTrue(currentWalkingAtMost(1).contains(outside.toString()));
+    void aLinkMovedToAnotherTargetIsSeenWalkingOnlyItsProject(@TempDir Path otherFolder) throws Exception {
+        Path other = otherFolder.toRealPath();
+        IFolder link = projects.get(0).getFolder("ext");
+        link.createLink(IPath.fromOSString(outside.toString()), IResource.NONE, null);
+        assertTrue(currentWalkingAtMost(1).contains(outside.toString()));
 
-            link.createLink(IPath.fromOSString(other.toString()), IResource.REPLACE, null);
-            List<String> folders = currentWalkingAtMost(1);
-            assertTrue(folders.contains(other.toString()), folders.toString());
-            assertFalse(folders.contains(outside.toString()), folders.toString());
-            link.delete(true, null);
-        } finally {
-            Files.deleteIfExists(other);
-        }
+        link.createLink(IPath.fromOSString(other.toString()), IResource.REPLACE, null);
+        List<String> folders = currentWalkingAtMost(1);
+        assertTrue(folders.contains(other.toString()), folders.toString());
+        assertFalse(folders.contains(outside.toString()), folders.toString());
+        link.delete(true, null);
     }
 
     /**
@@ -119,8 +127,8 @@ class ProjectFoldersTest {
      * walked again.
      */
     @Test
-    void aPathVariableChangeMovesTheLinksThatUseIt() throws Exception {
-        Path other = Files.createTempDirectory("project-folders-other").toRealPath();
+    void aPathVariableChangeMovesTheLinksThatUseIt(@TempDir Path otherFolder) throws Exception {
+        Path other = otherFolder.toRealPath();
         IPathVariableManager variables = ResourcesPlugin.getWorkspace().getPathVariableManager();
         String name = "PROJECT_FOLDERS_TEST";
         try {
@@ -137,7 +145,6 @@ class ProjectFoldersTest {
             link.delete(true, null);
         } finally {
             variables.setURIValue(name, null);
-            Files.deleteIfExists(other);
         }
     }
 

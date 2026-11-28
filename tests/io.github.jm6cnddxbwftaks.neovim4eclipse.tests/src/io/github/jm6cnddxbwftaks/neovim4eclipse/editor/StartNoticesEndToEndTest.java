@@ -28,6 +28,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.Activator;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.EarlyStartup;
@@ -59,21 +60,11 @@ import io.github.jm6cnddxbwftaks.neovim4eclipse.util.OldNeovimProgram;
  */
 class StartNoticesEndToEndTest extends EndToEndTestBase {
 
-    /** A folder of the test's own. */
-    private Path tmp;
-
     /** The startup option as the test Eclipse got it, put back after a test that changes it. */
     private final String option = System.getProperty(NeovimOption.PROPERTY);
 
     @AfterEach
-    void restoreTheOptionAndThePreference() throws java.io.IOException {
-        if (tmp != null) {
-            try (var paths = Files.walk(tmp)) {
-                for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
-                    Files.deleteIfExists(path);
-                }
-            }
-        }
+    void restoreTheOptionAndThePreference() {
         if (option == null) {
             System.clearProperty(NeovimOption.PROPERTY);
         } else {
@@ -147,12 +138,12 @@ class StartNoticesEndToEndTest extends EndToEndTestBase {
      * key cannot make the plug-in run a program: the key is no longer read for a start. Before
      * 0.2.1 this import ran the named program, unchecked. Example: the file names a script that
      * writes a marker; after the import and a Neovim restart the marker is still missing, and the
-     * next start shows the value in the once-only note.
+     * next start shows the value in the once-only note. Script and marker are in a JUnit
+     * {@code @TempDir}, deleted after the test.
      */
     @Test
     @DisabledOnOs(value = OS.WINDOWS, disabledReason = "a shell script stands in for the planted program")
-    void anImportedPreferencesFileCannotNameAProgramToRun() throws Exception {
-        tmp = Files.createTempDirectory("n4e-epf");
+    void anImportedPreferencesFileCannotNameAProgramToRun(@TempDir Path tmp) throws Exception {
         Path marker = tmp.resolve("ran");
         Path fake = Files.writeString(tmp.resolve("fake-nvim"), "#!/bin/sh\necho ran >> '" + marker + "'\n");
         Files.setPosixFilePermissions(fake, PosixFilePermissions.fromString("rwx------"));

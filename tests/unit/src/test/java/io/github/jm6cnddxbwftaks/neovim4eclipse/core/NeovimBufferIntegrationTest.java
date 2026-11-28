@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -17,6 +16,7 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.util.Diagnostic;
@@ -457,7 +457,9 @@ class NeovimBufferIntegrationTest {
      * {@code :w !cmd} pipes the text instead and asks Eclipse nothing.
      */
     @Test
-    void aTypedWriteAsksEclipseAndShowsTheWrittenMessage() throws Exception {
+    void aTypedWriteAsksEclipseAndShowsTheWrittenMessage(@TempDir Path dir) throws Exception {
+        // dir: where the file would be, a JUnit @TempDir (deleted after the test; the fake write
+        // handler writes nothing there).
         try (NeovimSession s = start()) {
             List<String> asked = new CopyOnWriteArrayList<>();
             s.setWriteHandler((document, request) -> {
@@ -465,7 +467,6 @@ class NeovimBufferIntegrationTest {
                         + (request.target().isEmpty() ? "" : " " + request.target()));
                 return DocumentWrite.Result.saved("\"A.txt\" 1L, 2B written");
             });
-            Path dir = Files.createTempDirectory("neovim4eclipse-write");
             DocumentBuffer a = new DocumentBuffer(dir.resolve("A.txt").toString());
             s.showBuffer(a);
             s.setBufferLines(List.of("a"));

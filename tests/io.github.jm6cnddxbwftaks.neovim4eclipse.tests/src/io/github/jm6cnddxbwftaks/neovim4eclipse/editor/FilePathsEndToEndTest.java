@@ -15,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import org.eclipse.core.resources.IFile;
@@ -42,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.github.jm6cnddxbwftaks.neovim4eclipse.core.SessionProbe;
 import io.github.jm6cnddxbwftaks.neovim4eclipse.testing.TestWait;
@@ -61,6 +61,13 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
     /** A link to the project's folder, outside the workspace. */
     private Path link;
 
+    /**
+     * Makes {@link #link} in a folder of its own. Not a JUnit {@code @TempDir}, unlike the other
+     * folders here: the link points at the test project, in the workspace, and on Windows it may be a
+     * junction, which Java takes for a plain folder. Should the link outlive the test, JUnit's delete
+     * would go through it and delete the project's files. So the test makes the folder itself, and
+     * {@link #removeTheLink} removes the link first, then the folder.
+     */
     @BeforeEach
     void linkToTheProject() throws IOException {
         Path dir = Files.createTempDirectory("n4e-link");
@@ -260,15 +267,17 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * spelling compared by the one rule ({@code NewFiles.workspaceFileAt}, its last step). Found
      * 2026-10-31 on Windows, where {@code ~\src} was a junction to the profile's {@code src}: the
      * link was made through the junction, {@code gf} gave the real path, and no editor opened.
-     * Example: {@code e2e/ext} linked to {@code /tmp/n4e-viaN/via}, a link to
-     * {@code /tmp/n4e-realN}; {@code :e /tmp/n4e-realN/ext.txt} opens {@code /e2e/ext/ext.txt}.
+     * Example: {@code e2e/ext} linked to {@code /tmp/junit2/via}, a link to {@code /tmp/junit1};
+     * {@code :e /tmp/junit1/ext.txt} opens {@code /e2e/ext/ext.txt}. Both folders are JUnit
+     * {@code @TempDir}s of the test, so the link and what it points to are inside them: JUnit's
+     * delete after the test reaches nothing outside, even through a Windows junction, which Java takes
+     * for a plain folder and descends into. The test still removes the link first.
      */
     @Test
-    void eByTheRealPathOpensAFileInAFolderLinkedThroughALink() throws Exception {
-        Path real = Files.createTempDirectory("n4e-real");
+    void eByTheRealPathOpensAFileInAFolderLinkedThroughALink(@TempDir Path real, @TempDir Path viaRoot) throws Exception {
         Path ext = real.resolve("ext.txt");
         Files.writeString(ext, "outside\n", StandardCharsets.UTF_8);
-        Path via = Files.createTempDirectory("n4e-via").resolve("via");
+        Path via = viaRoot.resolve("via");
         IFolder folder = project.getFolder("ext");
         try {
             assumeTrue(makeLink(via, real), "could make neither a symbolic link nor a junction here");
@@ -291,10 +300,7 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             if (folder.exists()) {
                 folder.delete(true, null);
             }
-            Files.deleteIfExists(via);
-            Files.deleteIfExists(via.getParent());
-            Files.deleteIfExists(ext);
-            Files.deleteIfExists(real);
+            Files.deleteIfExists(via); // the link (or junction) first; JUnit deletes the rest
         }
     }
 
@@ -305,13 +311,13 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * workspace or project under a link" did this by hand. Common in practice: on macOS every folder
      * under {@code /tmp} or {@code /var} is really under {@code /private}; on Windows a profile folder
      * may be a junction.
-     * Example: project {@code e2e-via} at {@code /tmp/n4e-viaN/p}, a link to {@code /tmp/n4e-realN};
-     * {@code gf} onto {@code /tmp/n4e-viaN/p/b.txt}, then {@code :e /tmp/n4e-realN/b.txt}.
+     * Example: project {@code e2e-via} at {@code /tmp/junit2/p}, a link to {@code /tmp/junit1};
+     * {@code gf} onto {@code /tmp/junit2/p/b.txt}, then {@code :e /tmp/junit1/b.txt}. Both folders
+     * are JUnit {@code @TempDir}s, as in {@link #eByTheRealPathOpensAFileInAFolderLinkedThroughALink}.
      */
     @Test
-    void aProjectUnderALinkHasOneEditorAndOneBufferForBothPaths() throws Exception {
-        Path real = Files.createTempDirectory("n4e-real");
-        Path via = Files.createTempDirectory("n4e-via").resolve("p");
+    void aProjectUnderALinkHasOneEditorAndOneBufferForBothPaths(@TempDir Path real, @TempDir Path viaRoot) throws Exception {
+        Path via = viaRoot.resolve("p");
         Path a = real.resolve("a.txt");
         Path b = real.resolve("b.txt");
         IProject linked = ResourcesPlugin.getWorkspace().getRoot().getProject("e2e-via");
@@ -341,12 +347,15 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             closeOtherEditors();
             wipeBuffers(a, b);
             if (linked.exists()) {
-                linked.delete(false, true, null); // keeps the files; deleted below
+                linked.delete(false, true, null); // keeps the files: JUnit deletes them with real
             }
-            session.leaveFolder(via.toString(), TestWait.duration());
+            // Neovim out of both @TempDirs before JUnit deletes them: out of real first, while the
+            // link still resolves (a window spelled through it is within real, links resolved); then
+            // out of viaRoot, where leaving the project (ProjectFolderExit) moved it, as the parent of
+            // via. Then the link (or junction) itself, so JUnit's delete never walks through it.
+            leave(real);
+            leave(viaRoot);
             Files.deleteIfExists(via);
-            Files.deleteIfExists(via.getParent());
-            leaveAndDelete(real, a, b, real.resolve(".project"));
         }
     }
 
@@ -382,8 +391,9 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * makes none. Asked of {@code cmd}'s {@code %~sI}, with the path passed in an environment variable
      * so that a non-ASCII letter reaches {@code cmd} intact; Java has no API for it, and Neovim's
      * {@code fnamemodify(name, ':8')} gave the name back unchanged (Neovim 0.12.6, 2026-10-31).
-     * Example: {@code C:\Users\me\AppData\Local\Temp\n4e path ü1\c.txt} gives
-     * {@code C:\Users\me\AppData\Local\Temp\N4EPAT~1\c.txt}.
+     * Example: {@code C:\Users\me\AppData\Local\Temp\junit123\n4e path ü\c.txt} gives
+     * {@code C:\Users\me\AppData\Local\Temp\JUNIT1~1\N4EPAT~1\c.txt} (JUnit's folder name is
+     * longer than 8 characters, so it is shortened too).
      */
     private static String shortName(Path file) throws IOException, InterruptedException {
         // Separate arguments with no spaces, so Java quotes none of them and cmd sees ("%N4E_PATH%").
@@ -406,7 +416,8 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
     /**
      * {@code path} as typed after {@code :e}: each {@code \} doubled, as the other tests here do, and
      * each space escaped, since {@code :e} reads a space as the end of the name.
-     * Example: {@code C:\Temp\n4e path ü1\c.txt} is typed {@code C:\\Temp\\n4e\ path\ ü1\\c.txt}.
+     * Example: {@code C:\Temp\junit123\n4e path ü\c.txt} is typed
+     * {@code C:\\Temp\\junit123\\n4e\ path\ ü\\c.txt}.
      */
     private static String typed(String path) {
         return path.replace("\\", "\\\\").replace(" ", "\\ ");
@@ -478,16 +489,18 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
         return created;
     }
 
-    /** Undoes {@link #projectAt}: closes the editors, wipes the buffers, deletes project and files. */
-    private void removeProject(IProject created, Path dir, Path... files) throws Exception {
+    /**
+     * Undoes {@link #projectAt}: closes the editors, wipes the buffers of {@code files}, deletes the
+     * project but not its files, and moves Neovim out of {@code tempDir}, the JUnit {@code @TempDir}
+     * that holds the project's folder ({@link #leave}): JUnit deletes the files after the test.
+     */
+    private void removeProject(IProject created, Path tempDir, Path... files) throws Exception {
         closeOtherEditors();
         wipeBuffers(files);
         if (created.exists()) {
-            created.delete(false, true, null); // keeps the files; deleted below
+            created.delete(false, true, null); // keeps the files: JUnit deletes them with tempDir
         }
-        Path[] contents = Arrays.copyOf(files, files.length + 1);
-        contents[files.length] = dir.resolve(".project");
-        leaveAndDelete(dir, contents);
+        leave(tempDir);
     }
 
     /**
@@ -496,12 +509,13 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * spellings" did this by hand; it runs on every system, since each spells such names its own way:
      * on macOS APFS and HFS+ may give back {@code ü} decomposed (u and a combining mark, NFD) where
      * Java and Neovim spelled it composed (NFC).
-     * Example: project {@code e2e-spelled} at {@code C:\Users\me\AppData\Local\Temp\n4e path ü123};
-     * {@code :e C:\...\n4e path ü123\c.txt}.
+     * Example: project {@code e2e-spelled} at {@code C:\Users\me\AppData\Local\Temp\junit123\n4e path ü};
+     * {@code :e C:\...\n4e path ü\c.txt}. The folder is made inside a JUnit {@code @TempDir}, which
+     * JUnit names {@code junit<digits>}, so that it has the name the test is about.
      */
     @Test
-    void aFolderNameWithASpaceAndANonAsciiLetterOpensTheWorkspaceFile() throws Exception {
-        Path dir = Files.createTempDirectory("n4e path \u00fc");
+    void aFolderNameWithASpaceAndANonAsciiLetterOpensTheWorkspaceFile(@TempDir Path temp) throws Exception {
+        Path dir = Files.createDirectory(temp.resolve("n4e path \u00fc"));
         Path c = dir.resolve("c.txt");
         Files.writeString(c, "sea\n", StandardCharsets.UTF_8);
         IProject spelled = null;
@@ -515,9 +529,9 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             assertOneEditorAndOneBuffer("c.txt", c, "by its full path");
         } finally {
             if (spelled != null) {
-                removeProject(spelled, dir, c);
+                removeProject(spelled, temp, c);
             } else {
-                leaveAndDelete(dir, c);
+                leave(temp);
             }
         }
     }
@@ -530,13 +544,15 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * Where the volume makes no 8.3 names, that spelling is left out with a
      * note on standard output. The rule these follow has its cases in {@code path-cases.tsv}; this
      * test runs them on a real disk and through Eclipse's lookup ({@code NewFiles.workspaceFileAt}).
-     * Example spellings: {@code C:\Users\me\...\n4e path ü123\c.txt}, {@code c:\Users\...},
-     * {@code C:/Users/me/...}, {@code C:\Users\me\AppData\Local\Temp\N4EPAT~1\c.txt}.
+     * Example spellings: {@code C:\Users\me\...\junit123\n4e path ü\c.txt}, {@code c:\Users\...},
+     * {@code C:/Users/me/...}, {@code C:\Users\me\AppData\Local\Temp\JUNIT1~1\N4EPAT~1\c.txt}.
+     * The folder is made inside a JUnit {@code @TempDir}, as in
+     * {@link #aFolderNameWithASpaceAndANonAsciiLetterOpensTheWorkspaceFile}.
      */
     @Test
     @EnabledOnOs(OS.WINDOWS)
-    void eachWindowsSpellingOfAFileFindsItsOneEditorAndBuffer() throws Exception {
-        Path dir = Files.createTempDirectory("n4e path \u00fc");
+    void eachWindowsSpellingOfAFileFindsItsOneEditorAndBuffer(@TempDir Path temp) throws Exception {
+        Path dir = Files.createDirectory(temp.resolve("n4e path \u00fc"));
         Path c = dir.resolve("c.txt");
         Files.writeString(c, "sea\n", StandardCharsets.UTF_8);
         IProject spelled = null;
@@ -567,9 +583,9 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             }
         } finally {
             if (spelled != null) {
-                removeProject(spelled, dir, c);
+                removeProject(spelled, temp, c);
             } else {
-                leaveAndDelete(dir, c);
+                leave(temp);
             }
         }
     }
@@ -610,13 +626,13 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * link: {@code :e new/deep/c.txt} opens an empty editor, and {@code :w ++p} makes the folders
      * and the file, which the editor then shows as the project's file (one file on disk, reached by
      * both paths). The manual test "A name under folders that do not exist yet".
-     * Example: project at {@code /tmp/n4e-viaN/p}, a link to {@code /tmp/n4e-realN}; the file is
-     * written at {@code /tmp/n4e-realN/new/deep/c.txt}.
+     * Example: project at {@code /tmp/junit2/p}, a link to {@code /tmp/junit1}; the file is
+     * written at {@code /tmp/junit1/new/deep/c.txt}. Both folders are JUnit {@code @TempDir}s, as in
+     * {@link #eByTheRealPathOpensAFileInAFolderLinkedThroughALink}.
      */
     @Test
-    void aNewFileUnderMissingFoldersInAProjectUnderALink() throws Exception {
-        Path real = Files.createTempDirectory("n4e-real");
-        Path via = Files.createTempDirectory("n4e-via").resolve("p");
+    void aNewFileUnderMissingFoldersInAProjectUnderALink(@TempDir Path real, @TempDir Path viaRoot) throws Exception {
+        Path via = viaRoot.resolve("p");
         Path a = real.resolve("a.txt");
         Path c = real.resolve("new").resolve("deep").resolve("c.txt");
         IProject linked = null;
@@ -648,13 +664,12 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             assertFalse(((ITextEditor) page().getActiveEditor()).isDirty(), "saved");
         } finally {
             if (linked != null) {
-                removeProject(linked, real, c, c.getParent(), c.getParent().getParent(), a);
-            } else {
-                Files.deleteIfExists(real);
+                removeProject(linked, real, c, c.getParent(), c.getParent().getParent(), a); // leaves real
             }
-            session.leaveFolder(via.toString(), TestWait.duration());
+            // Then out of viaRoot, where leaving the project moved Neovim (the parent of via), and the
+            // link (or junction) itself, so JUnit's delete never walks through it.
+            leave(viaRoot);
             Files.deleteIfExists(via);
-            Files.deleteIfExists(via.getParent());
         }
     }
 
@@ -664,13 +679,14 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
      * process works in, so Neovim first leaves it ({@code ProjectFolderExit}), recognizing the
      * folder through the junction. The delete then finishes, and Neovim goes on in the other
      * editors. Windows only (junctions are Windows'; the Lua side, links included, is
-     * folders_spec.lua). The manual test "Deleting a project reached through a junction".
+     * folders_spec.lua). The manual test "Deleting a project reached through a junction". The
+     * junction and its target are JUnit {@code @TempDir}s, as in
+     * {@link #eByTheRealPathOpensAFileInAFolderLinkedThroughALink}.
      */
     @Test
     @EnabledOnOs(OS.WINDOWS)
-    void aProjectReachedThroughAJunctionIsDeletedWithItsFileOpen() throws Exception {
-        Path real = Files.createTempDirectory("n4e-real");
-        Path via = Files.createTempDirectory("n4e-via").resolve("p");
+    void aProjectReachedThroughAJunctionIsDeletedWithItsFileOpen(@TempDir Path real, @TempDir Path viaRoot) throws Exception {
+        Path via = viaRoot.resolve("p");
         Path d = real.resolve("d.txt");
         Files.writeString(d, "dee\n", StandardCharsets.UTF_8);
         IProject linked = null;
@@ -693,10 +709,13 @@ class FilePathsEndToEndTest extends EndToEndTestBase {
             if (linked != null && linked.exists()) {
                 linked.delete(false, true, null);
             }
-            session.leaveFolder(via.toString(), TestWait.duration());
+            // Neovim out of both @TempDirs before JUnit deletes them: out of real first, while the
+            // link still resolves (a window spelled through it is within real, links resolved); then
+            // out of viaRoot, where leaving the project (ProjectFolderExit) moved it, as the parent of
+            // via. Then the link (or junction) itself, so JUnit's delete never walks through it.
+            leave(real);
+            leave(viaRoot);
             Files.deleteIfExists(via);
-            Files.deleteIfExists(via.getParent());
-            leaveAndDelete(real, d, real.resolve(".project"));
         }
     }
 
